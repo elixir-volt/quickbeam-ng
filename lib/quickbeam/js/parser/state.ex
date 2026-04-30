@@ -24,8 +24,13 @@ defmodule QuickBEAM.JS.Parser.State do
           match_value?(state, ";") -> advance(state)
           eof?(state) -> state
           current(state).before_line_terminator? -> state
-          true -> state
+          match_value?(state, "}") -> state
+          true -> add_error(state, current(state), "expected ;")
         end
+      end
+
+      defp consume_optional_semicolon(state) do
+        if match_value?(state, ";"), do: advance(state), else: state
       end
 
       defp statement_end?(state), do: match_value?(state, [";", "}"])

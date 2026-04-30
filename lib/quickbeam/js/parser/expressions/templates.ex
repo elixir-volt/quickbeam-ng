@@ -6,6 +6,92 @@ defmodule QuickBEAM.JS.Parser.Expressions.Templates do
       alias QuickBEAM.JS.Parser.AST
       alias QuickBEAM.JS.Parser.{Lexer, Token, Validation}
 
+      defp validate_untagged_template_literal(state, %Token{raw: raw} = token) do
+        if invalid_template_escape?(raw) do
+          add_error(state, token, "invalid template escape sequence")
+        else
+          state
+        end
+      end
+
+      defp invalid_template_escape?(raw) do
+        {quasis, _expressions} = split_template_literal(raw)
+        Enum.any?(quasis, &invalid_template_segment_escape?(&1.raw, 0))
+      end
+
+      defp invalid_template_segment_escape?(raw, index) when index >= byte_size(raw), do: false
+
+      defp invalid_template_segment_escape?(raw, index) do
+        if byte_at(raw, index) == ?\\ do
+          invalid_template_escape_at?(raw, index + 1) or
+            invalid_template_segment_escape?(raw, index + 2)
+        else
+          invalid_template_segment_escape?(raw, index + 1)
+        end
+      end
+
+      defp invalid_template_escape_at?(raw, index) when index >= byte_size(raw), do: true
+
+      defp invalid_template_escape_at?(raw, index) do
+        case byte_at(raw, index) do
+          ch when ch in ?1..?9 -> true
+          ?0 -> index + 1 < byte_size(raw) and byte_at(raw, index + 1) in ?0..?9
+          ?x -> not valid_hex_escape?(raw, index + 1, 2)
+          ?u -> not valid_unicode_escape?(raw, index + 1)
+          _ -> false
+        end
+      end
+
+      defp valid_hex_escape?(raw, index, count) do
+        index + count <= byte_size(raw) and
+          Enum.all?(index..(index + count - 1), &hex_digit?(byte_at(raw, &1)))
+      end
+
+      defp valid_unicode_escape?(raw, index) do
+        cond do
+          index < byte_size(raw) and byte_at(raw, index) == ?{ ->
+            valid_braced_unicode_escape?(raw, index + 1)
+
+          true ->
+            valid_hex_escape?(raw, index, 4)
+        end
+      end
+
+      defp valid_braced_unicode_escape?(raw, index),
+        do: valid_braced_unicode_escape?(raw, index, false)
+
+      defp valid_braced_unicode_escape?(raw, index, saw_digit?) when index >= byte_size(raw),
+        do: false
+
+      defp valid_braced_unicode_escape?(raw, index, saw_digit?) do
+        valid_braced_unicode_escape?(raw, index, saw_digit?, 0)
+      end
+
+      defp valid_braced_unicode_escape?(raw, index, _saw_digit?, _codepoint)
+           when index >= byte_size(raw),
+           do: false
+
+      defp valid_braced_unicode_escape?(raw, index, saw_digit?, codepoint) do
+        ch = byte_at(raw, index)
+
+        cond do
+          ch == ?} ->
+            saw_digit? and codepoint <= 0x10FFFF
+
+          hex_digit?(ch) ->
+            valid_braced_unicode_escape?(raw, index + 1, true, codepoint * 16 + hex_value(ch))
+
+          true ->
+            false
+        end
+      end
+
+      defp hex_value(ch) when ch in ?0..?9, do: ch - ?0
+      defp hex_value(ch) when ch in ?a..?f, do: ch - ?a + 10
+      defp hex_value(ch) when ch in ?A..?F, do: ch - ?A + 10
+
+      defp hex_digit?(ch), do: ch in ?0..?9 or ch in ?a..?f or ch in ?A..?F
+
       defp parse_template_literal(%Token{raw: raw}) do
         {quasis, expression_sources} = split_template_literal(raw)
 

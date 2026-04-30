@@ -87,7 +87,7 @@ defmodule QuickBEAM.JS.Parser.AST do
 
   defmodule ObjectPattern do
     @moduledoc "Object destructuring binding pattern."
-    defstruct type: :object_pattern, properties: []
+    defstruct type: :object_pattern, properties: [], parenthesized?: false
   end
 
   defmodule RestElement do
@@ -252,7 +252,7 @@ defmodule QuickBEAM.JS.Parser.AST do
 
   defmodule ObjectExpression do
     @moduledoc "Object literal expression."
-    defstruct type: :object_expression, properties: []
+    defstruct type: :object_expression, properties: [], parenthesized?: false
   end
 
   defmodule Property do
@@ -273,12 +273,16 @@ defmodule QuickBEAM.JS.Parser.AST do
 
   defmodule ArrowFunctionExpression do
     @moduledoc "Arrow function expression."
-    defstruct type: :arrow_function_expression, params: [], body: nil, async: false
+    defstruct type: :arrow_function_expression,
+              params: [],
+              body: nil,
+              async: false,
+              parenthesized?: false
   end
 
   defmodule YieldExpression do
     @moduledoc "Yield expression."
-    defstruct type: :yield_expression, argument: nil, delegate: false
+    defstruct type: :yield_expression, argument: nil, delegate: false, parenthesized?: false
   end
 
   defmodule AwaitExpression do
@@ -293,7 +297,11 @@ defmodule QuickBEAM.JS.Parser.AST do
 
   defmodule LogicalExpression do
     @moduledoc "Logical operator expression."
-    defstruct type: :logical_expression, operator: nil, left: nil, right: nil
+    defstruct type: :logical_expression,
+              operator: nil,
+              left: nil,
+              right: nil,
+              parenthesized?: false
   end
 
   defmodule AssignmentExpression do
@@ -303,7 +311,11 @@ defmodule QuickBEAM.JS.Parser.AST do
 
   defmodule UnaryExpression do
     @moduledoc "Unary operator expression."
-    defstruct type: :unary_expression, operator: nil, argument: nil, prefix: true
+    defstruct type: :unary_expression,
+              operator: nil,
+              argument: nil,
+              prefix: true,
+              parenthesized?: false
   end
 
   defmodule UpdateExpression do
@@ -318,7 +330,7 @@ defmodule QuickBEAM.JS.Parser.AST do
 
   defmodule SequenceExpression do
     @moduledoc "Comma sequence expression."
-    defstruct type: :sequence_expression, expressions: []
+    defstruct type: :sequence_expression, expressions: [], parenthesized?: false
   end
 
   defmodule CallExpression do

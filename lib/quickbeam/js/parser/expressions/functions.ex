@@ -18,13 +18,19 @@ defmodule QuickBEAM.JS.Parser.Expressions.Functions do
             {nil, state}
           end
 
-        {params, state} = parse_formal_parameters(state)
+        {params, state} = parse_function_formal_parameters(state, generator?, async?)
         {body, state} = parse_function_body(state, generator?, async?)
 
         state =
           state
+          |> Validation.validate_super_params(params)
+          |> Validation.validate_async_function_name(async?, id)
+          |> Validation.validate_async_generator_function_name(async? and generator?, id)
           |> Validation.validate_async_params(async?, params)
+          |> Validation.validate_async_body_bindings(async?, body)
+          |> Validation.validate_generator_function_name(generator?, id)
           |> Validation.validate_generator_params(generator?, params)
+          |> Validation.validate_generator_body_bindings(generator?, body)
           |> Validation.validate_strict_function_name(id, body)
           |> Validation.validate_strict_function_params(params, body)
 
@@ -58,10 +64,31 @@ defmodule QuickBEAM.JS.Parser.Expressions.Functions do
 
         state =
           state
+          |> Validation.validate_super_params(params)
           |> Validation.validate_async_params(true, params)
+          |> Validation.validate_async_body_bindings(true, body)
           |> Validation.validate_arrow_params(params, body)
 
         {%AST.ArrowFunctionExpression{params: params, body: body, async: true}, state}
+      end
+
+      defp parse_function_formal_parameters(state, yield_allowed?, await_allowed?) do
+        previous_yield_allowed? = state.yield_allowed?
+        previous_await_allowed? = state.await_allowed?
+
+        {params, state} =
+          parse_formal_parameters(%{
+            state
+            | yield_allowed?: yield_allowed?,
+              await_allowed?: await_allowed?
+          })
+
+        {params,
+         %{
+           state
+           | yield_allowed?: previous_yield_allowed?,
+             await_allowed?: previous_await_allowed?
+         }}
       end
 
       defp parse_function_body(state, generator?, async?) do
@@ -69,7 +96,11 @@ defmodule QuickBEAM.JS.Parser.Expressions.Functions do
         previous_await_allowed? = state.await_allowed?
 
         {body, state} =
-          parse_block_statement(%{state | yield_allowed?: generator?, await_allowed?: async?})
+          parse_function_block_statement(%{
+            state
+            | yield_allowed?: generator?,
+              await_allowed?: async?
+          })
 
         {body,
          %{
@@ -77,6 +108,13 @@ defmodule QuickBEAM.JS.Parser.Expressions.Functions do
            | yield_allowed?: previous_yield_allowed?,
              await_allowed?: previous_await_allowed?
          }}
+      end
+
+      defp parse_function_block_statement(state) do
+        state = expect_value(state, "{")
+        {body, state} = parse_statement_list(state, [])
+        state = Validation.validate_duplicate_lexical_bindings(state, body)
+        {%AST.BlockStatement{body: body}, expect_value(state, "}")}
       end
 
       defp parse_arrow_body(state, async? \\ false) do

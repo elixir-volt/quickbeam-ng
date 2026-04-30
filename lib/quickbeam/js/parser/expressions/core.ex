@@ -16,6 +16,11 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
         parse_expression_tail(state, left, min_precedence)
       end
 
+      defp parse_expression_no_in(state, min_precedence) do
+        {left, state} = parse_prefix(state)
+        parse_expression_tail_no_in(state, left, min_precedence)
+      end
+
       defp parse_expression_tail(state, left, min_precedence) do
         state = parse_postfix_tail(state, left)
 
@@ -32,7 +37,7 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
 
           match_value?(state, "?.") ->
             state =
-              if match?(%AST.NewExpression{}, left),
+              if match?(%AST.NewExpression{arguments: []}, left),
                 do: add_error(state, current(state), "optional chain not allowed after new"),
                 else: state
 
@@ -77,7 +82,7 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
               quasi: quasi
             })
 
-          postfix_update_operator?(current(state)) ->
+          postfix_update_operator?(current(state)) and not current(state).before_line_terminator? ->
             token = current(state)
             state = Validation.validate_update_target(state, left)
 
@@ -127,21 +132,48 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
       end
 
       defp parse_binary_tail(state, left, min_precedence) do
+        parse_binary_tail(state, left, min_precedence, true)
+      end
+
+      defp parse_expression_tail_no_in(state, left, min_precedence) do
+        state = parse_postfix_tail(state, left)
+
+        case state do
+          {left, state} -> parse_binary_tail(state, left, min_precedence, false)
+        end
+      end
+
+      defp parse_binary_tail(state, left, min_precedence, allow_in?) do
         token = current(state)
         operator = operator_value(token)
 
         case Map.get(@precedence, operator) do
-          {precedence, associativity} when precedence >= min_precedence ->
+          {precedence, associativity}
+          when precedence >= min_precedence and (allow_in? or operator != "in") ->
             state = advance(state)
 
             if operator == "?" do
-              parse_conditional_tail(state, left, precedence)
+              parse_conditional_tail(state, left, precedence, min_precedence, allow_in?)
             else
               next_min = if associativity == :left, do: precedence + 1, else: precedence
-              {right, state} = parse_expression(state, next_min)
-              state = Validation.validate_assignment_target(state, operator, left)
+
+              {right, state} =
+                if allow_in?,
+                  do: parse_expression(state, next_min),
+                  else: parse_expression_no_in(state, next_min)
+
+              assignment_left =
+                if operator in @assignment_ops, do: assignment_target_pattern(left), else: left
+
               expr = binary_node(operator, left, right)
-              parse_binary_tail(state, expr, min_precedence)
+
+              state =
+                state
+                |> Validation.validate_assignment_target(operator, assignment_left)
+                |> validate_exponentiation_left(operator, left)
+                |> validate_coalesce_mixing(operator, left, right)
+
+              parse_binary_tail(state, expr, min_precedence, allow_in?)
             end
 
           _ ->
@@ -151,6 +183,12 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
 
       defp private_identifier_start?(%Token{type: :punctuator, value: "#"}), do: true
       defp private_identifier_start?(_token), do: false
+
+      defp validate_unary_operand(state, %AST.YieldExpression{}) do
+        add_error(state, current(state), "yield expression not allowed as unary operand")
+      end
+
+      defp validate_unary_operand(state, _argument), do: state
 
       defp prefix_update_operator?(%Token{type: :punctuator, value: value})
            when value in @update_ops,
@@ -199,15 +237,20 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
       defp optional_chain?(%AST.SpreadElement{argument: argument}), do: optional_chain?(argument)
       defp optional_chain?(_expression), do: false
 
-      defp parse_conditional_tail(state, test, precedence) do
+      defp parse_conditional_tail(state, test, precedence, min_precedence, allow_in?) do
         {consequent, state} = parse_expression(state, 0)
         state = expect_value(state, ":")
-        {alternate, state} = parse_expression(state, precedence)
+
+        {alternate, state} =
+          if allow_in?,
+            do: parse_expression(state, precedence),
+            else: parse_expression_no_in(state, precedence)
 
         parse_binary_tail(
           state,
           %AST.ConditionalExpression{test: test, consequent: consequent, alternate: alternate},
-          0
+          min_precedence,
+          allow_in?
         )
       end
 
@@ -222,13 +265,14 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
             {params, state} = parse_formal_parameters(state)
             state = expect_value(state, "=>")
             {body, state} = parse_arrow_body(state)
+            state = Validation.validate_super_params(state, params)
             state = Validation.validate_arrow_params(state, params, body)
             {%AST.ArrowFunctionExpression{params: params, body: body}, state}
 
           match_value?(state, "(") ->
             state = advance(state)
             {expr, state} = parse_expression(state, 0)
-            {expr, expect_value(state, ")")}
+            {mark_parenthesized_expression(expr), expect_value(state, ")")}
 
           match_value?(state, "[") ->
             parse_array_expression(state)
@@ -243,6 +287,7 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
             state = advance(state)
             {argument, state} = parse_prefix(state)
             {argument, state} = parse_postfix_tail(state, argument)
+            state = Validation.validate_update_target(state, argument)
 
             {%AST.UpdateExpression{operator: token.value, argument: argument, prefix: true},
              state}
@@ -252,9 +297,11 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
             state = advance(state)
             {argument, state} = parse_prefix(state)
             {argument, state} = parse_postfix_tail(state, argument)
+            state = validate_unary_operand(state, argument)
             {%AST.UnaryExpression{operator: operator, argument: argument}, state}
 
           token.type == :template ->
+            state = validate_untagged_template_literal(state, token)
             {parse_template_literal(token), advance(state)}
 
           async_arrow_start?(state) ->
@@ -267,8 +314,13 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
           keyword?(state, "import") and peek_value(state) in ["(", "."] ->
             {%AST.Identifier{name: "import"}, advance(state)}
 
-          keyword?(state, "new") and peek_value(state) == "." ->
+          keyword?(state, "new") and peek_value(state) == "." and current(state).raw == "new" and
+              peek(state, 2).raw == "target" ->
             parse_new_target_expression(state)
+
+          keyword?(state, "new") and peek_value(state) == "." ->
+            {identifier, state} = parse_binding_identifier(state)
+            {identifier, add_error(state, current(state), "invalid meta property")}
 
           keyword?(state, "new") ->
             parse_new_expression(state)
@@ -288,11 +340,13 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
           token.value == "await" and (state.await_allowed? or state.source_type == :module) ->
             parse_await_expression(state)
 
-          identifier_like?(token) and peek_value(state) == "=>" ->
+          identifier_like?(token) and peek_value(state) == "=>" and
+              not peek(state).before_line_terminator? ->
             state = advance(state)
             state = advance(state)
             {body, state} = parse_arrow_body(state)
             params = [%AST.Identifier{name: token.value}]
+            state = Validation.validate_super_params(state, params)
             state = Validation.validate_arrow_params(state, params, body)
 
             {%AST.ArrowFunctionExpression{params: params, body: body}, state}
@@ -361,6 +415,54 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
         %AST.SequenceExpression{expressions: [left, right]}
       end
 
+      defp validate_exponentiation_left(state, "**", %AST.UnaryExpression{parenthesized?: false}) do
+        add_error(
+          state,
+          current(state),
+          "unparenthesized unary expression cannot be exponentiation base"
+        )
+      end
+
+      defp validate_exponentiation_left(state, _operator, _left), do: state
+
+      defp validate_coalesce_mixing(state, "??", left, right) do
+        if contains_logical_and_or?(left) or contains_logical_and_or?(right) do
+          add_error(state, current(state), "cannot mix ?? with && or ||")
+        else
+          state
+        end
+      end
+
+      defp validate_coalesce_mixing(state, operator, left, right) when operator in ["&&", "||"] do
+        if contains_coalesce?(left) or contains_coalesce?(right) do
+          add_error(state, current(state), "cannot mix ?? with && or ||")
+        else
+          state
+        end
+      end
+
+      defp validate_coalesce_mixing(state, _operator, _left, _right), do: state
+
+      defp contains_logical_and_or?(%AST.LogicalExpression{parenthesized?: true}), do: false
+
+      defp contains_logical_and_or?(%AST.LogicalExpression{operator: operator})
+           when operator in ["&&", "||"],
+           do: true
+
+      defp contains_logical_and_or?(%AST.LogicalExpression{left: left, right: right}),
+        do: contains_logical_and_or?(left) or contains_logical_and_or?(right)
+
+      defp contains_logical_and_or?(_expression), do: false
+
+      defp contains_coalesce?(%AST.LogicalExpression{parenthesized?: true}), do: false
+
+      defp contains_coalesce?(%AST.LogicalExpression{operator: "??"}), do: true
+
+      defp contains_coalesce?(%AST.LogicalExpression{left: left, right: right}),
+        do: contains_coalesce?(left) or contains_coalesce?(right)
+
+      defp contains_coalesce?(_expression), do: false
+
       defp binary_node(operator, left, right) when operator in @assignment_ops do
         %AST.AssignmentExpression{
           operator: operator,
@@ -377,8 +479,31 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
         %AST.BinaryExpression{operator: operator, left: left, right: right}
       end
 
-      defp assignment_target_pattern(%AST.ObjectExpression{properties: properties}) do
-        %AST.ObjectPattern{properties: Enum.map(properties, &assignment_target_pattern/1)}
+      defp mark_parenthesized_expression(%AST.ObjectExpression{} = expression),
+        do: %{expression | parenthesized?: true}
+
+      defp mark_parenthesized_expression(%AST.LogicalExpression{} = expression),
+        do: %{expression | parenthesized?: true}
+
+      defp mark_parenthesized_expression(%AST.ArrowFunctionExpression{} = expression),
+        do: %{expression | parenthesized?: true}
+
+      defp mark_parenthesized_expression(%AST.UnaryExpression{} = expression),
+        do: %{expression | parenthesized?: true}
+
+      defp mark_parenthesized_expression(%AST.YieldExpression{} = expression),
+        do: %{expression | parenthesized?: true}
+
+      defp mark_parenthesized_expression(%AST.SequenceExpression{} = expression),
+        do: %{expression | parenthesized?: true}
+
+      defp mark_parenthesized_expression(expression), do: expression
+
+      defp assignment_target_pattern(%AST.ObjectExpression{properties: properties} = expression) do
+        %AST.ObjectPattern{
+          properties: Enum.map(properties, &assignment_target_pattern/1),
+          parenthesized?: expression.parenthesized?
+        }
       end
 
       defp assignment_target_pattern(%AST.ArrayExpression{elements: elements}) do
@@ -410,7 +535,7 @@ defmodule QuickBEAM.JS.Parser.Expressions.Core do
       defp parse_parenthesized_expression(state) do
         state = expect_value(state, "(")
         {expr, state} = parse_expression(state, 0)
-        {expr, expect_value(state, ")")}
+        {mark_parenthesized_expression(expr), expect_value(state, ")")}
       end
     end
   end

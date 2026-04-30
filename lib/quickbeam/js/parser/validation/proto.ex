@@ -1,7 +1,8 @@
 defmodule QuickBEAM.JS.Parser.Validation.Proto do
   @moduledoc "Object initializer __proto__ validation."
 
-  alias QuickBEAM.JS.Parser.{AST, Error, Token}
+  alias QuickBEAM.JS.Parser.AST
+  import QuickBEAM.JS.Parser.Validation.Helpers, only: [add_error: 3, current: 1]
 
   def validate_duplicate_proto_initializers(state, body) do
     if Enum.any?(body, &duplicate_proto_initializer_statement?/1) do
@@ -208,23 +209,4 @@ defmodule QuickBEAM.JS.Parser.Validation.Proto do
        do: true
 
   defp proto_data_property?(_property), do: false
-
-  defp current(state), do: token_at(state, state.index)
-
-  defp token_at(%{token_count: token_count, last_token: last_token}, index)
-       when index >= token_count,
-       do: last_token
-
-  defp token_at(%{tokens: tokens}, index), do: elem(tokens, index)
-
-  defp add_error(state, %Token{} = token, message) do
-    error = %Error{
-      message: message,
-      line: token.line,
-      column: token.column,
-      offset: token.start
-    }
-
-    %{state | errors: [error | state.errors]}
-  end
 end

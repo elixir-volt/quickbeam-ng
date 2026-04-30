@@ -1,7 +1,8 @@
 defmodule QuickBEAM.JS.Parser.Validation.Modules do
   @moduledoc "Module declaration validation."
 
-  alias QuickBEAM.JS.Parser.{AST, Error, Token}
+  alias QuickBEAM.JS.Parser.AST
+  import QuickBEAM.JS.Parser.Validation.Helpers, only: [add_error: 3, current: 1]
 
   def validate_module_declarations(%{source_type: :module} = state, _body), do: state
 
@@ -85,23 +86,4 @@ defmodule QuickBEAM.JS.Parser.Validation.Modules do
 
   defp module_or_nested_declaration?(statement),
     do: module_declaration?(statement) or nested_module_declaration?(statement)
-
-  defp current(state), do: token_at(state, state.index)
-
-  defp token_at(%{token_count: token_count, last_token: last_token}, index)
-       when index >= token_count,
-       do: last_token
-
-  defp token_at(%{tokens: tokens}, index), do: elem(tokens, index)
-
-  defp add_error(state, %Token{} = token, message) do
-    error = %Error{
-      message: message,
-      line: token.line,
-      column: token.column,
-      offset: token.start
-    }
-
-    %{state | errors: [error | state.errors]}
-  end
 end

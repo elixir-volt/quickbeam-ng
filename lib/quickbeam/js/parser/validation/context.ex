@@ -1,7 +1,8 @@
 defmodule QuickBEAM.JS.Parser.Validation.Context do
   @moduledoc "Context-sensitive expression validation."
 
-  alias QuickBEAM.JS.Parser.{AST, Error, Token}
+  alias QuickBEAM.JS.Parser.AST
+  import QuickBEAM.JS.Parser.Validation.Helpers, only: [add_error: 3, current: 1]
 
   def validate_yield_context(state, body) do
     if Enum.any?(body, &invalid_yield_statement?/1) do
@@ -375,6 +376,14 @@ defmodule QuickBEAM.JS.Parser.Validation.Context do
   defp invalid_new_target_expression?(%AST.Property{value: value}),
     do: invalid_new_target_expression?(value)
 
+  defp invalid_new_target_expression?(%AST.ArrowFunctionExpression{
+         body: %AST.BlockStatement{} = body
+       }),
+       do: invalid_new_target_statement?(body)
+
+  defp invalid_new_target_expression?(%AST.ArrowFunctionExpression{body: body}),
+    do: invalid_new_target_expression?(body)
+
   defp invalid_new_target_expression?(_expression), do: false
 
   def validate_import_meta_context(%{source_type: :module} = state, _body), do: state
@@ -452,6 +461,14 @@ defmodule QuickBEAM.JS.Parser.Validation.Context do
     end
   end
 
+  def validate_super_params(state, params) do
+    if Enum.any?(params, &invalid_super_expression?/1) do
+      add_error(state, current(state), "super not allowed outside class method")
+    else
+      state
+    end
+  end
+
   defp invalid_super_statement?(%AST.ExpressionStatement{expression: expression}),
     do: invalid_super_expression?(expression)
 
@@ -497,14 +514,65 @@ defmodule QuickBEAM.JS.Parser.Validation.Context do
   defp invalid_super_expression?(%AST.ObjectExpression{properties: properties}),
     do: Enum.any?(properties, &invalid_super_expression?/1)
 
-  defp invalid_super_expression?(%AST.Property{value: value}),
-    do: invalid_super_expression?(value)
+  defp invalid_super_expression?(%AST.Property{
+         method: true,
+         key: key,
+         value: value,
+         computed: computed?
+       }) do
+    (computed? and invalid_super_expression?(key)) or has_super_call_statement?(value.body)
+  end
+
+  defp invalid_super_expression?(%AST.Property{
+         kind: kind,
+         key: key,
+         value: value,
+         computed: computed?
+       })
+       when kind in [:get, :set] do
+    (computed? and invalid_super_expression?(key)) or has_super_call_statement?(value.body)
+  end
+
+  defp invalid_super_expression?(%AST.Property{key: key, value: value, computed: computed?}) do
+    (computed? and invalid_super_expression?(key)) or invalid_super_expression?(value)
+  end
+
+  defp invalid_super_expression?(%AST.AssignmentPattern{left: left, right: right}),
+    do: invalid_super_expression?(left) or invalid_super_expression?(right)
+
+  defp invalid_super_expression?(%AST.RestElement{argument: argument}),
+    do: invalid_super_expression?(argument)
+
+  defp invalid_super_expression?(%AST.ArrayPattern{elements: elements}),
+    do: Enum.any?(elements, &invalid_super_expression?/1)
+
+  defp invalid_super_expression?(%AST.ObjectPattern{properties: properties}),
+    do: Enum.any?(properties, &invalid_super_expression?/1)
+
+  defp invalid_super_expression?(%AST.FunctionExpression{body: body}),
+    do: invalid_super_statement?(body)
+
+  defp invalid_super_expression?(%AST.ArrowFunctionExpression{
+         body: %AST.BlockStatement{} = body
+       }),
+       do: invalid_super_statement?(body)
+
+  defp invalid_super_expression?(%AST.ArrowFunctionExpression{body: body}),
+    do: invalid_super_expression?(body)
 
   defp invalid_super_expression?(_expression), do: false
 
   def validate_class_super_calls(state, body) do
     if Enum.any?(body, &invalid_class_super_call_statement?/1) do
       add_error(state, current(state), "super call not allowed outside derived constructor")
+    else
+      state
+    end
+  end
+
+  def validate_class_field_arguments(state, body) do
+    if Enum.any?(body, &invalid_class_field_arguments_statement?/1) do
+      add_error(state, current(state), "arguments is not allowed in class field initializer")
     else
       state
     end
@@ -517,7 +585,58 @@ defmodule QuickBEAM.JS.Parser.Validation.Context do
     Enum.any?(body, &invalid_class_super_call_element?(&1, super_class))
   end
 
+  defp invalid_class_super_call_statement?(%AST.VariableDeclaration{declarations: declarations}) do
+    Enum.any?(declarations, &invalid_class_super_call_expression?(&1.init))
+  end
+
+  defp invalid_class_super_call_statement?(%AST.ExpressionStatement{expression: expression}),
+    do: invalid_class_super_call_expression?(expression)
+
   defp invalid_class_super_call_statement?(_statement), do: false
+
+  defp invalid_class_super_call_expression?(%AST.ClassExpression{
+         super_class: super_class,
+         body: body
+       }) do
+    Enum.any?(body, &invalid_class_super_call_element?(&1, super_class))
+  end
+
+  defp invalid_class_super_call_expression?(%AST.AssignmentExpression{left: left, right: right}),
+    do: invalid_class_super_call_expression?(left) or invalid_class_super_call_expression?(right)
+
+  defp invalid_class_super_call_expression?(_expression), do: false
+
+  defp invalid_class_field_arguments_statement?(%AST.ClassDeclaration{body: body}),
+    do: Enum.any?(body, &invalid_class_field_arguments_element?/1)
+
+  defp invalid_class_field_arguments_statement?(%AST.VariableDeclaration{
+         declarations: declarations
+       }) do
+    Enum.any?(declarations, &invalid_class_field_arguments_expression?(&1.init))
+  end
+
+  defp invalid_class_field_arguments_statement?(%AST.ExpressionStatement{expression: expression}),
+    do: invalid_class_field_arguments_expression?(expression)
+
+  defp invalid_class_field_arguments_statement?(_statement), do: false
+
+  defp invalid_class_field_arguments_expression?(%AST.ClassExpression{body: body}),
+    do: Enum.any?(body, &invalid_class_field_arguments_element?/1)
+
+  defp invalid_class_field_arguments_expression?(%AST.AssignmentExpression{
+         left: left,
+         right: right
+       }),
+       do:
+         invalid_class_field_arguments_expression?(left) or
+           invalid_class_field_arguments_expression?(right)
+
+  defp invalid_class_field_arguments_expression?(_expression), do: false
+
+  defp invalid_class_field_arguments_element?(%AST.FieldDefinition{value: value}),
+    do: has_arguments_expression?(value)
+
+  defp invalid_class_field_arguments_element?(_element), do: false
 
   defp invalid_class_super_call_element?(
          %AST.MethodDefinition{kind: :constructor, value: value},
@@ -574,27 +693,123 @@ defmodule QuickBEAM.JS.Parser.Validation.Context do
   defp has_super_call_expression?(%AST.AssignmentExpression{left: left, right: right}),
     do: has_super_call_expression?(left) or has_super_call_expression?(right)
 
+  defp has_super_call_expression?(%AST.BinaryExpression{left: left, right: right}),
+    do: has_super_call_expression?(left) or has_super_call_expression?(right)
+
+  defp has_super_call_expression?(%AST.LogicalExpression{left: left, right: right}),
+    do: has_super_call_expression?(left) or has_super_call_expression?(right)
+
+  defp has_super_call_expression?(%AST.ConditionalExpression{
+         test: test,
+         consequent: consequent,
+         alternate: alternate
+       }) do
+    has_super_call_expression?(test) or has_super_call_expression?(consequent) or
+      has_super_call_expression?(alternate)
+  end
+
+  defp has_super_call_expression?(%AST.UnaryExpression{argument: argument}),
+    do: has_super_call_expression?(argument)
+
+  defp has_super_call_expression?(%AST.ArrayExpression{elements: elements}),
+    do: Enum.any?(elements, &has_super_call_expression?/1)
+
+  defp has_super_call_expression?(%AST.ObjectExpression{properties: properties}),
+    do: Enum.any?(properties, &has_super_call_expression?/1)
+
+  defp has_super_call_expression?(%AST.Property{key: key, value: value, computed: computed?}) do
+    has_super_call_expression?(value) or (computed? and has_super_call_expression?(key))
+  end
+
+  defp has_super_call_expression?(%AST.SpreadElement{argument: argument}),
+    do: has_super_call_expression?(argument)
+
   defp has_super_call_expression?(%AST.SequenceExpression{expressions: expressions}),
     do: Enum.any?(expressions, &has_super_call_expression?/1)
 
+  defp has_super_call_expression?(%AST.ArrowFunctionExpression{
+         body: %AST.BlockStatement{} = body
+       }),
+       do: has_super_call_statement?(body)
+
+  defp has_super_call_expression?(%AST.ArrowFunctionExpression{body: body}),
+    do: has_super_call_expression?(body)
+
   defp has_super_call_expression?(_expression), do: false
 
-  defp current(state), do: token_at(state, state.index)
+  defp has_arguments_expression?(nil), do: false
+  defp has_arguments_expression?(%AST.Identifier{name: "arguments"}), do: true
 
-  defp token_at(%{token_count: token_count, last_token: last_token}, index)
-       when index >= token_count,
-       do: last_token
+  defp has_arguments_expression?(%AST.ArrowFunctionExpression{
+         body: %AST.BlockStatement{} = body
+       }),
+       do: has_arguments_statement?(body)
 
-  defp token_at(%{tokens: tokens}, index), do: elem(tokens, index)
+  defp has_arguments_expression?(%AST.ArrowFunctionExpression{body: body}),
+    do: has_arguments_expression?(body)
 
-  defp add_error(state, %Token{} = token, message) do
-    error = %Error{
-      message: message,
-      line: token.line,
-      column: token.column,
-      offset: token.start
-    }
+  defp has_arguments_expression?(%AST.CallExpression{callee: callee, arguments: arguments}),
+    do: has_arguments_expression?(callee) or Enum.any?(arguments, &has_arguments_expression?/1)
 
-    %{state | errors: [error | state.errors]}
+  defp has_arguments_expression?(%AST.MemberExpression{
+         object: object,
+         property: property,
+         computed: computed?
+       }) do
+    has_arguments_expression?(object) or (computed? and has_arguments_expression?(property))
   end
+
+  defp has_arguments_expression?(%AST.AssignmentExpression{left: left, right: right}),
+    do: has_arguments_expression?(left) or has_arguments_expression?(right)
+
+  defp has_arguments_expression?(%AST.BinaryExpression{left: left, right: right}),
+    do: has_arguments_expression?(left) or has_arguments_expression?(right)
+
+  defp has_arguments_expression?(%AST.LogicalExpression{left: left, right: right}),
+    do: has_arguments_expression?(left) or has_arguments_expression?(right)
+
+  defp has_arguments_expression?(%AST.ConditionalExpression{
+         test: test,
+         consequent: consequent,
+         alternate: alternate
+       }) do
+    has_arguments_expression?(test) or has_arguments_expression?(consequent) or
+      has_arguments_expression?(alternate)
+  end
+
+  defp has_arguments_expression?(%AST.UnaryExpression{argument: argument}),
+    do: has_arguments_expression?(argument)
+
+  defp has_arguments_expression?(%AST.ArrayExpression{elements: elements}),
+    do: Enum.any?(elements, &has_arguments_expression?/1)
+
+  defp has_arguments_expression?(%AST.ObjectExpression{properties: properties}),
+    do: Enum.any?(properties, &has_arguments_expression?/1)
+
+  defp has_arguments_expression?(%AST.Property{key: key, value: value, computed: computed?}) do
+    has_arguments_expression?(value) or (computed? and has_arguments_expression?(key))
+  end
+
+  defp has_arguments_expression?(%AST.SpreadElement{argument: argument}),
+    do: has_arguments_expression?(argument)
+
+  defp has_arguments_expression?(%AST.SequenceExpression{expressions: expressions}),
+    do: Enum.any?(expressions, &has_arguments_expression?/1)
+
+  defp has_arguments_expression?(_expression), do: false
+
+  defp has_arguments_statement?(%AST.BlockStatement{body: body}),
+    do: Enum.any?(body, &has_arguments_statement?/1)
+
+  defp has_arguments_statement?(%AST.ExpressionStatement{expression: expression}),
+    do: has_arguments_expression?(expression)
+
+  defp has_arguments_statement?(%AST.ReturnStatement{argument: argument}),
+    do: has_arguments_expression?(argument)
+
+  defp has_arguments_statement?(%AST.VariableDeclaration{declarations: declarations}) do
+    Enum.any?(declarations, &has_arguments_expression?(&1.init))
+  end
+
+  defp has_arguments_statement?(_statement), do: false
 end

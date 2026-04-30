@@ -10,7 +10,8 @@ defmodule QuickBEAM.JS.Parser do
             errors: [],
             source_type: :script,
             yield_allowed?: false,
-            await_allowed?: false
+            await_allowed?: false,
+            block_depth: 0
 
   @type t :: %__MODULE__{}
 

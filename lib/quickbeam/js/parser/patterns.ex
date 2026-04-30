@@ -22,6 +22,10 @@ defmodule QuickBEAM.JS.Parser.Patterns do
             {%AST.Identifier{name: ""},
              add_error(state, token, "expected binding identifier") |> recover_expression()}
 
+          token.value == "enum" ->
+            {%AST.Identifier{name: ""},
+             add_error(state, token, "expected binding identifier") |> recover_expression()}
+
           identifier_like?(token) ->
             {%AST.Identifier{name: token.value}, advance(state)}
 
@@ -35,6 +39,14 @@ defmodule QuickBEAM.JS.Parser.Patterns do
         state = advance(state)
         {elements, state} = parse_array_pattern_elements(state, [])
         {%AST.ArrayPattern{elements: elements}, state}
+      end
+
+      defp validate_shorthand_binding_identifier(state, token) do
+        if identifier_like?(token) do
+          state
+        else
+          add_error(state, token, "expected binding identifier")
+        end
       end
 
       defp parse_object_pattern(state) do
@@ -71,6 +83,7 @@ defmodule QuickBEAM.JS.Parser.Patterns do
             end
 
           true ->
+            key_token = current(state)
             {key, computed?, state} = parse_property_key_with_computed(state)
 
             {value, state} =
@@ -80,6 +93,7 @@ defmodule QuickBEAM.JS.Parser.Patterns do
                   parse_binding_pattern(state)
 
                 match?(%AST.Identifier{}, key) ->
+                  state = validate_shorthand_binding_identifier(state, key_token)
                   {key, state}
 
                 true ->
