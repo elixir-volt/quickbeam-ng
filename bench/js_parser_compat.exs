@@ -1,9 +1,9 @@
 defmodule ParserCompatBench do
   @moduledoc false
 
-  @default_sample_limit 12_000
+  @default_sample_limit 60_000
   @default_error_limit 40
-  @language_glob "test/test262/test/language/**/*.js"
+  @default_test262_glob "test/test262/test/**/*.js"
   @test_language_path "test/vm/test_language.js"
 
   def run do
@@ -18,12 +18,13 @@ defmodule ParserCompatBench do
   end
 
   defp sample_files do
-    @language_glob
+    test262_glob()
     |> Path.wildcard()
     |> Enum.sort()
     |> Enum.reject(&negative_test?/1)
     |> Enum.drop(sample_offset())
     |> Enum.take(sample_limit())
+    |> Enum.reject(&support_fixture?/1)
   end
 
   defp parse_sample_file(path) do
@@ -48,6 +49,7 @@ defmodule ParserCompatBench do
   defp source_type(path, source) do
     cond do
       metadata_module?(source) -> :module
+      script_code_fixture?(path) -> :script
       String.contains?(path, "/module-code/") -> :module
       static_module_syntax?(source) -> :module
       true -> :script
@@ -58,6 +60,8 @@ defmodule ParserCompatBench do
     Regex.match?(~r/flags:\s*\[[^\]]*\bmodule\b/, source)
   end
 
+  defp script_code_fixture?(path), do: String.contains?(Path.basename(path), "script-code")
+
   defp static_module_syntax?(source) do
     Regex.match?(~r/^\s*import\s+(?:[\w*{]|["'])/m, source) or
       Regex.match?(~r/^\s*export\s+/m, source)
@@ -66,6 +70,8 @@ defmodule ParserCompatBench do
   defp negative_test?(path) do
     path |> File.read!() |> String.contains?("negative:")
   end
+
+  defp support_fixture?(path), do: String.ends_with?(path, "_FIXTURE.js")
 
   defp print_summary(test_language_result, sample_results) do
     test_language_errors = test_language_result.errors
@@ -166,6 +172,8 @@ defmodule ParserCompatBench do
     |> Enum.take(6)
     |> Path.join()
   end
+
+  defp test262_glob, do: System.get_env("TEST262_GLOB", @default_test262_glob)
 
   defp sample_limit, do: env_integer("TEST262_SAMPLE_LIMIT", @default_sample_limit)
   defp sample_offset, do: env_integer("TEST262_SAMPLE_OFFSET", 0)

@@ -1,1 +1,8 @@
-- Improve for-in declaration initializer recovery so `for (var key = first in object)` is parsed as a recoverable ForInStatement diagnostic instead of falling back to classic-for errors after consuming `in` as a binary operator.
+- Remaining parity clusters in later script audit windows:
+  - strict function/arrow body early errors: `"use strict"` with non-simple params, nested strict function declarations with reserved bindings
+  - async/generator strict-context errors for `await`/`yield` identifiers in async/generator functions and class methods
+  - direct assignment target edge cases for arrow/yield/parenthesized object expressions
+  - destructuring assignment rest/nested invalid target edge cases
+  - precise class field initializer early errors for `arguments`/`super`
+- Expand the NIF-vs-BEAM parser audit harness into a checked script or Mix task that compares acceptance across script and module inputs without relying on Test262 raw flags incorrectly.
+- Revisit Token struct allocation/performance ideas after parity work: compact token representation, avoiding per-token lexer state map updates, and parser hot-path profiling.
