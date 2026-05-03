@@ -99,12 +99,14 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   end
 
   defp compile_function(function, name, globals) do
-    params = Enum.map(function.params, &identifier_name!/1)
+    {params, defaults} = normalize_params(function.params)
     scope = Scope.new(params, globals)
 
     with {:ok, scope} <- Declarations.declare_program_locals(function.body.body, scope),
          {:ok, instructions, constants} <-
-           compile_statements(function.body.body, scope, [], [], globals) do
+           compile_param_defaults(defaults, scope, [], [], globals),
+         {:ok, instructions, constants} <-
+           compile_statements(function.body.body, scope, instructions, constants, globals) do
       instructions = ensure_function_return(instructions)
 
       {:ok,
@@ -150,5 +152,47 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
   defp top_level_globals(scope), do: Enum.drop(scope.local_names, 1)
 
-  defp identifier_name!(%AST.Identifier{name: name}), do: name
+  defp normalize_params(params) do
+    Enum.map_reduce(params, [], fn
+      %AST.Identifier{name: name}, defaults ->
+        {name, defaults}
+
+      %AST.AssignmentPattern{left: %AST.Identifier{name: name}, right: default}, defaults ->
+        {name, defaults ++ [{name, default}]}
+
+      param, _defaults ->
+        raise FunctionClauseError, function: :identifier_name!, arity: 1, args: [param]
+    end)
+  end
+
+  defp compile_param_defaults([], _scope, instructions, constants, _globals),
+    do: {:ok, instructions, constants}
+
+  defp compile_param_defaults([{name, default} | rest], scope, instructions, constants, globals) do
+    end_label = unique_label(:default_param_end)
+    slot = Scope.resolve(scope, name)
+
+    with {:ok, instructions, constants} <-
+           compile_expression(
+             default,
+             scope,
+             instructions ++
+               [
+                 QuickBEAM.JS.BytecodeCompiler.Slots.read(slot),
+                 :undefined,
+                 :strict_eq,
+                 {:jump_if_false, end_label}
+               ],
+             constants,
+             globals
+           ) do
+      compile_param_defaults(
+        rest,
+        scope,
+        instructions ++ [QuickBEAM.JS.BytecodeCompiler.Slots.put(slot), {:label, end_label}],
+        constants,
+        globals
+      )
+    end
+  end
 end
