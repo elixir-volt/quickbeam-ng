@@ -368,6 +368,54 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
     end
   end
 
+  def compile(
+        %AST.UpdateExpression{
+          operator: operator,
+          argument: %AST.MemberExpression{object: object, property: property, computed: true},
+          prefix: prefix?
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    with {:ok, op} <- Operators.update(operator, prefix?),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(property, scope, instructions, constants) do
+      suffix = if prefix?, do: [op, :insert3], else: [op, :perm4]
+
+      {:ok, instructions ++ [:to_propkey2, :dup2, :get_array_el | suffix] ++ [:put_array_el],
+       constants}
+    end
+  end
+
+  def compile(
+        %AST.UpdateExpression{
+          operator: operator,
+          argument: %AST.MemberExpression{
+            object: object,
+            property: %AST.Identifier{name: property},
+            computed: false
+          },
+          prefix: prefix?
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    with {:ok, op} <- Operators.update(operator, prefix?),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants) do
+      suffix = if prefix?, do: [op, :insert2], else: [op, :perm3]
+
+      {:ok, instructions ++ [{:get_field2, property} | suffix] ++ [{:put_field, property}],
+       constants}
+    end
+  end
+
   def compile(%AST.ArrayExpression{elements: elements}, scope, instructions, constants, callbacks) do
     with {:ok, instructions, constants} <-
            compile_array_elements(elements, scope, instructions, constants, callbacks) do

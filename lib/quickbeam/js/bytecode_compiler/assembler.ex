@@ -231,6 +231,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:insert2, _atoms), do: <<Opcodes.num(:insert2)>>
   defp encode_instruction(:insert3, _atoms), do: <<Opcodes.num(:insert3)>>
   defp encode_instruction(:dup, _atoms), do: <<Opcodes.num(:dup)>>
+  defp encode_instruction(:dup2, _atoms), do: <<Opcodes.num(:dup2)>>
+  defp encode_instruction(:perm3, _atoms), do: <<Opcodes.num(:perm3)>>
+  defp encode_instruction(:perm4, _atoms), do: <<Opcodes.num(:perm4)>>
   defp encode_instruction(:drop, _atoms), do: <<Opcodes.num(:drop)>>
   defp encode_instruction(:add, _atoms), do: <<Opcodes.num(:add)>>
   defp encode_instruction(:sub, _atoms), do: <<Opcodes.num(:sub)>>
@@ -254,6 +257,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:not, _atoms), do: <<Opcodes.num(:not)>>
   defp encode_instruction(:typeof, _atoms), do: <<Opcodes.num(:typeof)>>
   defp encode_instruction(:get_array_el, _atoms), do: <<Opcodes.num(:get_array_el)>>
+  defp encode_instruction(:to_propkey2, _atoms), do: <<Opcodes.num(:to_propkey2)>>
   defp encode_instruction(:get_array_el2, _atoms), do: <<Opcodes.num(:get_array_el2)>>
   defp encode_instruction(:put_array_el, _atoms), do: <<Opcodes.num(:put_array_el)>>
   defp encode_instruction(:define_array_el, _atoms), do: <<Opcodes.num(:define_array_el)>>
