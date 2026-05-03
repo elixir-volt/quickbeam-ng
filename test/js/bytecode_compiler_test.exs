@@ -56,6 +56,12 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
 
     test "compiles generic calls and for loops" do
       assert_compiles_to("function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)", 10)
+
+      assert_compiles_to(
+        Enum.map_join(0..260, ";", &"function f#{&1}(){return #{rem(&1, 10)}}") <> ";f260()",
+        0
+      )
+
       assert_compiles_to("let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s", 6)
     end
 

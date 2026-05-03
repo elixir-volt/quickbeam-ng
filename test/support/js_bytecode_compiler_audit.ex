@@ -15,6 +15,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"if alternate", "let x = 0; if (1 > 2) x = 3; else x = 4; x"},
       {"while loop", "let x = 0; while (x < 3) { x = x + 1; } x"},
       {"function call", "function f(a){ return a + 1; } f(2)"},
+      {"wide function closure index",
+       Enum.map_join(0..260, ";", &"function f#{&1}(){return #{rem(&1, 10)}}") <> ";f260()"},
       {"function expression", "let f = function(a){ return a + 1; }; f(2)"},
       {"equality", "let x = 1; x === 1"},
       {"undefined", "undefined"},

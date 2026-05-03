@@ -156,6 +156,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction({:closure, index}, _atoms) when index in 0..255,
     do: <<Opcodes.num(:fclosure8), index>>
 
+  defp encode_instruction({:closure, index}, _atoms),
+    do: <<Opcodes.num(:fclosure), index::little-32>>
+
   defp encode_instruction({:rest, start}, _atoms) when start in 0..65_535,
     do: <<Opcodes.num(:rest), start::little-16>>
 
