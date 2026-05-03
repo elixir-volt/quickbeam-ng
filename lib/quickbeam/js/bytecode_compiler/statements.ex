@@ -368,6 +368,42 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   def compile(
+        %AST.ForInStatement{
+          left: %AST.VariableDeclaration{
+            declarations: [%AST.VariableDeclarator{id: %AST.Identifier{name: name}}]
+          },
+          right: right,
+          body: body
+        },
+        scope,
+        instructions,
+        constants,
+        _opts,
+        callbacks
+      ) do
+    with {:loc, value_loc} <- callbacks.resolve.(scope, name),
+         {:loc, keys_loc} <- callbacks.resolve.(scope, "<for_in_keys>"),
+         {:loc, index_loc} <- callbacks.resolve.(scope, "<for_in_index>"),
+         {:ok, instructions, constants} <-
+           compile_object_keys(right, scope, instructions, constants, callbacks) do
+      compile_indexed_iteration(
+        body,
+        value_loc,
+        keys_loc,
+        index_loc,
+        scope,
+        instructions,
+        constants,
+        callbacks,
+        :for_in
+      )
+    else
+      :error -> {:error, {:unsupported, :for_in_binding}}
+      {:error, _} = error -> error
+    end
+  end
+
+  def compile(
         %AST.ForOfStatement{
           left: %AST.VariableDeclaration{
             declarations: [%AST.VariableDeclarator{id: %AST.Identifier{name: name}}]
@@ -382,50 +418,22 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         _opts,
         callbacks
       ) do
-    start_label = callbacks.unique_label.(:for_of_start)
-    update_label = callbacks.unique_label.(:for_of_update)
-    end_label = callbacks.unique_label.(:for_of_end)
-
     with {:loc, value_loc} <- callbacks.resolve.(scope, name),
          {:loc, array_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
          {:loc, index_loc} <- callbacks.resolve.(scope, "<for_of_index>"),
          {:ok, instructions, constants} <-
-           callbacks.compile_expression.(right, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile(
-             body,
-             scope,
-             instructions ++
-               [
-                 {:put_loc, array_loc},
-                 {:push_int, 0},
-                 {:put_loc, index_loc},
-                 {:label, start_label},
-                 {:get_loc, index_loc},
-                 {:get_loc, array_loc},
-                 :get_length,
-                 :lt,
-                 {:jump_if_false, end_label},
-                 {:get_loc, array_loc},
-                 {:get_loc, index_loc},
-                 :get_array_el,
-                 {:put_loc, value_loc}
-               ],
-             constants,
-             [tail?: false, break_label: end_label, continue_label: update_label],
-             callbacks
-           ) do
-      {:ok,
-       instructions ++
-         [
-           {:label, update_label},
-           {:get_loc, index_loc},
-           {:push_int, 1},
-           :add,
-           {:put_loc, index_loc},
-           {:jump, start_label},
-           {:label, end_label}
-         ], constants}
+           callbacks.compile_expression.(right, scope, instructions, constants) do
+      compile_indexed_iteration(
+        body,
+        value_loc,
+        array_loc,
+        index_loc,
+        scope,
+        instructions,
+        constants,
+        callbacks,
+        :for_of
+      )
     else
       :error -> {:error, {:unsupported, :for_of_binding}}
       {:error, _} = error -> error
@@ -680,6 +688,85 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       {:ok, properties} -> {:ok, Enum.reverse(properties)}
       error -> error
     end
+  end
+
+  defp compile_object_keys(right, scope, instructions, constants, callbacks) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             right,
+             scope,
+             instructions ++ [{:get_var, "Object"}, {:get_field2, "keys"}],
+             constants
+           ) do
+      {:ok, instructions ++ [{:call_method, 1}], constants}
+    end
+  end
+
+  defp compile_indexed_iteration(
+         body,
+         value_loc,
+         collection_loc,
+         index_loc,
+         scope,
+         instructions,
+         constants,
+         callbacks,
+         label_prefix
+       ) do
+    start_label = callbacks.unique_label.(String.to_atom("#{label_prefix}_start"))
+    update_label = callbacks.unique_label.(String.to_atom("#{label_prefix}_update"))
+    end_label = callbacks.unique_label.(String.to_atom("#{label_prefix}_end"))
+
+    with {:ok, instructions, constants} <-
+           compile(
+             body,
+             scope,
+             instructions ++
+               indexed_iteration_prefix(
+                 collection_loc,
+                 index_loc,
+                 value_loc,
+                 start_label,
+                 end_label
+               ),
+             constants,
+             [tail?: false, break_label: end_label, continue_label: update_label],
+             callbacks
+           ) do
+      {:ok,
+       instructions ++ indexed_iteration_suffix(index_loc, start_label, update_label, end_label),
+       constants}
+    end
+  end
+
+  defp indexed_iteration_prefix(collection_loc, index_loc, value_loc, start_label, end_label) do
+    [
+      {:put_loc, collection_loc},
+      {:push_int, 0},
+      {:put_loc, index_loc},
+      {:label, start_label},
+      {:get_loc, index_loc},
+      {:get_loc, collection_loc},
+      :get_length,
+      :lt,
+      {:jump_if_false, end_label},
+      {:get_loc, collection_loc},
+      {:get_loc, index_loc},
+      :get_array_el,
+      {:put_loc, value_loc}
+    ]
+  end
+
+  defp indexed_iteration_suffix(index_loc, start_label, update_label, end_label) do
+    [
+      {:label, update_label},
+      {:get_loc, index_loc},
+      {:push_int, 1},
+      :add,
+      {:put_loc, index_loc},
+      {:jump, start_label},
+      {:label, end_label}
+    ]
   end
 
   defp object_literal_keys(properties) do

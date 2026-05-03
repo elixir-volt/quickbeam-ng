@@ -114,8 +114,13 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let s = 0; for (const x of [1, 2, 3]) s += x; s", 6)
     end
 
-    test "compiles static object for-in loops" do
+    test "compiles object for-in loops" do
       assert_compiles_to("let s = ''; for (const k in {a: 1, b: 2}) s += k; s.length", 2)
+
+      assert_compiles_to(
+        "let o = {a: 1, b: 2}; let s = ''; for (let k in o) { s = s + k; } s.length",
+        2
+      )
     end
 
     test "compiles simple throw/catch" do

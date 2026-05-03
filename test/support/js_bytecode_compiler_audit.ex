@@ -69,6 +69,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
        "let x = 0; switch (2) { case 1: x = 1; break; default: x = 3; } x"},
       {"for of array", "let s = 0; for (const x of [1, 2, 3]) s += x; s"},
       {"for in static object", "let s = ''; for (const k in {a: 1, b: 2}) s += k; s.length"},
+      {"for in object keys",
+       "let o = {a: 1, b: 2}; let s = ''; for (let k in o) { s = s + k; } s.length"},
       {"simple throw catch", "try { throw 3; } catch (e) { e + 1; }"},
       {"simple class method", "class A { m() { return 1; } } new A().m()"},
       {"simple class constructor", "class A { constructor() { this.x = 1; } } new A().x"},
