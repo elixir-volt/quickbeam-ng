@@ -2,7 +2,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
   @moduledoc false
 
   alias QuickBEAM.JS.BytecodeCompiler
-  alias QuickBEAM.VM.{Compiler, Heap, Interpreter}
+  alias QuickBEAM.VM.{Bytecode, Compiler, Heap, Interpreter}
+  alias QuickBEAM.VM.Heap.Arrays
 
   def cases do
     [
@@ -15,6 +16,14 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"function call", "function f(a){ return a + 1; } f(2)"},
       {"function expression", "let f = function(a){ return a + 1; }; f(2)"},
       {"equality", "let x = 1; x === 1"},
+      {"undefined", "undefined"},
+      {"bitwise not", "~1"},
+      {"left shift", "1 << 4"},
+      {"signed right shift", "-8 >> 1"},
+      {"unsigned right shift", "-1 >>> 0"},
+      {"bitwise and assignment", "let x=7; x &= 3; x"},
+      {"bitwise or assignment", "let x=4; x |= 3; x"},
+      {"bitwise xor assignment", "let x=7; x ^= 3; x"},
       {"assignment expression", "let x = 1; x = x + 2; x"},
       {"string constant", "'quick'"},
       {"float constant", "1.5"},
@@ -133,7 +142,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
     {:ok, rt} = QuickBEAM.start(apis: false)
 
     try do
-      QuickBEAM.eval(rt, source)
+      normalize_result(QuickBEAM.eval(rt, source))
     after
       QuickBEAM.stop(rt)
     end
@@ -141,11 +150,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
 
   defp run_interpreter(bytecode) do
     Heap.reset()
-    Interpreter.eval(bytecode.value, [], %{gas: 1_000_000}, bytecode.atoms)
+    normalize_result(Interpreter.eval(bytecode.value, [], %{gas: 1_000_000}, bytecode.atoms))
   end
 
   defp run_compiler(bytecode) do
-    Compiler.invoke(bytecode.value, [])
+    normalize_result(Compiler.invoke(bytecode.value, []))
   end
 
   defp run_native_load(source) do
@@ -153,10 +162,62 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {:ok, rt} = QuickBEAM.start(apis: false)
 
       try do
-        QuickBEAM.load_bytecode(rt, binary)
+        normalize_result(QuickBEAM.load_bytecode(rt, binary))
       after
         QuickBEAM.stop(rt)
       end
     end
   end
+
+  defp normalize_result({:ok, value}), do: {:ok, normalize(value)}
+  defp normalize_result({:error, reason}), do: {:error, normalize(reason)}
+  defp normalize_result(other), do: other
+
+  defp normalize(value) when is_float(value) do
+    if value == 0.0 and :erlang.float_to_binary(value) == "-0.00000000000000000000e+00" do
+      -0.0
+    else
+      value
+    end
+  end
+
+  defp normalize(:undefined), do: nil
+  defp normalize(:neg_infinity), do: :"-Infinity"
+  defp normalize(:infinity), do: :Infinity
+  defp normalize({:js_throw, value}), do: {:js_throw, normalize(value)}
+  defp normalize({:obj, ref}), do: normalize_heap_object(Heap.get_obj(ref))
+  defp normalize({:closure, _captures, %Bytecode.Function{}}), do: :function
+  defp normalize({:builtin, name, callback}) when is_function(callback), do: {:builtin, name}
+  defp normalize(%Bytecode.Function{}), do: :function
+  defp normalize(%QuickBEAM.JSError{} = error), do: {:js_error, error.name, error.message}
+  defp normalize(value) when is_list(value), do: {:array, Enum.map(value, &normalize/1)}
+
+  defp normalize(%struct{} = value) when is_atom(struct), do: {struct, inspect(value)}
+
+  defp normalize(value) when is_map(value) do
+    value
+    |> Enum.map(fn {key, value} -> {key, normalize(value)} end)
+    |> Enum.sort_by(fn {key, _value} -> inspect(key) end)
+    |> then(&{:object, &1})
+  end
+
+  defp normalize(value), do: value
+
+  defp normalize_heap_object({:qb_arr, _} = array),
+    do: {:array, Enum.map(Arrays.to_list(array), &normalize/1)}
+
+  defp normalize_heap_object(map) when is_map(map) do
+    map
+    |> Enum.reject(fn {key, _value} -> internal_key?(key) end)
+    |> Enum.map(fn {key, value} -> {key, normalize(value)} end)
+    |> Enum.sort_by(fn {key, _value} -> inspect(key) end)
+    |> then(&{:object, &1})
+  end
+
+  defp normalize_heap_object(list) when is_list(list), do: {:array, Enum.map(list, &normalize/1)}
+  defp normalize_heap_object(other), do: {:object, inspect(other)}
+
+  defp internal_key?(key) when is_atom(key), do: true
+  defp internal_key?("__proto__"), do: true
+  defp internal_key?(_key), do: false
 end

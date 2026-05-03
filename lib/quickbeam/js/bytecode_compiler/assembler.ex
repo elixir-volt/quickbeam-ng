@@ -223,6 +223,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:mul, _atoms), do: <<Opcodes.num(:mul)>>
   defp encode_instruction(:div, _atoms), do: <<Opcodes.num(:div)>>
   defp encode_instruction(:mod, _atoms), do: <<Opcodes.num(:mod)>>
+  defp encode_instruction(:shl, _atoms), do: <<Opcodes.num(:shl)>>
+  defp encode_instruction(:sar, _atoms), do: <<Opcodes.num(:sar)>>
+  defp encode_instruction(:shr, _atoms), do: <<Opcodes.num(:shr)>>
+  defp encode_instruction(:band, _atoms), do: <<Opcodes.num(:band)>>
+  defp encode_instruction(:bxor, _atoms), do: <<Opcodes.num(:bxor)>>
+  defp encode_instruction(:bor, _atoms), do: <<Opcodes.num(:bor)>>
   defp encode_instruction(:inc, _atoms), do: <<Opcodes.num(:inc)>>
   defp encode_instruction(:dec, _atoms), do: <<Opcodes.num(:dec)>>
   defp encode_instruction(:post_inc, _atoms), do: <<Opcodes.num(:post_inc)>>
@@ -230,6 +236,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:neg, _atoms), do: <<Opcodes.num(:neg)>>
   defp encode_instruction(:plus, _atoms), do: <<Opcodes.num(:plus)>>
   defp encode_instruction(:lnot, _atoms), do: <<Opcodes.num(:lnot)>>
+  defp encode_instruction(:not, _atoms), do: <<Opcodes.num(:not)>>
   defp encode_instruction(:typeof, _atoms), do: <<Opcodes.num(:typeof)>>
   defp encode_instruction(:get_array_el, _atoms), do: <<Opcodes.num(:get_array_el)>>
   defp encode_instruction(:get_array_el2, _atoms), do: <<Opcodes.num(:get_array_el2)>>

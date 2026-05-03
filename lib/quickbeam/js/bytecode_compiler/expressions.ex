@@ -40,6 +40,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(%AST.Identifier{name: "this"}, _scope, instructions, constants, _callbacks),
     do: {:ok, instructions ++ [:push_this], constants}
 
+  def compile(%AST.Identifier{name: "undefined"}, _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions ++ [:undefined], constants}
+
   def compile(%AST.Identifier{name: name}, scope, instructions, constants, callbacks) do
     case callbacks.resolve.(scope, name) do
       :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}

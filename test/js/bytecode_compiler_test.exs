@@ -71,6 +71,17 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("0 ?? 3", 0)
     end
 
+    test "compiles bitwise expressions" do
+      assert_compiles_to("undefined", :undefined)
+      assert_compiles_to("~1", -2)
+      assert_compiles_to("1 << 4", 16)
+      assert_compiles_to("-8 >> 1", -4)
+      assert_compiles_to("-1 >>> 0", 4_294_967_295)
+      assert_compiles_to("let x=7; x &= 3; x", 3)
+      assert_compiles_to("let x=4; x |= 3; x", 7)
+      assert_compiles_to("let x=7; x ^= 3; x", 4)
+    end
+
     test "compiles sequence expressions" do
       assert_compiles_to("let x=0; (x=1, x+2)", 3)
       assert_compiles_to("let x=0; let y=(x=1, x+2); y+x", 4)
