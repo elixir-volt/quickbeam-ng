@@ -1,7 +1,7 @@
 defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Captures, Emitter, Operators, Slots}
+  alias QuickBEAM.JS.BytecodeCompiler.{Captures, Emitter, Operators, Scope, Slots}
   alias QuickBEAM.JS.Parser.AST
 
   def compile(expression, %Emitter{} = emitter) do
@@ -123,6 +123,17 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
            callbacks.compile_expression.(property, scope, instructions, constants) do
       {:ok, instructions ++ [:delete], constants}
     end
+  end
+
+  def compile(
+        %AST.UnaryExpression{operator: "delete", argument: %AST.Identifier{name: name}},
+        scope,
+        instructions,
+        constants,
+        _callbacks
+      ) do
+    result = callbacks_delete_identifier_result(scope, name)
+    {:ok, instructions ++ [result], constants}
   end
 
   def compile(
@@ -725,6 +736,13 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   defp regexp_bytecode_constant?(value, pattern), do: is_binary(value) and value != pattern
+
+  defp callbacks_delete_identifier_result(scope, name) do
+    case Scope.resolve(scope, name) do
+      :error -> true
+      _slot -> false
+    end
+  end
 
   defp compile_direct_call(callee, args, scope, instructions, constants, callbacks) do
     with {:ok, args} <- expand_call_args(args),

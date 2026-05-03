@@ -32,6 +32,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"in operator", "'x' in {x: 1}"},
       {"delete property", "let o={x:1}; delete o.x; o.x === undefined"},
       {"computed delete property", "let o={x:1}; delete o['x']; o.x === undefined"},
+      {"delete var binding", "var x = 1; delete x"},
       {"assignment expression", "let x = 1; x = x + 2; x"},
       {"string constant", "'quick'"},
       {"float constant", "1.5"},
