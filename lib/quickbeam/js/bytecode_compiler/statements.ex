@@ -90,6 +90,22 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   def compile(
+        %AST.VariableDeclaration{kind: kind, declarations: declarations},
+        scope,
+        instructions,
+        constants,
+        opts,
+        callbacks
+      )
+      when kind in [:let, :const] do
+    if Keyword.get(opts, :block_scope?, false) do
+      compile_block_lexical_declarations(declarations, scope, instructions, constants, callbacks)
+    else
+      compile_variable_declarations(declarations, scope, instructions, constants, callbacks)
+    end
+  end
+
+  def compile(
         %AST.VariableDeclaration{declarations: declarations},
         scope,
         instructions,
@@ -97,13 +113,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         _opts,
         callbacks
       ) do
-    Enum.reduce_while(declarations, {:ok, instructions, constants}, fn declaration,
-                                                                       {:ok, ins, consts} ->
-      case compile_declarator(declaration, scope, ins, consts, callbacks) do
-        {:ok, ins, consts} -> {:cont, {:ok, ins, consts}}
-        {:error, _} = error -> {:halt, error}
-      end
-    end)
+    compile_variable_declarations(declarations, scope, instructions, constants, callbacks)
   end
 
   def compile(
@@ -510,10 +520,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   def compile(%AST.BlockStatement{body: body}, scope, instructions, constants, opts, callbacks) do
+    block_opts = Keyword.put(opts, :block_scope?, true)
+
     if Keyword.fetch!(opts, :tail?) do
       compile_all(body, scope, instructions, constants, callbacks)
     else
-      compile_non_tail(body, scope, instructions, constants, opts, callbacks)
+      compile_non_tail(body, scope, instructions, constants, block_opts, callbacks)
     end
   end
 
@@ -938,6 +950,26 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  defp compile_variable_declarations(declarations, scope, instructions, constants, callbacks) do
+    Enum.reduce_while(declarations, {:ok, instructions, constants}, fn declaration,
+                                                                       {:ok, ins, consts} ->
+      case compile_declarator(declaration, scope, ins, consts, callbacks) do
+        {:ok, ins, consts} -> {:cont, {:ok, ins, consts}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp compile_block_lexical_declarations(declarations, scope, instructions, constants, callbacks) do
+    Enum.reduce_while(declarations, {:ok, instructions, constants}, fn declaration,
+                                                                       {:ok, ins, consts} ->
+      case compile_block_lexical_declarator(declaration, scope, ins, consts, callbacks) do
+        {:ok, ins, consts} -> {:cont, {:ok, ins, consts}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+  end
+
   defp compile_for_init(nil, _scope, instructions, constants, _callbacks),
     do: {:ok, instructions, constants}
 
@@ -973,6 +1005,28 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   defp compile_for_update(update, scope, instructions, constants, callbacks) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(update, scope, instructions, constants) do
+      {:ok, instructions ++ [{:put_loc, 0}], constants}
+    end
+  end
+
+  defp compile_block_lexical_declarator(
+         %AST.VariableDeclarator{init: nil},
+         _scope,
+         instructions,
+         constants,
+         _callbacks
+       ),
+       do: {:ok, instructions ++ [:undefined, {:put_loc, 0}], constants}
+
+  defp compile_block_lexical_declarator(
+         %AST.VariableDeclarator{init: init},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(init, scope, instructions, constants) do
       {:ok, instructions ++ [{:put_loc, 0}], constants}
     end
   end
