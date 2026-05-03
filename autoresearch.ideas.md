@@ -1,8 +1,9 @@
 - Add Test262-derived executable windows for broader coverage.
-- `eval` execution (3 mismatches): eval compiles as global but interpreter/BEAM compiler return undefined instead of executing code. Needs eval opcode implementation in interpreter.
-- Derived constructor return object (1 mismatch): stub class returns empty object instead of `{x:1}`.
-- `arguments` aliasing (4 unsupported): sloppy-mode parameter aliasing requires var_ref on parameter locals. Now that var_ref infrastructure exists, this could be implemented by marking params as captured when arguments object is used.
-- Private class fields/methods/super getters/setters (11 unsupported): needs define_class, private_symbol, check_brand, add_brand, get/put_private_field, get/put_super_value.
+- `eval` execution (3 mismatches): eval compiles as global but interpreter/BEAM compiler return undefined. Audit harness lacks runtime_pid for interpreter eval.
+- Derived constructor return object (1 mismatch): stub class returns empty object.
+- `arguments` aliasing (4 unsupported): interpreter's special_object 1 creates snapshot not aliased view. var_ref infrastructure exists but heap aliasing doesn't.
+- Private class fields/methods (4 cases) + private method key (1 case) = 5 private unsupported: needs define_class/private_symbol/brand/get-put_private_field.
+- Super setter/compound/postinc (3 cases) + super destructuring targets (2 cases) = 5 super-write unsupported: need prototype-chain write semantics (put_super_value).
 - `instanceof` (1 unsupported): class factories lack real prototypes.
 - `Symbol.iterator` (1 unsupported): custom iterable for-of needs iterator protocol.
 - `with(o){ delete x; }` parse error (1 case).
