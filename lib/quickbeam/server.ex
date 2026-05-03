@@ -110,7 +110,7 @@ defmodule QuickBEAM.Server do
 
       @impl true
       def handle_cast({:send_message, message}, state) do
-        if state.mode == :beam do
+        if Map.get(state, :mode) == :beam do
           {:noreply, %{state | beam_pending_msgs: state.beam_pending_msgs ++ [message]}}
         else
           nif_send_message(state, message)

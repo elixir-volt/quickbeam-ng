@@ -41,7 +41,10 @@ defmodule QuickBEAM.VM.Compiler do
   end
 
   defp settle_top_level_result({:ok, value}) do
-    PromiseState.drain_microtasks()
+    unless Heap.microtasks_empty?() do
+      PromiseState.drain_microtasks()
+    end
+
     {:ok, unwrap_resolved_promise(value)}
   end
 
@@ -136,7 +139,6 @@ defmodule QuickBEAM.VM.Compiler do
       {:decode, {:error, reason}} -> {:error, {:decode_failed, reason}}
       {:lower, {:error, reason}} -> {:error, reason}
       {:forms, {:error, reason}} -> {:error, {:beam_compile_failed, reason}}
-      {:forms, {:error, module, errors}} -> {:error, {:beam_compile_failed, module, errors}}
     end
   end
 

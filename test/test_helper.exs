@@ -1,4 +1,5 @@
 Application.ensure_all_started(:telemetry)
+Application.ensure_all_started(:bandit)
 
 # Compile the test N-API addon from C source
 test_addon_src = Path.expand("support/test_addon.c", __DIR__)
