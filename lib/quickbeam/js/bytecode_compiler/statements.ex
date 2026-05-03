@@ -84,7 +84,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       if Keyword.fetch!(opts, :tail?) do
         {:ok, instructions ++ [{:set_loc, 0}], constants}
       else
-        {:ok, instructions ++ [{:put_loc, 0}], constants}
+        {:ok, instructions ++ [:drop], constants}
       end
     end
   end
