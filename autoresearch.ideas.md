@@ -1,9 +1,9 @@
 - Add Test262-derived executable windows for broader coverage.
-- `eval` execution (3 mismatches): eval compiles as global but interpreter/BEAM compiler return undefined. Audit harness lacks runtime_pid for eval.
+- Direct eval with scope access (1 mismatch): `eval('arguments[0]')` needs caller scope — our indirect-eval fallback can't access it.
 - Derived constructor return object (1 mismatch): stub class returns empty object.
-- Super setter/compound/postinc (3 cases) + super destructuring targets (2 cases) = 5 super-write unsupported: factory approach rewrites super reads but writes need prototype-chain setter dispatch with `this` context. Object.getOwnPropertyDescriptor approach blocked because Object global unavailable in interpreter without runtime.
+- Super setter/compound/postinc (3) + super destructuring targets (2) = 5 super-write unsupported: factory approach rewrites reads but writes need prototype-chain setter dispatch.
 - Private class fields (3 class_element) + private method/getter keys (2 object_property_key) = 5 private unsupported.
-- `instanceof` (1 unsupported): class factories lack real prototypes.
-- `Symbol.iterator` (1 unsupported): custom iterable for-of needs iterator protocol.
-- `with(o){ delete x; }` parse error (1 case).
-- `test/vm/test_language.js` throw_statement (1 unsupported): full JS file needing many features.
+- `instanceof` (1): class factories lack real prototypes.
+- `Symbol.iterator` (1): custom iterable for-of needs iterator protocol.
+- `with(o){ delete x; }` parse error (1).
+- `test/vm/test_language.js` throw_statement (1): full JS file.
