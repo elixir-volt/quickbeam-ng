@@ -417,6 +417,23 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.AssignmentExpression{
+          operator: "=",
+          left: %AST.ObjectPattern{properties: properties},
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(right, scope, instructions, constants) do
+      compile_destructuring_assignment(properties, scope, instructions, constants, callbacks)
+    end
+  end
+
+  def compile(
         %AST.UpdateExpression{
           operator: operator,
           argument: %AST.Identifier{name: name},
@@ -787,6 +804,212 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
       {:ok, instructions ++ [{:call, length(args)}], constants}
     end
   end
+
+  defp compile_destructuring_assignment([], _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions, constants}
+
+  defp compile_destructuring_assignment(
+         [%AST.Property{computed: false, key: %AST.Identifier{name: key}, value: target} | rest],
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           compile_destructuring_target(key, target, scope, instructions, constants, callbacks) do
+      compile_destructuring_assignment(rest, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_destructuring_assignment(
+         [
+           %AST.Property{computed: true, key: computed_key, value: target}
+           | rest
+         ],
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           compile_computed_destructuring_target(
+             computed_key,
+             target,
+             scope,
+             instructions,
+             constants,
+             callbacks
+           ) do
+      compile_destructuring_assignment(rest, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_destructuring_assignment(
+         _properties,
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks
+       ),
+       do: {:error, {:unsupported, :assignment_expression}}
+
+  defp compile_destructuring_target(
+         key,
+         %AST.MemberExpression{
+           object: %AST.Identifier{name: obj_name},
+           property: %AST.Identifier{name: prop_name},
+           computed: false
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             %AST.Identifier{type: :identifier, name: obj_name},
+             scope,
+             instructions ++ [:dup, {:get_field, key}],
+             constants
+           ) do
+      {:ok, instructions ++ [:swap, {:put_field, prop_name}], constants}
+    end
+  end
+
+  defp compile_destructuring_target(
+         key,
+         %AST.MemberExpression{
+           object: %AST.Identifier{name: obj_name},
+           property: index_expr,
+           computed: true
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    # Stack: [rhs_obj, ...]
+    # dup, get_field key → [value, rhs_obj, ...]
+    # Then need target[index] = value while keeping rhs_obj
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             %AST.Identifier{type: :identifier, name: obj_name},
+             scope,
+             instructions ++ [:dup, {:get_field, key}],
+             constants
+           ) do
+      # Stack: [target, value, rhs_obj, ...]
+      with {:ok, instructions, constants} <-
+             callbacks.compile_expression.(index_expr, scope, instructions, constants) do
+        # Stack: [index, target, value, rhs_obj, ...]
+        # perm3 [a,b,c] → [a,c,b]: [index, value, target, rhs_obj, ...]
+        # But put_array_el wants [val, idx, obj]: swap first two then...
+        # Actually: we need [value, index, target, rhs_obj]
+        # From [index, target, value, rhs_obj]: rot3 → [value, index, target, rhs_obj]
+        # rot3 = taking third element to top: use perm3 then swap?
+        # perm3 [a,b,c]->[a,c,b]: [index, value, target]
+        # Then swap: [value, index, target]
+        {:ok, instructions ++ [:perm3, :swap, :put_array_el], constants}
+      end
+    end
+  end
+
+  defp compile_destructuring_target(
+         key,
+         %AST.Identifier{name: var_name},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    case callbacks.resolve.(scope, var_name) do
+      {:loc, loc} ->
+        {:ok, instructions ++ [:dup, {:get_field, key}, {:put_loc, loc}], constants}
+
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, var_name}}}
+    end
+  end
+
+  defp compile_destructuring_target(_key, _target, _scope, _instructions, _constants, _callbacks),
+    do: {:error, {:unsupported, :assignment_expression}}
+
+  defp compile_computed_destructuring_target(
+         computed_key,
+         %AST.MemberExpression{
+           object: %AST.Identifier{name: obj_name},
+           property: %AST.Identifier{name: prop_name},
+           computed: false
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             computed_key,
+             scope,
+             instructions ++ [:dup],
+             constants
+           ) do
+      with {:ok, instructions, constants} <-
+             callbacks.compile_expression.(
+               %AST.Identifier{type: :identifier, name: obj_name},
+               scope,
+               instructions ++ [:get_array_el],
+               constants
+             ) do
+        {:ok, instructions ++ [:swap, {:put_field, prop_name}], constants}
+      end
+    end
+  end
+
+  defp compile_computed_destructuring_target(
+         computed_key,
+         %AST.MemberExpression{
+           object: %AST.Identifier{name: obj_name},
+           property: index_expr,
+           computed: true
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    # Stack: [rhs_obj, ...]
+    # dup, push computed_key, get_array_el → [value, rhs_obj, ...]
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             computed_key,
+             scope,
+             instructions ++ [:dup],
+             constants
+           ) do
+      with {:ok, instructions, constants} <-
+             callbacks.compile_expression.(
+               %AST.Identifier{type: :identifier, name: obj_name},
+               scope,
+               instructions ++ [:get_array_el],
+               constants
+             ),
+           {:ok, instructions, constants} <-
+             callbacks.compile_expression.(index_expr, scope, instructions, constants) do
+        # Stack: [index, target, value, rhs_obj, ...]
+        {:ok, instructions ++ [:perm3, :swap, :put_array_el], constants}
+      end
+    end
+  end
+
+  defp compile_computed_destructuring_target(
+         _key,
+         _target,
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks
+       ),
+       do: {:error, {:unsupported, :assignment_expression}}
 
   defp compile_global_identifier(name, instructions, constants)
        when name in ["Object", "Math", "Array", "String", "Number", "Boolean"] do
