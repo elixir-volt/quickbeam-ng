@@ -94,6 +94,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"function if return", "function f(x){ if (x) return 1; return 2; } f(true)"},
       {"function loop return", "function f(){ while (true) { return 5; } } f()"},
       {"function for break", "function f(){ for(;;){ break; } return 1; } f()"},
+      {"function arg4 read", "function f(a,b,c,d,e){return e;} f(1,2,3,4,5)"},
+      {"function arg4 write", "function f(a,b,c,d,e){ e=6; return e; } f(1,2,3,4,5)"},
       {"function block var", "function f(){ if (true) { var x = 1; } return x; } f()"},
       {"function block let hidden",
        "function f(){ if (true) { let x = 1; } return typeof x; } f()"},
