@@ -31,6 +31,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  def compile_non_tail(statements, %Emitter{} = emitter) do
+    with {:ok, instructions, constants} <-
+           compile_non_tail(
+             statements,
+             emitter.scope,
+             emitter.instructions,
+             emitter.constants,
+             [],
+             emitter.callbacks
+           ) do
+      Emitter.result(%{emitter | instructions: instructions, constants: constants})
+    end
+  end
+
   def compile_non_tail([], _scope, instructions, constants, _opts, _callbacks),
     do: {:ok, instructions, constants}
 

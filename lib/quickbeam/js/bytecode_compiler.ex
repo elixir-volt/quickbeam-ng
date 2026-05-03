@@ -91,6 +91,13 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     )
   end
 
+  defp compile_function_body(statements, scope, instructions, constants, globals) do
+    Statements.compile_non_tail(
+      statements,
+      Emitter.new(scope, instructions, constants, callbacks(globals))
+    )
+  end
+
   defp compile_expression(expression, scope, instructions, constants, globals) do
     Expressions.compile(
       expression,
@@ -109,7 +116,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_param_defaults(defaults, scope, instructions, constants, globals),
          {:ok, instructions, constants} <-
-           compile_statements(function.body.body, scope, instructions, constants, globals) do
+           compile_function_body(function.body.body, scope, instructions, constants, globals) do
       instructions = ensure_function_return(instructions)
 
       {:ok,
