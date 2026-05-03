@@ -120,6 +120,29 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(
         %AST.AssignmentExpression{
           operator: "=",
+          left: %AST.MemberExpression{
+            object: object,
+            property: %AST.Identifier{name: property},
+            computed: false
+          },
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(right, scope, instructions, constants) do
+      {:ok, instructions ++ [:insert2, {:put_field, property}], constants}
+    end
+  end
+
+  def compile(
+        %AST.AssignmentExpression{
+          operator: "=",
           left: %AST.MemberExpression{object: object, property: property, computed: true},
           right: right
         },

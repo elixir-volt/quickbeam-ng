@@ -81,6 +81,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let o={x:1}; o[\"x\"]=2; o.x", 2)
     end
 
+    test "compiles member assignment expressions" do
+      assert_compiles_to("let o={}; let y=(o.x=2); y+o.x", 4)
+      assert_compiles_to("let a=[0]; let y=(a[0]=2); y+a[0]", 4)
+    end
+
     test "compiles function control flow" do
       assert_compiles_to("function f(x){ if (x) return 1; return 2; } f(true)", 1)
       assert_compiles_to("function f(){ while (true) { return 5; } } f()", 5)

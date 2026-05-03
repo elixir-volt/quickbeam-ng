@@ -28,6 +28,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"computed object key", "let k = \"x\"; ({[k]: 2}).x"},
       {"computed numeric object key", "({[1]: 2})[1]"},
       {"object property assignment", "let o = {x: 1}; o.x = 2; o.x"},
+      {"member assignment value", "let o={}; let y=(o.x=2); y+o.x"},
+      {"computed assignment value", "let a=[0]; let y=(a[0]=2); y+a[0]"},
       {"generic call arity", "function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)"},
       {"for loop", "let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s"},
       {"loop break", "let x=0; while (x < 5) { x=x+1; break; } x"},

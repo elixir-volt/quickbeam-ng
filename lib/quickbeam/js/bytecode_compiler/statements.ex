@@ -47,37 +47,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         %AST.ExpressionStatement{
           expression: %AST.AssignmentExpression{
             operator: "=",
-            left: %AST.MemberExpression{
-              object: object,
-              property: %AST.Identifier{name: property},
-              computed: false
-            },
-            right: right
-          }
-        },
-        scope,
-        instructions,
-        constants,
-        opts,
-        callbacks
-      ) do
-    with {:ok, instructions, constants} <-
-           callbacks.compile_expression.(object, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           callbacks.compile_expression.(right, scope, instructions, constants) do
-      if Keyword.fetch!(opts, :tail?) do
-        {:ok, instructions ++ [:insert2, {:put_field, property}, {:set_loc, 0}], constants}
-      else
-        {:ok, instructions ++ property_assignment_statement_suffix(callbacks, scope, property),
-         constants}
-      end
-    end
-  end
-
-  def compile(
-        %AST.ExpressionStatement{
-          expression: %AST.AssignmentExpression{
-            operator: "=",
             left: %AST.Identifier{name: name},
             right: right
           }
@@ -396,13 +365,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(argument, scope, instructions, constants) do
       {:ok, instructions ++ [:return], constants}
-    end
-  end
-
-  defp property_assignment_statement_suffix(callbacks, scope, property) do
-    case callbacks.resolve.(scope, "<ret>") do
-      {:loc, 0} -> [:insert2, {:put_field, property}, {:put_loc, 0}]
-      _ -> [{:put_field, property}]
     end
   end
 end
