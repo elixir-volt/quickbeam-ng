@@ -594,6 +594,25 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
     end
   end
 
+  def compile(
+        %AST.ArrowFunctionExpression{body: body, async: false, params: params},
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    expression = %AST.FunctionExpression{
+      type: :function_expression,
+      id: nil,
+      params: params,
+      body: arrow_body(body),
+      async: false,
+      generator: false
+    }
+
+    compile(expression, scope, instructions, constants, callbacks)
+  end
+
   def compile(%AST.FunctionExpression{} = expression, scope, instructions, constants, callbacks) do
     captures = Captures.captured_names(expression, scope)
     expression = Captures.prepend_params(expression, captures)
@@ -1072,6 +1091,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
 
   defp update_suffix(slot, true), do: [:dup, Slots.put(slot)]
   defp update_suffix(slot, false), do: [Slots.put(slot)]
+
+  defp arrow_body(%AST.BlockStatement{} = body), do: body
+
+  defp arrow_body(expression) do
+    %AST.BlockStatement{
+      type: :block_statement,
+      body: [%AST.ReturnStatement{type: :return_statement, argument: expression}]
+    }
+  end
 
   defp function_name(nil), do: nil
   defp function_name(%AST.Identifier{name: name}), do: name
