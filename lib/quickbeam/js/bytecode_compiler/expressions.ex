@@ -49,6 +49,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(%AST.Identifier{name: name}, scope, instructions, constants, callbacks) do
     case callbacks.resolve.(scope, name) do
       :error -> compile_global_identifier(name, instructions, constants)
+      {:global, global_name} -> {:ok, instructions ++ [{:get_var, global_name}], constants}
       slot -> {:ok, instructions ++ [Slots.read(slot)], constants}
     end
   end

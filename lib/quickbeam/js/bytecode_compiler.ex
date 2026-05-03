@@ -65,7 +65,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     scope = Scope.declare_local(Scope.new(), "<ret>")
 
     with {:ok, scope} <- Declarations.declare_program_locals(body, scope),
-         {:ok, instructions, constants} <- compile_statements(body, scope, [], []) do
+         {:ok, instructions, constants} <-
+           compile_statements(body, scope, [], [], top_level_globals(scope)) do
       instructions = finish_program(instructions)
 
       {:ok,
@@ -83,20 +84,27 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     end
   end
 
-  defp compile_statements(statements, scope, instructions, constants) do
-    Statements.compile_all(statements, Emitter.new(scope, instructions, constants, callbacks()))
+  defp compile_statements(statements, scope, instructions, constants, globals) do
+    Statements.compile_all(
+      statements,
+      Emitter.new(scope, instructions, constants, callbacks(globals))
+    )
   end
 
-  defp compile_expression(expression, scope, instructions, constants) do
-    Expressions.compile(expression, Emitter.new(scope, instructions, constants, callbacks()))
+  defp compile_expression(expression, scope, instructions, constants, globals) do
+    Expressions.compile(
+      expression,
+      Emitter.new(scope, instructions, constants, callbacks(globals))
+    )
   end
 
-  defp compile_function(function, name) do
+  defp compile_function(function, name, globals) do
     params = Enum.map(function.params, &identifier_name!/1)
-    scope = Scope.new(params)
+    scope = Scope.new(params, globals)
 
     with {:ok, scope} <- Declarations.declare_program_locals(function.body.body, scope),
-         {:ok, instructions, constants} <- compile_statements(function.body.body, scope, [], []) do
+         {:ok, instructions, constants} <-
+           compile_statements(function.body.body, scope, [], [], globals) do
       instructions = ensure_function_return(instructions)
 
       {:ok,
@@ -125,10 +133,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
       else: instructions ++ [:return_undef]
   end
 
-  defp callbacks do
+  defp callbacks(globals) do
     %{
-      compile_expression: &compile_expression/4,
-      compile_function: &compile_function/2,
+      compile_expression: fn expression, scope, instructions, constants ->
+        compile_expression(expression, scope, instructions, constants, globals)
+      end,
+      compile_function: fn function, name -> compile_function(function, name, globals) end,
       resolve: &resolve/2,
       unique_label: &unique_label/1
     }
@@ -137,6 +147,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   defp unique_label(prefix), do: {prefix, System.unique_integer([:positive])}
 
   defp resolve(scope, name), do: Scope.resolve(scope, name)
+
+  defp top_level_globals(scope), do: Enum.drop(scope.local_names, 1)
 
   defp identifier_name!(%AST.Identifier{name: name}), do: name
 end

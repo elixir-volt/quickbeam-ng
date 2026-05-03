@@ -117,7 +117,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     with {:ok, function} <- callbacks.compile_function.(declaration, name) do
       case callbacks.resolve.(scope, name) do
         {:loc, loc} ->
-          {:ok, instructions ++ [{:closure, length(constants)}, {:put_loc, loc}],
+          {:ok,
+           instructions ++
+             [{:closure, length(constants)}, :dup, {:put_loc, loc}, {:put_var, name}],
            [function | constants]}
 
         :error ->
@@ -127,7 +129,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   def compile(
-        %AST.ClassDeclaration{id: %AST.Identifier{name: name}, super_class: nil, body: body},
+        %AST.ClassDeclaration{
+          id: %AST.Identifier{name: name},
+          super_class: super_class,
+          body: body
+        },
         scope,
         instructions,
         constants,
@@ -135,9 +141,10 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         callbacks
       ) do
     with {:loc, loc} <- callbacks.resolve.(scope, name),
-         {:ok, factory} <- class_factory(name, body),
+         {:ok, factory} <- class_factory(name, super_class, body),
          {:ok, function} <- callbacks.compile_function.(factory, name) do
-      {:ok, instructions ++ [{:closure, length(constants)}, {:put_loc, loc}],
+      {:ok,
+       instructions ++ [{:closure, length(constants)}, :dup, {:put_loc, loc}, {:put_var, name}],
        [function | constants]}
     else
       :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
@@ -499,8 +506,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   defp compile_if_alternate(alternate, scope, instructions, constants, opts, callbacks),
     do: compile(alternate, scope, instructions, constants, opts, callbacks)
 
-  defp class_factory(name, body) do
-    with {:ok, properties} <- class_properties(body) do
+  defp class_factory(name, super_class, body) do
+    with {:ok, super_name} <- class_super_name(super_class),
+         {:ok, properties} <- class_properties(body, super_name) do
       {:ok,
        %AST.FunctionExpression{
          type: :function_expression,
@@ -525,9 +533,13 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
-  defp class_properties(body) do
+  defp class_super_name(nil), do: {:ok, nil}
+  defp class_super_name(%AST.Identifier{name: name}), do: {:ok, name}
+  defp class_super_name(_super_class), do: {:error, {:unsupported, :class_super}}
+
+  defp class_properties(body, super_name) do
     Enum.reduce_while(body, {:ok, []}, fn definition, {:ok, properties} ->
-      case class_property(definition) do
+      case class_property(definition, super_name) do
         {:ok, next_properties} -> {:cont, {:ok, next_properties ++ properties}}
         {:error, _} = error -> {:halt, error}
       end
@@ -538,19 +550,22 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
-  defp class_property(%AST.MethodDefinition{
-         kind: :method,
-         static: false,
-         computed: false,
-         key: key,
-         value: value
-       }) do
+  defp class_property(
+         %AST.MethodDefinition{
+           kind: :method,
+           static: false,
+           computed: false,
+           key: key,
+           value: value
+         },
+         super_name
+       ) do
     {:ok,
      [
        %AST.Property{
          type: :property,
          key: key,
-         value: value,
+         value: rewrite_super(value, super_name),
          kind: :init,
          method: false,
          shorthand: false,
@@ -559,14 +574,78 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
      ]}
   end
 
-  defp class_property(%AST.MethodDefinition{
-         kind: :constructor,
-         value: %AST.FunctionExpression{body: %AST.BlockStatement{body: body}}
-       }) do
+  defp class_property(
+         %AST.MethodDefinition{
+           kind: :constructor,
+           value: %AST.FunctionExpression{body: %AST.BlockStatement{body: body}}
+         },
+         _super_name
+       ) do
     constructor_properties(body)
   end
 
-  defp class_property(%AST.MethodDefinition{}), do: {:error, {:unsupported, :class_element}}
+  defp class_property(%AST.MethodDefinition{}, _super_name),
+    do: {:error, {:unsupported, :class_element}}
+
+  defp rewrite_super(value, nil), do: value
+
+  defp rewrite_super(%AST.FunctionExpression{body: body} = function, super_name),
+    do: %{function | body: rewrite_super(body, super_name)}
+
+  defp rewrite_super(%AST.BlockStatement{body: body} = block, super_name),
+    do: %{block | body: Enum.map(body, &rewrite_super(&1, super_name))}
+
+  defp rewrite_super(%AST.ReturnStatement{argument: argument} = statement, super_name),
+    do: %{statement | argument: rewrite_super(argument, super_name)}
+
+  defp rewrite_super(%AST.ExpressionStatement{expression: expression} = statement, super_name),
+    do: %{statement | expression: rewrite_super(expression, super_name)}
+
+  defp rewrite_super(%AST.BinaryExpression{left: left, right: right} = expression, super_name),
+    do: %{
+      expression
+      | left: rewrite_super(left, super_name),
+        right: rewrite_super(right, super_name)
+    }
+
+  defp rewrite_super(
+         %AST.CallExpression{callee: callee, arguments: args} = expression,
+         super_name
+       ),
+       do: %{
+         expression
+         | callee: rewrite_super(callee, super_name),
+           arguments: Enum.map(args, &rewrite_super(&1, super_name))
+       }
+
+  defp rewrite_super(
+         %AST.MemberExpression{object: %AST.Identifier{name: "super"}} = expression,
+         super_name
+       ) do
+    %{expression | object: superclass_call(super_name)}
+  end
+
+  defp rewrite_super(
+         %AST.MemberExpression{object: object, property: property} = expression,
+         super_name
+       ) do
+    %{
+      expression
+      | object: rewrite_super(object, super_name),
+        property: rewrite_super(property, super_name)
+    }
+  end
+
+  defp rewrite_super(expression, _super_name), do: expression
+
+  defp superclass_call(super_name) do
+    %AST.CallExpression{
+      type: :call_expression,
+      callee: %AST.Identifier{type: :identifier, name: super_name},
+      arguments: [],
+      optional: false
+    }
+  end
 
   defp constructor_properties(body) do
     Enum.reduce_while(body, {:ok, []}, fn

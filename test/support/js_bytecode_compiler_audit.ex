@@ -70,6 +70,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"simple throw catch", "try { throw 3; } catch (e) { e + 1; }"},
       {"simple class method", "class A { m() { return 1; } } new A().m()"},
       {"simple class constructor", "class A { constructor() { this.x = 1; } } new A().x"},
+      {"simple class inheritance",
+       "class A { m() { return 1; } } class B extends A { m() { return super.m() + 1; } } new B().m()"},
       {"post increment", "let x=1; x++; x"},
       {"pre increment", "let x=1; ++x"},
       {"post decrement", "let x=1; x--; x"},

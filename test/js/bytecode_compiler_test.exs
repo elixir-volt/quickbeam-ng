@@ -123,6 +123,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
     test "compiles simple classes" do
       assert_compiles_to("class A { m() { return 1; } } new A().m()", 1)
       assert_compiles_to("class A { constructor() { this.x = 1; } } new A().x", 1)
+
+      assert_compiles_to(
+        "class A { m() { return 1; } } class B extends A { m() { return super.m() + 1; } } new B().m()",
+        2
+      )
     end
 
     test "compiles update and compound assignments" do
