@@ -40,6 +40,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       {:accessor, getter, _} when getter != nil ->
         call_getter(getter, value)
 
+      {:accessor, nil, _} ->
+        :undefined
+
       val ->
         val
     end
