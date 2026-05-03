@@ -1,100 +1,101 @@
-# Autoresearch: JavaScript Parser Compatibility
+# Autoresearch: VM Compiler Performance
 
 ## Objective
-Close accepted-syntax compatibility gaps in the experimental hand-written JavaScript lexer/parser (`lib/quickbeam/js/parser*`) against QuickJS/Test262-style JavaScript while preserving VM/Web API behavior and the focused parser test suite.
+Improve invocation performance of the experimental BEAM compiler backend for QuickJS bytecode while preserving compiler/interpreter semantic parity and the widened strict Test262 compiler audit.
 
-This segment is compatibility-focused. Do not cheat by suppressing diagnostics, skipping validation, weakening tests, changing Test262 inputs, or special-casing benchmark files/strings. Fix the grammar/lexer behavior and add focused regression tests for each gap.
+The workload is `PARSER_BENCH=vm_compiler_perf ./autoresearch.sh`, which benchmarks compiled invocation time against interpreter invocation time across representative VM compiler workloads.
 
-## Primary Metric
-- **`test262_language_sample_errors`** (lower is better): total parser errors across the deterministic standalone non-negative `test/test262/test/**/*.js` corpus, excluding Test262 support fixtures after selecting the sample window.
+## Metrics
+- **Primary**: `compiler_avg_invoke_us` (µs, lower is better) — average compiled invocation time across benchmark workloads.
+- **Secondary**:
+  - `interpreter_avg_invoke_us` — interpreter comparison baseline for the same workloads.
+  - `compiler_avg_speedup` — average interpreter/compiler speedup; higher is better.
+  - `compiler_perf_workloads` — number of workloads included; should remain stable.
+  - `quickjs_parser_tests`, `parser_tests`, `parser_test_ms` — backpressure signals emitted by the shared benchmark wrapper.
 
-## Secondary Metrics
-- `test262_language_sample_error_files` — sampled files with parser errors.
-- `test262_language_sample_unique_errors` — unique diagnostic messages in sampled files.
-- `test262_language_sample_files` — sample size; default should stay 12000.
-- `test262_language_sample_module_files` — files parsed with `source_type: :module` by metadata/static-module detection.
-- `test_language_errors` — parser errors on `test/vm/test_language.js`; must stay 0.
-- `test_language_parse_ok` — must stay 1.
-- `quickjs_parser_tests` — QuickJS-port coverage signal; must not regress intentionally.
-- `parser_tests` — focused parser test count.
-- `parser_test_ms` — focused parser suite duration.
-
-## Commands
-Run the accepted-syntax compatibility loop with:
+## How to Run
 
 ```sh
-./autoresearch.sh
+PARSER_BENCH=vm_compiler_perf ./autoresearch.sh
 ```
 
-Run QuickJS-vs-parser acceptance parity with the generated ExUnit wrapper:
+The benchmark emits per-workload diagnostics like:
 
-```sh
-PARSER_BENCH=quickjs_audit_exunit AUDIT_OFFSET=30000 AUDIT_LIMIT=2000 ./autoresearch.sh
+```text
+COMPILER_PERF workload=arithmetic_loop compile_us=... compiler_us=... interpreter_us=... speedup=...
 ```
 
-Useful optional environment variables:
+and structured metrics:
 
-```sh
-TEST262_GLOB='test/test262/test/language/**/*.js' ./autoresearch.sh  # restrict accepted-syntax tests
-TEST262_SAMPLE_OFFSET=20000 ./autoresearch.sh  # inspect a later accepted-syntax slice
-TEST262_ERROR_LIMIT=80 ./autoresearch.sh       # print more accepted-syntax failing files
-AUDIT_GLOB='test/test262/test/language/**/*.js' PARSER_BENCH=quickjs_audit_exunit ./autoresearch.sh
-AUDIT_OFFSET=32000 AUDIT_LIMIT=2000 AUDIT_FILE_TIMEOUT=5000 PARSER_BENCH=quickjs_audit_exunit ./autoresearch.sh
+```text
+METRIC compiler_avg_invoke_us=...
+METRIC interpreter_avg_invoke_us=...
+METRIC compiler_avg_speedup=...
 ```
-
-`autoresearch.sh` runs:
-1. `mix test test/js/parser --formatter ExUnit.CLIFormatter`
-2. one selected benchmark:
-   - `mix run bench/js_parser_compat.exs` for `PARSER_BENCH=compat`
-   - `mix run bench/js_parser_perf.exs` for `PARSER_BENCH=perf`
-   - `mix run bench/js_parser_quickjs_audit.exs` for legacy `PARSER_BENCH=quickjs_audit`
-   - `mix test test/js/parser/quickjs_acceptance_audit_test.exs --only quickjs_acceptance_audit` for `PARSER_BENCH=quickjs_audit_exunit`
-
-The benchmark prints:
-- summary CSV rows for `test_language` and the Test262 sample
-- top `ERROR_MESSAGE` clusters
-- top `ERROR_DIR` clusters
-- `ERROR_FILE ...` examples with source type and first diagnostic
-- structured `METRIC ...` lines for autoresearch
-
-## Source Type Rules
-`bench/js_parser_compat.exs` parses files as modules when any of these are true:
-- Test262 metadata has `flags: [... module ...]`
-- path contains `/module-code/`, except fixtures whose filename explicitly marks `script-code`
-- source has top-level-looking static `import` / `export` syntax
-
-The deterministic sample excludes files ending in `_FIXTURE.js` after selecting the sample window because Test262 uses them as support inputs for other tests, not standalone accepted-syntax tests. Everything else is parsed as script source. This is benchmark setup only; do not edit Test262 files.
 
 ## Files in Scope
-- `lib/quickbeam/js/parser.ex`
-- `lib/quickbeam/js/parser/lexer.ex`
-- `lib/quickbeam/js/parser/ast.ex`
-- `lib/quickbeam/js/parser/token.ex`
-- `lib/quickbeam/js/parser/error.ex`
-- `test/js/parser/`
-- `bench/js_parser_compat.exs`
-- `autoresearch.sh`
-- `autoresearch.md`
 
-Benchmark inputs are read-only:
-- `test/vm/test_language.js`
-- `test/test262/test/language/**/*.js`
+Compiler lowering and generated-BEAM performance:
+- `lib/quickbeam/vm/compiler/lowering.ex`
+- `lib/quickbeam/vm/compiler/lowering/builder.ex`
+- `lib/quickbeam/vm/compiler/lowering/state.ex`
+- `lib/quickbeam/vm/compiler/lowering/ops/*.ex`
+- `lib/quickbeam/vm/compiler/optimizer.ex`
+- `lib/quickbeam/vm/compiler/forms.ex`
+- `lib/quickbeam/vm/compiler/runtime_helpers.ex`
+- `lib/quickbeam/vm/compiler/runner.ex`
+- `lib/quickbeam/vm/compiler/analysis/*.ex`
+
+Benchmark and guardrails:
+- `bench/vm_compiler_perf.exs`
+- `bench/vm_compiler_semantic_gaps.exs`
+- `bench/vm_compiler_test262.exs`
+- `test/support/vm_compiler_audit.ex`
+- `test/vm/compiler_test.exs`
+- `test/vm/auto_mode_test.exs`
 
 ## Off Limits
-- Zig/C/NIF files.
-- External parser generators or native parser replacements.
-- New dependencies for the parser compatibility loop.
-- Benchmark overfitting or exact string/file special cases.
 
-## Experiment Workflow
-1. Run `./autoresearch.sh` or inspect current `ERROR_MESSAGE` / `ERROR_FILE` output.
-2. Pick the broadest real syntax gap visible in the sample.
-3. Add focused tests under `test/js/parser/<area>/..._test.exs` with `@moduletag :quickjs_port`.
-4. Fix parser/lexer behavior generally.
-5. Run `mix format`, `mix compile --warnings-as-errors`, `mix test test/js/parser`, then `./autoresearch.sh`.
-6. Keep only changes that reduce the primary metric without regressing `test_language_errors`, parser tests, or QuickJS-port coverage.
+- Do not weaken correctness checks, semantic audits, Test262 inputs, or benchmark assertions.
+- Do not special-case benchmark workload strings or file names.
+- Do not remove JS semantics to win microbenchmarks.
+- Do not touch Zig/C/NIF code for this loop unless a measured Elixir-side bottleneck clearly requires it.
+- Do not make compiler default-readiness changes in this loop; this target is invoke performance only.
 
-## Current Known Gap Clusters
-The full standalone non-negative Test262 corpus available in this checkout is parse-clean after excluding Test262 support fixtures. Inspect the current `ERROR_MESSAGE` and `ERROR_FILE` output before choosing any future gap.
+## Constraints
 
-If new Test262 files are added, rerun the benchmark and target a later slice using `TEST262_SAMPLE_OFFSET` if needed.
+- `mix compile --warnings-as-errors` must pass after code changes.
+- `PARSER_BENCH=vm_compiler_semantics ./autoresearch.sh` must remain clean.
+- `TEST262_LIMIT=1500 TEST262_CASE_TIMEOUT=5000 PARSER_BENCH=vm_compiler_test262 ./autoresearch.sh` should remain clean for kept changes.
+- `./autoresearch.checks.sh` runs automatically after passing experiments and is authoritative.
+- Keep improvements generic and architecture-driven.
+
+## Current Baseline Context
+
+Recent perf audit on `beam-vm-interpreter` after compiler correctness hardening:
+
+```text
+arithmetic_loop       speedup=0.897
+array_sum             speedup=0.973
+object_property_loop  speedup=0.989
+closure_call          speedup=1.041
+class_method          speedup=1.803
+compiler_avg_invoke_us=50.737
+interpreter_avg_invoke_us=79.174
+compiler_avg_speedup=1.141
+```
+
+The simple arithmetic/array/object workloads are near parity or slightly slower, while class/method calls benefit most. Focus first on reducing compiled overhead in hot simple loops without regressing class/method gains.
+
+## Promising Directions
+
+- Inspect generated forms for simple loop workloads and remove avoidable helper calls, temporary binds, or context/global refreshes.
+- Optimize block-call argument passing or stack/slot propagation where hot loops bounce through generated block functions.
+- Specialize safe integer/number operations only when JS semantics are preserved; use runtime helpers when raw BEAM operations can raise or mis-handle `NaN`, infinities, negative zero, or BigInt.
+- Reduce per-iteration global/property lookup overhead only with correct invalidation/freshness semantics.
+- Consider benchmark instrumentation if per-workload metrics are not enough to localize regressions.
+
+## What's Been Tried
+
+- Correctness hardening brought strict selected Test262 compiler audit to 1582/1582 and semantic corpus to 1000/1000 before this performance loop.
+- Prior arithmetic fixes intentionally routed risky operations through JS helpers for correctness; do not undo those unless a replacement preserves all JS edge cases.
