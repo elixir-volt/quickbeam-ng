@@ -90,6 +90,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"simple switch default",
        "let x = 0; switch (2) { case 1: x = 1; break; default: x = 3; } x"},
       {"for of array", "let s = 0; for (const x of [1, 2, 3]) s += x; s"},
+      {"for of array destructuring", "let s=0; for (const [x] of [[1],[2]]) s += x; s"},
       {"for in static object", "let s = ''; for (const k in {a: 1, b: 2}) s += k; s.length"},
       {"for in object keys",
        "let o = {a: 1, b: 2}; let s = ''; for (let k in o) { s = s + k; } s.length"},

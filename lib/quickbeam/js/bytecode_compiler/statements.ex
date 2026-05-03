@@ -512,6 +512,45 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  def compile(
+        %AST.ForOfStatement{
+          left: %AST.VariableDeclaration{
+            declarations: [
+              %AST.VariableDeclarator{id: %AST.ArrayPattern{elements: elements}}
+            ]
+          },
+          right: right,
+          body: body,
+          await: false
+        },
+        scope,
+        instructions,
+        constants,
+        _opts,
+        callbacks
+      ) do
+    with {:loc, value_loc} <- callbacks.resolve.(scope, "<for_of_value>"),
+         {:loc, array_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
+         {:loc, index_loc} <- callbacks.resolve.(scope, "<for_of_index>"),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(right, scope, instructions, constants) do
+      compile_indexed_iteration_with_destructuring(
+        body,
+        elements,
+        value_loc,
+        array_loc,
+        index_loc,
+        scope,
+        instructions,
+        constants,
+        callbacks
+      )
+    else
+      :error -> {:error, {:unsupported, :for_of_binding}}
+      {:error, _} = error -> error
+    end
+  end
+
   def compile(%AST.ForStatement{} = statement, scope, instructions, constants, _opts, callbacks) do
     test_label = callbacks.unique_label.(:for_test)
     update_label = callbacks.unique_label.(:for_update)
@@ -926,6 +965,47 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  defp compile_indexed_iteration_with_destructuring(
+         body,
+         elements,
+         value_loc,
+         collection_loc,
+         index_loc,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    start_label = callbacks.unique_label.(:for_of_start)
+    update_label = callbacks.unique_label.(:for_of_update)
+    end_label = callbacks.unique_label.(:for_of_end)
+
+    prefix =
+      indexed_iteration_prefix(collection_loc, index_loc, value_loc, start_label, end_label)
+
+    with {:ok, instructions, constants} <-
+           compile_array_pattern(
+             elements,
+             scope,
+             instructions ++ prefix ++ [{:get_loc, value_loc}],
+             constants,
+             callbacks
+           ),
+         {:ok, instructions, constants} <-
+           compile(
+             body,
+             scope,
+             instructions,
+             constants,
+             [tail?: false, break_label: end_label, continue_label: update_label],
+             callbacks
+           ) do
+      {:ok,
+       instructions ++ indexed_iteration_suffix(index_loc, start_label, update_label, end_label),
+       constants}
+    end
+  end
+
   defp indexed_iteration_prefix(collection_loc, index_loc, value_loc, start_label, end_label) do
     [
       {:put_loc, collection_loc},
@@ -1262,7 +1342,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     do: {:ok, instructions ++ [:drop], constants}
 
   defp compile_array_pattern([element], scope, instructions, constants, callbacks),
-    do: compile_array_pattern_element(element, 0, scope, instructions, constants, callbacks, true)
+    do:
+      compile_array_pattern_element(element, 0, scope, instructions, constants, callbacks, false)
 
   defp compile_array_pattern([element | rest], scope, instructions, constants, callbacks) do
     with {:ok, instructions, constants} <-

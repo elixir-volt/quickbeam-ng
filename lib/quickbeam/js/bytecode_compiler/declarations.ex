@@ -54,6 +54,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
     scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
     scope = Scope.declare_local(scope, "<for_of_array>")
     scope = Scope.declare_local(scope, "<for_of_index>")
+    scope = Scope.declare_local(scope, "<for_of_value>")
     declare_statements(rest, scope)
   end
 
