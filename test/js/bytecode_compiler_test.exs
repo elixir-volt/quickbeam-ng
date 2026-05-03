@@ -80,6 +80,9 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let x=7; x &= 3; x", 3)
       assert_compiles_to("let x=4; x |= 3; x", 7)
       assert_compiles_to("let x=7; x ^= 3; x", 4)
+      assert_compiles_to("'x' in {x: 1}", true)
+      assert_compiles_to("let o={x:1}; delete o.x; o.x === undefined", true)
+      assert_compiles_to("let o={x:1}; delete o['x']; o.x === undefined", true)
     end
 
     test "compiles sequence expressions" do

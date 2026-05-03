@@ -568,6 +568,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def delete_call(state) do
     with {:ok, key, _key_type, state} <- pop_typed(state),
          {:ok, obj, _obj_type, state} <- pop_typed(state) do
+      state = invalidate_shaped_aliases(state, obj)
       effectful_push(state, compiler_call(state, :delete_property, [obj, key]), :boolean)
     end
   end

@@ -67,6 +67,46 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.UnaryExpression{
+          operator: "delete",
+          argument: %AST.MemberExpression{
+            object: object,
+            property: %AST.Identifier{name: property},
+            computed: false
+          }
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    {property_instruction, constants} = add_constant(property, constants)
+
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants) do
+      {:ok, instructions ++ [property_instruction, :delete], constants}
+    end
+  end
+
+  def compile(
+        %AST.UnaryExpression{
+          operator: "delete",
+          argument: %AST.MemberExpression{object: object, property: property, computed: true}
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(property, scope, instructions, constants) do
+      {:ok, instructions ++ [:delete], constants}
+    end
+  end
+
+  def compile(
         %AST.UnaryExpression{operator: operator, argument: argument},
         scope,
         instructions,

@@ -12,6 +12,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Operators do
   def binary("&"), do: {:ok, :band}
   def binary("^"), do: {:ok, :bxor}
   def binary("|"), do: {:ok, :bor}
+  def binary("in"), do: {:ok, :in}
   def binary("<"), do: {:ok, :lt}
   def binary("<="), do: {:ok, :lte}
   def binary(">"), do: {:ok, :gt}
