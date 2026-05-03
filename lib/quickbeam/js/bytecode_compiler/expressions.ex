@@ -324,19 +324,17 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       )
-      when operator != "=" and operator not in ["||=", "&&=", "??="] do
-    with {:ok, op} <- Operators.compound(operator),
-         {:ok, instructions, constants} <-
-           callbacks.compile_expression.(object, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           callbacks.compile_expression.(
-             right,
-             scope,
-             instructions ++ [{:get_field2, property}],
-             constants
-           ) do
-      {:ok, instructions ++ [op, :insert2, {:put_field, property}], constants}
-    end
+      when operator != "=" do
+    compile_member_assignment(
+      operator,
+      object,
+      property,
+      right,
+      scope,
+      instructions,
+      constants,
+      callbacks
+    )
   end
 
   def compile(
@@ -777,6 +775,72 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
 
   def compile(expression, _scope, _instructions, _constants, _callbacks),
     do: {:error, {:unsupported, expression.type}}
+
+  defp compile_member_assignment(
+         operator,
+         object,
+         property,
+         right,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       )
+       when operator in ["||=", "&&=", "??="] do
+    skip_label = callbacks.unique_label.(:logical_member_skip)
+    end_label = callbacks.unique_label.(:logical_member_end)
+
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             right,
+             scope,
+             instructions ++
+               [{:get_field2, property}, :dup] ++
+               logical_member_test(operator, skip_label) ++ [:drop],
+             constants
+           ) do
+      {:ok,
+       instructions ++
+         [
+           :insert2,
+           {:put_field, property},
+           {:jump, end_label},
+           {:label, skip_label},
+           :nip,
+           {:label, end_label}
+         ], constants}
+    end
+  end
+
+  defp compile_member_assignment(
+         operator,
+         object,
+         property,
+         right,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, op} <- Operators.compound(operator),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             right,
+             scope,
+             instructions ++ [{:get_field2, property}],
+             constants
+           ) do
+      {:ok, instructions ++ [op, :insert2, {:put_field, property}], constants}
+    end
+  end
+
+  defp logical_member_test("||=", label), do: [{:jump_if_true, label}]
+  defp logical_member_test("&&=", label), do: [{:jump_if_false, label}]
+  defp logical_member_test("??=", label), do: [:is_undefined_or_null, {:jump_if_false, label}]
 
   defp compile_logical_assignment(
          operator,

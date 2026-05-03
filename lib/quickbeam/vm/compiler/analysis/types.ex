@@ -716,7 +716,7 @@ defmodule QuickBEAM.VM.Compiler.Analysis.Types do
              :set_home_object
            ] ->
         with {:ok, state} <- apply_generic_stack_effect(state, op, args) do
-          {:ok, {:continue, state, return_type}}
+          {:ok, {:continue, invalidate_shaped_slot_types(state), return_type}}
         end
 
       {{:ok, name}, _} when name in [:define_method, :define_method_computed] ->
@@ -911,6 +911,16 @@ defmodule QuickBEAM.VM.Compiler.Analysis.Types do
     with {:ok, _type, state} <- pop_type(state) do
       pop_types(state, count - 1)
     end
+  end
+
+  defp invalidate_shaped_slot_types(state) do
+    slot_types =
+      Map.new(state.slot_types, fn
+        {idx, {:shaped_object, _, _}} -> {idx, :object}
+        entry -> entry
+      end)
+
+    %{state | slot_types: slot_types}
   end
 
   defp apply_generic_stack_effect(state, op, args) do
