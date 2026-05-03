@@ -42,7 +42,9 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"computed object write", "let o={x:1}; o[\"x\"]=2; o.x"},
       {"function if return", "function f(x){ if (x) return 1; return 2; } f(true)"},
       {"function loop return", "function f(){ while (true) { return 5; } } f()"},
-      {"function for break", "function f(){ for(;;){ break; } return 1; } f()"}
+      {"function for break", "function f(){ for(;;){ break; } return 1; } f()"},
+      {"method call", "let o={f:function(){return 2}}; o.f()"},
+      {"method this call", "let o={x:1,f:function(){return this.x}}; o.f()"}
     ]
   end
 

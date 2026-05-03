@@ -37,6 +37,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(%AST.Literal{value: false}, _scope, instructions, constants, _callbacks),
     do: {:ok, instructions ++ [false], constants}
 
+  def compile(%AST.Identifier{name: "this"}, _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions ++ [:push_this], constants}
+
   def compile(%AST.Identifier{name: name}, scope, instructions, constants, callbacks) do
     case callbacks.resolve.(scope, name) do
       :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
@@ -273,6 +276,34 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(%AST.FunctionExpression{} = expression, _scope, instructions, constants, callbacks) do
     with {:ok, function} <- callbacks.compile_function.(expression, function_name(expression.id)) do
       {:ok, instructions ++ [{:closure, length(constants)}], [function | constants]}
+    end
+  end
+
+  def compile(
+        %AST.CallExpression{
+          callee: %AST.MemberExpression{
+            object: object,
+            property: %AST.Identifier{name: property},
+            computed: false
+          },
+          arguments: args
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_call_args(
+             args,
+             scope,
+             instructions ++ [{:get_field2, property}],
+             constants,
+             callbacks
+           ) do
+      {:ok, instructions ++ [{:call_method, length(args)}], constants}
     end
   end
 

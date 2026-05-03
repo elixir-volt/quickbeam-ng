@@ -84,6 +84,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("function f(){ for(;;){ break; } return 1; } f()", 1)
     end
 
+    test "compiles method calls" do
+      assert_compiles_to("let o={f:function(){return 2}}; o.f()", 2)
+      assert_compiles_to("let o={x:1,f:function(){return this.x}}; o.f()", 1)
+    end
+
     test "emits QuickJS-loadable bytecode binaries" do
       assert {:ok, binary} =
                BytecodeCompiler.compile_to_binary("function f(a){ return a + 1; } f(2)")
