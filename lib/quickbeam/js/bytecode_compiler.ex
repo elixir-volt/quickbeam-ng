@@ -9,6 +9,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
   alias QuickBEAM.JS.BytecodeCompiler.{
     Declarations,
+    Emitter,
     Expressions,
     FunctionBuilder,
     Scope,
@@ -83,11 +84,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   end
 
   defp compile_statements(statements, scope, instructions, constants) do
-    Statements.compile_all(statements, scope, instructions, constants, callbacks())
+    Statements.compile_all(statements, Emitter.new(scope, instructions, constants, callbacks()))
   end
 
   defp compile_expression(expression, scope, instructions, constants) do
-    Expressions.compile(expression, scope, instructions, constants, callbacks())
+    Expressions.compile(expression, Emitter.new(scope, instructions, constants, callbacks()))
   end
 
   defp compile_function(function, name) do

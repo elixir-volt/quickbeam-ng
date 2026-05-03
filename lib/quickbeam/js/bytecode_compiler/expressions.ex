@@ -1,8 +1,21 @@
 defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Operators, Slots}
+  alias QuickBEAM.JS.BytecodeCompiler.{Emitter, Operators, Slots}
   alias QuickBEAM.JS.Parser.AST
+
+  def compile(expression, %Emitter{} = emitter) do
+    with {:ok, instructions, constants} <-
+           compile(
+             expression,
+             emitter.scope,
+             emitter.instructions,
+             emitter.constants,
+             emitter.callbacks
+           ) do
+      Emitter.result(%{emitter | instructions: instructions, constants: constants})
+    end
+  end
 
   def compile(%AST.Literal{value: value}, _scope, instructions, constants, _callbacks)
       when is_integer(value) do

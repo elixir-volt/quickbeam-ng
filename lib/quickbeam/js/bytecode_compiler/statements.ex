@@ -1,8 +1,21 @@
 defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.Slots
+  alias QuickBEAM.JS.BytecodeCompiler.{Emitter, Slots}
   alias QuickBEAM.JS.Parser.AST
+
+  def compile_all(statements, %Emitter{} = emitter) do
+    with {:ok, instructions, constants} <-
+           compile_all(
+             statements,
+             emitter.scope,
+             emitter.instructions,
+             emitter.constants,
+             emitter.callbacks
+           ) do
+      Emitter.result(%{emitter | instructions: instructions, constants: constants})
+    end
+  end
 
   def compile_all([], _scope, instructions, constants, _callbacks),
     do: {:ok, instructions, constants}
