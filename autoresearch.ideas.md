@@ -1,10 +1,8 @@
 - Add Test262-derived executable windows for broader coverage.
-- Mutable closure cells (1 mismatch): value-capture works but shared mutable cells need var_ref infrastructure.
-- `eval` execution (3 mismatches): eval compiles as global but interpreter/BEAM compiler return undefined instead of executing code.
+- `eval` execution (3 mismatches): eval compiles as global but interpreter/BEAM compiler return undefined instead of executing code. Needs eval opcode implementation in interpreter.
 - Derived constructor return object (1 mismatch): stub class returns empty object instead of `{x:1}`.
-- `arguments` aliasing (4 unsupported): sloppy-mode parameter aliasing requires var_ref. Enabling arguments for parameterized functions would only create mismatches.
-- Private class fields/methods/super getters/setters (10 class_element + 1 private method key = 11 unsupported): needs define_class, private_symbol, check_brand, add_brand, get/put_private_field, get/put_super_value.
+- `arguments` aliasing (4 unsupported): sloppy-mode parameter aliasing requires var_ref on parameter locals. Now that var_ref infrastructure exists, this could be implemented by marking params as captured when arguments object is used.
+- Private class fields/methods/super getters/setters (11 unsupported): needs define_class, private_symbol, check_brand, add_brand, get/put_private_field, get/put_super_value.
 - `instanceof` (1 unsupported): class factories lack real prototypes.
 - `Symbol.iterator` (1 unsupported): custom iterable for-of needs iterator protocol.
-- `with(o){ delete x; }` parse error (1 case): parser rejects `with` statement.
-- `test/vm/test_language.js` (1 unsupported): full JS file needing arguments + many features.
+- `with(o){ delete x; }` parse error (1 case).
