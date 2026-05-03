@@ -21,6 +21,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"simple arrow function", "let f = x => x + 1; f(2)"},
       {"class static field and method",
        "class A { static x = 3; static m() { return this.x + 1; } } A.m()"},
+      {"computed class method", "let k='m'; class A { [k](){ return 1; } } new A().m()"},
+      {"computed static method", "let k='m'; class A { static [k](){ return 1; } } A.m()"},
       {"array map arrow", "[1, 2, 3].map(x => x + 1).join(',')"},
       {"equality", "let x = 1; x === 1"},
       {"undefined", "undefined"},

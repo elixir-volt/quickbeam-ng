@@ -159,15 +159,33 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       ) do
     {instance_body, static_body} = Enum.split_with(body, &(!static_member?(&1)))
 
+    excluded = MapSet.new([name, super_class_name(super_class)])
+
     with {:loc, loc} <- callbacks.resolve.(scope, name),
-         {:ok, factory} <- class_factory(name, super_class, instance_body),
-         {:ok, function} <- callbacks.compile_function.(factory, name) do
-      base_instructions =
-        instructions ++ [{:closure, length(constants)}, :dup, {:put_loc, loc}, {:put_var, name}]
+         {:ok, factory} <- class_factory(name, super_class, instance_body) do
+      captures =
+        factory
+        |> Captures.captured_names(scope)
+        |> Enum.reject(&MapSet.member?(excluded, &1))
 
-      constants = [function | constants]
+      factory = Captures.prepend_params(factory, captures)
 
-      compile_static_members(static_body, name, scope, base_instructions, constants, callbacks)
+      with {:ok, function} <- callbacks.compile_function.(factory, name) do
+        instructions = instructions ++ [{:closure, length(constants)}]
+        constants = [function | constants]
+
+        {:ok, instructions, constants} =
+          if captures == [] do
+            {:ok, instructions, constants}
+          else
+            Captures.bind(captures, scope, instructions, constants)
+          end
+
+        base_instructions =
+          instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}]
+
+        compile_static_members(static_body, name, scope, base_instructions, constants, callbacks)
+      end
     else
       :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
       {:error, _} = error -> error
@@ -650,8 +668,38 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  defp compile_static_member(
+         %AST.MethodDefinition{
+           kind: :method,
+           static: true,
+           computed: true,
+           key: key,
+           value: value
+         },
+         class_name,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             key,
+             scope,
+             instructions ++ [{:get_var, class_name}],
+             constants
+           ),
+         {:ok, function} <- callbacks.compile_function.(value, nil) do
+      {:ok, instructions ++ [{:closure, length(constants)}, :define_array_el, :drop],
+       [function | constants]}
+    end
+  end
+
   defp compile_static_member(_member, _name, _scope, _instructions, _constants, _callbacks),
     do: {:error, {:unsupported, :class_element}}
+
+  defp super_class_name(%AST.Identifier{name: name}), do: name
+  defp super_class_name(_), do: nil
 
   defp class_super_name(nil), do: {:ok, nil}
   defp class_super_name(%AST.Identifier{name: name}), do: {:ok, name}
@@ -674,7 +722,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
          %AST.MethodDefinition{
            kind: :method,
            static: false,
-           computed: false,
+           computed: computed,
            key: key,
            value: value
          },
@@ -689,7 +737,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
          kind: :init,
          method: false,
          shorthand: false,
-         computed: false
+         computed: computed
        }
      ]}
   end
