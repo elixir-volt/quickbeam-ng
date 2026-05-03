@@ -7,7 +7,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   `QuickBEAM.JS.Parser` AST and emits `%QuickBEAM.VM.Bytecode{}` values.
   """
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Declarations, FunctionBuilder, Operators, Scope}
+  alias QuickBEAM.JS.BytecodeCompiler.{Declarations, Expressions, FunctionBuilder, Scope}
   alias QuickBEAM.JS.Parser
   alias QuickBEAM.JS.Parser.AST
   alias QuickBEAM.VM.Bytecode
@@ -419,314 +419,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     end
   end
 
-  defp compile_expression(%AST.Literal{value: value}, _scope, instructions, constants)
-       when is_integer(value) do
-    {:ok, instructions ++ [{:push_int, value}], constants}
-  end
+  defp compile_expression(expression, scope, instructions, constants) do
+    callbacks = %{
+      compile_expression: &compile_expression/4,
+      compile_function: &compile_function/2,
+      resolve: &resolve/2,
+      unique_label: &unique_label/1
+    }
 
-  defp compile_expression(%AST.Literal{value: value}, _scope, instructions, constants)
-       when is_float(value) or is_binary(value) do
-    {instruction, constants} = add_constant(value, constants)
-    {:ok, instructions ++ [instruction], constants}
-  end
-
-  defp compile_expression(%AST.Literal{value: nil}, _scope, instructions, constants),
-    do: {:ok, instructions ++ [:null], constants}
-
-  defp compile_expression(%AST.Literal{value: true}, _scope, instructions, constants),
-    do: {:ok, instructions ++ [true], constants}
-
-  defp compile_expression(%AST.Literal{value: false}, _scope, instructions, constants),
-    do: {:ok, instructions ++ [false], constants}
-
-  defp compile_expression(%AST.Identifier{name: name}, scope, instructions, constants) do
-    case resolve(scope, name) do
-      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
-      slot -> {:ok, instructions ++ [read_slot(slot)], constants}
-    end
-  end
-
-  defp compile_expression(
-         %AST.BinaryExpression{operator: operator, left: left, right: right},
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, op} <- Operators.binary(operator),
-         {:ok, instructions, constants} <-
-           compile_expression(left, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_expression(right, scope, instructions, constants) do
-      {:ok, instructions ++ [op], constants}
-    end
-  end
-
-  defp compile_expression(
-         %AST.UnaryExpression{operator: operator, argument: argument},
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, op} <- Operators.unary(operator),
-         {:ok, instructions, constants} <-
-           compile_expression(argument, scope, instructions, constants) do
-      {:ok, instructions ++ [op], constants}
-    end
-  end
-
-  defp compile_expression(
-         %AST.LogicalExpression{operator: operator, left: left, right: right},
-         scope,
-         instructions,
-         constants
-       ) do
-    compile_logical_expression(operator, left, right, scope, instructions, constants)
-  end
-
-  defp compile_expression(
-         %AST.ConditionalExpression{test: test, consequent: consequent, alternate: alternate},
-         scope,
-         instructions,
-         constants
-       ) do
-    else_label = unique_label(:cond_else)
-    end_label = unique_label(:cond_end)
-
-    with {:ok, instructions, constants} <-
-           compile_expression(test, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_expression(
-             consequent,
-             scope,
-             instructions ++ [{:jump_if_false, else_label}],
-             constants
-           ),
-         {:ok, instructions, constants} <-
-           compile_expression(
-             alternate,
-             scope,
-             instructions ++ [{:jump, end_label}, {:label, else_label}],
-             constants
-           ) do
-      {:ok, instructions ++ [{:label, end_label}], constants}
-    end
-  end
-
-  defp compile_expression(
-         %AST.AssignmentExpression{
-           operator: "=",
-           left: %AST.Identifier{name: name},
-           right: right
-         },
-         scope,
-         instructions,
-         constants
-       ) do
-    with slot when slot != :error <- resolve(scope, name),
-         {:ok, instructions, constants} <-
-           compile_expression(right, scope, instructions, constants) do
-      {:ok, instructions ++ [write_slot(slot)], constants}
-    else
-      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
-      {:error, _} = error -> error
-    end
-  end
-
-  defp compile_expression(
-         %AST.ArrayExpression{elements: elements},
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, instructions, constants} <-
-           compile_array_elements(elements, scope, instructions, constants) do
-      {:ok, instructions ++ [{:array_from, length(elements)}], constants}
-    end
-  end
-
-  defp compile_expression(
-         %AST.ObjectExpression{properties: properties},
-         scope,
-         instructions,
-         constants
-       ) do
-    compile_object_properties(properties, scope, instructions ++ [:object], constants)
-  end
-
-  defp compile_expression(
-         %AST.MemberExpression{object: object, property: property, computed: true},
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, instructions, constants} <-
-           compile_expression(object, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_expression(property, scope, instructions, constants) do
-      {:ok, instructions ++ [:get_array_el], constants}
-    end
-  end
-
-  defp compile_expression(
-         %AST.MemberExpression{
-           object: object,
-           property: %AST.Identifier{name: "length"},
-           computed: false
-         },
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, instructions, constants} <-
-           compile_expression(object, scope, instructions, constants) do
-      {:ok, instructions ++ [:get_length], constants}
-    end
-  end
-
-  defp compile_expression(
-         %AST.MemberExpression{
-           object: object,
-           property: %AST.Identifier{name: property},
-           computed: false
-         },
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, instructions, constants} <-
-           compile_expression(object, scope, instructions, constants) do
-      {:ok, instructions ++ [{:get_field, property}], constants}
-    end
-  end
-
-  defp compile_expression(%AST.FunctionExpression{} = expression, _scope, instructions, constants) do
-    with {:ok, function} <- compile_function(expression, function_name(expression.id)) do
-      {:ok, instructions ++ [{:closure, length(constants)}], [function | constants]}
-    end
-  end
-
-  defp compile_expression(
-         %AST.CallExpression{callee: callee, arguments: args},
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, instructions, constants} <-
-           compile_expression(callee, scope, instructions, constants),
-         {:ok, instructions, constants} <- compile_call_args(args, scope, instructions, constants) do
-      {:ok, instructions ++ [{:call, length(args)}], constants}
-    end
-  end
-
-  defp compile_expression(expression, _scope, _instructions, _constants),
-    do: {:error, {:unsupported, expression.type}}
-
-  defp compile_logical_expression("&&", left, right, scope, instructions, constants) do
-    end_label = unique_label(:logical_and_end)
-
-    with {:ok, instructions, constants} <-
-           compile_expression(left, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_expression(
-             right,
-             scope,
-             instructions ++ [:dup, {:jump_if_false, end_label}, :drop],
-             constants
-           ) do
-      {:ok, instructions ++ [{:label, end_label}], constants}
-    end
-  end
-
-  defp compile_logical_expression("||", left, right, scope, instructions, constants) do
-    end_label = unique_label(:logical_or_end)
-
-    with {:ok, instructions, constants} <-
-           compile_expression(left, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_expression(
-             right,
-             scope,
-             instructions ++ [:dup, {:jump_if_true, end_label}, :drop],
-             constants
-           ) do
-      {:ok, instructions ++ [{:label, end_label}], constants}
-    end
-  end
-
-  defp compile_logical_expression("??", left, right, scope, instructions, constants) do
-    end_label = unique_label(:logical_nullish_end)
-
-    with {:ok, instructions, constants} <-
-           compile_expression(left, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_expression(
-             right,
-             scope,
-             instructions ++ [:dup, :is_undefined_or_null, {:jump_if_false, end_label}, :drop],
-             constants
-           ) do
-      {:ok, instructions ++ [{:label, end_label}], constants}
-    end
-  end
-
-  defp compile_logical_expression(operator, _left, _right, _scope, _instructions, _constants),
-    do: {:error, {:unsupported, {:logical_operator, operator}}}
-
-  defp compile_array_elements([], _scope, instructions, constants),
-    do: {:ok, instructions, constants}
-
-  defp compile_array_elements([nil | rest], _scope, _instructions, _constants),
-    do: {:error, {:unsupported, {:array_hole, length(rest)}}}
-
-  defp compile_array_elements([%AST.SpreadElement{} | _rest], _scope, _instructions, _constants),
-    do: {:error, {:unsupported, :array_spread}}
-
-  defp compile_array_elements([element | rest], scope, instructions, constants) do
-    with {:ok, instructions, constants} <-
-           compile_expression(element, scope, instructions, constants) do
-      compile_array_elements(rest, scope, instructions, constants)
-    end
-  end
-
-  defp compile_object_properties([], _scope, instructions, constants),
-    do: {:ok, instructions, constants}
-
-  defp compile_object_properties(
-         [%AST.SpreadElement{} | _rest],
-         _scope,
-         _instructions,
-         _constants
-       ),
-       do: {:error, {:unsupported, :object_spread}}
-
-  defp compile_object_properties(
-         [%AST.Property{} = property | rest],
-         scope,
-         instructions,
-         constants
-       ) do
-    with {:ok, key} <- property_key(property),
-         {:ok, instructions, constants} <-
-           compile_expression(property.value, scope, instructions, constants) do
-      compile_object_properties(rest, scope, instructions ++ [{:define_field, key}], constants)
-    end
-  end
-
-  defp property_key(%AST.Property{computed: false, key: %AST.Identifier{name: name}}),
-    do: {:ok, name}
-
-  defp property_key(%AST.Property{computed: false, key: %AST.Literal{value: value}})
-       when is_binary(value),
-       do: {:ok, value}
-
-  defp property_key(%AST.Property{}), do: {:error, {:unsupported, :object_property_key}}
-
-  defp compile_call_args([], _scope, instructions, constants), do: {:ok, instructions, constants}
-
-  defp compile_call_args([arg | rest], scope, instructions, constants) do
-    with {:ok, instructions, constants} <- compile_expression(arg, scope, instructions, constants) do
-      compile_call_args(rest, scope, instructions, constants)
-    end
+    Expressions.compile(expression, scope, instructions, constants, callbacks)
   end
 
   defp compile_function(function, name) do
@@ -763,11 +464,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
       else: instructions ++ [:return_undef]
   end
 
-  defp add_constant(value, constants), do: {{:constant, length(constants)}, [value | constants]}
-
-  defp read_slot({:arg, index}), do: {:get_arg, index}
-  defp read_slot({:loc, index}), do: {:get_loc, index}
-
   defp write_slot({:loc, index}), do: {:set_loc, index}
   defp write_slot({:arg, index}), do: {:set_arg, index}
 
@@ -786,7 +482,4 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   defp resolve(scope, name), do: Scope.resolve(scope, name)
 
   defp identifier_name!(%AST.Identifier{name: name}), do: name
-
-  defp function_name(nil), do: nil
-  defp function_name(%AST.Identifier{name: name}), do: name
 end
