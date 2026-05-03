@@ -662,6 +662,44 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.TaggedTemplateExpression{
+          tag: tag,
+          quasi: %AST.TemplateLiteral{quasis: quasis, expressions: expressions}
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    cooked = Enum.map(quasis, & &1.value)
+    raw = Enum.map(quasis, & &1.raw)
+
+    template_constant =
+      {:template_object, {:array, cooked}, {:template_object, {:array, raw}, :undefined}}
+
+    with {:ok, tag_instructions, constants} <-
+           compile_tagged_template_tag(tag, scope, [], constants, callbacks) do
+      arg_count = 1 + length(expressions)
+
+      {expr_instructions, constants} =
+        Enum.reduce(expressions, {[], constants}, fn expr, {insts, consts} ->
+          case callbacks.compile_expression.(expr, scope, [], consts) do
+            {:ok, new_insts, new_consts} -> {insts ++ new_insts, new_consts}
+          end
+        end)
+
+      call_op = tagged_template_call_op(tag, arg_count)
+
+      {:ok,
+       instructions ++
+         tag_instructions ++
+         [{:constant, length(constants)}] ++
+         expr_instructions ++
+         [call_op], [template_constant | constants]}
+    end
+  end
+
+  def compile(
         %AST.CallExpression{
           callee: %AST.MemberExpression{
             object: object,
@@ -1010,6 +1048,47 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
          _callbacks
        ),
        do: {:error, {:unsupported, :assignment_expression}}
+
+  defp compile_tagged_template_tag(
+         %AST.MemberExpression{
+           object: object,
+           property: %AST.Identifier{name: property},
+           computed: false
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants) do
+      {:ok, instructions ++ [{:get_field2, property}], constants}
+    end
+  end
+
+  defp compile_tagged_template_tag(
+         %AST.MemberExpression{object: object, property: property, computed: true},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(property, scope, instructions, constants) do
+      {:ok, instructions ++ [:get_array_el2], constants}
+    end
+  end
+
+  defp compile_tagged_template_tag(tag, scope, instructions, constants, callbacks),
+    do: callbacks.compile_expression.(tag, scope, instructions, constants)
+
+  defp tagged_template_call_op(%AST.MemberExpression{}, arg_count),
+    do: {:call_method, arg_count}
+
+  defp tagged_template_call_op(_tag, arg_count),
+    do: {:call, arg_count}
 
   defp compile_global_identifier(name, instructions, constants)
        when name in ["Object", "Math", "Array", "String", "Number", "Boolean"] do

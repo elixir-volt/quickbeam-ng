@@ -92,6 +92,22 @@ defmodule QuickBEAM.VM.Bytecode.Writer do
     end
   end
 
+  defp write_object({:template_object, cooked, raw}, atoms) do
+    {:array, cooked_values} = cooked
+
+    with {:ok, cooked_encoded} <- map_values(cooked_values, &write_object(&1, atoms)),
+         {:ok, raw_encoded} <- write_object(raw, atoms) do
+      {:ok,
+       [
+         Opcodes.bc_tag_template_object(),
+         write_unsigned(length(cooked_values)),
+         cooked_encoded,
+         raw_encoded
+       ]
+       |> IO.iodata_to_binary()}
+    end
+  end
+
   defp write_object({:object, properties}, atoms) when is_map(properties) do
     pairs = Map.to_list(properties)
 

@@ -81,6 +81,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"nullish value", "0 ?? 3"},
       {"sequence expression", "let x=0; (x=1, x+2)"},
       {"sequence declaration", "let x=0; let y=(x=1, x+2); y+x"},
+      {"tagged template", "function tag(s){return s.raw[0]}; tag`x`"},
+      {"tagged template member", "function tag(s){return s.raw[0]}; let a=[tag]; a[0]`x`"},
       {"template literal", "let x = 2; `${x + 1}`"},
       {"template literal parts", "`a${1}b${2}c`"},
       {"simple switch",
