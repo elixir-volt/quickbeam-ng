@@ -1315,7 +1315,7 @@ defmodule QuickBEAM.VM.CompilerTest do
 
       parent_proto = Heap.wrap(%{})
       child = Heap.wrap(%{proto() => parent_proto})
-      ctor = Heap.wrap(%{"prototype" => parent_proto})
+      ctor = Heap.wrap(%{"call" => true, "prototype" => parent_proto})
 
       assert {:ok, true} = Compiler.invoke(fun, [child, ctor])
       assert {:ok, false} = Compiler.invoke(fun, [5, ctor])
@@ -1329,7 +1329,7 @@ defmodule QuickBEAM.VM.CompilerTest do
       parent_proto = Heap.wrap(%{})
       mid_proto = Heap.wrap(%{proto() => parent_proto})
       child = Heap.wrap(%{proto() => mid_proto})
-      ctor = Heap.wrap(%{"prototype" => parent_proto})
+      ctor = Heap.wrap(%{"call" => true, "prototype" => parent_proto})
 
       assert {:ok, true} = Compiler.invoke(fun, [child, ctor])
     end
