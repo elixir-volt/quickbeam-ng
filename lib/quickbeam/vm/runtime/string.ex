@@ -523,7 +523,18 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp regex_replace(s, {:regexp, bytecode, _source}, replacement)
        when is_binary(s) and is_binary(bytecode) do
     rep = Runtime.stringify(replacement)
+    global? = Bitwise.band(:binary.at(bytecode, 0), 1) != 0
 
+    if global? do
+      regex_replace_all(s, bytecode, rep, 0, [])
+    else
+      regex_replace_first(s, bytecode, rep)
+    end
+  end
+
+  defp regex_replace(s, _, _), do: s
+
+  defp regex_replace_first(s, bytecode, rep) do
     case RegExp.nif_exec(bytecode, s, 0) do
       nil ->
         s
@@ -538,7 +549,17 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp regex_replace(s, _, _), do: s
+  defp regex_replace_all(s, bytecode, rep, offset, acc) do
+    case RegExp.nif_exec(bytecode, s, offset) do
+      nil ->
+        IO.iodata_to_binary(acc ++ [binary_part(s, offset, byte_size(s) - offset)])
+
+      [{match_start, match_len} | _captures] ->
+        before = binary_part(s, offset, match_start - offset)
+        next_offset = match_start + max(match_len, 1)
+        regex_replace_all(s, bytecode, rep, next_offset, acc ++ [before, rep])
+    end
+  end
 
   defp search(s, [{:regexp, bytecode, _source} | _]) when is_binary(s) and is_binary(bytecode) do
     case RegExp.nif_exec(bytecode, s, 0) do
