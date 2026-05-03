@@ -91,7 +91,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
   defp do_run_case(name, source) do
     expected = native_eval(source)
 
-    case BytecodeCompiler.compile(source) do
+    case safe_compile(source) do
       {:ok, bytecode} ->
         interpreter = run_interpreter(bytecode)
         compiler = run_compiler(bytecode)
@@ -118,6 +118,15 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {:error, reason} ->
         %{name: name, source: source, status: :error, expected: expected, reason: reason}
     end
+  end
+
+  defp safe_compile(source) do
+    BytecodeCompiler.compile(source)
+  rescue
+    exception ->
+      {:error, {:compile_exception, exception.__struct__, Exception.message(exception)}}
+  catch
+    kind, reason -> {:error, {:compile_throw, kind, reason}}
   end
 
   defp native_eval(source) do
