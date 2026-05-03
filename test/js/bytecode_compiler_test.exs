@@ -108,6 +108,10 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       )
     end
 
+    test "compiles for-of arrays" do
+      assert_compiles_to("let s = 0; for (const x of [1, 2, 3]) s += x; s", 6)
+    end
+
     test "compiles update and compound assignments" do
       assert_compiles_to("let x=1; x++; x", 2)
       assert_compiles_to("let x=1; ++x", 2)

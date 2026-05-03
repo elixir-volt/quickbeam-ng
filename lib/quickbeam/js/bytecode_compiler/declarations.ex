@@ -28,6 +28,21 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
     declare_statements(rest, scope)
   end
 
+  defp declare_statements(
+         [
+           %AST.ForOfStatement{
+             left: %AST.VariableDeclaration{declarations: declarations}
+           }
+           | rest
+         ],
+         scope
+       ) do
+    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    scope = Scope.declare_local(scope, "<for_of_array>")
+    scope = Scope.declare_local(scope, "<for_of_index>")
+    declare_statements(rest, scope)
+  end
+
   defp declare_statements([_statement | rest], scope), do: declare_statements(rest, scope)
 
   defp declare_pattern(%AST.Identifier{name: name}, scope), do: Scope.declare_local(scope, name)

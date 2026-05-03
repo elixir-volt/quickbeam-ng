@@ -273,6 +273,71 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  def compile(
+        %AST.ForOfStatement{
+          left: %AST.VariableDeclaration{
+            declarations: [%AST.VariableDeclarator{id: %AST.Identifier{name: name}}]
+          },
+          right: right,
+          body: body,
+          await: false
+        },
+        scope,
+        instructions,
+        constants,
+        _opts,
+        callbacks
+      ) do
+    start_label = callbacks.unique_label.(:for_of_start)
+    update_label = callbacks.unique_label.(:for_of_update)
+    end_label = callbacks.unique_label.(:for_of_end)
+
+    with {:loc, value_loc} <- callbacks.resolve.(scope, name),
+         {:loc, array_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
+         {:loc, index_loc} <- callbacks.resolve.(scope, "<for_of_index>"),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(right, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile(
+             body,
+             scope,
+             instructions ++
+               [
+                 {:put_loc, array_loc},
+                 {:push_int, 0},
+                 {:put_loc, index_loc},
+                 {:label, start_label},
+                 {:get_loc, index_loc},
+                 {:get_loc, array_loc},
+                 :get_length,
+                 :lt,
+                 {:jump_if_false, end_label},
+                 {:get_loc, array_loc},
+                 {:get_loc, index_loc},
+                 :get_array_el,
+                 {:put_loc, value_loc}
+               ],
+             constants,
+             [tail?: false, break_label: end_label, continue_label: update_label],
+             callbacks
+           ) do
+      {:ok,
+       instructions ++
+         [
+           {:label, update_label},
+           {:get_loc, index_loc},
+           {:push_int, 1},
+           :add,
+           {:put_loc, index_loc},
+           {:jump, start_label},
+           {:label, end_label}
+         ], constants}
+    else
+      :error -> {:error, {:unsupported, :for_of_binding}}
+      {:error, _} = error -> error
+    end
+  end
+
   def compile(%AST.ForStatement{} = statement, scope, instructions, constants, _opts, callbacks) do
     test_label = callbacks.unique_label.(:for_test)
     update_label = callbacks.unique_label.(:for_update)
