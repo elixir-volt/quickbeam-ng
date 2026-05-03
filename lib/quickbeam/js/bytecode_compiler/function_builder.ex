@@ -20,7 +20,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
       var_count: length(locals),
       defined_arg_count: Keyword.get(opts, :defined_arg_count, length(args)),
       stack_size: Assembler.stack_size(instructions),
-      locals: Enum.map(args ++ locals, &var_def/1),
+      locals: Keyword.get(opts, :local_defs, Enum.map(args ++ locals, &var_def/1)),
+      var_ref_count: Keyword.get(opts, :var_ref_count, 0),
+      closure_vars: Keyword.get(opts, :closure_vars, []),
       constants: Keyword.fetch!(opts, :constants),
       extra_atoms: extra_atoms,
       byte_code: <<>>,
@@ -51,7 +53,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
     |> Map.update!(:constants, &attach_constant_atoms(&1, atoms))
   end
 
-  defp var_def(name) do
+  def var_def(name) do
     %VarDef{
       name: name,
       scope_level: 0,

@@ -26,6 +26,32 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Captures do
 
   def captured_names(_function, _scope), do: []
 
+  def has_mutable_captures?(function, captured_names) do
+    assigned = collect_assigned_identifiers(function.body, MapSet.new())
+    Enum.any?(captured_names, &MapSet.member?(assigned, &1))
+  end
+
+  defp collect_assigned_identifiers(
+         %AST.AssignmentExpression{left: %AST.Identifier{name: n}},
+         acc
+       ),
+       do: MapSet.put(acc, n)
+
+  defp collect_assigned_identifiers(
+         %AST.UpdateExpression{argument: %AST.Identifier{name: n}},
+         acc
+       ),
+       do: MapSet.put(acc, n)
+
+  defp collect_assigned_identifiers(%{__struct__: _} = node, acc) do
+    node |> Map.from_struct() |> Map.values() |> Enum.reduce(acc, &collect_assigned_identifiers/2)
+  end
+
+  defp collect_assigned_identifiers(list, acc) when is_list(list),
+    do: Enum.reduce(list, acc, &collect_assigned_identifiers/2)
+
+  defp collect_assigned_identifiers(_value, acc), do: acc
+
   def prepend_params(function, []), do: function
 
   def prepend_params(%{params: params} = function, captures) do

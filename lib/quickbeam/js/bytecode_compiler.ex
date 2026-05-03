@@ -134,6 +134,13 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     uses_arguments? = references_arguments?(function.body) and function.params == []
     scope = if uses_arguments?, do: Scope.declare_local(scope, "<arguments>"), else: scope
 
+    closure_scope = Process.get(:bytecode_compiler_closure_scope)
+    Process.delete(:bytecode_compiler_closure_scope)
+    scope = if closure_scope, do: Scope.with_var_refs(scope, closure_scope), else: scope
+
+    prev_var_refs = Process.get(:bytecode_compiler_var_refs)
+    Process.put(:bytecode_compiler_var_refs, %{})
+
     with {:ok, scope} <- Declarations.declare_program_locals(function.body.body, scope),
          {:ok, instructions, constants} <- compile_param_patterns(pattern_params, scope, [], []),
          {:ok, instructions, constants} <- compile_rest_param(rest_param, instructions, constants),
@@ -144,12 +151,19 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_function_body(function.body.body, scope, instructions, constants, globals) do
       instructions = ensure_function_return(instructions)
+      var_refs = Process.get(:bytecode_compiler_var_refs, %{})
+      Process.put(:bytecode_compiler_var_refs, prev_var_refs)
+
+      {local_defs, var_ref_count} =
+        build_local_defs(params ++ scope.local_names, var_refs)
 
       {:ok,
        FunctionBuilder.build(
          name: name,
          args: params,
          locals: scope.local_names,
+         local_defs: local_defs,
+         var_ref_count: var_ref_count,
          constants: Enum.reverse(constants),
          instructions: instructions,
          defined_arg_count: defined_arg_count(params, rest_param),
@@ -158,7 +172,32 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          new_target_allowed: true,
          source: ""
        )}
+    else
+      error ->
+        Process.put(:bytecode_compiler_var_refs, prev_var_refs)
+        error
     end
+  end
+
+  defp build_local_defs(all_names, var_refs) when map_size(var_refs) == 0,
+    do: {Enum.map(all_names, &FunctionBuilder.var_def/1), 0}
+
+  defp build_local_defs(all_names, var_refs) do
+    {defs, _idx} =
+      Enum.map_reduce(all_names, 0, fn name, next_ref_idx ->
+        if Map.has_key?(var_refs, name) do
+          {%{
+             FunctionBuilder.var_def(name)
+             | is_captured: true,
+               is_lexical: true,
+               var_ref_idx: next_ref_idx
+           }, next_ref_idx + 1}
+        else
+          {FunctionBuilder.var_def(name), next_ref_idx}
+        end
+      end)
+
+    {defs, Enum.count(var_refs)}
   end
 
   defp compile_function_stub(_function, name) do

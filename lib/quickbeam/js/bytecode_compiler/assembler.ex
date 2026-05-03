@@ -286,6 +286,24 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction({:special_object, type}, _atoms),
     do: <<Opcodes.num(:special_object), type>>
 
+  defp encode_instruction({:get_var_ref, idx}, _atoms) when idx in 0..3,
+    do: <<Opcodes.num(String.to_atom("get_var_ref#{idx}"))>>
+
+  defp encode_instruction({:get_var_ref, idx}, _atoms),
+    do: <<Opcodes.num(:get_var_ref), idx::little-16>>
+
+  defp encode_instruction({:put_var_ref, idx}, _atoms) when idx in 0..3,
+    do: <<Opcodes.num(String.to_atom("put_var_ref#{idx}"))>>
+
+  defp encode_instruction({:put_var_ref, idx}, _atoms),
+    do: <<Opcodes.num(:put_var_ref), idx::little-16>>
+
+  defp encode_instruction({:get_var_ref_check, idx}, _atoms),
+    do: <<Opcodes.num(:get_var_ref_check), idx::little-16>>
+
+  defp encode_instruction({:put_var_ref_check, idx}, _atoms),
+    do: <<Opcodes.num(:put_var_ref_check), idx::little-16>>
+
   defp encode_instruction(:throw, _atoms), do: <<Opcodes.num(:throw)>>
 
   defp encode_instruction({:throw_error, type, atom_idx}, atoms),

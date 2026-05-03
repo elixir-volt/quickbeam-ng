@@ -652,16 +652,22 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
 
   def compile(%AST.FunctionExpression{} = expression, scope, instructions, constants, callbacks) do
     captures = Captures.captured_names(expression, scope)
-    expression = Captures.prepend_params(expression, captures)
 
-    with {:ok, function} <- callbacks.compile_function.(expression, function_name(expression.id)) do
-      instructions = instructions ++ [{:closure, length(constants)}]
-      constants = [function | constants]
+    if captures != [] and Captures.has_mutable_captures?(expression, captures) do
+      compile_mutable_closure(expression, captures, instructions, constants, callbacks)
+    else
+      expression = Captures.prepend_params(expression, captures)
 
-      if captures == [] do
-        {:ok, instructions, constants}
-      else
-        Captures.bind(captures, scope, instructions, constants)
+      with {:ok, function} <-
+             callbacks.compile_function.(expression, function_name(expression.id)) do
+        instructions = instructions ++ [{:closure, length(constants)}]
+        constants = [function | constants]
+
+        if captures == [] do
+          {:ok, instructions, constants}
+        else
+          Captures.bind(captures, scope, instructions, constants)
+        end
       end
     end
   end
@@ -1119,6 +1125,43 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
          _callbacks
        ),
        do: {:error, {:unsupported, :assignment_expression}}
+
+  defp compile_mutable_closure(expression, captures, instructions, constants, callbacks) do
+    parent_var_refs = Process.get(:bytecode_compiler_var_refs, %{})
+
+    capture_var_refs =
+      captures
+      |> Enum.with_index(map_size(parent_var_refs))
+      |> Map.new(fn {name, idx} -> {name, idx} end)
+
+    Process.put(:bytecode_compiler_var_refs, Map.merge(parent_var_refs, capture_var_refs))
+
+    closure_vars =
+      Enum.map(captures, fn name ->
+        %QuickBEAM.VM.Bytecode.ClosureVar{
+          name: name,
+          var_idx: Map.fetch!(capture_var_refs, name),
+          closure_type: 0,
+          is_const: false,
+          is_lexical: true,
+          var_kind: 0
+        }
+      end)
+
+    prev_closure_scope = Process.get(:bytecode_compiler_closure_scope)
+    Process.put(:bytecode_compiler_closure_scope, capture_var_refs)
+
+    case callbacks.compile_function.(expression, function_name(expression.id)) do
+      {:ok, function} ->
+        Process.put(:bytecode_compiler_closure_scope, prev_closure_scope)
+        function = %{function | closure_vars: closure_vars}
+        {:ok, instructions ++ [{:closure, length(constants)}], [function | constants]}
+
+      {:error, _} = error ->
+        Process.put(:bytecode_compiler_closure_scope, prev_closure_scope)
+        error
+    end
+  end
 
   defp compile_tagged_template_tag(
          %AST.MemberExpression{
