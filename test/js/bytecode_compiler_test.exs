@@ -120,6 +120,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("try { throw 3; } catch (e) { e + 1; }", 4)
     end
 
+    test "compiles simple classes" do
+      assert_compiles_to("class A { m() { return 1; } } new A().m()", 1)
+      assert_compiles_to("class A { constructor() { this.x = 1; } } new A().x", 1)
+    end
+
     test "compiles update and compound assignments" do
       assert_compiles_to("let x=1; x++; x", 2)
       assert_compiles_to("let x=1; ++x", 2)

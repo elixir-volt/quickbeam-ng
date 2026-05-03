@@ -456,6 +456,23 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       ) do
+    compile_direct_call(callee, args, scope, instructions, constants, callbacks)
+  end
+
+  def compile(
+        %AST.NewExpression{callee: callee, arguments: args},
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    compile_direct_call(callee, args, scope, instructions, constants, callbacks)
+  end
+
+  def compile(expression, _scope, _instructions, _constants, _callbacks),
+    do: {:error, {:unsupported, expression.type}}
+
+  defp compile_direct_call(callee, args, scope, instructions, constants, callbacks) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(callee, scope, instructions, constants),
          {:ok, instructions, constants} <-
@@ -463,9 +480,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
       {:ok, instructions ++ [{:call, length(args)}], constants}
     end
   end
-
-  def compile(expression, _scope, _instructions, _constants, _callbacks),
-    do: {:error, {:unsupported, expression.type}}
 
   defp compile_global_identifier(name, instructions, constants)
        when name in ["Object", "Math", "Array", "String", "Number", "Boolean"] do

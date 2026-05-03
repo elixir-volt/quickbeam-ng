@@ -127,6 +127,25 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   def compile(
+        %AST.ClassDeclaration{id: %AST.Identifier{name: name}, super_class: nil, body: body},
+        scope,
+        instructions,
+        constants,
+        _opts,
+        callbacks
+      ) do
+    with {:loc, loc} <- callbacks.resolve.(scope, name),
+         {:ok, factory} <- class_factory(name, body),
+         {:ok, function} <- callbacks.compile_function.(factory, name) do
+      {:ok, instructions ++ [{:closure, length(constants)}, {:put_loc, loc}],
+       [function | constants]}
+    else
+      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
+      {:error, _} = error -> error
+    end
+  end
+
+  def compile(
         %AST.ReturnStatement{} = statement,
         scope,
         instructions,
@@ -479,6 +498,110 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
   defp compile_if_alternate(alternate, scope, instructions, constants, opts, callbacks),
     do: compile(alternate, scope, instructions, constants, opts, callbacks)
+
+  defp class_factory(name, body) do
+    with {:ok, properties} <- class_properties(body) do
+      {:ok,
+       %AST.FunctionExpression{
+         type: :function_expression,
+         id: %AST.Identifier{type: :identifier, name: name},
+         params: [],
+         body: %AST.BlockStatement{
+           type: :block_statement,
+           body: [
+             %AST.ReturnStatement{
+               type: :return_statement,
+               argument: %AST.ObjectExpression{
+                 type: :object_expression,
+                 properties: properties,
+                 parenthesized?: false
+               }
+             }
+           ]
+         },
+         async: false,
+         generator: false
+       }}
+    end
+  end
+
+  defp class_properties(body) do
+    Enum.reduce_while(body, {:ok, []}, fn definition, {:ok, properties} ->
+      case class_property(definition) do
+        {:ok, next_properties} -> {:cont, {:ok, next_properties ++ properties}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, properties} -> {:ok, Enum.reverse(properties)}
+      error -> error
+    end
+  end
+
+  defp class_property(%AST.MethodDefinition{
+         kind: :method,
+         static: false,
+         computed: false,
+         key: key,
+         value: value
+       }) do
+    {:ok,
+     [
+       %AST.Property{
+         type: :property,
+         key: key,
+         value: value,
+         kind: :init,
+         method: false,
+         shorthand: false,
+         computed: false
+       }
+     ]}
+  end
+
+  defp class_property(%AST.MethodDefinition{
+         kind: :constructor,
+         value: %AST.FunctionExpression{body: %AST.BlockStatement{body: body}}
+       }) do
+    constructor_properties(body)
+  end
+
+  defp class_property(%AST.MethodDefinition{}), do: {:error, {:unsupported, :class_element}}
+
+  defp constructor_properties(body) do
+    Enum.reduce_while(body, {:ok, []}, fn
+      %AST.ExpressionStatement{
+        expression: %AST.AssignmentExpression{
+          operator: "=",
+          left: %AST.MemberExpression{
+            object: %AST.Identifier{name: "this"},
+            property: %AST.Identifier{} = key,
+            computed: false
+          },
+          right: value
+        }
+      },
+      {:ok, properties} ->
+        property = %AST.Property{
+          type: :property,
+          key: key,
+          value: value,
+          kind: :init,
+          method: false,
+          shorthand: false,
+          computed: false
+        }
+
+        {:cont, {:ok, [property | properties]}}
+
+      _statement, _acc ->
+        {:halt, {:error, {:unsupported, :class_constructor_body}}}
+    end)
+    |> case do
+      {:ok, properties} -> {:ok, Enum.reverse(properties)}
+      error -> error
+    end
+  end
 
   defp object_literal_keys(properties) do
     Enum.reduce_while(properties, {:ok, []}, fn

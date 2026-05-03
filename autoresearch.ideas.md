@@ -2,3 +2,4 @@
 - Investigate full closure support as a larger milestone: free-variable analysis, var refs/closure cells, bytecode writer metadata, and QuickJS loadability.
 - Add scoped/block lexical model before deeper `let`/`const`/TDZ semantics; current simple slots flatten scope and can mis-handle shadowing.
 - Consider demand-driven bytecode writer roundtrip expansion for classes, try/catch, regexp, and closure metadata once frontend starts emitting those constructs.
+- RegExp literal support needs VM interpreter/runtime alignment before frontend compilation: lowering via `RegExp(pattern)` produced QuickJS-valid code but interpreter returned `false` for `/a+/.test("aa")`, so do not enable until the RegExp runtime path is audited.
