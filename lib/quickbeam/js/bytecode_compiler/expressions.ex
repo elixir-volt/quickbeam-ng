@@ -1090,6 +1090,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   defp tagged_template_call_op(_tag, arg_count),
     do: {:call, arg_count}
 
+  defp nameable_value?(%AST.FunctionExpression{id: nil}), do: true
+  defp nameable_value?(%AST.ArrowFunctionExpression{}), do: true
+  defp nameable_value?(%AST.ClassExpression{id: nil}), do: true
+  defp nameable_value?(_), do: false
+
   defp compile_global_identifier(name, instructions, constants)
        when name in ["Object", "Math", "Array", "String", "Number", "Boolean"] do
     {:ok, instructions ++ [{:get_var, name}], constants}
@@ -1346,7 +1351,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
            callbacks.compile_expression.(key, scope, instructions, constants),
          {:ok, instructions, constants} <-
            callbacks.compile_expression.(value, scope, instructions, constants) do
-      {:ok, instructions ++ [:define_array_el, :drop], constants}
+      name_instr = if nameable_value?(value), do: [:set_name_computed], else: []
+      {:ok, instructions ++ name_instr ++ [:define_array_el, :drop], constants}
     end
   end
 
