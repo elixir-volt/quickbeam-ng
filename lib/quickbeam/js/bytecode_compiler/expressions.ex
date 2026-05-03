@@ -126,6 +126,33 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.UnaryExpression{operator: "typeof", argument: %AST.Identifier{name: name}},
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    case callbacks.resolve.(scope, name) do
+      :error ->
+        {instruction, constants} = add_constant("undefined", constants)
+        {:ok, instructions ++ [instruction], constants}
+
+      _slot ->
+        compile(
+          %AST.Identifier{type: :identifier, name: name},
+          scope,
+          instructions,
+          constants,
+          callbacks
+        )
+        |> case do
+          {:ok, instructions, constants} -> {:ok, instructions ++ [:typeof], constants}
+          {:error, _} = error -> error
+        end
+    end
+  end
+
+  def compile(
         %AST.UnaryExpression{operator: operator, argument: argument},
         scope,
         instructions,

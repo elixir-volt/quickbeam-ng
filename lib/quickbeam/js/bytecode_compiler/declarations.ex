@@ -75,7 +75,44 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
     declare_statements(rest, Scope.declare_local(scope, name))
   end
 
-  defp declare_statements([_statement | rest], scope), do: declare_statements(rest, scope)
+  defp declare_statements([statement | rest], scope) do
+    scope = declare_nested_var_bindings(statement, scope)
+    declare_statements(rest, scope)
+  end
+
+  defp declare_nested_var_bindings(%AST.BlockStatement{body: body}, scope),
+    do: declare_var_statements(body, scope)
+
+  defp declare_nested_var_bindings(
+         %AST.IfStatement{consequent: consequent, alternate: alternate},
+         scope
+       ) do
+    scope
+    |> declare_nested_var_bindings_from(consequent)
+    |> declare_nested_var_bindings_from(alternate)
+  end
+
+  defp declare_nested_var_bindings(_statement, scope), do: scope
+
+  defp declare_nested_var_bindings_from(scope, nil), do: scope
+
+  defp declare_nested_var_bindings_from(scope, statement),
+    do: declare_nested_var_bindings(statement, scope)
+
+  defp declare_var_statements([], scope), do: scope
+
+  defp declare_var_statements(
+         [%AST.VariableDeclaration{kind: :var, declarations: declarations} | rest],
+         scope
+       ) do
+    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    declare_var_statements(rest, scope)
+  end
+
+  defp declare_var_statements([statement | rest], scope) do
+    scope = declare_nested_var_bindings(statement, scope)
+    declare_var_statements(rest, scope)
+  end
 
   defp declare_pattern(%AST.Identifier{name: name}, scope), do: Scope.declare_local(scope, name)
 

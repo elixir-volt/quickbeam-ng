@@ -170,6 +170,15 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let a=[0]; let y=(a[0]=2); y+a[0]", 4)
     end
 
+    test "compiles block scoped function bodies" do
+      assert_compiles_to("function f(){ if (true) { var x = 1; } return x; } f()", 1)
+
+      assert_compiles_to(
+        "function f(){ if (true) { let x = 1; } return typeof x; } f()",
+        "undefined"
+      )
+    end
+
     test "compiles function control flow" do
       assert_compiles_to("function f(x){ if (x) return 1; return 2; } f(true)", 1)
       assert_compiles_to("function f(){ while (true) { return 5; } } f()", 5)
