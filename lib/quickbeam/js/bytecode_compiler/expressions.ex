@@ -511,7 +511,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       ) do
-    compile_direct_call(callee, args, scope, instructions, constants, callbacks)
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(callee, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_call_args(args, scope, instructions ++ [:dup], constants, callbacks) do
+      {:ok, instructions ++ [{:call_constructor, length(args)}], constants}
+    end
   end
 
   def compile(expression, _scope, _instructions, _constants, _callbacks),

@@ -192,6 +192,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction({:call_method, argc}, _atoms) when argc in 0..65_535,
     do: <<Opcodes.num(:call_method), argc::little-16>>
 
+  defp encode_instruction({:call_constructor, argc}, _atoms) when argc in 0..65_535,
+    do: <<Opcodes.num(:call_constructor), argc::little-16>>
+
   defp encode_instruction({:array_from, count}, _atoms) when count in 0..65_535,
     do: <<Opcodes.num(:array_from), count::little-16>>
 
@@ -271,6 +274,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
 
   defp stack_effect({:call, argc}), do: {1 + argc, 1}
   defp stack_effect({:call_method, argc}), do: {2 + argc, 1}
+  defp stack_effect({:call_constructor, argc}), do: {2 + argc, 1}
   defp stack_effect({:get_var, _name}), do: {0, 1}
   defp stack_effect({:put_var, _name}), do: {1, 0}
   defp stack_effect({:array_from, count}), do: {count, 1}
