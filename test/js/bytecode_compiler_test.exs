@@ -73,6 +73,14 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let x=6; x *= 7; x", 42)
     end
 
+    test "compiles computed array writes" do
+      assert_compiles_to("let a=[1]; a[0]=3; a[0]", 3)
+    end
+
+    test "emits loadable computed object writes" do
+      assert_loads_to("let o={x:1}; o[\"x\"]=2; o.x", 2)
+    end
+
     test "emits QuickJS-loadable bytecode binaries" do
       assert {:ok, binary} =
                BytecodeCompiler.compile_to_binary("function f(a){ return a + 1; } f(2)")

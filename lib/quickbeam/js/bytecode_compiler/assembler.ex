@@ -206,6 +206,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(false, _atoms), do: <<Opcodes.num(:push_false)>>
   defp encode_instruction(:object, _atoms), do: <<Opcodes.num(:object)>>
   defp encode_instruction(:insert2, _atoms), do: <<Opcodes.num(:insert2)>>
+  defp encode_instruction(:insert3, _atoms), do: <<Opcodes.num(:insert3)>>
   defp encode_instruction(:dup, _atoms), do: <<Opcodes.num(:dup)>>
   defp encode_instruction(:drop, _atoms), do: <<Opcodes.num(:drop)>>
   defp encode_instruction(:add, _atoms), do: <<Opcodes.num(:add)>>
@@ -222,6 +223,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:lnot, _atoms), do: <<Opcodes.num(:lnot)>>
   defp encode_instruction(:typeof, _atoms), do: <<Opcodes.num(:typeof)>>
   defp encode_instruction(:get_array_el, _atoms), do: <<Opcodes.num(:get_array_el)>>
+  defp encode_instruction(:put_array_el, _atoms), do: <<Opcodes.num(:put_array_el)>>
   defp encode_instruction(:get_length, _atoms), do: <<Opcodes.num(:get_length)>>
 
   defp encode_instruction(:is_undefined_or_null, _atoms),

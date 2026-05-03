@@ -36,7 +36,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"pre increment", "let x=1; ++x"},
       {"post decrement", "let x=1; x--; x"},
       {"compound add", "let x=3; x += 4; x"},
-      {"compound multiply", "let x=6; x *= 7; x"}
+      {"compound multiply", "let x=6; x *= 7; x"},
+      {"array write", "let a=[1]; a[0]=3; a[0]"}
     ]
   end
 
