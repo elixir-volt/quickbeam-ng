@@ -79,6 +79,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Classes do
              ctx
            ) do
         Methods.define_method(target, method_closure, Names.resolve_atom(ctx, atom_idx), flags)
+        Methods.define_method(target, method_closure, Names.resolve_atom(ctx, atom_idx), flags)
         run(pc + 1, frame, [target | rest], gas, ctx)
       end
 

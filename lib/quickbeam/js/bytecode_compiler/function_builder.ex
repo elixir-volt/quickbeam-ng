@@ -36,7 +36,22 @@ defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
     }
 
     atoms = collect_atoms(function)
-    %{function | byte_code: Assembler.encode(instructions, atoms)}
+
+    %{function | byte_code: Assembler.encode(instructions, atoms), atoms: atoms}
+    |> attach_own_constant_atoms()
+  end
+
+  defp attach_own_constant_atoms(%Function{atoms: atoms, constants: constants} = function) do
+    constants =
+      for c <- constants do
+        case c do
+          %Function{atoms: nil} -> attach_atoms(c, atoms)
+          %Function{} -> c
+          _ -> c
+        end
+      end
+
+    %{function | constants: constants}
   end
 
   def collect_atoms(%Function{} = function) do
