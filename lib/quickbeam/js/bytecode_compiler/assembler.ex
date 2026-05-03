@@ -142,6 +142,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
     <<Opcodes.num(:push_i16), value::signed-little-16>>
   end
 
+  defp encode_instruction({:push_int, value}, _atoms)
+       when value in -2_147_483_648..2_147_483_647 do
+    <<Opcodes.num(:push_i32), value::signed-little-32>>
+  end
+
   defp encode_instruction({:constant, index}, _atoms) when index in 0..255,
     do: <<Opcodes.num(:push_const8), index>>
 

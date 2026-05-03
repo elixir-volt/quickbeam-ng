@@ -9,6 +9,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
     [
       {"literal integer", "1"},
       {"arithmetic precedence", "1 + 2 * 3"},
+      {"large int32 literal", "2147483647"},
       {"local declaration", "let x = 1; x + 2"},
       {"if consequent", "let x = 0; if (1 < 2) x = 3; x"},
       {"if alternate", "let x = 0; if (1 > 2) x = 3; else x = 4; x"},

@@ -7,6 +7,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
   describe "compile/1" do
     test "compiles arithmetic expression scripts" do
       assert_compiles_to("1 + 2 * 3", 7)
+      assert_compiles_to("2147483647", 2_147_483_647)
     end
 
     test "compiles local declarations and reads" do
