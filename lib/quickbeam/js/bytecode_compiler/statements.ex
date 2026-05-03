@@ -203,6 +203,38 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  def compile(
+        %AST.DoWhileStatement{body: body, test: test},
+        scope,
+        instructions,
+        constants,
+        _opts,
+        callbacks
+      ) do
+    start_label = callbacks.unique_label.(:do_start)
+    test_label = callbacks.unique_label.(:do_test)
+    end_label = callbacks.unique_label.(:do_end)
+
+    with {:ok, instructions, constants} <-
+           compile(
+             body,
+             scope,
+             instructions ++ [{:label, start_label}],
+             constants,
+             [tail?: false, break_label: end_label, continue_label: test_label],
+             callbacks
+           ),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             test,
+             scope,
+             instructions ++ [{:label, test_label}],
+             constants
+           ) do
+      {:ok, instructions ++ [{:jump_if_true, start_label}, {:label, end_label}], constants}
+    end
+  end
+
   def compile(%AST.ForStatement{} = statement, scope, instructions, constants, _opts, callbacks) do
     test_label = callbacks.unique_label.(:for_test)
     update_label = callbacks.unique_label.(:for_update)

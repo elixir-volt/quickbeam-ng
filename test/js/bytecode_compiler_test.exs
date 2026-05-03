@@ -58,6 +58,12 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y", 3)
     end
 
+    test "compiles do while loops" do
+      assert_compiles_to("let x=0; do { x=x+1; } while (x<3); x", 3)
+      assert_compiles_to("let x=0; do { break; } while (true); x", 0)
+      assert_compiles_to("let x=0; do { x=x+1; continue; x=9; } while (x<3); x", 3)
+    end
+
     test "compiles logical short-circuit expressions" do
       assert_compiles_to("let x=0; true && (x=1); x", 1)
       assert_compiles_to("let x=0; false || (x=1); x", 1)
