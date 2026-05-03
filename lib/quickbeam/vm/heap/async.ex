@@ -9,15 +9,19 @@ defmodule QuickBEAM.VM.Heap.Async do
 
   @doc "Removes and returns the next queued microtask, or `nil` when the queue is empty."
   def dequeue_microtask do
-    queue = Process.get(:qb_microtask_queue, :queue.new())
-
-    case :queue.out(queue) do
-      {{:value, task}, rest} ->
-        Process.put(:qb_microtask_queue, rest)
-        task
-
-      {:empty, _} ->
+    case Process.get(:qb_microtask_queue) do
+      nil ->
         nil
+
+      queue ->
+        case :queue.out(queue) do
+          {{:value, task}, rest} ->
+            Process.put(:qb_microtask_queue, rest)
+            task
+
+          {:empty, _} ->
+            nil
+        end
     end
   end
 
