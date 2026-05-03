@@ -22,8 +22,8 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
            ) do
       value
     else
-      %{runtime_pid: nil} -> :undefined
-      nil -> :undefined
+      %{runtime_pid: nil} -> eval_without_runtime(code)
+      nil -> eval_without_runtime(code)
       {:error, %{message: msg}} -> JSThrow.syntax_error!(msg)
       {:error, msg} when is_binary(msg) -> JSThrow.syntax_error!(msg)
       _ -> :undefined
@@ -31,6 +31,26 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
   end
 
   def js_eval(_, _), do: :undefined
+
+  defp eval_without_runtime(code) do
+    task =
+      Task.async(fn ->
+        with {:ok, rt} <- QuickBEAM.start(apis: false) do
+          try do
+            QuickBEAM.eval(rt, code)
+          after
+            QuickBEAM.stop(rt)
+          end
+        end
+      end)
+
+    case Task.await(task, 5_000) do
+      {:ok, value} -> value
+      _ -> :undefined
+    end
+  rescue
+    _ -> :undefined
+  end
 
   @doc "Implements the CommonJS-like `require` global backed by registered VM modules."
   def js_require([name | _], _) do
