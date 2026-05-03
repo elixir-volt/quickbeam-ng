@@ -189,14 +189,21 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
 
   defp run_interpreter(bytecode) do
     Heap.reset()
-    normalize_result(Interpreter.eval(bytecode.value, [], %{gas: 1_000_000}, bytecode.atoms))
+
+    safe_result(:interpreter, fn ->
+      normalize_result(Interpreter.eval(bytecode.value, [], %{gas: 1_000_000}, bytecode.atoms))
+    end)
   end
 
   defp run_compiler(bytecode) do
-    normalize_result(Compiler.invoke(bytecode.value, []))
+    safe_result(:compiler, fn -> normalize_result(Compiler.invoke(bytecode.value, [])) end)
   end
 
   defp run_native_load(source) do
+    safe_result(:native_load, fn -> do_run_native_load(source) end)
+  end
+
+  defp do_run_native_load(source) do
     with {:ok, binary} <- BytecodeCompiler.compile_to_binary(source) do
       {:ok, rt} = QuickBEAM.start(apis: false)
 
@@ -206,6 +213,14 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
         QuickBEAM.stop(rt)
       end
     end
+  end
+
+  defp safe_result(stage, fun) do
+    fun.()
+  rescue
+    exception -> {:error, {stage, :exception, exception.__struct__, Exception.message(exception)}}
+  catch
+    kind, reason -> {:error, {stage, :throw, kind, reason}}
   end
 
   defp normalize_result({:ok, value}), do: {:ok, normalize(value)}
