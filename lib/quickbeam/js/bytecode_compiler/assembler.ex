@@ -165,6 +165,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction({:get_loc, index}, _atoms) when index in 0..255,
     do: <<Opcodes.num(:get_loc8), index>>
 
+  defp encode_instruction({:get_loc, index}, _atoms) when index in 0..65_535,
+    do: <<Opcodes.num(:get_loc), index::little-16>>
+
   defp encode_instruction({:set_arg, index}, _atoms) when index in 0..255,
     do: <<Opcodes.num(:set_arg), index::little-16>>
 
@@ -178,12 +181,18 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction({:put_loc, index}, _atoms) when index in 0..255,
     do: <<Opcodes.num(:put_loc8), index>>
 
+  defp encode_instruction({:put_loc, index}, _atoms) when index in 0..65_535,
+    do: <<Opcodes.num(:put_loc), index::little-16>>
+
   defp encode_instruction({:set_loc, index}, _atoms) when index in 0..3 do
     <<Opcodes.num(String.to_atom("set_loc#{index}"))>>
   end
 
   defp encode_instruction({:set_loc, index}, _atoms) when index in 0..255,
     do: <<Opcodes.num(:set_loc8), index>>
+
+  defp encode_instruction({:set_loc, index}, _atoms) when index in 0..65_535,
+    do: <<Opcodes.num(:set_loc), index::little-16>>
 
   defp encode_instruction({:call, argc}, _atoms) when argc in 0..3 do
     <<Opcodes.num(String.to_atom("call#{argc}"))>>
