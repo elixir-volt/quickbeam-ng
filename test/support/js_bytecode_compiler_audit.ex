@@ -23,6 +23,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
        "class A { static x = 3; static m() { return this.x + 1; } } A.m()"},
       {"computed class method", "let k='m'; class A { [k](){ return 1; } } new A().m()"},
       {"computed static method", "let k='m'; class A { static [k](){ return 1; } } A.m()"},
+      {"class expression",
+       "function f(){ let o = { x: class { m(){ return 1; } } }; return 1 } 1"},
       {"array map arrow", "[1, 2, 3].map(x => x + 1).join(',')"},
       {"equality", "let x = 1; x === 1"},
       {"undefined", "undefined"},

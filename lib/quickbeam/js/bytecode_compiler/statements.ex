@@ -698,6 +698,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   defp compile_static_member(_member, _name, _scope, _instructions, _constants, _callbacks),
     do: {:error, {:unsupported, :class_element}}
 
+  def class_factory_from_expression(name, super_class, body, _scope) do
+    {instance_body, _static_body} = Enum.split_with(body, &(!static_member?(&1)))
+    class_factory(name, super_class, instance_body)
+  end
+
   defp super_class_name(%AST.Identifier{name: name}), do: name
   defp super_class_name(_), do: nil
 

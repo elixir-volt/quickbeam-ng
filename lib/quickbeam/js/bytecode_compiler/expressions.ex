@@ -1,7 +1,7 @@
 defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Captures, Emitter, Operators, Scope, Slots}
+  alias QuickBEAM.JS.BytecodeCompiler.{Captures, Emitter, Operators, Scope, Slots, Statements}
   alias QuickBEAM.JS.Parser.AST
 
   def compile(expression, %Emitter{} = emitter) do
@@ -611,6 +611,21 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
     }
 
     compile(expression, scope, instructions, constants, callbacks)
+  end
+
+  def compile(
+        %AST.ClassExpression{id: id, super_class: super_class, body: body},
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    name = function_name(id)
+
+    with {:ok, factory} <-
+           Statements.class_factory_from_expression(name, super_class, body, scope) do
+      compile(factory, scope, instructions, constants, callbacks)
+    end
   end
 
   def compile(%AST.FunctionExpression{} = expression, scope, instructions, constants, callbacks) do
