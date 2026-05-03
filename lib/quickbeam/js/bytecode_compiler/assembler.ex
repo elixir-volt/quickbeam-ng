@@ -278,6 +278,10 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:get_array_el2, _atoms), do: <<Opcodes.num(:get_array_el2)>>
   defp encode_instruction(:put_array_el, _atoms), do: <<Opcodes.num(:put_array_el)>>
   defp encode_instruction(:define_array_el, _atoms), do: <<Opcodes.num(:define_array_el)>>
+
+  defp encode_instruction({:copy_data_properties, mask}, _atoms) when mask in 0..255,
+    do: <<Opcodes.num(:copy_data_properties), mask>>
+
   defp encode_instruction(:get_length, _atoms), do: <<Opcodes.num(:get_length)>>
   defp encode_instruction(:regexp, _atoms), do: <<Opcodes.num(:regexp)>>
 

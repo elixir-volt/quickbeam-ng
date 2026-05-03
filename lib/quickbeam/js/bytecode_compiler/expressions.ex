@@ -950,13 +950,23 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
     do: {:ok, instructions, constants}
 
   defp compile_object_properties(
-         [%AST.SpreadElement{} | _rest],
-         _scope,
-         _instructions,
-         _constants,
-         _callbacks
-       ),
-       do: {:error, {:unsupported, :object_spread}}
+         [%AST.SpreadElement{argument: argument} | rest],
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(argument, scope, instructions, constants) do
+      compile_object_properties(
+        rest,
+        scope,
+        instructions ++ [:null, {:copy_data_properties, 6}, :drop, :drop],
+        constants,
+        callbacks
+      )
+    end
+  end
 
   defp compile_object_properties(
          [%AST.Property{} = property | rest],
