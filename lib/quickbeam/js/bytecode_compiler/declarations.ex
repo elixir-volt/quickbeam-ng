@@ -31,5 +31,13 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
   defp declare_statements([_statement | rest], scope), do: declare_statements(rest, scope)
 
   defp declare_pattern(%AST.Identifier{name: name}, scope), do: Scope.declare_local(scope, name)
+
+  defp declare_pattern(%AST.ObjectPattern{properties: properties}, scope) do
+    Enum.reduce(properties, scope, fn
+      %AST.Property{value: value}, acc -> declare_pattern(value, acc)
+      _property, acc -> acc
+    end)
+  end
+
   defp declare_pattern(_pattern, scope), do: scope
 end

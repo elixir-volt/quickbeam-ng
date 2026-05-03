@@ -44,6 +44,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let o = {x: 1, y: 2}; o.x + o.y", 3)
       assert_compiles_to("let o = {x: 1}; o.x = 2; o.x", 2)
       assert_compiles_to("let x = 1; ({x}).x", 1)
+      assert_compiles_to("let {x} = {x: 9}; x", 9)
+      assert_compiles_to("let {x, y} = {x: 2, y: 3}; x + y", 5)
       assert_compiles_to("let k = \"x\"; ({[k]: 2}).x", 2)
       assert_compiles_to("({[1]: 2})[1]", 2)
     end

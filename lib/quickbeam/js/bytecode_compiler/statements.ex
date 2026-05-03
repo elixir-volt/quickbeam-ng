@@ -378,6 +378,81 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  defp compile_declarator(
+         %AST.VariableDeclarator{id: %AST.ObjectPattern{properties: properties}, init: init},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(init, scope, instructions, constants) do
+      compile_object_pattern(properties, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_declarator(
+         %AST.VariableDeclarator{id: pattern},
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks
+       ),
+       do: {:error, {:unsupported, {:declaration_pattern, pattern.type}}}
+
+  defp compile_object_pattern([], _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions ++ [:drop], constants}
+
+  defp compile_object_pattern([property], scope, instructions, constants, callbacks),
+    do:
+      compile_object_pattern_property(property, scope, instructions, constants, callbacks, false)
+
+  defp compile_object_pattern([property | rest], scope, instructions, constants, callbacks) do
+    with {:ok, instructions, constants} <-
+           compile_object_pattern_property(
+             property,
+             scope,
+             instructions,
+             constants,
+             callbacks,
+             true
+           ) do
+      compile_object_pattern(rest, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_object_pattern_property(
+         %AST.Property{
+           computed: false,
+           key: %AST.Identifier{name: key},
+           value: %AST.Identifier{name: name}
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks,
+         keep_object?
+       ) do
+    case callbacks.resolve.(scope, name) do
+      {:loc, loc} ->
+        prefix = if keep_object?, do: [:dup], else: []
+        {:ok, instructions ++ prefix ++ [{:get_field, key}, {:put_loc, loc}], constants}
+
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
+    end
+  end
+
+  defp compile_object_pattern_property(
+         %AST.Property{} = property,
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks,
+         _keep_object?
+       ),
+       do: {:error, {:unsupported, {:object_pattern_property, property.type}}}
+
   defp compile_return(
          %AST.ReturnStatement{argument: nil},
          _scope,
