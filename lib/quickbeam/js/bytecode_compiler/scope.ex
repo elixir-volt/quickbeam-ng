@@ -1,7 +1,12 @@
 defmodule QuickBEAM.JS.BytecodeCompiler.Scope do
   @moduledoc false
 
-  defstruct args: %{}, globals: MapSet.new(), locals: %{}, local_names: [], var_refs: %{}
+  defstruct args: %{},
+            globals: MapSet.new(),
+            locals: %{},
+            local_names: [],
+            var_refs: %{},
+            arguments_alias: nil
 
   def new(args \\ [], globals \\ []) do
     args = Enum.with_index(args) |> Map.new()
@@ -10,6 +15,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Scope do
 
   def with_var_refs(%__MODULE__{} = scope, var_ref_map) when is_map(var_ref_map),
     do: %{scope | var_refs: var_ref_map}
+
+  def with_arguments_alias(%__MODULE__{} = scope, param_count),
+    do: %{scope | arguments_alias: param_count}
 
   def declare_local(%__MODULE__{} = scope, name) when is_binary(name) do
     if Map.has_key?(scope.locals, name) do

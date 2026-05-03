@@ -62,10 +62,26 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
     do: {:ok, instructions ++ [{:get_var, "NaN"}], constants}
 
   def compile(%AST.Identifier{name: "arguments"}, scope, instructions, constants, callbacks) do
-    case callbacks.resolve.(scope, "<arguments>") do
-      {:loc, _} = slot -> {:ok, instructions ++ [Slots.read(slot)], constants}
+    case {scope.arguments_alias, callbacks.resolve.(scope, "<arguments>")} do
+      {count, _} when is_integer(count) -> {:ok, instructions ++ [:undefined], constants}
+      {_, {:loc, _} = slot} -> {:ok, instructions ++ [Slots.read(slot)], constants}
       _ -> {:error, {:unsupported, {:unresolved_identifier, "arguments"}}}
     end
+  end
+
+  def compile(
+        %AST.MemberExpression{
+          object: %AST.Identifier{name: "arguments"},
+          property: %AST.Literal{value: index},
+          computed: true
+        },
+        %{arguments_alias: count},
+        instructions,
+        constants,
+        _callbacks
+      )
+      when is_integer(count) and is_integer(index) and index >= 0 and index < count do
+    {:ok, instructions ++ [{:get_arg, index}], constants}
   end
 
   def compile(%AST.Identifier{name: name}, scope, instructions, constants, callbacks) do

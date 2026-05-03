@@ -131,8 +131,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     {params, defaults, rest_param, pattern_params} = normalize_params(function.params)
     scope = Scope.new(params, globals)
     scope = declare_param_patterns(scope, pattern_params)
-    uses_arguments? = references_arguments?(function.body) and function.params == []
-    scope = if uses_arguments?, do: Scope.declare_local(scope, "<arguments>"), else: scope
+    uses_arguments? = references_arguments?(function.body)
+    has_params? = function.params != []
+    uses_arguments_object? = uses_arguments? and not has_params?
+    scope = if uses_arguments_object?, do: Scope.declare_local(scope, "<arguments>"), else: scope
+
+    scope =
+      if uses_arguments? and has_params?,
+        do: Scope.with_arguments_alias(scope, length(params)),
+        else: scope
 
     closure_scope = Process.get(:bytecode_compiler_closure_scope)
     Process.delete(:bytecode_compiler_closure_scope)
@@ -147,7 +154,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_param_defaults(defaults, scope, instructions, constants, globals),
          {:ok, instructions, constants} <-
-           compile_arguments_prologue(uses_arguments?, scope, instructions, constants),
+           compile_arguments_prologue(uses_arguments_object?, scope, instructions, constants),
          {:ok, instructions, constants} <-
            compile_function_body(function.body.body, scope, instructions, constants, globals) do
       instructions = ensure_function_return(instructions)
