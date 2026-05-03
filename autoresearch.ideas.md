@@ -3,5 +3,13 @@
 - Full mutable closure capture remains future work: current frontend supports value-captured function expressions/declarations through explicit capture params and `Function.prototype.bind`, but not mutable shared closure cells. Earlier direct var_ref/closure_var metadata attempts segfaulted stable frontend native-load validation.
 - Remaining full-parity scoping work after frontier fixes: real lexical environments, TDZ, per-iteration environments, and block/function declaration edge cases beyond the current simple var-hoist/block-let isolation subset.
 - A logical member assignment attempt (`o.x ||= y`) matched the interpreter but exposed a BEAM compiler mismatch, so revisit only after inspecting compiler lowering for branch stack shapes (`get_field2`, `if_true`, `insert2`, `put_field`, `nip`).
-- Array-pattern `for...of` lowering was tried and removed because interpreter matched but BEAM compiler invocation returned `:error`; revisit with compiler stack-shape diagnostics around per-iteration array extraction before enabling the audit case.
-- Tagged-template lowering was tried with template-object approximations, but function calls currently lose nested object properties across invocation (`strings.raw` becomes `undefined`); investigate heap/object argument preservation before adding tagged template support.
+- For-of destructuring and array-pattern for-of lowering compile and pass interpreter/native but BEAM compiler returns `:error`; revisit with compiler stack-shape diagnostics.
+- Tagged-template lowering was tried but nested object properties across function calls were lost (`strings.raw` becomes `undefined`); investigate heap/object argument preservation.
+- `instanceof` works as an opcode but class factories don't produce real prototypes, so `a instanceof A` returns false; blocked until class/prototype semantics improve.
+- Function expression name inference from variable assignment context (e.g. `let f = function(){}; f.name === "f"`) and class expression name inference need set_function_name opcode support.
+- `try { return 1 } finally { return 2 }` — finally-over-return completion semantics are a mismatch in both interpreter and native-load; both return 1 instead of 2.
+- `arguments` object support requires detecting function scope context and emitting `arguments` as a QuickJS-recognized local; 5 corpus cases blocked on this.
+- Private class fields/methods require full private name tracking; 7+ corpus cases blocked.
+- `eval` as a runtime feature requires special compilation; 7 corpus cases blocked.
+- `with` statement requires dynamic scope resolution; 6 corpus cases blocked.
+- `yield`/generator/async function support requires fundamental generator/coroutine lowering; 4+ corpus cases blocked.
