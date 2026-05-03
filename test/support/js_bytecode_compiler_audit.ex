@@ -19,6 +19,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
        Enum.map_join(0..260, ";", &"function f#{&1}(){return #{rem(&1, 10)}}") <> ";f260()"},
       {"function expression", "let f = function(a){ return a + 1; }; f(2)"},
       {"simple arrow function", "let f = x => x + 1; f(2)"},
+      {"class static field and method",
+       "class A { static x = 3; static m() { return this.x + 1; } } A.m()"},
       {"array map arrow", "[1, 2, 3].map(x => x + 1).join(',')"},
       {"equality", "let x = 1; x === 1"},
       {"undefined", "undefined"},

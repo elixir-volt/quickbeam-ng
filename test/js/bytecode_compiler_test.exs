@@ -58,6 +58,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
     test "compiles generic calls and for loops" do
       assert_compiles_to("function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)", 10)
       assert_compiles_to("let f = x => x + 1; f(2)", 3)
+      assert_compiles_to("class A { static x = 3; static m() { return this.x + 1; } } A.m()", 4)
       assert_compiles_to("[1, 2, 3].map(x => x + 1).join(',')", "2,3,4")
 
       assert_compiles_to(

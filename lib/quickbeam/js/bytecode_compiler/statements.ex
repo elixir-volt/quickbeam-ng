@@ -157,12 +157,17 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         _opts,
         callbacks
       ) do
+    {instance_body, static_body} = Enum.split_with(body, &(!static_member?(&1)))
+
     with {:loc, loc} <- callbacks.resolve.(scope, name),
-         {:ok, factory} <- class_factory(name, super_class, body),
+         {:ok, factory} <- class_factory(name, super_class, instance_body),
          {:ok, function} <- callbacks.compile_function.(factory, name) do
-      {:ok,
-       instructions ++ [{:closure, length(constants)}, :dup, {:put_loc, loc}, {:put_var, name}],
-       [function | constants]}
+      base_instructions =
+        instructions ++ [{:closure, length(constants)}, :dup, {:put_loc, loc}, {:put_var, name}]
+
+      constants = [function | constants]
+
+      compile_static_members(static_body, name, scope, base_instructions, constants, callbacks)
     else
       :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
       {:error, _} = error -> error
@@ -577,6 +582,76 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
        }}
     end
   end
+
+  defp static_member?(%AST.MethodDefinition{static: true}), do: true
+  defp static_member?(%AST.FieldDefinition{static: true}), do: true
+  defp static_member?(_), do: false
+
+  defp compile_static_members([], _name, _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions, constants}
+
+  defp compile_static_members(
+         [member | rest],
+         name,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           compile_static_member(member, name, scope, instructions, constants, callbacks) do
+      compile_static_members(rest, name, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_static_member(
+         %AST.MethodDefinition{
+           kind: :method,
+           static: true,
+           computed: false,
+           key: %AST.Identifier{name: method_name},
+           value: value
+         },
+         class_name,
+         _scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, function} <- callbacks.compile_function.(value, method_name) do
+      {:ok,
+       instructions ++
+         [{:get_var, class_name}, {:closure, length(constants)}, {:put_field, method_name}],
+       [function | constants]}
+    end
+  end
+
+  defp compile_static_member(
+         %AST.FieldDefinition{
+           static: true,
+           computed: false,
+           key: %AST.Identifier{name: field_name},
+           value: value
+         },
+         class_name,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             value,
+             scope,
+             instructions ++ [{:get_var, class_name}],
+             constants
+           ) do
+      {:ok, instructions ++ [{:put_field, field_name}], constants}
+    end
+  end
+
+  defp compile_static_member(_member, _name, _scope, _instructions, _constants, _callbacks),
+    do: {:error, {:unsupported, :class_element}}
 
   defp class_super_name(nil), do: {:ok, nil}
   defp class_super_name(%AST.Identifier{name: name}), do: {:ok, name}
