@@ -274,6 +274,35 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         instructions,
         constants,
         callbacks
+      )
+      when operator in ["||=", "&&=", "??="] do
+    case callbacks.resolve.(scope, name) do
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
+
+      slot ->
+        compile_logical_assignment(
+          operator,
+          slot,
+          right,
+          scope,
+          instructions,
+          constants,
+          callbacks
+        )
+    end
+  end
+
+  def compile(
+        %AST.AssignmentExpression{
+          operator: operator,
+          left: %AST.Identifier{name: name},
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
       ) do
     with {:ok, op} <- Operators.compound(operator),
          slot when slot != :error <- callbacks.resolve.(scope, name),
@@ -487,6 +516,35 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
 
   def compile(expression, _scope, _instructions, _constants, _callbacks),
     do: {:error, {:unsupported, expression.type}}
+
+  defp compile_logical_assignment(
+         operator,
+         slot,
+         right,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    end_label = callbacks.unique_label.(:logical_assignment_end)
+
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             right,
+             scope,
+             instructions ++
+               [Slots.read(slot), :dup] ++ logical_assignment_test(operator, end_label),
+             constants
+           ) do
+      {:ok, instructions ++ [Slots.write(slot), {:label, end_label}], constants}
+    end
+  end
+
+  defp logical_assignment_test("||=", end_label), do: [{:jump_if_true, end_label}, :drop]
+  defp logical_assignment_test("&&=", end_label), do: [{:jump_if_false, end_label}, :drop]
+
+  defp logical_assignment_test("??=", end_label),
+    do: [:is_undefined_or_null, {:jump_if_false, end_label}, :drop]
 
   defp regexp_bytecode(raw, pattern) do
     with {:ok, rt} <- QuickBEAM.start(apis: false) do

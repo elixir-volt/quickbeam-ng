@@ -750,21 +750,40 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   defp add_constant(value, constants), do: {{:constant, length(constants)}, [value | constants]}
 
   defp validate_simple_switch(cases) do
-    if Enum.all?(cases, &simple_switch_case?/1) do
-      :ok
-    else
-      {:error, {:unsupported, :switch_fallthrough}}
+    cases
+    |> Enum.with_index()
+    |> Enum.all?(fn {switch_case, index} ->
+      simple_switch_case?(switch_case, index == length(cases) - 1)
+    end)
+    |> case do
+      true -> :ok
+      false -> {:error, {:unsupported, :switch_fallthrough}}
     end
   end
 
-  defp simple_switch_case?(%AST.SwitchCase{test: nil}), do: false
+  defp simple_switch_case?(%AST.SwitchCase{test: nil}, last?), do: last?
 
-  defp simple_switch_case?(%AST.SwitchCase{consequent: consequent}) do
+  defp simple_switch_case?(%AST.SwitchCase{consequent: consequent}, true) do
+    consequent == [] or match?([%AST.BreakStatement{} | _], Enum.reverse(consequent))
+  end
+
+  defp simple_switch_case?(%AST.SwitchCase{consequent: consequent}, false) do
     match?([%AST.BreakStatement{} | _], Enum.reverse(consequent))
   end
 
   defp compile_switch_tests([], [], _scope, instructions, constants, end_label, _callbacks),
     do: {:ok, instructions ++ [:drop, {:jump, end_label}], constants}
+
+  defp compile_switch_tests(
+         [%AST.SwitchCase{test: nil} | _cases],
+         [label | _labels],
+         _scope,
+         instructions,
+         constants,
+         _end_label,
+         _callbacks
+       ),
+       do: {:ok, instructions ++ [{:jump, label}], constants}
 
   defp compile_switch_tests(
          [%AST.SwitchCase{test: test} | cases],

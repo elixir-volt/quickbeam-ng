@@ -106,6 +106,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
         "let x = 2; switch (x) { case 1: x = 10; break; case 2: x = 20; break; } x",
         20
       )
+
+      assert_compiles_to("let x = 0; switch (2) { case 1: x = 1; break; default: x = 3; } x", 3)
     end
 
     test "compiles for-of arrays" do
@@ -140,6 +142,9 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let x=1; x--; x", 0)
       assert_compiles_to("let x=3; x += 4; x", 7)
       assert_compiles_to("let x=6; x *= 7; x", 42)
+      assert_compiles_to("let x = 0; x ||= 2; x", 2)
+      assert_compiles_to("let x = 1; x &&= 3; x", 3)
+      assert_compiles_to("let x = null; x ??= 4; x", 4)
     end
 
     test "compiles computed array writes" do
