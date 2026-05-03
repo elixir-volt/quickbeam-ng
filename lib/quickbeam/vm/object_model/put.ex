@@ -470,7 +470,16 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   defp proto_has_setter_property?(:undefined, _key), do: false
 
   defp proto_has_setter_property?({:obj, ref}, key) do
-    case Heap.get_obj(ref, %{}) do
+    case Heap.get_obj_raw(ref) do
+      {:shape, _shape_id, offsets, vals, parent_proto} ->
+        case Map.fetch(offsets, key) do
+          {:ok, off} ->
+            match?({:accessor, _, setter} when setter != nil, elem(vals, off))
+
+          :error ->
+            proto_has_setter_property?(parent_proto, key)
+        end
+
       map when is_map(map) ->
         case Map.get(map, key) do
           {:accessor, _, setter} when setter != nil -> true
