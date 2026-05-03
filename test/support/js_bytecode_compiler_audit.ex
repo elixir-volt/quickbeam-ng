@@ -203,6 +203,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
   end
 
   defp normalize(:undefined), do: nil
+  defp normalize(:nan), do: :NaN
   defp normalize(:neg_infinity), do: :"-Infinity"
   defp normalize(:infinity), do: :Infinity
   defp normalize({:js_throw, value}), do: {:js_throw, normalize(value)}
