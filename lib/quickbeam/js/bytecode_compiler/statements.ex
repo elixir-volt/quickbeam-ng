@@ -1,7 +1,7 @@
 defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Emitter, Slots}
+  alias QuickBEAM.JS.BytecodeCompiler.{Captures, Emitter, Slots}
   alias QuickBEAM.JS.Parser.AST
 
   def compile_all(statements, %Emitter{} = emitter) do
@@ -124,13 +124,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         _opts,
         callbacks
       ) do
-    with {:ok, function} <- callbacks.compile_function.(declaration, name) do
+    captures = Captures.captured_names(declaration, scope)
+    declaration = Captures.prepend_params(declaration, captures)
+
+    with {:ok, function} <- callbacks.compile_function.(declaration, name),
+         {:ok, instructions, constants} <-
+           Captures.bind(
+             captures,
+             scope,
+             instructions ++ [{:closure, length(constants)}],
+             [function | constants]
+           ) do
       case callbacks.resolve.(scope, name) do
         {:loc, loc} ->
-          {:ok,
-           instructions ++
-             [{:closure, length(constants)}, :dup, {:put_loc, loc}, {:put_var, name}],
-           [function | constants]}
+          {:ok, instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}], constants}
 
         :error ->
           {:error, {:unsupported, {:unresolved_identifier, name}}}

@@ -202,6 +202,16 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
         5
       )
 
+      assert_compiles_to(
+        "function f(){ let a=1,b=2; function g(){ return b; } return g(); } f()",
+        2
+      )
+
+      assert_compiles_to(
+        "function f(a,b,c,d){ function g(){ return a+b+c+d; } return g(); } f(1,2,3,4)",
+        10
+      )
+
       assert_compiles_to("function f(x){ if (x) return 1; return 2; } f(true)", 1)
       assert_compiles_to("function f(){ while (true) { return 5; } } f()", 5)
       assert_compiles_to("function f(){ for(;;){ break; } return 1; } f()", 1)
