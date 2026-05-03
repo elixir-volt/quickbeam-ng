@@ -92,6 +92,14 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     declare_program_locals(rest, Scope.declare_local(scope, name))
   end
 
+  defp declare_program_locals(
+         [%AST.ForStatement{init: %AST.VariableDeclaration{declarations: declarations}} | rest],
+         scope
+       ) do
+    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    declare_program_locals(rest, scope)
+  end
+
   defp declare_program_locals([_ | rest], scope), do: declare_program_locals(rest, scope)
 
   defp declare_pattern(%AST.Identifier{name: name}, scope), do: Scope.declare_local(scope, name)
@@ -110,13 +118,44 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     end
   end
 
-  defp compile_non_tail_statements([], _scope, instructions, constants),
+  defp compile_non_tail_statements([], _scope, instructions, constants, _opts),
     do: {:ok, instructions, constants}
 
-  defp compile_non_tail_statements([statement | rest], scope, instructions, constants) do
+  defp compile_non_tail_statements([statement | rest], scope, instructions, constants, opts) do
+    opts = Keyword.put(opts, :tail?, false)
+
     with {:ok, instructions, constants} <-
-           compile_statement(statement, scope, instructions, constants, tail?: false) do
-      compile_non_tail_statements(rest, scope, instructions, constants)
+           compile_statement(statement, scope, instructions, constants, opts) do
+      compile_non_tail_statements(rest, scope, instructions, constants, opts)
+    end
+  end
+
+  defp compile_statement(
+         %AST.ExpressionStatement{
+           expression: %AST.AssignmentExpression{
+             operator: "=",
+             left: %AST.MemberExpression{
+               object: object,
+               property: %AST.Identifier{name: property},
+               computed: false
+             },
+             right: right
+           }
+         },
+         scope,
+         instructions,
+         constants,
+         opts
+       ) do
+    with {:ok, instructions, constants} <-
+           compile_expression(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_expression(right, scope, instructions, constants) do
+      if Keyword.fetch!(opts, :tail?) do
+        {:ok, instructions ++ [:insert2, {:put_field, property}, {:set_loc, 0}], constants}
+      else
+        {:ok, instructions ++ property_assignment_statement_suffix(scope, property), constants}
+      end
     end
   end
 
@@ -259,9 +298,61 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
              scope,
              instructions ++ [{:jump_if_false, end_label}],
              constants,
-             tail?: false
+             tail?: false,
+             break_label: end_label,
+             continue_label: start_label
            ) do
       {:ok, instructions ++ [{:jump, start_label}, {:label, end_label}], constants}
+    end
+  end
+
+  defp compile_statement(%AST.ForStatement{} = statement, scope, instructions, constants, _opts) do
+    test_label = unique_label(:for_test)
+    update_label = unique_label(:for_update)
+    end_label = unique_label(:for_end)
+
+    with {:ok, instructions, constants} <-
+           compile_for_init(statement.init, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_for_test(
+             statement.test,
+             scope,
+             instructions ++ [{:label, test_label}],
+             constants,
+             end_label
+           ),
+         {:ok, instructions, constants} <-
+           compile_statement(
+             statement.body,
+             scope,
+             instructions,
+             constants,
+             tail?: false,
+             break_label: end_label,
+             continue_label: update_label
+           ),
+         {:ok, instructions, constants} <-
+           compile_for_update(
+             statement.update,
+             scope,
+             instructions ++ [{:label, update_label}],
+             constants
+           ) do
+      {:ok, instructions ++ [{:jump, test_label}, {:label, end_label}], constants}
+    end
+  end
+
+  defp compile_statement(%AST.BreakStatement{}, _scope, instructions, constants, opts) do
+    case Keyword.fetch(opts, :break_label) do
+      {:ok, label} -> {:ok, instructions ++ [{:jump, label}], constants}
+      :error -> {:error, {:unsupported, :break_outside_loop}}
+    end
+  end
+
+  defp compile_statement(%AST.ContinueStatement{}, _scope, instructions, constants, opts) do
+    case Keyword.fetch(opts, :continue_label) do
+      {:ok, label} -> {:ok, instructions ++ [{:jump, label}], constants}
+      :error -> {:error, {:unsupported, :continue_outside_loop}}
     end
   end
 
@@ -269,7 +360,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     if Keyword.fetch!(opts, :tail?) do
       compile_statements(body, scope, instructions, constants)
     else
-      compile_non_tail_statements(body, scope, instructions, constants)
+      compile_non_tail_statements(body, scope, instructions, constants, opts)
     end
   end
 
@@ -287,6 +378,38 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
   defp compile_if_alternate(alternate, scope, instructions, constants, opts),
     do: compile_statement(alternate, scope, instructions, constants, opts)
+
+  defp compile_for_init(nil, _scope, instructions, constants), do: {:ok, instructions, constants}
+
+  defp compile_for_init(%AST.VariableDeclaration{} = declaration, scope, instructions, constants),
+    do: compile_statement(declaration, scope, instructions, constants, tail?: false)
+
+  defp compile_for_init(expression, scope, instructions, constants) do
+    with {:ok, instructions, constants} <-
+           compile_expression(expression, scope, instructions, constants) do
+      {:ok, instructions ++ [{:put_loc, 0}], constants}
+    end
+  end
+
+  defp compile_for_test(nil, _scope, instructions, constants, _end_label),
+    do: {:ok, instructions, constants}
+
+  defp compile_for_test(test, scope, instructions, constants, end_label) do
+    with {:ok, instructions, constants} <-
+           compile_expression(test, scope, instructions, constants) do
+      {:ok, instructions ++ [{:jump_if_false, end_label}], constants}
+    end
+  end
+
+  defp compile_for_update(nil, _scope, instructions, constants),
+    do: {:ok, instructions, constants}
+
+  defp compile_for_update(update, scope, instructions, constants) do
+    with {:ok, instructions, constants} <-
+           compile_expression(update, scope, instructions, constants) do
+      {:ok, instructions ++ [{:put_loc, 0}], constants}
+    end
+  end
 
   defp compile_declarator(
          %AST.VariableDeclarator{id: %AST.Identifier{name: name}, init: nil},
@@ -443,6 +566,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   end
 
   defp compile_expression(
+         %AST.ObjectExpression{properties: properties},
+         scope,
+         instructions,
+         constants
+       ) do
+    compile_object_properties(properties, scope, instructions ++ [:object], constants)
+  end
+
+  defp compile_expression(
          %AST.MemberExpression{object: object, property: property, computed: true},
          scope,
          instructions,
@@ -472,6 +604,22 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     end
   end
 
+  defp compile_expression(
+         %AST.MemberExpression{
+           object: object,
+           property: %AST.Identifier{name: property},
+           computed: false
+         },
+         scope,
+         instructions,
+         constants
+       ) do
+    with {:ok, instructions, constants} <-
+           compile_expression(object, scope, instructions, constants) do
+      {:ok, instructions ++ [{:get_field, property}], constants}
+    end
+  end
+
   defp compile_expression(%AST.FunctionExpression{} = expression, _scope, instructions, constants) do
     with {:ok, function} <- compile_function(expression, function_name(expression.id)) do
       {:ok, instructions ++ [{:closure, length(constants)}], [function | constants]}
@@ -483,8 +631,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          scope,
          instructions,
          constants
-       )
-       when length(args) <= 3 do
+       ) do
     with {:ok, instructions, constants} <-
            compile_expression(callee, scope, instructions, constants),
          {:ok, instructions, constants} <- compile_call_args(args, scope, instructions, constants) do
@@ -510,6 +657,39 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
       compile_array_elements(rest, scope, instructions, constants)
     end
   end
+
+  defp compile_object_properties([], _scope, instructions, constants),
+    do: {:ok, instructions, constants}
+
+  defp compile_object_properties(
+         [%AST.SpreadElement{} | _rest],
+         _scope,
+         _instructions,
+         _constants
+       ),
+       do: {:error, {:unsupported, :object_spread}}
+
+  defp compile_object_properties(
+         [%AST.Property{} = property | rest],
+         scope,
+         instructions,
+         constants
+       ) do
+    with {:ok, key} <- property_key(property),
+         {:ok, instructions, constants} <-
+           compile_expression(property.value, scope, instructions, constants) do
+      compile_object_properties(rest, scope, instructions ++ [{:define_field, key}], constants)
+    end
+  end
+
+  defp property_key(%AST.Property{computed: false, key: %AST.Identifier{name: name}}),
+    do: {:ok, name}
+
+  defp property_key(%AST.Property{computed: false, key: %AST.Literal{value: value}})
+       when is_binary(value),
+       do: {:ok, value}
+
+  defp property_key(%AST.Property{}), do: {:error, {:unsupported, :object_property_key}}
 
   defp compile_call_args([], _scope, instructions, constants), do: {:ok, instructions, constants}
 
@@ -544,12 +724,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
   defp build_function(opts) do
     instructions = Keyword.fetch!(opts, :instructions)
-    byte_code = Assembler.encode(instructions)
     stack_size = Assembler.stack_size(instructions)
     args = Keyword.fetch!(opts, :args)
     locals = Keyword.fetch!(opts, :locals)
+    extra_atoms = Assembler.atoms(instructions)
 
-    %Function{
+    function = %Function{
       name: Keyword.fetch!(opts, :name),
       filename: "<elixir-bytecode-compiler>",
       line_num: 1,
@@ -560,7 +740,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
       stack_size: stack_size,
       locals: Enum.map(args ++ locals, &var_def/1),
       constants: Keyword.fetch!(opts, :constants),
-      byte_code: byte_code,
+      extra_atoms: extra_atoms,
+      byte_code: <<>>,
       has_prototype: Keyword.fetch!(opts, :has_prototype),
       has_simple_parameter_list: Keyword.fetch!(opts, :has_simple_parameter_list),
       new_target_allowed: Keyword.fetch!(opts, :new_target_allowed),
@@ -569,6 +750,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
       has_debug_info: false,
       source: Keyword.fetch!(opts, :source)
     }
+
+    atoms = collect_atoms(function)
+    %{function | byte_code: Assembler.encode(instructions, atoms)}
   end
 
   defp var_def(name) do
@@ -626,6 +810,13 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   defp put_slot({:loc, index}), do: {:put_loc, index}
   defp put_slot({:arg, index}), do: {:put_arg, index}
 
+  defp property_assignment_statement_suffix(scope, property) do
+    case resolve(scope, "<ret>") do
+      {:loc, 0} -> [:insert2, {:put_field, property}, {:put_loc, 0}]
+      _ -> [{:put_field, property}]
+    end
+  end
+
   defp unique_label(prefix), do: {prefix, System.unique_integer([:positive])}
 
   defp resolve(scope, name), do: Scope.resolve(scope, name)
@@ -645,6 +836,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
   defp do_collect_atoms(%Function{} = function, acc) do
     acc = [function.name, function.filename | acc]
+    acc = Enum.reduce(function.extra_atoms || [], acc, &[&1 | &2])
     acc = Enum.reduce(function.locals, acc, fn %VarDef{name: name}, acc -> [name | acc] end)
 
     Enum.reduce(function.constants, acc, fn

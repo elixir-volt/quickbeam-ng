@@ -36,6 +36,7 @@ defmodule QuickBEAM.VM.Bytecode.Writer do
   defp do_collect_atoms(%Function{} = function, acc) do
     acc = collect_atom(function.name, acc)
     acc = collect_atom(function.filename, acc)
+    acc = Enum.reduce(function.extra_atoms || [], acc, &collect_atom/2)
 
     acc =
       Enum.reduce(function.locals, acc, fn %VarDef{name: name}, acc -> collect_atom(name, acc) end)

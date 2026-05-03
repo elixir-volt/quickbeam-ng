@@ -46,6 +46,7 @@ defmodule QuickBEAM.VM.Bytecode do
       closure_vars: [],
       constants: [],
       atoms: nil,
+      extra_atoms: [],
       byte_code: <<>>,
       has_prototype: false,
       has_simple_parameter_list: false,

@@ -40,6 +40,24 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let a = [1, 2, 3]; a[1]", 2)
     end
 
+    test "compiles object properties" do
+      assert_compiles_to("let o = {x: 1, y: 2}; o.x + o.y", 3)
+    end
+
+    test "emits loadable object property writes" do
+      assert_loads_to("let o = {x: 1}; o.x = 2; o.x", 2)
+    end
+
+    test "compiles generic calls and for loops" do
+      assert_compiles_to("function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)", 10)
+      assert_compiles_to("let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s", 6)
+    end
+
+    test "compiles loop break and continue" do
+      assert_compiles_to("let x=0; while (x < 5) { x=x+1; break; } x", 1)
+      assert_compiles_to("let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y", 3)
+    end
+
     test "emits QuickJS-loadable bytecode binaries" do
       assert {:ok, binary} =
                BytecodeCompiler.compile_to_binary("function f(a){ return a + 1; } f(2)")
@@ -75,6 +93,17 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
     test "returns an explicit unsupported error for unresolved globals" do
       assert {:error, {:unsupported, {:unresolved_identifier, "missing"}}} =
                BytecodeCompiler.compile("missing")
+    end
+  end
+
+  defp assert_loads_to(source, expected) do
+    assert {:ok, binary} = BytecodeCompiler.compile_to_binary(source)
+    assert {:ok, rt} = QuickBEAM.start(apis: false)
+
+    try do
+      assert {:ok, ^expected} = QuickBEAM.load_bytecode(rt, binary)
+    after
+      QuickBEAM.stop(rt)
     end
   end
 

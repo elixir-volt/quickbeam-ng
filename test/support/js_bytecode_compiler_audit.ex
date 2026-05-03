@@ -22,7 +22,12 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"logical not", "!false"},
       {"conditional expression", "let x = 1; x === 1 ? 2 : 3"},
       {"array length", "let a = [1, 2, 3]; a.length"},
-      {"array index", "let a = [1, 2, 3]; a[1]"}
+      {"array index", "let a = [1, 2, 3]; a[1]"},
+      {"object property", "let o = {x: 1, y: 2}; o.x + o.y"},
+      {"generic call arity", "function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)"},
+      {"for loop", "let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s"},
+      {"loop break", "let x=0; while (x < 5) { x=x+1; break; } x"},
+      {"loop continue", "let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y"}
     ]
   end
 
