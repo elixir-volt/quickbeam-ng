@@ -39,7 +39,10 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"compound add", "let x=3; x += 4; x"},
       {"compound multiply", "let x=6; x *= 7; x"},
       {"array write", "let a=[1]; a[0]=3; a[0]"},
-      {"computed object write", "let o={x:1}; o[\"x\"]=2; o.x"}
+      {"computed object write", "let o={x:1}; o[\"x\"]=2; o.x"},
+      {"function if return", "function f(x){ if (x) return 1; return 2; } f(true)"},
+      {"function loop return", "function f(){ while (true) { return 5; } } f()"},
+      {"function for break", "function f(){ for(;;){ break; } return 1; } f()"}
     ]
   end
 
