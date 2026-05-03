@@ -61,6 +61,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"sequence declaration", "let x=0; let y=(x=1, x+2); y+x"},
       {"template literal", "let x = 2; `${x + 1}`"},
       {"template literal parts", "`a${1}b${2}c`"},
+      {"simple switch",
+       "let x = 2; switch (x) { case 1: x = 10; break; case 2: x = 20; break; } x"},
       {"post increment", "let x=1; x++; x"},
       {"pre increment", "let x=1; ++x"},
       {"post decrement", "let x=1; x--; x"},

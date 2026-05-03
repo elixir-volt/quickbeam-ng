@@ -235,6 +235,44 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  def compile(
+        %AST.SwitchStatement{discriminant: discriminant, cases: cases},
+        scope,
+        instructions,
+        constants,
+        _opts,
+        callbacks
+      ) do
+    end_label = callbacks.unique_label.(:switch_end)
+    labels = Enum.map(cases, fn _case -> callbacks.unique_label.(:switch_case) end)
+
+    with :ok <- validate_simple_switch(cases),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(discriminant, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_switch_tests(
+             cases,
+             labels,
+             scope,
+             instructions,
+             constants,
+             end_label,
+             callbacks
+           ),
+         {:ok, instructions, constants} <-
+           compile_switch_cases(
+             cases,
+             labels,
+             scope,
+             instructions,
+             constants,
+             end_label,
+             callbacks
+           ) do
+      {:ok, instructions ++ [{:label, end_label}], constants}
+    end
+  end
+
   def compile(%AST.ForStatement{} = statement, scope, instructions, constants, _opts, callbacks) do
     test_label = callbacks.unique_label.(:for_test)
     update_label = callbacks.unique_label.(:for_update)
@@ -308,6 +346,71 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
   defp compile_if_alternate(alternate, scope, instructions, constants, opts, callbacks),
     do: compile(alternate, scope, instructions, constants, opts, callbacks)
+
+  defp validate_simple_switch(cases) do
+    if Enum.all?(cases, &simple_switch_case?/1) do
+      :ok
+    else
+      {:error, {:unsupported, :switch_fallthrough}}
+    end
+  end
+
+  defp simple_switch_case?(%AST.SwitchCase{test: nil}), do: false
+
+  defp simple_switch_case?(%AST.SwitchCase{consequent: consequent}) do
+    match?([%AST.BreakStatement{} | _], Enum.reverse(consequent))
+  end
+
+  defp compile_switch_tests([], [], _scope, instructions, constants, end_label, _callbacks),
+    do: {:ok, instructions ++ [:drop, {:jump, end_label}], constants}
+
+  defp compile_switch_tests(
+         [%AST.SwitchCase{test: test} | cases],
+         [label | labels],
+         scope,
+         instructions,
+         constants,
+         end_label,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(test, scope, instructions ++ [:dup], constants) do
+      compile_switch_tests(
+        cases,
+        labels,
+        scope,
+        instructions ++ [:strict_eq, {:jump_if_true, label}],
+        constants,
+        end_label,
+        callbacks
+      )
+    end
+  end
+
+  defp compile_switch_cases([], [], _scope, instructions, constants, _end_label, _callbacks),
+    do: {:ok, instructions, constants}
+
+  defp compile_switch_cases(
+         [%AST.SwitchCase{consequent: consequent} | cases],
+         [label | labels],
+         scope,
+         instructions,
+         constants,
+         end_label,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           compile_non_tail(
+             consequent,
+             scope,
+             instructions ++ [{:label, label}, :drop],
+             constants,
+             [tail?: false, break_label: end_label],
+             callbacks
+           ) do
+      compile_switch_cases(cases, labels, scope, instructions, constants, end_label, callbacks)
+    end
+  end
 
   defp compile_for_init(nil, _scope, instructions, constants, _callbacks),
     do: {:ok, instructions, constants}

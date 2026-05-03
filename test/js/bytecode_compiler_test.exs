@@ -99,6 +99,13 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("`a${1}b${2}c`", "a1b2c")
     end
 
+    test "compiles simple switch statements" do
+      assert_compiles_to(
+        "let x = 2; switch (x) { case 1: x = 10; break; case 2: x = 20; break; } x",
+        20
+      )
+    end
+
     test "compiles update and compound assignments" do
       assert_compiles_to("let x=1; x++; x", 2)
       assert_compiles_to("let x=1; ++x", 2)
