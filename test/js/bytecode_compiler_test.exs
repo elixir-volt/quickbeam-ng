@@ -21,6 +21,16 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let x = 0; if (1 > 2) x = 3; else x = 4; x", 4)
     end
 
+    test "compiles constants and unary expressions" do
+      assert_compiles_to("'quick'", "quick")
+      assert_compiles_to("let x = 2; -x", -2)
+      assert_compiles_to("!false", true)
+    end
+
+    test "compiles conditional expressions" do
+      assert_compiles_to("let x = 1; x === 1 ? 2 : 3", 2)
+    end
+
     test "compiles while loops" do
       assert_compiles_to("let x = 0; while (x < 3) { x = x + 1; } x", 3)
     end
@@ -64,12 +74,15 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
   end
 
   defp assert_compiles_to(source, expected) do
-    Heap.reset()
-    assert {:ok, bytecode} = BytecodeCompiler.compile(source)
+    Task.async(fn ->
+      Heap.reset()
+      assert {:ok, bytecode} = BytecodeCompiler.compile(source)
 
-    assert {:ok, ^expected} =
-             Interpreter.eval(bytecode.value, [], %{gas: 1_000_000}, bytecode.atoms)
+      assert {:ok, ^expected} =
+               Interpreter.eval(bytecode.value, [], %{gas: 1_000_000}, bytecode.atoms)
 
-    assert {:ok, ^expected} = Compiler.invoke(bytecode.value, [])
+      assert {:ok, ^expected} = Compiler.invoke(bytecode.value, [])
+    end)
+    |> Task.await(30_000)
   end
 end

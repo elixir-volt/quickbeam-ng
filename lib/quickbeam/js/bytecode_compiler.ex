@@ -331,6 +331,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     {:ok, instructions ++ [{:push_int, value}], constants}
   end
 
+  defp compile_expression(%AST.Literal{value: value}, _scope, instructions, constants)
+       when is_float(value) or is_binary(value) do
+    {instruction, constants} = add_constant(value, constants)
+    {:ok, instructions ++ [instruction], constants}
+  end
+
   defp compile_expression(%AST.Literal{value: nil}, _scope, instructions, constants),
     do: {:ok, instructions ++ [:null], constants}
 
@@ -359,6 +365,48 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_expression(right, scope, instructions, constants) do
       {:ok, instructions ++ [op], constants}
+    end
+  end
+
+  defp compile_expression(
+         %AST.UnaryExpression{operator: operator, argument: argument},
+         scope,
+         instructions,
+         constants
+       ) do
+    with {:ok, op} <- unary_operator(operator),
+         {:ok, instructions, constants} <-
+           compile_expression(argument, scope, instructions, constants) do
+      {:ok, instructions ++ [op], constants}
+    end
+  end
+
+  defp compile_expression(
+         %AST.ConditionalExpression{test: test, consequent: consequent, alternate: alternate},
+         scope,
+         instructions,
+         constants
+       ) do
+    else_label = unique_label(:cond_else)
+    end_label = unique_label(:cond_end)
+
+    with {:ok, instructions, constants} <-
+           compile_expression(test, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_expression(
+             consequent,
+             scope,
+             instructions ++ [{:jump_if_false, else_label}],
+             constants
+           ),
+         {:ok, instructions, constants} <-
+           compile_expression(
+             alternate,
+             scope,
+             instructions ++ [{:jump, end_label}, {:label, else_label}],
+             constants
+           ) do
+      {:ok, instructions ++ [{:label, end_label}], constants}
     end
   end
 
@@ -502,6 +550,14 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   defp binary_operator("==="), do: {:ok, :strict_eq}
   defp binary_operator("!=="), do: {:ok, :strict_neq}
   defp binary_operator(operator), do: {:error, {:unsupported, {:binary_operator, operator}}}
+
+  defp unary_operator("-"), do: {:ok, :neg}
+  defp unary_operator("+"), do: {:ok, :plus}
+  defp unary_operator("!"), do: {:ok, :lnot}
+  defp unary_operator("typeof"), do: {:ok, :typeof}
+  defp unary_operator(operator), do: {:error, {:unsupported, {:unary_operator, operator}}}
+
+  defp add_constant(value, constants), do: {{:constant, length(constants)}, [value | constants]}
 
   defp read_slot({:arg, index}), do: {:get_arg, index}
   defp read_slot({:loc, index}), do: {:get_loc, index}

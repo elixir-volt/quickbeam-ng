@@ -81,6 +81,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction({:constant, index}) when index in 0..255,
     do: <<Opcodes.num(:push_const8), index>>
 
+  defp encode_instruction({:constant, index}),
+    do: <<Opcodes.num(:push_const), index::little-32>>
+
   defp encode_instruction({:closure, index}) when index in 0..255,
     do: <<Opcodes.num(:fclosure8), index>>
 
@@ -130,6 +133,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:mul), do: <<Opcodes.num(:mul)>>
   defp encode_instruction(:div), do: <<Opcodes.num(:div)>>
   defp encode_instruction(:mod), do: <<Opcodes.num(:mod)>>
+  defp encode_instruction(:neg), do: <<Opcodes.num(:neg)>>
+  defp encode_instruction(:plus), do: <<Opcodes.num(:plus)>>
+  defp encode_instruction(:not), do: <<Opcodes.num(:not)>>
+  defp encode_instruction(:lnot), do: <<Opcodes.num(:lnot)>>
+  defp encode_instruction(:typeof), do: <<Opcodes.num(:typeof)>>
   defp encode_instruction(:lt), do: <<Opcodes.num(:lt)>>
   defp encode_instruction(:lte), do: <<Opcodes.num(:lte)>>
   defp encode_instruction(:gt), do: <<Opcodes.num(:gt)>>

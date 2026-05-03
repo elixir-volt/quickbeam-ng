@@ -15,7 +15,12 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"function call", "function f(a){ return a + 1; } f(2)"},
       {"function expression", "let f = function(a){ return a + 1; }; f(2)"},
       {"equality", "let x = 1; x === 1"},
-      {"assignment expression", "let x = 1; x = x + 2; x"}
+      {"assignment expression", "let x = 1; x = x + 2; x"},
+      {"string constant", "'quick'"},
+      {"float constant", "1.5"},
+      {"unary negation", "let x = 2; -x"},
+      {"logical not", "!false"},
+      {"conditional expression", "let x = 1; x === 1 ? 2 : 3"}
     ]
   end
 
