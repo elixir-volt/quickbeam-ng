@@ -48,6 +48,15 @@ mix run bench/js_parser_perf.exs
 mix run bench/js_parser_quickjs_audit.exs
 ```
 
+## JS bytecode compiler audits
+
+These cover the separate frontend compiler that lowers `QuickBEAM.JS.Parser` AST
+to QuickJS-compatible bytecode:
+
+```sh
+mix run bench/js_bytecode_compiler_compat.exs
+```
+
 Useful environment variables:
 
 - `TEST262_GLOB` — file glob, default `test/test262/test/**/*.js`

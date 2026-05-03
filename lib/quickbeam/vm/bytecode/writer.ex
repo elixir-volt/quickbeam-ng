@@ -285,7 +285,7 @@ defmodule QuickBEAM.VM.Bytecode.Writer do
     rem32((h + value) * 0x9E37_0001)
   end
 
-  defp checksum_words(<<word::little-32, rest::binary>>, h),
+  defp checksum_words(<<word::little-32, rest::binary>>, h) when byte_size(rest) > 0,
     do: checksum_words(rest, rem32((h + word) * 0x9E37_0001))
 
   defp checksum_words(rest, h), do: {h, rest}

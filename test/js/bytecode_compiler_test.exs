@@ -17,6 +17,14 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("function f(a){ return a + 1; } f(2)", 3)
     end
 
+    test "compiles if/else control flow" do
+      assert_compiles_to("let x = 0; if (1 > 2) x = 3; else x = 4; x", 4)
+    end
+
+    test "compiles while loops" do
+      assert_compiles_to("let x = 0; while (x < 3) { x = x + 1; } x", 3)
+    end
+
     test "emits QuickJS-loadable bytecode binaries" do
       assert {:ok, binary} =
                BytecodeCompiler.compile_to_binary("function f(a){ return a + 1; } f(2)")
@@ -34,6 +42,19 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert {:ok, bytecode} = BytecodeCompiler.compile("1 + 2")
       assert %QuickBEAM.VM.Bytecode{} = bytecode
       assert {:ok, 3} = Compiler.invoke(bytecode.value, [])
+    end
+
+    test "rewrites simple native QuickJS bytecode binaries" do
+      assert {:ok, rt} = QuickBEAM.start(apis: false)
+
+      try do
+        assert {:ok, native} = QuickBEAM.compile(rt, "function f(a){ return a + 1; } f(2)")
+        assert {:ok, decoded} = QuickBEAM.VM.Bytecode.decode(native)
+        assert {:ok, encoded} = QuickBEAM.VM.Bytecode.Writer.encode(decoded)
+        assert {:ok, 3} = QuickBEAM.load_bytecode(rt, encoded)
+      after
+        QuickBEAM.stop(rt)
+      end
     end
 
     test "returns an explicit unsupported error for unresolved globals" do

@@ -110,6 +110,43 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     end
   end
 
+  defp compile_non_tail_statements([], _scope, instructions, constants),
+    do: {:ok, instructions, constants}
+
+  defp compile_non_tail_statements([statement | rest], scope, instructions, constants) do
+    with {:ok, instructions, constants} <-
+           compile_statement(statement, scope, instructions, constants, tail?: false) do
+      compile_non_tail_statements(rest, scope, instructions, constants)
+    end
+  end
+
+  defp compile_statement(
+         %AST.ExpressionStatement{
+           expression: %AST.AssignmentExpression{
+             operator: "=",
+             left: %AST.Identifier{name: name},
+             right: right
+           }
+         },
+         scope,
+         instructions,
+         constants,
+         opts
+       ) do
+    with slot when slot != :error <- resolve(scope, name),
+         {:ok, instructions, constants} <-
+           compile_expression(right, scope, instructions, constants) do
+      if Keyword.fetch!(opts, :tail?) do
+        {:ok, instructions ++ [write_slot(slot), {:set_loc, 0}], constants}
+      else
+        {:ok, instructions ++ [put_slot(slot)], constants}
+      end
+    else
+      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
+      {:error, _} = error -> error
+    end
+  end
+
   defp compile_statement(
          %AST.ExpressionStatement{expression: expression},
          scope,
@@ -172,8 +209,68 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     compile_return(statement, scope, instructions, constants)
   end
 
-  defp compile_statement(%AST.BlockStatement{body: body}, scope, instructions, constants, _opts) do
-    compile_statements(body, scope, instructions, constants)
+  defp compile_statement(
+         %AST.IfStatement{test: test, consequent: consequent, alternate: alternate},
+         scope,
+         instructions,
+         constants,
+         opts
+       ) do
+    else_label = unique_label(:else)
+    end_label = unique_label(:endif)
+
+    with {:ok, instructions, constants} <-
+           compile_expression(test, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_statement(
+             consequent,
+             scope,
+             instructions ++ [{:jump_if_false, else_label}],
+             constants,
+             opts
+           ),
+         {:ok, instructions, constants} <-
+           compile_if_alternate(
+             alternate,
+             scope,
+             instructions ++ [{:jump, end_label}, {:label, else_label}],
+             constants,
+             opts
+           ) do
+      {:ok, instructions ++ [{:label, end_label}], constants}
+    end
+  end
+
+  defp compile_statement(
+         %AST.WhileStatement{test: test, body: body},
+         scope,
+         instructions,
+         constants,
+         _opts
+       ) do
+    start_label = unique_label(:while_start)
+    end_label = unique_label(:while_end)
+
+    with {:ok, instructions, constants} <-
+           compile_expression(test, scope, instructions ++ [{:label, start_label}], constants),
+         {:ok, instructions, constants} <-
+           compile_statement(
+             body,
+             scope,
+             instructions ++ [{:jump_if_false, end_label}],
+             constants,
+             tail?: false
+           ) do
+      {:ok, instructions ++ [{:jump, start_label}, {:label, end_label}], constants}
+    end
+  end
+
+  defp compile_statement(%AST.BlockStatement{body: body}, scope, instructions, constants, opts) do
+    if Keyword.fetch!(opts, :tail?) do
+      compile_statements(body, scope, instructions, constants)
+    else
+      compile_non_tail_statements(body, scope, instructions, constants)
+    end
   end
 
   defp compile_statement(%AST.EmptyStatement{}, _scope, instructions, constants, _opts),
@@ -181,6 +278,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
   defp compile_statement(statement, _scope, _instructions, _constants, _opts),
     do: {:error, {:unsupported, statement.type}}
+
+  defp compile_if_alternate(nil, _scope, instructions, constants, tail?: true),
+    do: {:ok, instructions ++ [:undefined, {:set_loc, 0}], constants}
+
+  defp compile_if_alternate(nil, _scope, instructions, constants, _opts),
+    do: {:ok, instructions, constants}
+
+  defp compile_if_alternate(alternate, scope, instructions, constants, opts),
+    do: compile_statement(alternate, scope, instructions, constants, opts)
 
   defp compile_declarator(
          %AST.VariableDeclarator{id: %AST.Identifier{name: name}, init: nil},
@@ -253,6 +359,26 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_expression(right, scope, instructions, constants) do
       {:ok, instructions ++ [op], constants}
+    end
+  end
+
+  defp compile_expression(
+         %AST.AssignmentExpression{
+           operator: "=",
+           left: %AST.Identifier{name: name},
+           right: right
+         },
+         scope,
+         instructions,
+         constants
+       ) do
+    with slot when slot != :error <- resolve(scope, name),
+         {:ok, instructions, constants} <-
+           compile_expression(right, scope, instructions, constants) do
+      {:ok, instructions ++ [write_slot(slot)], constants}
+    else
+      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
+      {:error, _} = error -> error
     end
   end
 
@@ -367,10 +493,26 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   defp binary_operator("*"), do: {:ok, :mul}
   defp binary_operator("/"), do: {:ok, :div}
   defp binary_operator("%"), do: {:ok, :mod}
+  defp binary_operator("<"), do: {:ok, :lt}
+  defp binary_operator("<="), do: {:ok, :lte}
+  defp binary_operator(">"), do: {:ok, :gt}
+  defp binary_operator(">="), do: {:ok, :gte}
+  defp binary_operator("=="), do: {:ok, :eq}
+  defp binary_operator("!="), do: {:ok, :neq}
+  defp binary_operator("==="), do: {:ok, :strict_eq}
+  defp binary_operator("!=="), do: {:ok, :strict_neq}
   defp binary_operator(operator), do: {:error, {:unsupported, {:binary_operator, operator}}}
 
   defp read_slot({:arg, index}), do: {:get_arg, index}
   defp read_slot({:loc, index}), do: {:get_loc, index}
+
+  defp write_slot({:loc, index}), do: {:set_loc, index}
+  defp write_slot({:arg, index}), do: {:set_arg, index}
+
+  defp put_slot({:loc, index}), do: {:put_loc, index}
+  defp put_slot({:arg, index}), do: {:put_arg, index}
+
+  defp unique_label(prefix), do: {prefix, System.unique_integer([:positive])}
 
   defp resolve(scope, name), do: Scope.resolve(scope, name)
 
