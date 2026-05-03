@@ -272,6 +272,64 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
 
   def compile(
         %AST.AssignmentExpression{
+          operator: operator,
+          left: %AST.MemberExpression{object: object, property: property, computed: true},
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      )
+      when operator != "=" and operator not in ["||=", "&&=", "??="] do
+    with {:ok, op} <- Operators.compound(operator),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(property, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             right,
+             scope,
+             instructions ++ [:to_propkey2, :dup2, :get_array_el],
+             constants
+           ) do
+      {:ok, instructions ++ [op, :insert3, :put_array_el], constants}
+    end
+  end
+
+  def compile(
+        %AST.AssignmentExpression{
+          operator: operator,
+          left: %AST.MemberExpression{
+            object: object,
+            property: %AST.Identifier{name: property},
+            computed: false
+          },
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      )
+      when operator != "=" and operator not in ["||=", "&&=", "??="] do
+    with {:ok, op} <- Operators.compound(operator),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             right,
+             scope,
+             instructions ++ [{:get_field2, property}],
+             constants
+           ) do
+      {:ok, instructions ++ [op, :insert2, {:put_field, property}], constants}
+    end
+  end
+
+  def compile(
+        %AST.AssignmentExpression{
           operator: "=",
           left: %AST.Identifier{name: name},
           right: right

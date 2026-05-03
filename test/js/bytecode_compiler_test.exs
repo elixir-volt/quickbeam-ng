@@ -157,6 +157,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let o={x:1}; ++o.x", 2)
       assert_compiles_to("let x=3; x += 4; x", 7)
       assert_compiles_to("let x=6; x *= 7; x", 42)
+      assert_compiles_to("let a=[1]; (a[0] += 2)", 3)
+      assert_compiles_to("let o={x:1}; o.x += 2", 3)
       assert_compiles_to("2 ** 3", 8.0)
       assert_compiles_to("let x=2; x **= 3; x", 8.0)
       assert_compiles_to("let x = 0; x ||= 2; x", 2)

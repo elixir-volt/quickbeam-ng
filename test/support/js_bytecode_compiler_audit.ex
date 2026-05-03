@@ -89,6 +89,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"member prefix update", "let o={x:1}; ++o.x"},
       {"compound add", "let x=3; x += 4; x"},
       {"compound multiply", "let x=6; x *= 7; x"},
+      {"compound array assignment", "let a=[1]; (a[0] += 2)"},
+      {"compound member assignment", "let o={x:1}; o.x += 2"},
       {"exponent", "2 ** 3"},
       {"compound exponent", "let x=2; x **= 3; x"},
       {"logical assignment or", "let x = 0; x ||= 2; x"},
