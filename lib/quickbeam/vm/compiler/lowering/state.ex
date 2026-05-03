@@ -373,6 +373,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def put_field_call(state, key_expr) do
     with {:ok, val, _val_type, state} <- pop_typed(state),
          {:ok, obj, _obj_type, state} <- pop_typed(state) do
+      state = invalidate_shaped_aliases(state, obj)
+
       {:ok,
        emit(state, Builder.remote_call(QuickBEAM.VM.ObjectModel.Put, :put, [obj, key_expr, val]))}
     end
@@ -473,6 +475,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     with {:ok, val, _val_type, state} <- pop_typed(state),
          {:ok, idx, _idx_type, state} <- pop_typed(state),
          {:ok, obj, _obj_type, state} <- pop_typed(state) do
+      state = invalidate_shaped_aliases(state, obj)
       {:ok, emit(state, compiler_call(state, :put_array_el, [obj, idx, val]))}
     end
   end
@@ -1086,6 +1089,19 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       {idx, initialized}
     end)
   end
+
+  defp invalidate_shaped_aliases(state, _obj) do
+    slot_types =
+      Map.new(state.slot_types, fn {idx, type} ->
+        if shaped_object_type?(type), do: {idx, :object}, else: {idx, type}
+      end)
+
+    %{state | slot_types: slot_types}
+  end
+
+  defp shaped_object_type?({:shaped_object, _offsets}), do: true
+  defp shaped_object_type?({:shaped_object, _offsets, _values}), do: true
+  defp shaped_object_type?(_type), do: false
 
   defp update_slot!(state, idx, expr, type) do
     {:ok, state} = update_slot(state, idx, expr, false, type)

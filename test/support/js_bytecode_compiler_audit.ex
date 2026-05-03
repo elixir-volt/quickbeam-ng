@@ -24,6 +24,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"array length", "let a = [1, 2, 3]; a.length"},
       {"array index", "let a = [1, 2, 3]; a[1]"},
       {"object property", "let o = {x: 1, y: 2}; o.x + o.y"},
+      {"object property assignment", "let o = {x: 1}; o.x = 2; o.x"},
       {"generic call arity", "function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)"},
       {"for loop", "let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s"},
       {"loop break", "let x=0; while (x < 5) { x=x+1; break; } x"},
@@ -37,7 +38,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"post decrement", "let x=1; x--; x"},
       {"compound add", "let x=3; x += 4; x"},
       {"compound multiply", "let x=6; x *= 7; x"},
-      {"array write", "let a=[1]; a[0]=3; a[0]"}
+      {"array write", "let a=[1]; a[0]=3; a[0]"},
+      {"computed object write", "let o={x:1}; o[\"x\"]=2; o.x"}
     ]
   end
 
