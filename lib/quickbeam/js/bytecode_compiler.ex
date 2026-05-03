@@ -505,6 +505,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   end
 
   defp compile_expression(
+         %AST.LogicalExpression{operator: operator, left: left, right: right},
+         scope,
+         instructions,
+         constants
+       ) do
+    compile_logical_expression(operator, left, right, scope, instructions, constants)
+  end
+
+  defp compile_expression(
          %AST.ConditionalExpression{test: test, consequent: consequent, alternate: alternate},
          scope,
          instructions,
@@ -641,6 +650,57 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
   defp compile_expression(expression, _scope, _instructions, _constants),
     do: {:error, {:unsupported, expression.type}}
+
+  defp compile_logical_expression("&&", left, right, scope, instructions, constants) do
+    end_label = unique_label(:logical_and_end)
+
+    with {:ok, instructions, constants} <-
+           compile_expression(left, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_expression(
+             right,
+             scope,
+             instructions ++ [:dup, {:jump_if_false, end_label}, :drop],
+             constants
+           ) do
+      {:ok, instructions ++ [{:label, end_label}], constants}
+    end
+  end
+
+  defp compile_logical_expression("||", left, right, scope, instructions, constants) do
+    end_label = unique_label(:logical_or_end)
+
+    with {:ok, instructions, constants} <-
+           compile_expression(left, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_expression(
+             right,
+             scope,
+             instructions ++ [:dup, {:jump_if_true, end_label}, :drop],
+             constants
+           ) do
+      {:ok, instructions ++ [{:label, end_label}], constants}
+    end
+  end
+
+  defp compile_logical_expression("??", left, right, scope, instructions, constants) do
+    end_label = unique_label(:logical_nullish_end)
+
+    with {:ok, instructions, constants} <-
+           compile_expression(left, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_expression(
+             right,
+             scope,
+             instructions ++ [:dup, :is_undefined_or_null, {:jump_if_false, end_label}, :drop],
+             constants
+           ) do
+      {:ok, instructions ++ [{:label, end_label}], constants}
+    end
+  end
+
+  defp compile_logical_expression(operator, _left, _right, _scope, _instructions, _constants),
+    do: {:error, {:unsupported, {:logical_operator, operator}}}
 
   defp compile_array_elements([], _scope, instructions, constants),
     do: {:ok, instructions, constants}

@@ -55,7 +55,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
       instructions
       |> Enum.with_index()
       |> Enum.reduce(widths, fn
-        {{op, label}, idx}, acc when op in [:jump, :jump_if_false] ->
+        {{op, label}, idx}, acc when op in [:jump, :jump_if_false, :jump_if_true] ->
           offset = instruction_offset(instructions, idx, widths)
           diff = Map.fetch!(labels, label) - (offset + 1)
 
@@ -91,7 +91,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
     end)
   end
 
-  defp instruction_size({op, _label}, width) when op in [:jump, :jump_if_false],
+  defp instruction_size({op, _label}, width) when op in [:jump, :jump_if_false, :jump_if_true],
     do: jump_size(op, width || :short)
 
   defp instruction_size({op, _name}, _width) when op in [:define_field, :get_field, :put_field],
@@ -107,6 +107,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
 
   defp encode_instruction({:jump_if_false, label}, offset, labels, width, _atoms),
     do: encode_jump(:if_false8, :if_false, label, offset, labels, width || :short)
+
+  defp encode_instruction({:jump_if_true, label}, offset, labels, width, _atoms),
+    do: encode_jump(:if_true8, :if_true, label, offset, labels, width || :short)
 
   defp encode_instruction(instruction, _offset, _labels, _width, atoms),
     do: encode_instruction(instruction, atoms)
@@ -196,12 +199,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
 
   defp encode_instruction({:jump, _label}, _atoms), do: <<Opcodes.num(:goto8), 0>>
   defp encode_instruction({:jump_if_false, _label}, _atoms), do: <<Opcodes.num(:if_false8), 0>>
+  defp encode_instruction({:jump_if_true, _label}, _atoms), do: <<Opcodes.num(:if_true8), 0>>
   defp encode_instruction(:undefined, _atoms), do: <<Opcodes.num(:undefined)>>
   defp encode_instruction(:null, _atoms), do: <<Opcodes.num(:null)>>
   defp encode_instruction(true, _atoms), do: <<Opcodes.num(:push_true)>>
   defp encode_instruction(false, _atoms), do: <<Opcodes.num(:push_false)>>
   defp encode_instruction(:object, _atoms), do: <<Opcodes.num(:object)>>
   defp encode_instruction(:insert2, _atoms), do: <<Opcodes.num(:insert2)>>
+  defp encode_instruction(:dup, _atoms), do: <<Opcodes.num(:dup)>>
+  defp encode_instruction(:drop, _atoms), do: <<Opcodes.num(:drop)>>
   defp encode_instruction(:add, _atoms), do: <<Opcodes.num(:add)>>
   defp encode_instruction(:sub, _atoms), do: <<Opcodes.num(:sub)>>
   defp encode_instruction(:mul, _atoms), do: <<Opcodes.num(:mul)>>
@@ -213,6 +219,10 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:typeof, _atoms), do: <<Opcodes.num(:typeof)>>
   defp encode_instruction(:get_array_el, _atoms), do: <<Opcodes.num(:get_array_el)>>
   defp encode_instruction(:get_length, _atoms), do: <<Opcodes.num(:get_length)>>
+
+  defp encode_instruction(:is_undefined_or_null, _atoms),
+    do: <<Opcodes.num(:is_undefined_or_null)>>
+
   defp encode_instruction(:lt, _atoms), do: <<Opcodes.num(:lt)>>
   defp encode_instruction(:lte, _atoms), do: <<Opcodes.num(:lte)>>
   defp encode_instruction(:gt, _atoms), do: <<Opcodes.num(:gt)>>

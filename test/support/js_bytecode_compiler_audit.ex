@@ -27,7 +27,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"generic call arity", "function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)"},
       {"for loop", "let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s"},
       {"loop break", "let x=0; while (x < 5) { x=x+1; break; } x"},
-      {"loop continue", "let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y"}
+      {"loop continue", "let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y"},
+      {"logical and", "let x=0; true && (x=1); x"},
+      {"logical or", "let x=0; false || (x=1); x"},
+      {"nullish null", "null ?? 3"},
+      {"nullish value", "0 ?? 3"}
     ]
   end
 

@@ -58,6 +58,13 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y", 3)
     end
 
+    test "compiles logical short-circuit expressions" do
+      assert_compiles_to("let x=0; true && (x=1); x", 1)
+      assert_compiles_to("let x=0; false || (x=1); x", 1)
+      assert_compiles_to("null ?? 3", 3)
+      assert_compiles_to("0 ?? 3", 0)
+    end
+
     test "emits QuickJS-loadable bytecode binaries" do
       assert {:ok, binary} =
                BytecodeCompiler.compile_to_binary("function f(a){ return a + 1; } f(2)")
