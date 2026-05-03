@@ -123,5 +123,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
     end)
   end
 
+  defp declare_pattern(%AST.ArrayPattern{elements: elements}, scope) do
+    elements
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reduce(scope, &declare_pattern/2)
+  end
+
   defp declare_pattern(_pattern, scope), do: scope
 end

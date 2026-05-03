@@ -1082,6 +1082,19 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   defp compile_declarator(
+         %AST.VariableDeclarator{id: %AST.ArrayPattern{elements: elements}, init: init},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(init, scope, instructions, constants) do
+      compile_array_pattern(elements, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_declarator(
          %AST.VariableDeclarator{id: pattern},
          _scope,
          _instructions,
@@ -1089,6 +1102,97 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
          _callbacks
        ),
        do: {:error, {:unsupported, {:declaration_pattern, pattern.type}}}
+
+  defp compile_array_pattern([], _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions ++ [:drop], constants}
+
+  defp compile_array_pattern([element], scope, instructions, constants, callbacks),
+    do: compile_array_pattern_element(element, 0, scope, instructions, constants, callbacks, true)
+
+  defp compile_array_pattern([element | rest], scope, instructions, constants, callbacks) do
+    with {:ok, instructions, constants} <-
+           compile_array_pattern_element(
+             element,
+             0,
+             scope,
+             instructions,
+             constants,
+             callbacks,
+             true
+           ) do
+      compile_array_pattern_rest(rest, 1, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_array_pattern_rest([], _index, _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions ++ [:drop], constants}
+
+  defp compile_array_pattern_rest(
+         [element | rest],
+         index,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    keep_array? = true
+
+    with {:ok, instructions, constants} <-
+           compile_array_pattern_element(
+             element,
+             index,
+             scope,
+             instructions,
+             constants,
+             callbacks,
+             keep_array?
+           ) do
+      compile_array_pattern_rest(rest, index + 1, scope, instructions, constants, callbacks)
+    end
+  end
+
+  defp compile_array_pattern_element(
+         nil,
+         _index,
+         _scope,
+         instructions,
+         constants,
+         _callbacks,
+         _keep_array?
+       ),
+       do: {:ok, instructions, constants}
+
+  defp compile_array_pattern_element(
+         %AST.Identifier{name: name},
+         index,
+         scope,
+         instructions,
+         constants,
+         callbacks,
+         keep_array?
+       ) do
+    case callbacks.resolve.(scope, name) do
+      {:loc, loc} ->
+        prefix = if keep_array?, do: [:dup], else: []
+
+        {:ok, instructions ++ prefix ++ [{:push_int, index}, :get_array_el, {:put_loc, loc}],
+         constants}
+
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
+    end
+  end
+
+  defp compile_array_pattern_element(
+         _element,
+         _index,
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks,
+         _keep_array?
+       ),
+       do: {:error, {:unsupported, :array_pattern_element}}
 
   defp compile_object_pattern([], _scope, instructions, constants, _callbacks),
     do: {:ok, instructions ++ [:drop], constants}
