@@ -1,0 +1,32 @@
+defmodule QuickBEAM.JS.BytecodeCompiler.Scope do
+  @moduledoc false
+
+  defstruct args: %{}, locals: %{}, local_names: []
+
+  def new(args \\ []) do
+    args = Enum.with_index(args) |> Map.new()
+    %__MODULE__{args: args}
+  end
+
+  def declare_local(%__MODULE__{} = scope, name) when is_binary(name) do
+    if Map.has_key?(scope.locals, name) do
+      scope
+    else
+      index = map_size(scope.locals)
+
+      %{
+        scope
+        | locals: Map.put(scope.locals, name, index),
+          local_names: scope.local_names ++ [name]
+      }
+    end
+  end
+
+  def resolve(%__MODULE__{} = scope, name) when is_binary(name) do
+    cond do
+      Map.has_key?(scope.args, name) -> {:arg, Map.fetch!(scope.args, name)}
+      Map.has_key?(scope.locals, name) -> {:loc, Map.fetch!(scope.locals, name)}
+      true -> :error
+    end
+  end
+end
