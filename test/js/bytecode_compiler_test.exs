@@ -64,6 +64,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       )
 
       assert_compiles_to("let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s", 6)
+
+      assert_compiles_to(
+        "let s = 0; for (let i = 0; i < 4; i++) { for (let j = 0; j < 3; j++) s += i + j; } s",
+        30
+      )
     end
 
     test "compiles loop break and continue" do

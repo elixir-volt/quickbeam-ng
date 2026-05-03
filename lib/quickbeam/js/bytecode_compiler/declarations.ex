@@ -28,10 +28,17 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
   end
 
   defp declare_statements(
-         [%AST.ForStatement{init: %AST.VariableDeclaration{declarations: declarations}} | rest],
+         [
+           %AST.ForStatement{
+             init: %AST.VariableDeclaration{declarations: declarations},
+             body: body
+           }
+           | rest
+         ],
          scope
        ) do
     scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    scope = declare_nested_var_bindings_from(scope, body)
     declare_statements(rest, scope)
   end
 
@@ -91,6 +98,27 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
     |> declare_nested_var_bindings_from(consequent)
     |> declare_nested_var_bindings_from(alternate)
   end
+
+  defp declare_nested_var_bindings(
+         %AST.ForStatement{
+           init: %AST.VariableDeclaration{declarations: declarations},
+           body: body
+         },
+         scope
+       ) do
+    declarations
+    |> Enum.reduce(scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    |> declare_nested_var_bindings_from(body)
+  end
+
+  defp declare_nested_var_bindings(%AST.ForStatement{body: body}, scope),
+    do: declare_nested_var_bindings_from(scope, body)
+
+  defp declare_nested_var_bindings(%AST.WhileStatement{body: body}, scope),
+    do: declare_nested_var_bindings_from(scope, body)
+
+  defp declare_nested_var_bindings(%AST.DoWhileStatement{body: body}, scope),
+    do: declare_nested_var_bindings_from(scope, body)
 
   defp declare_nested_var_bindings(_statement, scope), do: scope
 

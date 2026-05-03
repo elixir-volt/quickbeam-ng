@@ -56,6 +56,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"computed assignment value", "let a=[0]; let y=(a[0]=2); y+a[0]"},
       {"generic call arity", "function f(a,b,c,d){ return a+b+c+d; } f(1,2,3,4)"},
       {"for loop", "let s=0; for(let i=0; i<4; i=i+1){ s=s+i; } s"},
+      {"nested for loop",
+       "let s = 0; for (let i = 0; i < 4; i++) { for (let j = 0; j < 3; j++) s += i + j; } s"},
       {"loop break", "let x=0; while (x < 5) { x=x+1; break; } x"},
       {"loop continue", "let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y"},
       {"do while loop", "let x=0; do { x=x+1; } while (x<3); x"},
