@@ -331,6 +331,39 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(
         %AST.MemberExpression{
           object: object,
+          property: %AST.Identifier{name: property},
+          computed: false,
+          optional: true
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    get_label = callbacks.unique_label.(:optional_get)
+    end_label = callbacks.unique_label.(:optional_end)
+
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants) do
+      {:ok,
+       instructions ++
+         [
+           :dup,
+           :is_undefined_or_null,
+           {:jump_if_false, get_label},
+           :drop,
+           :undefined,
+           {:jump, end_label},
+           {:label, get_label},
+           {:get_field, property},
+           {:label, end_label}
+         ], constants}
+    end
+  end
+
+  def compile(
+        %AST.MemberExpression{
+          object: object,
           property: %AST.Identifier{name: "length"},
           computed: false
         },

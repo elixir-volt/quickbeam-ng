@@ -41,6 +41,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       {"object shorthand", "let x = 1; ({x}).x"},
       {"object destructuring", "let {x} = {x: 9}; x"},
       {"object destructuring multiple", "let {x, y} = {x: 2, y: 3}; x + y"},
+      {"optional member null", "let o = null; o?.x === undefined"},
+      {"optional member object", "let o = {x: 1}; o?.x"},
       {"computed object key", "let k = \"x\"; ({[k]: 2}).x"},
       {"computed numeric object key", "({[1]: 2})[1]"},
       {"object property assignment", "let o = {x: 1}; o.x = 2; o.x"},
