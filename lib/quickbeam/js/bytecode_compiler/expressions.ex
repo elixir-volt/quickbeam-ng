@@ -131,6 +131,16 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.TemplateLiteral{quasis: quasis, expressions: expressions},
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    compile_template_literal(quasis, expressions, scope, instructions, constants, callbacks)
+  end
+
+  def compile(
         %AST.SequenceExpression{expressions: expressions},
         scope,
         instructions,
@@ -420,6 +430,90 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
 
   def compile(expression, _scope, _instructions, _constants, _callbacks),
     do: {:error, {:unsupported, expression.type}}
+
+  defp compile_template_literal(
+         [%AST.TemplateElement{value: value}],
+         [],
+         _scope,
+         instructions,
+         constants,
+         _callbacks
+       ) do
+    {instruction, constants} = add_constant(value, constants)
+    {:ok, instructions ++ [instruction], constants}
+  end
+
+  defp compile_template_literal(
+         [%AST.TemplateElement{value: first} | quasis],
+         expressions,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    {instruction, constants} = add_constant(first, constants)
+
+    compile_template_parts(
+      quasis,
+      expressions,
+      scope,
+      instructions ++ [instruction],
+      constants,
+      callbacks
+    )
+  end
+
+  defp compile_template_literal(
+         _quasis,
+         _expressions,
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks
+       ),
+       do: {:error, {:unsupported, :template_literal}}
+
+  defp compile_template_parts([], [], _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions, constants}
+
+  defp compile_template_parts(
+         [%AST.TemplateElement{value: value} | quasis],
+         [expression | expressions],
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(expression, scope, instructions, constants) do
+      instructions = instructions ++ [:add]
+
+      if value == "" do
+        compile_template_parts(quasis, expressions, scope, instructions, constants, callbacks)
+      else
+        {instruction, constants} = add_constant(value, constants)
+
+        compile_template_parts(
+          quasis,
+          expressions,
+          scope,
+          instructions ++ [instruction, :add],
+          constants,
+          callbacks
+        )
+      end
+    end
+  end
+
+  defp compile_template_parts(
+         _quasis,
+         _expressions,
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks
+       ),
+       do: {:error, {:unsupported, :template_literal}}
 
   defp compile_sequence_expressions([], _scope, _instructions, _constants, _callbacks),
     do: {:error, {:unsupported, :empty_sequence}}

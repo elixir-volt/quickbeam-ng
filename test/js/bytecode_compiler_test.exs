@@ -92,6 +92,11 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let x=0; let y=(x=1, x+2); y+x", 4)
     end
 
+    test "compiles template literals" do
+      assert_compiles_to("let x = 2; `${x + 1}`", "3")
+      assert_compiles_to("`a${1}b${2}c`", "a1b2c")
+    end
+
     test "compiles update and compound assignments" do
       assert_compiles_to("let x=1; x++; x", 2)
       assert_compiles_to("let x=1; ++x", 2)
