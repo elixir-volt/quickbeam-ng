@@ -1,9 +1,10 @@
-- Add Test262-derived executable windows for `QuickBEAM.JS.BytecodeCompiler` after harness/module/async filtering is explicit.
-- Full mutable closure capture (1 mismatch): value-captured closures work but mutable shared cells don't.
-- `eval` execution (3 mismatches): eval as global compiles but interpreter/BEAM compiler can't execute eval code. Needs eval opcode or runtime eval dispatch.
-- `arguments` aliasing (4 unsupported): parameterless functions support arguments object, but sloppy-mode parameter aliasing requires var_ref.
-- Private class fields/methods (5 cases) + super getter/setter (4 cases) + private method key (1 case) = 10 class_element unsupported.
-- `instanceof` (1 case): class factories lack real prototypes.
-- `Symbol.iterator` (1 case): custom iterable for-of needs iterator protocol.
-- Class constructor body (2 cases): needs broader statement recognition beyond `this.prop = value`.
-- Parser `with` statement error (1 case): parse_error for `with(o){ delete x; }`.
+- Add Test262-derived executable windows for broader coverage.
+- Mutable closure cells (1 mismatch): value-capture works but shared mutable cells need var_ref infrastructure.
+- `eval` execution (3 mismatches): eval compiles as global but interpreter/BEAM compiler return undefined instead of executing code.
+- Derived constructor return object (1 mismatch): stub class returns empty object instead of `{x:1}`.
+- `arguments` aliasing (4 unsupported): sloppy-mode parameter aliasing requires var_ref. Enabling arguments for parameterized functions would only create mismatches.
+- Private class fields/methods/super getters/setters (10 class_element + 1 private method key = 11 unsupported): needs define_class, private_symbol, check_brand, add_brand, get/put_private_field, get/put_super_value.
+- `instanceof` (1 unsupported): class factories lack real prototypes.
+- `Symbol.iterator` (1 unsupported): custom iterable for-of needs iterator protocol.
+- `with(o){ delete x; }` parse error (1 case): parser rejects `with` statement.
+- `test/vm/test_language.js` (1 unsupported): full JS file needing arguments + many features.
