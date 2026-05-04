@@ -1588,35 +1588,51 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end_label = callbacks.unique_label.(:for_of_end)
     update_label = callbacks.unique_label.(:for_of_update)
 
-    # for_of_start: pops iterable, pushes [index=0, next_fn, iter_obj]
-    # for_of_next idx: pops nothing extra, pushes [done, value] above the 3 iterator items
-    # idx is the number of stack items between top and the iterator state
-    with {:ok, instructions, constants} <-
-           compile(
-             body,
-             scope,
-             instructions ++
-               [
-                 :for_of_start,
-                 {:label, start_label},
-                 {:for_of_next, 0},
-                 {:jump_if_true, end_label},
-                 {:put_loc, value_loc}
-               ],
-             constants,
-             [tail?: false, break_label: end_label, continue_label: update_label],
-             callbacks
-           ) do
-      {:ok,
-       instructions ++
-         [
-           {:label, update_label},
-           {:jump, start_label},
-           {:label, end_label},
-           :drop,
-           :drop,
-           :drop
-         ], constants}
+    with {:loc, iter_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
+         {:loc, result_loc} <- callbacks.resolve.(scope, "<for_of_index>") do
+      # Manual iterator protocol: call iterable[Symbol.iterator](), loop with next()
+      # Stack has iterable from caller. Call [Symbol.iterator]() on it.
+      init =
+        [
+          :dup,
+          {:get_var, "Symbol"},
+          {:get_field, "iterator"},
+          :get_array_el2,
+          {:call_method, 0},
+          {:put_loc, iter_loc}
+        ]
+
+      loop_head =
+        [
+          {:label, start_label},
+          {:get_loc, iter_loc},
+          :dup,
+          {:get_field, "next"},
+          {:call_method, 0},
+          {:put_loc, result_loc},
+          {:get_loc, result_loc},
+          {:get_field, "done"},
+          {:jump_if_true, end_label},
+          {:get_loc, result_loc},
+          {:get_field, "value"},
+          {:put_loc, value_loc}
+        ]
+
+      with {:ok, instructions, constants} <-
+             compile(
+               body,
+               scope,
+               instructions ++ init ++ loop_head,
+               constants,
+               [tail?: false, break_label: end_label, continue_label: update_label],
+               callbacks
+             ) do
+        {:ok,
+         instructions ++
+           [{:label, update_label}, {:jump, start_label}, {:label, end_label}], constants}
+      end
+    else
+      :error -> {:error, {:unsupported, :for_of_binding}}
     end
   end
 
@@ -1633,42 +1649,57 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end_label = callbacks.unique_label.(:for_of_end)
     update_label = callbacks.unique_label.(:for_of_update)
 
-    prefix =
-      [
-        :for_of_start,
-        {:label, start_label},
-        {:for_of_next, 0},
-        {:jump_if_true, end_label},
-        {:put_loc, value_loc}
-      ]
+    with {:loc, iter_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
+         {:loc, result_loc} <- callbacks.resolve.(scope, "<for_of_index>") do
+      init =
+        [
+          :dup,
+          {:get_var, "Symbol"},
+          {:get_field, "iterator"},
+          :get_array_el2,
+          {:call_method, 0},
+          {:put_loc, iter_loc}
+        ]
 
-    with {:ok, instructions, constants} <-
-           compile_array_pattern(
-             elements,
-             scope,
-             instructions ++ prefix ++ [{:get_loc, value_loc}],
-             constants,
-             callbacks
-           ),
-         {:ok, instructions, constants} <-
-           compile(
-             body,
-             scope,
-             instructions,
-             constants,
-             [tail?: false, break_label: end_label, continue_label: update_label],
-             callbacks
-           ) do
-      {:ok,
-       instructions ++
-         [
-           {:label, update_label},
-           {:jump, start_label},
-           {:label, end_label},
-           :drop,
-           :drop,
-           :drop
-         ], constants}
+      loop_head =
+        [
+          {:label, start_label},
+          {:get_loc, iter_loc},
+          :dup,
+          {:get_field, "next"},
+          {:call_method, 0},
+          {:put_loc, result_loc},
+          {:get_loc, result_loc},
+          {:get_field, "done"},
+          {:jump_if_true, end_label},
+          {:get_loc, result_loc},
+          {:get_field, "value"},
+          {:put_loc, value_loc}
+        ]
+
+      with {:ok, instructions, constants} <-
+             compile_array_pattern(
+               elements,
+               scope,
+               instructions ++ init ++ loop_head ++ [{:get_loc, value_loc}],
+               constants,
+               callbacks
+             ),
+           {:ok, instructions, constants} <-
+             compile(
+               body,
+               scope,
+               instructions,
+               constants,
+               [tail?: false, break_label: end_label, continue_label: update_label],
+               callbacks
+             ) do
+        {:ok,
+         instructions ++
+           [{:label, update_label}, {:jump, start_label}, {:label, end_label}], constants}
+      end
+    else
+      :error -> {:error, {:unsupported, :for_of_binding}}
     end
   end
 
