@@ -57,6 +57,27 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
 
   def compile(
         %AST.MemberExpression{
+          object: %AST.Identifier{name: "this"},
+          property: %AST.PrivateIdentifier{name: pname},
+          computed: false
+        },
+        scope,
+        instructions,
+        constants,
+        _callbacks
+      ) do
+    case Scope.resolve(scope, "##{pname}") do
+      {:var_ref, idx} ->
+        {:ok, instructions ++ [:push_this, {:get_var_ref_check, idx}, :get_private_field],
+         constants}
+
+      _ ->
+        {:error, {:unsupported, :object_property_key}}
+    end
+  end
+
+  def compile(
+        %AST.MemberExpression{
           object: %AST.Identifier{name: "super"},
           property: %AST.Identifier{name: prop},
           computed: false
@@ -282,6 +303,38 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
              constants
            ) do
       {:ok, instructions ++ [{:label, end_label}], constants}
+    end
+  end
+
+  def compile(
+        %AST.AssignmentExpression{
+          operator: "=",
+          left: %AST.MemberExpression{
+            object: %AST.Identifier{name: "this"},
+            property: %AST.PrivateIdentifier{name: pname},
+            computed: false
+          },
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    case Scope.resolve(scope, "##{pname}") do
+      {:var_ref, idx} ->
+        with {:ok, instructions, constants} <-
+               callbacks.compile_expression.(
+                 right,
+                 scope,
+                 instructions ++ [:push_this, {:get_var_ref_check, idx}],
+                 constants
+               ) do
+          {:ok, instructions ++ [:swap, :put_private_field, :undefined], constants}
+        end
+
+      _ ->
+        {:error, {:unsupported, :object_property_key}}
     end
   end
 

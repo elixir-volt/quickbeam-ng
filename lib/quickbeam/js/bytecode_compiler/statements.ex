@@ -750,9 +750,18 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   defp compile_class_define(name, super_class, body, scope, instructions, constants, callbacks) do
+    private_names =
+      body
+      |> Enum.flat_map(fn
+        %{key: %AST.PrivateIdentifier{name: pn}} -> [pn]
+        _ -> []
+      end)
+      |> Enum.uniq()
+
     with {:loc, loc} <- callbacks.resolve.(scope, name),
          {:loc, proto_loc} <- callbacks.resolve.(scope, "<class_proto:#{name}>"),
-         {:ok, ctor_fn} <- compile_class_ctor(body, name, callbacks) do
+         {:ok, ctor_fn} <-
+           compile_class_ctor_with_private(body, name, private_names, scope, callbacks) do
       flags = if super_class, do: 1, else: 0
 
       parent =
@@ -761,9 +770,24 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
           _ -> [:undefined]
         end
 
+      # Emit private_symbol BEFORE define_class so symbols are in locals
+      # when the constructor closure captures them
+      instructions = instructions ++ [{:set_loc_uninitialized, loc}]
+
+      instructions =
+        Enum.reduce(private_names, instructions, fn pname, instr ->
+          case callbacks.resolve.(scope, "##{pname}") do
+            {:loc, ploc} ->
+              instr ++
+                [{:set_loc_uninitialized, ploc}, {:private_symbol, "##{pname}"}, {:put_loc, ploc}]
+
+            _ ->
+              instr
+          end
+        end)
+
       instructions =
         instructions ++
-          [{:set_loc_uninitialized, loc}] ++
           parent ++
           [
             {:set_loc_uninitialized, proto_loc},
@@ -772,23 +796,116 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
           ]
 
       constants = [ctor_fn | constants]
+
+      # Set up private scope for method compilation
+      private_locs =
+        Enum.map(private_names, fn pn ->
+          case callbacks.resolve.(scope, "##{pn}") do
+            {:loc, l} -> l
+            _ -> 0
+          end
+        end)
+
+      private_refs =
+        private_names |> Enum.with_index() |> Map.new(fn {pn, i} -> {"##{pn}", i} end)
+
+      prev_priv = Process.get(:bytecode_compiler_class_private_scope)
+      Process.put(:bytecode_compiler_class_private_scope, {private_refs, private_locs})
+      prev_vrefs = Process.get(:bytecode_compiler_var_refs) || %{}
+
+      Process.put(
+        :bytecode_compiler_var_refs,
+        Enum.reduce(private_names, prev_vrefs, fn pn, a -> Map.put(a, "##{pn}", map_size(a)) end)
+      )
+
       {methods, statics} = partition_class_body(body)
 
-      with {:ok, instructions, constants} <-
-             emit_define_methods(methods, scope, instructions, constants, callbacks) do
-        instructions =
-          instructions ++
-            [
-              :undefined,
-              {:put_loc, proto_loc},
-              :drop,
-              {:set_loc, loc},
-              {:close_loc, proto_loc},
-              {:put_var, name}
-            ]
+      result =
+        with {:ok, instructions, constants} <-
+               emit_define_methods(methods, scope, instructions, constants, callbacks) do
+          close_privates =
+            Enum.flat_map(private_names, fn pn ->
+              case callbacks.resolve.(scope, "##{pn}") do
+                {:loc, l} -> [{:close_loc, l}]
+                _ -> []
+              end
+            end)
 
-        emit_define_statics(statics, loc, scope, instructions, constants, callbacks)
-      end
+          instructions =
+            instructions ++
+              [:undefined, {:put_loc, proto_loc}, :drop, {:set_loc, loc}, {:close_loc, proto_loc}] ++
+              close_privates ++ [{:put_var, name}]
+
+          emit_define_statics(statics, loc, scope, instructions, constants, callbacks)
+        end
+
+      Process.put(:bytecode_compiler_var_refs, prev_vrefs)
+      Process.put(:bytecode_compiler_class_private_scope, prev_priv)
+      result
+    end
+  end
+
+  defp compile_class_ctor_with_private(body, name, [], _scope, callbacks) do
+    compile_class_ctor(body, name, callbacks)
+  end
+
+  defp compile_class_ctor_with_private(body, name, private_names, scope, callbacks) do
+    case Enum.find(body, &match?(%AST.MethodDefinition{kind: :constructor}, &1)) do
+      %AST.MethodDefinition{} ->
+        callbacks.compile_function.(hd(body).value, name)
+
+      nil ->
+        # Build constructor that inlines define_private_field for each private field
+        private_locs =
+          Enum.map(private_names, fn pn ->
+            case callbacks.resolve.(scope, "##{pn}") do
+              {:loc, l} -> l
+              _ -> 0
+            end
+          end)
+
+        field_inits =
+          body
+          |> Enum.filter(&match?(%AST.FieldDefinition{key: %AST.PrivateIdentifier{}}, &1))
+          |> Enum.with_index()
+          |> Enum.flat_map(fn {field, idx} ->
+            val =
+              case field.value do
+                nil -> [:undefined]
+                %AST.Literal{value: v} when is_integer(v) -> [{:push_int, v}]
+                _ -> [:undefined]
+              end
+
+            [:push_this, {:get_var_ref_check, idx}] ++ val ++ [:define_private_field]
+          end)
+
+        closure_vars =
+          Enum.zip(private_names, private_locs)
+          |> Enum.map(fn {pn, ploc} ->
+            %QuickBEAM.VM.Bytecode.ClosureVar{
+              name: "##{pn}",
+              var_idx: ploc,
+              closure_type: 0,
+              is_const: true,
+              is_lexical: true,
+              var_kind: 5
+            }
+          end)
+
+        {:ok,
+         QuickBEAM.JS.BytecodeCompiler.FunctionBuilder.build(
+           name: name,
+           args: [],
+           locals: [],
+           closure_vars: closure_vars,
+           constants: [],
+           instructions: field_inits ++ [:return_undef],
+           defined_arg_count: 0,
+           has_prototype: true,
+           has_simple_parameter_list: true,
+           new_target_allowed: true,
+           source: ""
+         )}
     end
   end
 

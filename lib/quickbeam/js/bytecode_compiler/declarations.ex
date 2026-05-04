@@ -21,10 +21,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
   end
 
   defp declare_statements(
-         [%AST.ClassDeclaration{id: %AST.Identifier{name: name}} | rest],
+         [%AST.ClassDeclaration{id: %AST.Identifier{name: name}, body: cbody} | rest],
          scope
        ) do
     scope = scope |> Scope.declare_local(name) |> Scope.declare_local("<class_proto:#{name}>")
+
+    scope =
+      cbody
+      |> Enum.flat_map(fn
+        %{key: %AST.PrivateIdentifier{name: pn}} -> [pn]
+        _ -> []
+      end)
+      |> Enum.uniq()
+      |> Enum.reduce(scope, fn pn, acc -> Scope.declare_local(acc, "##{pn}") end)
+
     declare_statements(rest, scope)
   end
 

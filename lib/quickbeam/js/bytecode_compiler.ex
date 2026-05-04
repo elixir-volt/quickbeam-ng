@@ -143,7 +143,10 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
 
     closure_scope = Process.get(:bytecode_compiler_closure_scope)
     Process.delete(:bytecode_compiler_closure_scope)
-    scope = if closure_scope, do: Scope.with_var_refs(scope, closure_scope), else: scope
+    class_priv = Process.get(:bytecode_compiler_class_private_scope)
+    priv_refs = if class_priv, do: elem(class_priv, 0), else: %{}
+    merged_refs = Map.merge(priv_refs, closure_scope || %{})
+    scope = if merged_refs != %{}, do: Scope.with_var_refs(scope, merged_refs), else: scope
 
     prev_var_refs = Process.get(:bytecode_compiler_var_refs)
     Process.put(:bytecode_compiler_var_refs, %{})
@@ -164,12 +167,35 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
       {local_defs, var_ref_count} =
         build_local_defs(params ++ scope.local_names, var_refs)
 
+      priv_closure_vars =
+        if class_priv do
+          {_refs, locs} = class_priv
+
+          priv_refs
+          |> Enum.sort_by(&elem(&1, 1))
+          |> Enum.map(fn {vn, _idx} ->
+            ploc = Enum.at(locs, Map.get(priv_refs, vn, 0))
+
+            %QuickBEAM.VM.Bytecode.ClosureVar{
+              name: vn,
+              var_idx: ploc,
+              closure_type: 0,
+              is_const: true,
+              is_lexical: true,
+              var_kind: 0
+            }
+          end)
+        else
+          []
+        end
+
       {:ok,
        FunctionBuilder.build(
          name: name,
          args: params,
          locals: scope.local_names,
          local_defs: local_defs,
+         closure_vars: priv_closure_vars,
          var_ref_count: var_ref_count,
          constants: Enum.reverse(constants),
          instructions: instructions,
