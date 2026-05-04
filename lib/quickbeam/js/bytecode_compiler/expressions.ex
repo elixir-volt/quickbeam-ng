@@ -363,6 +363,39 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.UpdateExpression{
+          operator: operator,
+          prefix: _prefix?,
+          argument: %AST.MemberExpression{
+            object: %AST.Identifier{name: "super"},
+            property: %AST.Identifier{name: property},
+            computed: false
+          }
+        },
+        _scope,
+        instructions,
+        constants,
+        _callbacks
+      ) do
+    {key_instr, constants} = add_constant(property, constants)
+
+    super_prefix = [
+      :push_this,
+      :dup,
+      {:get_field, "__proto__"},
+      {:get_field, "__proto__"},
+      key_instr
+    ]
+
+    update_op = if operator == "++", do: :post_inc, else: :post_dec
+
+    {:ok,
+     instructions ++
+       super_prefix ++ super_prefix ++ [:get_super_value, update_op, :perm5, :put_super_value],
+     constants}
+  end
+
+  def compile(
         %AST.AssignmentExpression{
           operator: "=",
           left: %AST.MemberExpression{
