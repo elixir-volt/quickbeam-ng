@@ -1104,6 +1104,42 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.CallExpression{
+          callee: %AST.Identifier{name: "super"},
+          arguments: args
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    case Process.get(:bytecode_compiler_super_class) do
+      %AST.Identifier{name: parent_name} ->
+        with {:ok, args} <- expand_call_args(args),
+             {:ok, instructions, constants} <-
+               compile_call_args(
+                 args,
+                 scope,
+                 instructions ++ [{:get_var, parent_name}, {:get_var, parent_name}],
+                 constants,
+                 callbacks
+               ) do
+          {:ok, instructions ++ [{:call_constructor, length(args)}], constants}
+        end
+
+      _ ->
+        compile_direct_call(
+          %AST.Identifier{type: :identifier, name: "super"},
+          args,
+          scope,
+          instructions,
+          constants,
+          callbacks
+        )
+    end
+  end
+
+  def compile(
         %AST.CallExpression{callee: callee, arguments: args},
         scope,
         instructions,

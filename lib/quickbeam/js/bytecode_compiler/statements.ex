@@ -897,8 +897,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
     prev_derived = Process.get(:bytecode_compiler_derived_ctor, false)
 
+    prev_super = Process.get(:bytecode_compiler_super_class)
+
     if is_derived and has_explicit_ctor do
       Process.put(:bytecode_compiler_derived_ctor, true)
+      Process.put(:bytecode_compiler_super_class, super_class)
     end
 
     with {:loc, loc} <- callbacks.resolve.(scope, name),
@@ -906,6 +909,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
          {:ok, ctor_fn} <-
            compile_class_ctor_with_private(body, name, field_names, scope, callbacks) do
       Process.put(:bytecode_compiler_derived_ctor, prev_derived)
+      Process.put(:bytecode_compiler_super_class, prev_super)
 
       ctor_fn =
         if is_derived and has_explicit_ctor do
@@ -1027,6 +1031,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       Process.put(:bytecode_compiler_class_private_scope, prev_priv)
       Process.put(:bytecode_compiler_private_kinds, prev_kinds)
       Process.put(:bytecode_compiler_derived_ctor, prev_derived)
+      Process.put(:bytecode_compiler_super_class, prev_super)
       result
     end
   end
@@ -2253,7 +2258,16 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
       ret_ops =
         if is_derived do
-          [:check_ctor_return, :return]
+          done_label = callbacks.unique_label.(:ctor_ret_done)
+
+          [
+            :check_ctor_return,
+            {:jump_if_false, done_label},
+            :drop,
+            :push_this,
+            {:label, done_label},
+            :return
+          ]
         else
           [:return]
         end
