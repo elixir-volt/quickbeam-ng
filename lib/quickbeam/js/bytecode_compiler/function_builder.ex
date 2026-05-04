@@ -94,7 +94,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
 
   defp attach_constant_atoms(constants, atoms) do
     for constant <- constants do
-      if match?(%Function{}, constant), do: attach_atoms(constant, atoms), else: constant
+      case constant do
+        %Function{atoms: own} when own != nil and own != {} -> constant
+        %Function{} -> attach_atoms(constant, atoms)
+        _ -> constant
+      end
     end
   end
 end
