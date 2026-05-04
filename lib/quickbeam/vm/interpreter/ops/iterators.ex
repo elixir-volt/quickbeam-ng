@@ -162,7 +162,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
         if iter_obj == :undefined do
           run(pc + 1, frame, [true, :undefined | stack], gas, ctx)
         else
-          raw_result = Invocation.invoke_callback_or_throw(next_fn, [])
+          raw_result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
 
           result = resolve_awaited(raw_result)
 

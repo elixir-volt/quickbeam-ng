@@ -596,20 +596,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         callbacks
       ) do
     with {:loc, value_loc} <- callbacks.resolve.(scope, name),
-         {:loc, array_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
-         {:loc, index_loc} <- callbacks.resolve.(scope, "<for_of_index>"),
          {:ok, instructions, constants} <-
            callbacks.compile_expression.(right, scope, instructions, constants) do
-      compile_indexed_iteration(
+      compile_iterator_for_of(
         body,
         value_loc,
-        array_loc,
-        index_loc,
         scope,
         instructions,
         constants,
-        callbacks,
-        :for_of
+        callbacks
       )
     else
       :error -> {:error, {:unsupported, :for_of_binding}}
@@ -1543,6 +1538,50 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
              constants
            ) do
       {:ok, instructions ++ [{:call_method, 1}], constants}
+    end
+  end
+
+  defp compile_iterator_for_of(
+         body,
+         value_loc,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    start_label = callbacks.unique_label.(:for_of_start)
+    end_label = callbacks.unique_label.(:for_of_end)
+    update_label = callbacks.unique_label.(:for_of_update)
+
+    # for_of_start: pops iterable, pushes [index=0, next_fn, iter_obj]
+    # for_of_next idx: pops nothing extra, pushes [done, value] above the 3 iterator items
+    # idx is the number of stack items between top and the iterator state
+    with {:ok, instructions, constants} <-
+           compile(
+             body,
+             scope,
+             instructions ++
+               [
+                 :for_of_start,
+                 {:label, start_label},
+                 {:for_of_next, 0},
+                 {:jump_if_true, end_label},
+                 {:put_loc, value_loc}
+               ],
+             constants,
+             [tail?: false, break_label: end_label, continue_label: update_label],
+             callbacks
+           ) do
+      {:ok,
+       instructions ++
+         [
+           {:label, update_label},
+           {:jump, start_label},
+           {:label, end_label},
+           :drop,
+           :drop,
+           :drop
+         ], constants}
     end
   end
 

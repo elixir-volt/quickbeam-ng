@@ -1244,8 +1244,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   def for_of_next(_ctx, _next_fn, {:list_iter, []}), do: {true, :undefined, :undefined}
 
-  def for_of_next(ctx, next_fn, iter_obj) do
-    result = Invocation.call_callback(ctx, next_fn, [])
+  def for_of_next(_ctx, next_fn, iter_obj) do
+    result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
     done = Get.get(result, "done")
     value = Get.get(result, "value")
 
@@ -1264,7 +1264,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   def for_of_next(_next_fn, {:list_iter, []}), do: {true, :undefined, :undefined}
 
   def for_of_next(next_fn, iter_obj) do
-    result = Runtime.call_callback(next_fn, [])
+    result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
     done = Get.get(result, "done")
     value = Get.get(result, "value")
 

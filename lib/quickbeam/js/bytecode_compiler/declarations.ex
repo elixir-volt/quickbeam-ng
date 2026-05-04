@@ -169,5 +169,13 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
     |> Enum.reduce(scope, &declare_pattern/2)
   end
 
+  defp declare_pattern(%AST.AssignmentPattern{left: left}, scope) do
+    declare_pattern(left, scope)
+  end
+
+  defp declare_pattern(%AST.RestElement{argument: argument}, scope) do
+    declare_pattern(argument, scope)
+  end
+
   defp declare_pattern(_pattern, scope), do: scope
 end

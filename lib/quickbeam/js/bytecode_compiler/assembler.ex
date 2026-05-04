@@ -119,6 +119,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp instruction_size({:throw_error, _type, _atom}, _width), do: 6
   defp instruction_size({:define_method, _name, _flags}, _width), do: 6
   defp instruction_size({:private_symbol, _name}, _width), do: 5
+  defp instruction_size({:for_of_next, _idx}, _width), do: 2
   defp instruction_size({:define_class, _name, _flags}, _width), do: 6
   defp instruction_size({:close_loc, _idx}, _width), do: 3
   defp instruction_size({:set_loc_uninitialized, _idx}, _width), do: 3
@@ -327,6 +328,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:check_ctor_return, _atoms), do: <<Opcodes.num(:check_ctor_return)>>
   defp encode_instruction(:add_brand, _atoms), do: <<Opcodes.num(:add_brand)>>
   defp encode_instruction(:private_in, _atoms), do: <<Opcodes.num(:private_in)>>
+  defp encode_instruction(:for_of_start, _atoms), do: <<Opcodes.num(:for_of_start)>>
+
+  defp encode_instruction({:for_of_next, idx}, _atoms),
+    do: <<Opcodes.num(:for_of_next), idx::8>>
+
   defp encode_instruction(:check_brand, _atoms), do: <<Opcodes.num(:check_brand)>>
   defp encode_instruction(:get_private_field, _atoms), do: <<Opcodes.num(:get_private_field)>>
   defp encode_instruction(:put_private_field, _atoms), do: <<Opcodes.num(:put_private_field)>>
@@ -427,6 +433,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp stack_effect(:check_ctor), do: {0, 0}
   defp stack_effect(:add_brand), do: {2, 0}
   defp stack_effect(:private_in), do: {2, 1}
+  defp stack_effect(:for_of_start), do: {1, 3}
+  defp stack_effect({:for_of_next, _idx}), do: {0, 2}
   defp stack_effect(:check_brand), do: {2, 2}
   defp stack_effect(:get_private_field), do: {2, 1}
   defp stack_effect(:put_private_field), do: {3, 0}

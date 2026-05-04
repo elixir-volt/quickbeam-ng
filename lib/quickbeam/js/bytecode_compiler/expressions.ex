@@ -598,13 +598,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       ) do
-    with slot when slot != :error <- callbacks.resolve.(scope, name),
-         {:ok, instructions, constants} <-
+    with {:ok, instructions, constants} <-
            callbacks.compile_expression.(right, scope, instructions, constants) do
-      {:ok, instructions ++ [Slots.write(slot)], constants}
-    else
-      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
-      {:error, _} = error -> error
+      case callbacks.resolve.(scope, name) do
+        :error -> {:ok, instructions ++ [{:put_var, name}], constants}
+        slot -> {:ok, instructions ++ [Slots.write(slot)], constants}
+      end
     end
   end
 
@@ -648,19 +647,21 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       ) do
-    with {:ok, op} <- Operators.compound(operator),
-         slot when slot != :error <- callbacks.resolve.(scope, name),
-         {:ok, instructions, constants} <-
-           callbacks.compile_expression.(
-             right,
-             scope,
-             instructions ++ [Slots.read(slot)],
-             constants
-           ) do
-      {:ok, instructions ++ [op, Slots.write(slot)], constants}
-    else
-      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
-      {:error, _} = error -> error
+    with {:ok, op} <- Operators.compound(operator) do
+      slot = callbacks.resolve.(scope, name)
+
+      read_op = if slot == :error, do: {:get_var, name}, else: Slots.read(slot)
+      write_op = if slot == :error, do: {:put_var, name}, else: Slots.write(slot)
+
+      with {:ok, instructions, constants} <-
+             callbacks.compile_expression.(
+               right,
+               scope,
+               instructions ++ [read_op],
+               constants
+             ) do
+        {:ok, instructions ++ [op, write_op], constants}
+      end
     end
   end
 
@@ -692,13 +693,22 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       ) do
-    with {:ok, op} <- Operators.update(operator, prefix?),
-         slot when slot != :error <- callbacks.resolve.(scope, name) do
-      suffix = update_suffix(slot, prefix?)
-      {:ok, instructions ++ [Slots.read(slot), op | suffix], constants}
-    else
-      :error -> {:error, {:unsupported, {:unresolved_identifier, name}}}
-      {:error, _} = error -> error
+    with {:ok, op} <- Operators.update(operator, prefix?) do
+      slot = callbacks.resolve.(scope, name)
+
+      if slot == :error do
+        read_op = {:get_var, name}
+        write_op = {:put_var, name}
+
+        if prefix? do
+          {:ok, instructions ++ [read_op, op, :dup, write_op, :drop], constants}
+        else
+          {:ok, instructions ++ [read_op, op, :dup, write_op, :drop], constants}
+        end
+      else
+        suffix = update_suffix(slot, prefix?)
+        {:ok, instructions ++ [Slots.read(slot), op | suffix], constants}
+      end
     end
   end
 
