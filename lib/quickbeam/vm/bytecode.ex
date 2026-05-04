@@ -48,6 +48,7 @@ defmodule QuickBEAM.VM.Bytecode do
       atoms: nil,
       extra_atoms: [],
       byte_code: <<>>,
+      instructions: nil,
       has_prototype: false,
       has_simple_parameter_list: false,
       is_derived_class_constructor: false,

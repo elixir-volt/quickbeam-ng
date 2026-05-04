@@ -354,6 +354,7 @@ defmodule QuickBEAM.VM.Opcodes do
   def info(num) when is_integer(num), do: Map.get(@opcodes, num)
   @doc "Returns the numeric opcode for an opcode name."
   def num(name) when is_atom(name), do: Map.get(@name_to_num, name)
+  def all_opcodes, do: @name_to_num
 
   @doc "Returns operand-format metadata for an opcode."
   def format_info(fmt), do: Map.get(@format_info, fmt)

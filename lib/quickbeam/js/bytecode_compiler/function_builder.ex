@@ -36,10 +36,66 @@ defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
     }
 
     atoms = collect_atoms(function)
+    resolved = to_interpreter_format(instructions, atoms)
 
-    %{function | byte_code: Assembler.encode(instructions, atoms), atoms: atoms}
+    %{
+      function
+      | byte_code: Assembler.encode(instructions, atoms),
+        atoms: atoms,
+        instructions: resolved
+    }
     |> attach_own_constant_atoms()
   end
+
+  defp to_interpreter_format(instructions, atoms) do
+    atom_map =
+      atoms
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Map.new()
+
+    {labels, _} =
+      Enum.reduce(instructions, {%{}, 0}, fn
+        {:label, name}, {map, pc} -> {Map.put(map, name, pc), pc}
+        _, {map, pc} -> {map, pc + 1}
+      end)
+
+    instructions
+    |> Enum.reject(&match?({:label, _}, &1))
+    |> Enum.map(&to_op(&1, labels, atom_map))
+    |> List.to_tuple()
+  end
+
+  @op QuickBEAM.VM.Opcodes.all_opcodes()
+
+  defp to_op(true, _l, _a), do: {@op[:push_true], []}
+  defp to_op(false, _l, _a), do: {@op[:push_false], []}
+  defp to_op({:push_int, v}, _l, _a), do: {@op[:push_i32], [v]}
+  defp to_op({:constant, idx}, _l, _a), do: {@op[:push_const], [idx]}
+  defp to_op({:closure, idx}, _l, _a), do: {@op[:fclosure], [idx]}
+  defp to_op({:jump, t}, l, _a), do: {@op[:goto], [l[t]]}
+  defp to_op({:jump_if_false, t}, l, _a), do: {@op[:if_false], [l[t]]}
+  defp to_op({:jump_if_true, t}, l, _a), do: {@op[:if_true], [l[t]]}
+  defp to_op({:catch, t}, l, _a), do: {@op[:catch], [l[t]]}
+  defp to_op({:gosub, t}, l, _a), do: {@op[:gosub], [l[t]]}
+  defp to_op({:get_var, n}, _l, a), do: {@op[:get_var], [a[n]]}
+  defp to_op({:put_var, n}, _l, a), do: {@op[:put_var], [a[n]]}
+  defp to_op({:get_field, n}, _l, a), do: {@op[:get_field], [a[n]]}
+  defp to_op({:get_field2, n}, _l, a), do: {@op[:get_field2], [a[n]]}
+  defp to_op({:put_field, n}, _l, a), do: {@op[:put_field], [a[n]]}
+  defp to_op({:define_field, n}, _l, a), do: {@op[:define_field], [a[n]]}
+  defp to_op({:set_name, n}, _l, a), do: {@op[:set_name], [a[n]]}
+  defp to_op({:define_method, n, f}, _l, a), do: {@op[:define_method], [a[n], f]}
+  defp to_op({:define_method_computed, f}, _l, _a), do: {@op[:define_method_computed], [f]}
+  defp to_op({:define_class, n, f}, _l, a), do: {@op[:define_class], [a[n], f]}
+  defp to_op({:private_symbol, n}, _l, a), do: {@op[:private_symbol], [a[n]]}
+  defp to_op({:throw_error, type, n}, _l, a), do: {@op[:throw_error], [a[n], type]}
+  defp to_op({:with_get_var, n, t}, l, a), do: {@op[:with_get_var], [a[n], l[t], 1]}
+  defp to_op({:with_put_var, n, t}, l, a), do: {@op[:with_put_var], [a[n], l[t], 1]}
+  defp to_op({:with_delete_var, n, t}, l, a), do: {@op[:with_delete_var], [a[n], l[t], 1]}
+  defp to_op({:eval, argc, scope}, _l, _a), do: {@op[:eval], [argc, scope]}
+  defp to_op({op, arg}, _l, _a) when is_atom(op), do: {@op[op], [arg]}
+  defp to_op(op, _l, _a) when is_atom(op), do: {@op[op], []}
 
   defp attach_own_constant_atoms(%Function{atoms: atoms, constants: constants} = function) do
     constants =

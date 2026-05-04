@@ -1360,23 +1360,28 @@ defmodule QuickBEAM.VM.Interpreter do
 
   defp do_invoke(%Bytecode.Function{} = fun, self_ref, args, var_refs, gas, ctx) do
     Heap.put_ctx(ctx)
-    cache_key = {fun.byte_code, fun.arg_count}
 
     insns =
-      case Heap.get_decoded(cache_key) do
-        nil ->
-          case Decoder.decode(fun.byte_code, fun.arg_count) do
-            {:ok, instructions} ->
-              t = List.to_tuple(instructions)
-              Heap.put_decoded(cache_key, t)
-              t
+      if fun.instructions do
+        fun.instructions
+      else
+        cache_key = {fun.byte_code, fun.arg_count}
 
-            {:error, _} = err ->
-              throw(err)
-          end
+        case Heap.get_decoded(cache_key) do
+          nil ->
+            case Decoder.decode(fun.byte_code, fun.arg_count) do
+              {:ok, instructions} ->
+                t = List.to_tuple(instructions)
+                Heap.put_decoded(cache_key, t)
+                t
 
-        cached ->
-          cached
+              {:error, _} = err ->
+                throw(err)
+            end
+
+          cached ->
+            cached
+        end
       end
 
     case insns do
