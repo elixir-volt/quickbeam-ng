@@ -874,7 +874,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
     if is_derived and has_explicit_ctor do
       Process.put(:bytecode_compiler_derived_ctor, true)
-      Process.put(:bytecode_compiler_super_class, super_class)
     end
 
     with {:loc, loc} <- callbacks.resolve.(scope, name),
