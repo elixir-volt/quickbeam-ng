@@ -8,20 +8,19 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   def encode(instructions, atoms \\ {}) when is_list(instructions) do
     widths = jump_widths(instructions)
     labels = label_offsets(instructions, widths)
+    offsets = build_offset_table(instructions, widths)
 
-    instructions
-    |> Enum.with_index()
-    |> Enum.reject(fn {instruction, _idx} -> match?({:label, _name}, instruction) end)
-    |> Enum.map(fn {instruction, idx} ->
-      encode_instruction(
-        instruction,
-        instruction_offset(instructions, idx, widths),
-        labels,
-        widths[idx],
-        atoms
-      )
-    end)
-    |> IO.iodata_to_binary()
+    {iodata, _} =
+      Enum.reduce(instructions, {[], 0}, fn
+        {:label, _}, {acc, idx} ->
+          {acc, idx + 1}
+
+        instruction, {acc, idx} ->
+          encoded = encode_instruction(instruction, offsets[idx], labels, widths[idx], atoms)
+          {[acc | encoded], idx + 1}
+      end)
+
+    IO.iodata_to_binary(iodata)
   end
 
   def stack_size(instructions) when is_list(instructions) do
@@ -61,14 +60,14 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
 
   defp widen_jumps(instructions, widths) do
     labels = label_offsets(instructions, widths)
+    offsets = build_offset_table(instructions, widths)
 
     next_widths =
       instructions
       |> Enum.with_index()
       |> Enum.reduce(widths, fn
         {{op, label}, idx}, acc when op in [:jump, :jump_if_false, :jump_if_true] ->
-          offset = instruction_offset(instructions, idx, widths)
-          diff = Map.fetch!(labels, label) - (offset + 1)
+          diff = Map.fetch!(labels, label) - (offsets[idx] + 1)
 
           if diff in -128..127, do: acc, else: Map.put(acc, idx, :wide)
 
@@ -92,14 +91,19 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
     |> elem(0)
   end
 
-  defp instruction_offset(instructions, target_idx, widths) do
-    instructions
-    |> Enum.with_index()
-    |> Enum.take(target_idx)
-    |> Enum.reject(fn {instruction, _idx} -> match?({:label, _name}, instruction) end)
-    |> Enum.reduce(0, fn {instruction, idx}, offset ->
-      offset + instruction_size(instruction, widths[idx])
-    end)
+  defp build_offset_table(instructions, widths) do
+    {table, _} =
+      instructions
+      |> Enum.with_index()
+      |> Enum.reduce({%{}, 0}, fn
+        {{:label, _name}, idx}, {table, offset} ->
+          {Map.put(table, idx, offset), offset}
+
+        {instruction, idx}, {table, offset} ->
+          {Map.put(table, idx, offset), offset + instruction_size(instruction, widths[idx])}
+      end)
+
+    table
   end
 
   defp instruction_size({op, _label}, width) when op in [:jump, :jump_if_false, :jump_if_true],
