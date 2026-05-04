@@ -1,9 +1,8 @@
 - Add Test262-derived executable windows for broader coverage.
 - Direct eval with scope access (1 mismatch): `eval('arguments[0]')` needs caller scope.
-- Derived constructor return object (1 mismatch): define_class constructor with `super(); return {x:1}` fails.
-- Super postincrement (1 unsupported): `super.x++` needs complex stack manipulation for post_inc + put_super_value.
-- Super destructuring targets (2 unsupported): `({a: super.x} = ...)` needs put_super_value in destructuring path.
-- Private class fields (3 class_element) + private method/getter keys (2 object_property_key) = 5 private unsupported.
+- Derived constructor return object (1 mismatch): define_class constructor with `super(); return {x:1}`.
+- Super destructuring targets (2 unsupported): `({a: super.x} = ...)` needs put_super_value in destructuring — complex stack manipulation (no rot4 opcode available).
+- Private class fields (3 class_element) + private method/getter keys (2 object_property_key) = 5 private unsupported: needs private_symbol, check_brand, add_brand, get/put_private_field.
 - `Symbol.iterator` (1 unsupported): custom iterable for-of needs iterator protocol.
-- `with(o){ delete x; }` parse error (1).
-- `test/vm/test_language.js` throw_statement (1): full JS file.
+- `with(o){ delete x; }` parse error (1): parser ASI issue.
+- `test/vm/test_language.js` throw_statement (1): full JS file needing many features.
