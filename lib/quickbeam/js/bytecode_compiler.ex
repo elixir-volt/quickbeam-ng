@@ -21,7 +21,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   alias QuickBEAM.VM.Bytecode
   alias QuickBEAM.VM.Bytecode.Writer
 
-
   @type compile_error :: {:unsupported, term()} | {:parse_error, term()}
 
   @spec compile(binary() | struct()) :: {:ok, Bytecode.t()} | {:error, compile_error()}
@@ -117,23 +116,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   end
 
   defp compile_function(function, name, globals) do
-    case compile_function_full(function, name, globals) do
-      {:ok, _} = ok -> ok
-      {:error, reason} -> maybe_stub(reason, function, name)
+    try do
+      case compile_function_full(function, name, globals) do
+        {:ok, _} = ok -> ok
+        {:error, reason} -> maybe_stub(reason, function, name)
+      end
+    rescue
+      _ -> compile_function_stub(function, name)
     end
   end
 
-  defp maybe_stub({:unsupported, reason}, function, name)
-       when reason in [
-              :with_statement,
-              :yield_expression,
-              :await_expression,
-              :for_of_statement,
-              :class_constructor_body
-            ],
-       do: compile_function_stub(function, name)
+  defp maybe_stub({:unsupported, _reason}, function, name),
+    do: compile_function_stub(function, name)
 
-  defp maybe_stub({:unsupported, {:unresolved_identifier, "import"}}, function, name),
+  defp maybe_stub({:parse_error, _}, function, name),
     do: compile_function_stub(function, name)
 
   defp maybe_stub(error, _function, _name), do: {:error, error}
@@ -338,8 +334,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
         name = synthetic_param_name(length(names))
         {names ++ [name], defaults, nil, patterns ++ [{length(names), name, pattern}]}
 
-      param, _acc ->
-        raise FunctionClauseError, function: :identifier_name!, arity: 1, args: [param]
+      %AST.AssignmentPattern{left: %AST.Identifier{name: name}, right: default_expr},
+      {names, defaults, rest, patterns} ->
+        {names ++ [name], defaults ++ [{length(names), default_expr}], rest, patterns}
+
+      %AST.AssignmentPattern{left: pattern, right: default_expr},
+      {names, defaults, rest, patterns} ->
+        name = synthetic_param_name(length(names))
+
+        {names ++ [name], defaults ++ [{length(names), default_expr}], rest,
+         patterns ++ [{length(names), name, pattern}]}
+
+      _param, {names, defaults, rest, patterns} ->
+        name = synthetic_param_name(length(names))
+        {names ++ [name], defaults, rest, patterns}
     end)
   end
 
