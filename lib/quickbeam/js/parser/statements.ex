@@ -693,7 +693,7 @@ defmodule QuickBEAM.JS.Parser.Statements do
         {object, state} = parse_parenthesized_expression(state)
         {body, state} = parse_statement(state)
         state = validate_single_statement_body(state, body)
-        {%AST.WithStatement{object: object, body: body}, consume_semicolon(state)}
+        {%AST.WithStatement{object: object, body: body}, state}
       end
 
       defp parse_labeled_statement(state) do

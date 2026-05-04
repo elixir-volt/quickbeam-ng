@@ -175,15 +175,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       {:ok, _, _} = ok ->
         ok
 
-      {:error, reason} ->
-        IO.inspect(
-          {:CLASS_DEFINE_FAILED, reason,
-           Exception.format_stacktrace(Process.info(self(), :current_stacktrace) |> elem(1))
-           |> String.split("\n")
-           |> Enum.slice(1, 5)},
-          label: "DBG"
-        )
-
+      {:error, _} ->
         compile_class_factory_fallback(
           name,
           super_class,
@@ -428,6 +420,95 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   def compile(
+        %AST.TryStatement{
+          block: %AST.BlockStatement{body: try_body},
+          handler: %AST.CatchClause{param: param, body: handler_body},
+          finalizer: nil
+        },
+        scope,
+        instructions,
+        constants,
+        opts,
+        callbacks
+      ) do
+    catch_label = callbacks.unique_label.(:catch)
+    done_label = callbacks.unique_label.(:try_done)
+
+    with {:ok, instructions, constants} <-
+           compile_non_tail(
+             try_body,
+             scope,
+             instructions ++ [{:catch, catch_label}],
+             constants,
+             [tail?: false],
+             callbacks
+           ),
+         {:ok, catch_instructions, constants} <-
+           compile_catch_handler(param, handler_body, scope, constants, opts, callbacks) do
+      {:ok,
+       instructions ++
+         [:drop, {:jump, done_label}, {:label, catch_label}] ++
+         catch_instructions ++ [{:label, done_label}], constants}
+    end
+  end
+
+  def compile(
+        %AST.TryStatement{
+          block: %AST.BlockStatement{body: try_body},
+          handler: %AST.CatchClause{param: param, body: handler_body},
+          finalizer: %AST.BlockStatement{body: finalizer}
+        },
+        scope,
+        instructions,
+        constants,
+        opts,
+        callbacks
+      ) do
+    finally_label = callbacks.unique_label.(:finally)
+    catch_label = callbacks.unique_label.(:catch_finally)
+    done_label = callbacks.unique_label.(:try_done)
+
+    with {:ok, instructions, constants} <-
+           compile_non_tail(
+             try_body,
+             scope,
+             instructions ++ [{:catch, catch_label}],
+             constants,
+             [tail?: false, finally_label: finally_label],
+             callbacks
+           ),
+         {:ok, catch_instructions, constants} <-
+           compile_catch_handler(param, handler_body, scope, constants, opts, callbacks),
+         {:ok, finally_instructions, constants} <-
+           compile_non_tail(
+             finalizer,
+             scope,
+             [],
+             constants,
+             [tail?: false],
+             callbacks
+           ) do
+      {:ok,
+       instructions ++
+         [
+           :drop,
+           {:gosub, finally_label},
+           :drop,
+           {:jump, done_label},
+           {:label, catch_label}
+         ] ++
+         catch_instructions ++
+         [
+           {:gosub, finally_label},
+           :drop,
+           {:jump, done_label},
+           {:label, finally_label}
+         ] ++
+         finally_instructions ++ [:ret, {:label, done_label}], constants}
+    end
+  end
+
+  def compile(
         %AST.ForInStatement{
           left: %AST.VariableDeclaration{
             declarations: [%AST.VariableDeclarator{id: %AST.Identifier{name: name}}]
@@ -639,6 +720,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   def compile(%AST.EmptyStatement{}, _scope, instructions, constants, _opts, _callbacks),
     do: {:ok, instructions, constants}
 
+  def compile(
+        %AST.ThrowStatement{argument: argument},
+        scope,
+        instructions,
+        constants,
+        _opts,
+        callbacks
+      ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(argument, scope, instructions, constants) do
+      {:ok, instructions ++ [:throw], constants}
+    end
+  end
+
   def compile(statement, _scope, _instructions, _constants, _opts, _callbacks),
     do: {:error, {:unsupported, statement.type}}
 
@@ -772,11 +867,29 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       |> Enum.map(& &1.key.name)
       |> Enum.uniq()
 
+    is_derived = super_class != nil
+    has_explicit_ctor = Enum.any?(body, &match?(%AST.MethodDefinition{kind: :constructor}, &1))
+
+    prev_derived = Process.get(:bytecode_compiler_derived_ctor, false)
+
+    if is_derived and has_explicit_ctor do
+      Process.put(:bytecode_compiler_derived_ctor, true)
+    end
+
     with {:loc, loc} <- callbacks.resolve.(scope, name),
          {:loc, proto_loc} <- callbacks.resolve.(scope, "<class_proto:#{name}>"),
          {:ok, ctor_fn} <-
            compile_class_ctor_with_private(body, name, field_names, scope, callbacks) do
-      flags = if super_class, do: 1, else: 0
+      Process.put(:bytecode_compiler_derived_ctor, prev_derived)
+
+      ctor_fn =
+        if is_derived and has_explicit_ctor do
+          %{ctor_fn | is_derived_class_constructor: true, super_call_allowed: true}
+        else
+          ctor_fn
+        end
+
+      flags = if is_derived, do: 1, else: 0
 
       parent =
         case super_class do
@@ -888,6 +1001,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       # Don't restore var_refs — keep accumulated for compile_program to pick up
       Process.put(:bytecode_compiler_class_private_scope, prev_priv)
       Process.put(:bytecode_compiler_private_kinds, prev_kinds)
+      Process.put(:bytecode_compiler_derived_ctor, prev_derived)
       result
     end
   end
@@ -996,6 +1110,43 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
             generator: false
           },
           name
+        )
+    end
+  end
+
+  defp compile_catch_handler(
+         param,
+         %AST.BlockStatement{body: handler_body},
+         scope,
+         constants,
+         opts,
+         callbacks
+       ) do
+    case param do
+      %AST.Identifier{name: name} ->
+        case callbacks.resolve.(scope, name) do
+          {:loc, loc} ->
+            compile_non_tail(
+              handler_body,
+              scope,
+              [{:put_loc, loc}],
+              constants,
+              opts,
+              callbacks
+            )
+
+          _ ->
+            {:error, {:unsupported, {:unresolved_identifier, name}}}
+        end
+
+      nil ->
+        compile_non_tail(
+          handler_body,
+          scope,
+          [:drop],
+          constants,
+          opts,
+          callbacks
         )
     end
   end
@@ -1977,9 +2128,18 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
        ) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(argument, scope, instructions, constants) do
+      is_derived = Process.get(:bytecode_compiler_derived_ctor, false)
+
+      ret_ops =
+        if is_derived do
+          [:check_ctor_return, :return]
+        else
+          [:return]
+        end
+
       case Keyword.get(opts, :finally_label) do
-        nil -> {:ok, instructions ++ [:return], constants}
-        label -> {:ok, instructions ++ [:nip_catch, {:gosub, label}, :return], constants}
+        nil -> {:ok, instructions ++ ret_ops, constants}
+        label -> {:ok, instructions ++ [:nip_catch, {:gosub, label}] ++ ret_ops, constants}
       end
     end
   end

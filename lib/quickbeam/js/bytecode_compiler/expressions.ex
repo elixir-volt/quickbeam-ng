@@ -1608,7 +1608,10 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
               "isFinite",
               "encodeURIComponent",
               "decodeURIComponent",
-              "Infinity"
+              "Infinity",
+              "Symbol",
+              "Proxy",
+              "Reflect"
             ] do
     {:ok, instructions ++ [{:get_var, name}], constants}
   end

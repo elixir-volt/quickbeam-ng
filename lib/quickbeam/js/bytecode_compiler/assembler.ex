@@ -324,6 +324,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:put_super_value, _atoms), do: <<Opcodes.num(:put_super_value)>>
   defp encode_instruction(:set_home_object, _atoms), do: <<Opcodes.num(:set_home_object)>>
   defp encode_instruction(:check_ctor, _atoms), do: <<Opcodes.num(:check_ctor)>>
+  defp encode_instruction(:check_ctor_return, _atoms), do: <<Opcodes.num(:check_ctor_return)>>
   defp encode_instruction(:add_brand, _atoms), do: <<Opcodes.num(:add_brand)>>
   defp encode_instruction(:private_in, _atoms), do: <<Opcodes.num(:private_in)>>
   defp encode_instruction(:check_brand, _atoms), do: <<Opcodes.num(:check_brand)>>
