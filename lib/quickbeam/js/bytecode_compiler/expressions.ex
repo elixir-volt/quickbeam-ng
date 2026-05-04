@@ -66,10 +66,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         _callbacks
       ) do
+    private_kinds = Process.get(:bytecode_compiler_private_kinds) || %{}
+
     case Scope.resolve(scope, "##{pname}") do
       {:var_ref, idx} ->
-        {:ok, instructions ++ [:push_this, {:get_var_ref_check, idx}, :get_private_field],
-         constants}
+        ops =
+          case Map.get(private_kinds, "##{pname}") do
+            :get ->
+              [:push_this, {:get_var_ref_check, idx}, {:call_method, 0}]
+
+            _ ->
+              [:push_this, {:get_var_ref_check, idx}, :get_private_field]
+          end
+
+        {:ok, instructions ++ ops, constants}
 
       _ ->
         {:error, {:unsupported, :object_property_key}}

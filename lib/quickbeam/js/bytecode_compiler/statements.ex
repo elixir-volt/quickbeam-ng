@@ -799,6 +799,11 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       field_names = Enum.map(private_fields, & &1.key.name) |> Enum.uniq()
       method_names = Enum.map(private_methods, & &1.key.name) |> Enum.uniq()
 
+      private_kinds =
+        Enum.reduce(private_methods, %{}, fn m, acc ->
+          Map.put(acc, "##{m.key.name}", m.kind)
+        end)
+
       instructions = instructions ++ [{:set_loc_uninitialized, loc}]
 
       # private_symbol for fields
@@ -848,6 +853,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
       prev_priv = Process.get(:bytecode_compiler_class_private_scope)
       Process.put(:bytecode_compiler_class_private_scope, {private_refs, private_locs})
+      prev_kinds = Process.get(:bytecode_compiler_private_kinds)
+      Process.put(:bytecode_compiler_private_kinds, private_kinds)
       prev_vrefs = Process.get(:bytecode_compiler_var_refs) || %{}
 
       Process.put(
@@ -880,6 +887,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
       # Don't restore var_refs — keep accumulated for compile_program to pick up
       Process.put(:bytecode_compiler_class_private_scope, prev_priv)
+      Process.put(:bytecode_compiler_private_kinds, prev_kinds)
       result
     end
   end
