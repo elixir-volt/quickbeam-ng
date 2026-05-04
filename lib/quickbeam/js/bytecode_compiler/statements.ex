@@ -1704,47 +1704,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
-  defp compile_indexed_iteration_with_destructuring(
-         body,
-         elements,
-         value_loc,
-         collection_loc,
-         index_loc,
-         scope,
-         instructions,
-         constants,
-         callbacks
-       ) do
-    start_label = callbacks.unique_label.(:for_of_start)
-    update_label = callbacks.unique_label.(:for_of_update)
-    end_label = callbacks.unique_label.(:for_of_end)
-
-    prefix =
-      indexed_iteration_prefix(collection_loc, index_loc, value_loc, start_label, end_label)
-
-    with {:ok, instructions, constants} <-
-           compile_array_pattern(
-             elements,
-             scope,
-             instructions ++ prefix ++ [{:get_loc, value_loc}],
-             constants,
-             callbacks
-           ),
-         {:ok, instructions, constants} <-
-           compile(
-             body,
-             scope,
-             instructions,
-             constants,
-             [tail?: false, break_label: end_label, continue_label: update_label],
-             callbacks
-           ) do
-      {:ok,
-       instructions ++ indexed_iteration_suffix(index_loc, start_label, update_label, end_label),
-       constants}
-    end
-  end
-
   defp indexed_iteration_prefix(collection_loc, index_loc, value_loc, start_label, end_label) do
     [
       {:put_loc, collection_loc},
