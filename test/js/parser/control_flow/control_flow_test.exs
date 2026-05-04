@@ -17,8 +17,9 @@ defmodule QuickBEAM.JS.Parser.ControlFlow.ControlFlowTest do
     """
 
     assert {:ok,
-            %AST.Program{body: [do_while, if_stmt, with_stmt, while_stmt, %AST.EmptyStatement{}]}} =
-             Parser.parse(source)
+            %AST.Program{
+              body: [do_while, if_stmt, with_stmt, %AST.EmptyStatement{}, while_stmt, %AST.EmptyStatement{}]
+            }} = Parser.parse(source)
 
     assert %AST.DoWhileStatement{body: %AST.LabeledStatement{label: %AST.Identifier{name: "x"}}} =
              do_while
