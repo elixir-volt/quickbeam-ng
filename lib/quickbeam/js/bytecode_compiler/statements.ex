@@ -630,16 +630,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         callbacks
       ) do
     with {:loc, value_loc} <- callbacks.resolve.(scope, "<for_of_value>"),
-         {:loc, array_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
-         {:loc, index_loc} <- callbacks.resolve.(scope, "<for_of_index>"),
          {:ok, instructions, constants} <-
            callbacks.compile_expression.(right, scope, instructions, constants) do
-      compile_indexed_iteration_with_destructuring(
+      compile_iterator_for_of_destructuring(
         body,
         elements,
         value_loc,
-        array_loc,
-        index_loc,
         scope,
         instructions,
         constants,
@@ -1568,6 +1564,58 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
                  {:jump_if_true, end_label},
                  {:put_loc, value_loc}
                ],
+             constants,
+             [tail?: false, break_label: end_label, continue_label: update_label],
+             callbacks
+           ) do
+      {:ok,
+       instructions ++
+         [
+           {:label, update_label},
+           {:jump, start_label},
+           {:label, end_label},
+           :drop,
+           :drop,
+           :drop
+         ], constants}
+    end
+  end
+
+  defp compile_iterator_for_of_destructuring(
+         body,
+         elements,
+         value_loc,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    start_label = callbacks.unique_label.(:for_of_start)
+    end_label = callbacks.unique_label.(:for_of_end)
+    update_label = callbacks.unique_label.(:for_of_update)
+
+    prefix =
+      [
+        :for_of_start,
+        {:label, start_label},
+        {:for_of_next, 0},
+        {:jump_if_true, end_label},
+        {:put_loc, value_loc}
+      ]
+
+    with {:ok, instructions, constants} <-
+           compile_array_pattern(
+             elements,
+             scope,
+             instructions ++ prefix ++ [{:get_loc, value_loc}],
+             constants,
+             callbacks
+           ),
+         {:ok, instructions, constants} <-
+           compile(
+             body,
+             scope,
+             instructions,
              constants,
              [tail?: false, break_label: end_label, continue_label: update_label],
              callbacks
