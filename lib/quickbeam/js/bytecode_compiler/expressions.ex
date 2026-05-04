@@ -1588,42 +1588,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   defp nameable_value?(%AST.ClassExpression{id: nil}), do: true
   defp nameable_value?(_), do: false
 
-  defp compile_global_identifier(name, instructions, constants)
-       when name in [
-              "Object",
-              "Math",
-              "Array",
-              "String",
-              "Number",
-              "Boolean",
-              "eval",
-              "Error",
-              "TypeError",
-              "RangeError",
-              "JSON",
-              "Date",
-              "RegExp",
-              "Promise",
-              "Map",
-              "Set",
-              "WeakMap",
-              "WeakSet",
-              "parseInt",
-              "parseFloat",
-              "isNaN",
-              "isFinite",
-              "encodeURIComponent",
-              "decodeURIComponent",
-              "Infinity",
-              "Symbol",
-              "Proxy",
-              "Reflect"
-            ] do
+  defp compile_global_identifier(name, instructions, constants) do
     {:ok, instructions ++ [{:get_var, name}], constants}
   end
-
-  defp compile_global_identifier(name, _instructions, _constants),
-    do: {:error, {:unsupported, {:unresolved_identifier, name}}}
 
   defp compile_template_literal(
          [%AST.TemplateElement{value: value}],

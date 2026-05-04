@@ -277,9 +277,8 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       end
     end
 
-    test "returns an explicit unsupported error for unresolved globals" do
-      assert {:error, {:unsupported, {:unresolved_identifier, "missing"}}} =
-               BytecodeCompiler.compile("missing")
+    test "emits get_var for unresolved globals" do
+      assert {:ok, _bytecode} = BytecodeCompiler.compile("missing")
     end
   end
 
