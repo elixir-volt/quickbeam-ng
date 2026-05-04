@@ -68,19 +68,31 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_statements(body, scope, [], [], top_level_globals(scope)) do
       instructions = finish_program(instructions)
+      var_refs = Process.get(:bytecode_compiler_var_refs) || %{}
+      local_names = scope.local_names
 
-      {:ok,
-       FunctionBuilder.build(
-         name: nil,
-         args: [],
-         locals: [@ret_name | Enum.drop(scope.local_names, 1)],
-         constants: Enum.reverse(constants),
-         instructions: instructions,
-         has_prototype: false,
-         has_simple_parameter_list: false,
-         new_target_allowed: false,
-         source: ""
-       )}
+      {local_defs, var_ref_count} =
+        if map_size(var_refs) > 0 do
+          build_local_defs(local_names, var_refs)
+        else
+          {nil, 0}
+        end
+
+      build_opts =
+        [
+          name: nil,
+          args: [],
+          locals: local_names,
+          var_ref_count: var_ref_count,
+          constants: Enum.reverse(constants),
+          instructions: instructions,
+          has_prototype: false,
+          has_simple_parameter_list: false,
+          new_target_allowed: false,
+          source: ""
+        ] ++ if(local_defs, do: [local_defs: local_defs], else: [])
+
+      {:ok, FunctionBuilder.build(build_opts)}
     end
   end
 

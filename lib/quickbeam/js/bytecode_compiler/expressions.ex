@@ -935,7 +935,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
                compile_call_args(
                  args,
                  scope,
-                 instructions ++ [:push_this, {:get_var_ref_check, idx}, :check_brand],
+                 instructions ++ [:push_this, {:get_var_ref_check, idx}],
                  constants,
                  callbacks
                ) do

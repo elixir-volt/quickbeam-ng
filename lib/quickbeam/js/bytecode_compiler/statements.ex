@@ -175,7 +175,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       {:ok, _, _} = ok ->
         ok
 
-      {:error, _} ->
+      {:error, reason} ->
+        IO.inspect(
+          {:CLASS_DEFINE_FAILED, reason,
+           Exception.format_stacktrace(Process.info(self(), :current_stacktrace) |> elem(1))
+           |> String.split("\n")
+           |> Enum.slice(1, 5)},
+          label: "DBG"
+        )
+
         compile_class_factory_fallback(
           name,
           super_class,
@@ -870,7 +878,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
           emit_define_statics(statics, loc, scope, instructions, constants, callbacks)
         end
 
-      Process.put(:bytecode_compiler_var_refs, prev_vrefs)
+      # Don't restore var_refs — keep accumulated for compile_program to pick up
       Process.put(:bytecode_compiler_class_private_scope, prev_priv)
       result
     end
@@ -987,6 +995,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   defp partition_class_body(body) do
     Enum.reduce(body, {[], []}, fn
       %AST.MethodDefinition{kind: :constructor}, acc -> acc
+      %AST.MethodDefinition{key: %AST.PrivateIdentifier{}}, acc -> acc
       %AST.MethodDefinition{static: false} = m, {ms, ss} -> {[m | ms], ss}
       %AST.MethodDefinition{static: true} = m, {ms, ss} -> {ms, [m | ss]}
       %AST.FieldDefinition{static: true} = f, {ms, ss} -> {ms, [f | ss]}
