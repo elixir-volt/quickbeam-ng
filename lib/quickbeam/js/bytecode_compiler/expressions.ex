@@ -33,8 +33,14 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(%AST.Literal{value: value}, _scope, instructions, constants, _callbacks)
-      when is_integer(value) do
+      when is_integer(value) and value >= -2_147_483_648 and value <= 2_147_483_647 do
     {:ok, instructions ++ [{:push_int, value}], constants}
+  end
+
+  def compile(%AST.Literal{value: value}, _scope, instructions, constants, _callbacks)
+      when is_integer(value) do
+    {instruction, constants} = add_constant(value / 1, constants)
+    {:ok, instructions ++ [instruction], constants}
   end
 
   def compile(%AST.Literal{value: value}, _scope, instructions, constants, _callbacks)
