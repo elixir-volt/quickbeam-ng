@@ -758,10 +758,16 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       end)
       |> Enum.uniq()
 
+    field_names =
+      body
+      |> Enum.filter(&match?(%AST.FieldDefinition{key: %AST.PrivateIdentifier{}}, &1))
+      |> Enum.map(& &1.key.name)
+      |> Enum.uniq()
+
     with {:loc, loc} <- callbacks.resolve.(scope, name),
          {:loc, proto_loc} <- callbacks.resolve.(scope, "<class_proto:#{name}>"),
          {:ok, ctor_fn} <-
-           compile_class_ctor_with_private(body, name, private_names, scope, callbacks) do
+           compile_class_ctor_with_private(body, name, field_names, scope, callbacks) do
       flags = if super_class, do: 1, else: 0
 
       parent =
@@ -770,19 +776,42 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
           _ -> [:undefined]
         end
 
-      # Emit private_symbol BEFORE define_class so symbols are in locals
-      # when the constructor closure captures them
+      private_fields =
+        Enum.filter(body, &match?(%AST.FieldDefinition{key: %AST.PrivateIdentifier{}}, &1))
+
+      private_methods =
+        Enum.filter(body, fn
+          %AST.MethodDefinition{key: %AST.PrivateIdentifier{}, kind: k} when k != :constructor ->
+            true
+
+          _ ->
+            false
+        end)
+
+      field_names = Enum.map(private_fields, & &1.key.name) |> Enum.uniq()
+      method_names = Enum.map(private_methods, & &1.key.name) |> Enum.uniq()
+
       instructions = instructions ++ [{:set_loc_uninitialized, loc}]
 
+      # private_symbol for fields
       instructions =
-        Enum.reduce(private_names, instructions, fn pname, instr ->
-          case callbacks.resolve.(scope, "##{pname}") do
+        Enum.reduce(field_names, instructions, fn pn, instr ->
+          case callbacks.resolve.(scope, "##{pn}") do
             {:loc, ploc} ->
               instr ++
-                [{:set_loc_uninitialized, ploc}, {:private_symbol, "##{pname}"}, {:put_loc, ploc}]
+                [{:set_loc_uninitialized, ploc}, {:private_symbol, "##{pn}"}, {:put_loc, ploc}]
 
             _ ->
               instr
+          end
+        end)
+
+      # init method locals
+      instructions =
+        Enum.reduce(method_names, instructions, fn pn, instr ->
+          case callbacks.resolve.(scope, "##{pn}") do
+            {:loc, ploc} -> instr ++ [{:set_loc_uninitialized, ploc}]
+            _ -> instr
           end
         end)
 
@@ -822,7 +851,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
 
       result =
         with {:ok, instructions, constants} <-
-               emit_define_methods(methods, scope, instructions, constants, callbacks) do
+               emit_define_methods(methods, scope, instructions, constants, callbacks),
+             {:ok, instructions, constants} <-
+               emit_private_methods(private_methods, scope, instructions, constants, callbacks) do
           close_privates =
             Enum.flat_map(private_names, fn pn ->
               case callbacks.resolve.(scope, "##{pn}") do
@@ -842,6 +873,30 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       Process.put(:bytecode_compiler_var_refs, prev_vrefs)
       Process.put(:bytecode_compiler_class_private_scope, prev_priv)
       result
+    end
+  end
+
+  defp emit_private_methods([], _scope, instructions, constants, _callbacks),
+    do: {:ok, instructions, constants}
+
+  defp emit_private_methods([method | rest], scope, instructions, constants, callbacks) do
+    pname = method.key.name
+
+    case callbacks.resolve.(scope, "##{pname}") do
+      {:loc, ploc} ->
+        case callbacks.compile_function.(method.value, "##{pname}") do
+          {:ok, function} ->
+            instructions =
+              instructions ++ [{:closure, length(constants)}, :set_home_object, {:put_loc, ploc}]
+
+            emit_private_methods(rest, scope, instructions, [function | constants], callbacks)
+
+          error ->
+            error
+        end
+
+      _ ->
+        {:error, {:unsupported, :class_element}}
     end
   end
 

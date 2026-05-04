@@ -917,6 +917,39 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(
         %AST.CallExpression{
           callee: %AST.MemberExpression{
+            object: %AST.Identifier{name: "this"},
+            property: %AST.PrivateIdentifier{name: pname},
+            computed: false
+          },
+          arguments: args
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    case Scope.resolve(scope, "##{pname}") do
+      {:var_ref, idx} ->
+        with {:ok, args} <- expand_call_args(args),
+             {:ok, instructions, constants} <-
+               compile_call_args(
+                 args,
+                 scope,
+                 instructions ++ [:push_this, {:get_var_ref_check, idx}, :check_brand],
+                 constants,
+                 callbacks
+               ) do
+          {:ok, instructions ++ [{:call_method, length(args)}], constants}
+        end
+
+      _ ->
+        {:error, {:unsupported, :object_property_key}}
+    end
+  end
+
+  def compile(
+        %AST.CallExpression{
+          callee: %AST.MemberExpression{
             object: %AST.Identifier{name: "super"},
             property: %AST.Identifier{name: property},
             computed: false
