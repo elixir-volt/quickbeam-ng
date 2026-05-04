@@ -238,10 +238,25 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         scope,
         instructions,
         constants,
-        _callbacks
+        callbacks
       ) do
-    result = callbacks_delete_identifier_result(scope, name)
-    {:ok, instructions ++ [result], constants}
+    case Process.get(:bytecode_compiler_with_loc) do
+      nil ->
+        result = callbacks_delete_identifier_result(scope, name)
+        {:ok, instructions ++ [result], constants}
+
+      with_loc ->
+        done_label = callbacks.unique_label.(:with_del_done)
+
+        {:ok,
+         instructions ++
+           [
+             {:get_loc, with_loc},
+             {:with_delete_var, name, done_label},
+             {:push_int, 1},
+             {:label, done_label}
+           ], constants}
+    end
   end
 
   def compile(

@@ -49,6 +49,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
       {:define_class, name, _flags} -> [name]
       {:private_symbol, name} -> [name]
       {:throw_error, _type, atom_idx} -> [atom_idx]
+      {:with_get_var, name, _label} -> [name]
+      {:with_put_var, name, _label} -> [name]
+      {:with_delete_var, name, _label} -> [name]
       _ -> []
     end)
     |> Enum.uniq()
@@ -120,6 +123,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp instruction_size({:define_method, _name, _flags}, _width), do: 6
   defp instruction_size({:private_symbol, _name}, _width), do: 5
   defp instruction_size({:for_of_next, _idx}, _width), do: 2
+  defp instruction_size({:with_get_var, _name, _label}, _width), do: 10
+  defp instruction_size({:with_put_var, _name, _label}, _width), do: 10
+  defp instruction_size({:with_delete_var, _name, _label}, _width), do: 10
   defp instruction_size({:define_class, _name, _flags}, _width), do: 6
   defp instruction_size({:close_loc, _idx}, _width), do: 3
   defp instruction_size({:set_loc_uninitialized, _idx}, _width), do: 3
@@ -141,6 +147,27 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction({:catch, label}, offset, labels, _width, _atoms) do
     diff = Map.fetch!(labels, label) - (offset + 1)
     <<Opcodes.num(:catch), diff::signed-little-32>>
+  end
+
+  defp encode_instruction({:with_get_var, atom_name, label}, offset, labels, _width, atoms) do
+    diff = Map.fetch!(labels, label) - (offset + 5)
+
+    <<Opcodes.num(:with_get_var), atom_index!(atoms, atom_name)::little-32,
+      diff::signed-little-32, 1>>
+  end
+
+  defp encode_instruction({:with_put_var, atom_name, label}, offset, labels, _width, atoms) do
+    diff = Map.fetch!(labels, label) - (offset + 5)
+
+    <<Opcodes.num(:with_put_var), atom_index!(atoms, atom_name)::little-32,
+      diff::signed-little-32, 1>>
+  end
+
+  defp encode_instruction({:with_delete_var, atom_name, label}, offset, labels, _width, atoms) do
+    diff = Map.fetch!(labels, label) - (offset + 5)
+
+    <<Opcodes.num(:with_delete_var), atom_index!(atoms, atom_name)::little-32,
+      diff::signed-little-32, 1>>
   end
 
   defp encode_instruction({:gosub, label}, offset, labels, _width, _atoms) do
@@ -435,6 +462,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp stack_effect(:private_in), do: {2, 1}
   defp stack_effect(:for_of_start), do: {1, 3}
   defp stack_effect({:for_of_next, _idx}), do: {0, 2}
+  defp stack_effect({:with_get_var, _name, _label}), do: {1, 1}
+  defp stack_effect({:with_put_var, _name, _label}), do: {2, 1}
+  defp stack_effect({:with_delete_var, _name, _label}), do: {1, 1}
   defp stack_effect(:check_brand), do: {2, 2}
   defp stack_effect(:get_private_field), do: {2, 1}
   defp stack_effect(:put_private_field), do: {3, 0}

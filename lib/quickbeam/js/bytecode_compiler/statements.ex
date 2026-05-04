@@ -710,6 +710,38 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     end
   end
 
+  def compile(
+        %AST.WithStatement{object: object, body: body},
+        scope,
+        instructions,
+        constants,
+        opts,
+        callbacks
+      ) do
+    with {:loc, with_loc} <- callbacks.resolve.(scope, "<with_obj>"),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(object, scope, instructions, constants) do
+      instructions = instructions ++ [{:put_loc, with_loc}]
+      prev_with = Process.get(:bytecode_compiler_with_loc)
+      Process.put(:bytecode_compiler_with_loc, with_loc)
+
+      result =
+        case body do
+          %AST.BlockStatement{body: stmts} ->
+            compile_non_tail(stmts, scope, instructions, constants, opts, callbacks)
+
+          stmt ->
+            compile(stmt, scope, instructions, constants, opts, callbacks)
+        end
+
+      Process.put(:bytecode_compiler_with_loc, prev_with)
+      result
+    else
+      :error -> {:error, {:unsupported, :with_statement}}
+      {:error, _} = error -> error
+    end
+  end
+
   def compile(%AST.EmptyStatement{}, _scope, instructions, constants, _opts, _callbacks),
     do: {:ok, instructions, constants}
 

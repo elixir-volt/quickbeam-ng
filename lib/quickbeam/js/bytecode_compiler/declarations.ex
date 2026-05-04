@@ -94,6 +94,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
     declare_statements(rest, Scope.declare_local(scope, name))
   end
 
+  defp declare_statements([%AST.WithStatement{body: body} | rest], scope) do
+    scope = Scope.declare_local(scope, "<with_obj>")
+    scope = declare_nested_var_bindings(body, scope)
+    declare_statements(rest, scope)
+  end
+
   defp declare_statements([statement | rest], scope) do
     scope = declare_nested_var_bindings(statement, scope)
     declare_statements(rest, scope)
