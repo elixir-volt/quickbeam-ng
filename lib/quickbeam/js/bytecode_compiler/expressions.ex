@@ -289,6 +289,83 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         %AST.AssignmentExpression{
           operator: "=",
           left: %AST.MemberExpression{
+            object: %AST.Identifier{name: "super"},
+            property: %AST.Identifier{name: property},
+            computed: false
+          },
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    {key_instr, constants} = add_constant(property, constants)
+
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(
+             right,
+             scope,
+             instructions ++
+               [:push_this, :dup, {:get_field, "__proto__"}, {:get_field, "__proto__"}, key_instr],
+             constants
+           ) do
+      {:ok, instructions ++ [:put_super_value, :undefined], constants}
+    end
+  end
+
+  def compile(
+        %AST.AssignmentExpression{
+          operator: operator,
+          left: %AST.MemberExpression{
+            object: %AST.Identifier{name: "super"},
+            property: %AST.Identifier{name: property},
+            computed: false
+          },
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      )
+      when operator != "=" do
+    with {:ok, op} <- Operators.compound(operator) do
+      {key_instr, constants} = add_constant(property, constants)
+
+      super_prefix = [
+        :push_this,
+        :dup,
+        {:get_field, "__proto__"},
+        {:get_field, "__proto__"},
+        key_instr
+      ]
+
+      with {:ok, instructions, constants} <-
+             callbacks.compile_expression.(
+               right,
+               scope,
+               instructions ++
+                 super_prefix ++
+                 [
+                   :push_this,
+                   :dup,
+                   {:get_field, "__proto__"},
+                   {:get_field, "__proto__"},
+                   key_instr,
+                   :get_super_value
+                 ],
+               constants
+             ) do
+        {:ok, instructions ++ [op, :put_super_value, :undefined], constants}
+      end
+    end
+  end
+
+  def compile(
+        %AST.AssignmentExpression{
+          operator: "=",
+          left: %AST.MemberExpression{
             object: object,
             property: %AST.Identifier{name: property},
             computed: false
