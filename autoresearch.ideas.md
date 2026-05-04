@@ -1,14 +1,14 @@
 ## Remaining 6 failures (92→6, -93.5%)
 
-### Unsupported (2)
-- `with(o){ delete x; }` — needs with-scope semantics (`with_get_var`, `with_put_var`, `with_delete_var`)
-- `test/vm/test_language.js` — needs declarations for AssignmentPattern defaults in function params, `async` class fields in factory path
+### Unsupported (1)
+- `with(o){ delete x; }` — needs with-scope semantics: transform all variable accesses in body to `with_get_var`/`with_put_var`/`with_delete_var` with fallback targets. Interpreter already handles the opcodes.
 
-### Mismatches (4)
-- `Symbol.iterator` custom iterable — interpreter+BEAM correct (3), but native_load fails ("not a function" — for_of_start uses internal atom lookup for Symbol.iterator)
-- `eval('arguments[0]')` — inherent limitation of indirect eval (no access to caller scope)
-- Computed super destructuring `({[p]: super.x} = {a:1})` — native load fails (atom reference leak in bytecode writer)
-- Derived constructor `super(); return {x:1}` — factory path can't mark is_derived_class_constructor, needs super() in define_class path
+### Mismatches (5)
+- `Symbol.iterator` — interpreter+BEAM correct but native_load fails (native for_of_start uses internal atom JS_ATOM_Symbol_iterator which doesn't match our computed property key)
+- `eval('arguments[0]')` — inherent indirect eval limitation
+- Computed super destructuring `({[p]: super.x} = {a:1})` — interpreter+BEAM correct but native returns nil (subtle bytecode stack issue)
+- Derived constructor `super(); return {x:1}` — all paths fail (super() via get_var doesn't resolve, factory path can't mark is_derived_class_constructor)
+- `test_language.js` — compiles but assertion mismatch (stubbed functions return undefined vs oracle errors on `gc`)
 
-### All 4 mismatches blocked by native_load issues
-Interpreter and BEAM compiler now produce correct results for 2/4 mismatch cases (Symbol.iterator, possibly computed super). The metric doesn't improve because native_load must also match.
+### Hardest wall: native_load compatibility
+3/5 mismatches are because native QuickJS interprets our bytecode differently (Symbol atoms, stack layouts, super semantics). These are fundamental native compatibility issues.
