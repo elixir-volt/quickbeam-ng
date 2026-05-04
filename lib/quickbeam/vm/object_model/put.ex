@@ -426,7 +426,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           _ -> {:accessor, nil, fun}
         end
 
-      Map.put(map, key, desc)
+      result = Map.put(map, key, desc)
+      result
     end)
   end
 

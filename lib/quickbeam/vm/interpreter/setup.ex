@@ -32,7 +32,8 @@ defmodule QuickBEAM.VM.Interpreter.Setup do
     Heap.put_fn_atoms(fun, atoms)
 
     for %Bytecode.Function{} = inner <- fun.constants do
-      store_function_atoms(inner, atoms)
+      inner_atoms = if inner.atoms && inner.atoms != {}, do: inner.atoms, else: atoms
+      store_function_atoms(inner, inner_atoms)
     end
 
     :ok

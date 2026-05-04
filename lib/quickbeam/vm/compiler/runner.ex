@@ -76,7 +76,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
     normalized_args = normalize_args(args, fun.arg_count)
 
     case Heap.get_compiled(key) do
-      {:compiled, {mod, name}, atoms} ->
+      {:compiled, {mod, name}, _cached_atoms} ->
         ctx = invocation_ctx(base_ctx, current_func, args, ctx_overrides, fun, atoms)
         {:ok, invoke_compiled(fun, {mod, name}, ctx, normalized_args)}
 
