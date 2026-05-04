@@ -149,6 +149,29 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   end
 
   def compile(
+        %AST.BinaryExpression{
+          operator: "in",
+          left: %AST.PrivateIdentifier{name: pname},
+          right: right
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    case Scope.resolve(scope, "##{pname}") do
+      {:var_ref, idx} ->
+        with {:ok, instructions, constants} <-
+               callbacks.compile_expression.(right, scope, instructions, constants) do
+          {:ok, instructions ++ [{:get_var_ref_check, idx}, :private_in], constants}
+        end
+
+      _ ->
+        {:error, {:unsupported, :private_in}}
+    end
+  end
+
+  def compile(
         %AST.BinaryExpression{operator: operator, left: left, right: right},
         scope,
         instructions,
