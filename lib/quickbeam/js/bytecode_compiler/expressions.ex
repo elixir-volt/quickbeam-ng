@@ -1161,6 +1161,37 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   defp compile_destructuring_target(
          key,
          %AST.MemberExpression{
+           object: %AST.Identifier{name: "super"},
+           property: %AST.Identifier{name: prop},
+           computed: false
+         },
+         _scope,
+         instructions,
+         constants,
+         _callbacks
+       ) do
+    {prop_instr, constants} = add_constant(prop, constants)
+
+    {:ok,
+     instructions ++
+       [
+         :dup,
+         {:get_field, key},
+         :push_this,
+         :dup,
+         {:get_field, "__proto__"},
+         {:get_field, "__proto__"},
+         prop_instr,
+         :perm4,
+         :perm4,
+         :swap,
+         :put_super_value
+       ], constants}
+  end
+
+  defp compile_destructuring_target(
+         key,
+         %AST.MemberExpression{
            object: %AST.Identifier{name: obj_name},
            property: %AST.Identifier{name: prop_name},
            computed: false
@@ -1236,39 +1267,41 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
     end
   end
 
-  defp compile_destructuring_target(
-         key,
+  defp compile_destructuring_target(_key, _target, _scope, _instructions, _constants, _callbacks),
+    do: {:error, {:unsupported, :assignment_expression}}
+
+  defp compile_computed_destructuring_target(
+         computed_key,
          %AST.MemberExpression{
            object: %AST.Identifier{name: "super"},
            property: %AST.Identifier{name: prop},
            computed: false
          },
-         _scope,
+         scope,
          instructions,
          constants,
-         _callbacks
+         callbacks
        ) do
     {prop_instr, constants} = add_constant(prop, constants)
 
-    {:ok,
-     instructions ++
-       [
-         :dup,
-         {:get_field, key},
-         :push_this,
-         :dup,
-         {:get_field, "__proto__"},
-         {:get_field, "__proto__"},
-         prop_instr,
-         :perm4,
-         :perm4,
-         :swap,
-         :put_super_value
-       ], constants}
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(computed_key, scope, instructions ++ [:dup], constants) do
+      {:ok,
+       instructions ++
+         [
+           :get_array_el,
+           :push_this,
+           :dup,
+           {:get_field, "__proto__"},
+           {:get_field, "__proto__"},
+           prop_instr,
+           :perm4,
+           :perm4,
+           :swap,
+           :put_super_value
+         ], constants}
+    end
   end
-
-  defp compile_destructuring_target(_key, _target, _scope, _instructions, _constants, _callbacks),
-    do: {:error, {:unsupported, :assignment_expression}}
 
   defp compile_computed_destructuring_target(
          computed_key,
@@ -1334,39 +1367,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         # Stack: [index, target, value, rhs_obj, ...]
         {:ok, instructions ++ [:perm3, :swap, :put_array_el], constants}
       end
-    end
-  end
-
-  defp compile_computed_destructuring_target(
-         computed_key,
-         %AST.MemberExpression{
-           object: %AST.Identifier{name: "super"},
-           property: %AST.Identifier{name: prop},
-           computed: false
-         },
-         scope,
-         instructions,
-         constants,
-         callbacks
-       ) do
-    {prop_instr, constants} = add_constant(prop, constants)
-
-    with {:ok, instructions, constants} <-
-           callbacks.compile_expression.(computed_key, scope, instructions ++ [:dup], constants) do
-      {:ok,
-       instructions ++
-         [
-           :get_array_el,
-           :push_this,
-           :dup,
-           {:get_field, "__proto__"},
-           {:get_field, "__proto__"},
-           prop_instr,
-           :perm4,
-           :perm4,
-           :swap,
-           :put_super_value
-         ], constants}
     end
   end
 
