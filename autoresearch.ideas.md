@@ -1,9 +1,9 @@
 - Add Test262-derived executable windows for broader coverage.
 - Direct eval with scope access (1 mismatch): `eval('arguments[0]')` needs caller scope.
-- Derived constructor return object (1 mismatch): stub class returns empty object.
-- Super-write (5 unsupported): put_super_value works in interpreter+compiler after accessor fix, but native load needs define_class infrastructure. The factory approach can't produce QuickJS-compatible class hierarchies.
+- Derived constructor return object (1 mismatch): define_class constructor with `super(); return {x:1}` fails.
+- Super postincrement (1 unsupported): `super.x++` needs complex stack manipulation for post_inc + put_super_value.
+- Super destructuring targets (2 unsupported): `({a: super.x} = ...)` needs put_super_value in destructuring path.
 - Private class fields (3 class_element) + private method/getter keys (2 object_property_key) = 5 private unsupported.
-- `instanceof` (1): class factories lack real prototypes.
-- `Symbol.iterator` (1): custom iterable for-of needs iterator protocol.
+- `Symbol.iterator` (1 unsupported): custom iterable for-of needs iterator protocol.
 - `with(o){ delete x; }` parse error (1).
 - `test/vm/test_language.js` throw_statement (1): full JS file.
