@@ -2093,6 +2093,47 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
   end
 
   defp compile_object_pattern_property(
+         %AST.Property{
+           computed: false,
+           key: %AST.Identifier{name: key},
+           value: %AST.AssignmentPattern{
+             left: %AST.Identifier{name: name},
+             right: default_expr
+           }
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks,
+         keep_object?
+       ) do
+    case callbacks.resolve.(scope, name) do
+      {:loc, loc} ->
+        prefix = if keep_object?, do: [:dup], else: []
+        done_label = callbacks.unique_label.(:default_done)
+
+        with {:ok, default_instructions, constants} <-
+               callbacks.compile_expression.(default_expr, scope, [], constants) do
+          {:ok,
+           instructions ++
+             prefix ++
+             [
+               {:get_field, key},
+               :dup,
+               :undefined,
+               :strict_eq,
+               {:jump_if_false, done_label},
+               :drop
+             ] ++
+             default_instructions ++ [{:label, done_label}, {:put_loc, loc}], constants}
+        end
+
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
+    end
+  end
+
+  defp compile_object_pattern_property(
          %AST.Property{} = property,
          _scope,
          _instructions,
