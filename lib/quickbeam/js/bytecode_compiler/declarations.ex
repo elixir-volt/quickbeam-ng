@@ -24,7 +24,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
          [%AST.ClassDeclaration{id: %AST.Identifier{name: name}} | rest],
          scope
        ) do
-    declare_statements(rest, Scope.declare_local(scope, name))
+    scope = scope |> Scope.declare_local(name) |> Scope.declare_local("<class_proto:#{name}>")
+    declare_statements(rest, scope)
   end
 
   defp declare_statements(

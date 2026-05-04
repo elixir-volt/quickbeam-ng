@@ -171,44 +171,20 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         _opts,
         callbacks
       ) do
-    {instance_body, static_body} = Enum.split_with(body, &(!static_member?(&1)))
+    case compile_class_define(name, super_class, body, scope, instructions, constants, callbacks) do
+      {:ok, _, _} = ok ->
+        ok
 
-    excluded = MapSet.new([name, super_class_name(super_class)])
-
-    with {:loc, loc} <- callbacks.resolve.(scope, name),
-         {:ok, factory} <- class_factory(name, super_class, instance_body) do
-      captures =
-        factory
-        |> Captures.captured_names(scope)
-        |> Enum.reject(&MapSet.member?(excluded, &1))
-
-      factory = Captures.prepend_params(factory, captures)
-
-      with {:ok, function} <- callbacks.compile_function.(factory, name) do
-        instructions = instructions ++ [{:closure, length(constants)}]
-        constants = [function | constants]
-
-        {:ok, instructions, constants} =
-          if captures == [] do
-            {:ok, instructions, constants}
-          else
-            Captures.bind(captures, scope, instructions, constants)
-          end
-
-        base_instructions =
-          instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}]
-
-        compile_static_members(static_body, name, scope, base_instructions, constants, callbacks)
-      end
-    else
-      :error ->
-        {:error, {:unsupported, {:unresolved_identifier, name}}}
-
-      {:error, {:unsupported, :class_constructor_body}} ->
-        compile_stub_class(name, scope, instructions, constants, callbacks)
-
-      {:error, _} = error ->
-        error
+      {:error, _} ->
+        compile_class_factory_fallback(
+          name,
+          super_class,
+          body,
+          scope,
+          instructions,
+          constants,
+          callbacks
+        )
     end
   end
 
@@ -723,6 +699,235 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
        [function | constants]}
     end
   end
+
+  defp compile_class_factory_fallback(
+         name,
+         super_class,
+         body,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    {instance_body, static_body} = Enum.split_with(body, &(!static_member?(&1)))
+    excluded = MapSet.new([name, super_class_name(super_class)])
+
+    with {:loc, loc} <- callbacks.resolve.(scope, name),
+         {:ok, factory} <- class_factory(name, super_class, instance_body) do
+      captures =
+        factory
+        |> Captures.captured_names(scope)
+        |> Enum.reject(&MapSet.member?(excluded, &1))
+
+      factory = Captures.prepend_params(factory, captures)
+
+      with {:ok, function} <- callbacks.compile_function.(factory, name) do
+        instructions = instructions ++ [{:closure, length(constants)}]
+        constants = [function | constants]
+
+        {:ok, instructions, constants} =
+          if captures == [] do
+            {:ok, instructions, constants}
+          else
+            Captures.bind(captures, scope, instructions, constants)
+          end
+
+        base_instructions =
+          instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}]
+
+        compile_static_members(static_body, name, scope, base_instructions, constants, callbacks)
+      end
+    else
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
+
+      {:error, {:unsupported, :class_constructor_body}} ->
+        compile_stub_class(name, scope, instructions, constants, callbacks)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp compile_class_define(name, super_class, body, scope, instructions, constants, callbacks) do
+    with {:loc, loc} <- callbacks.resolve.(scope, name),
+         {:loc, proto_loc} <- callbacks.resolve.(scope, "<class_proto:#{name}>"),
+         {:ok, ctor_fn} <- compile_class_ctor(body, name, callbacks) do
+      flags = if super_class, do: 1, else: 0
+
+      parent =
+        case super_class do
+          %AST.Identifier{name: p} -> [{:get_var, p}]
+          _ -> [:undefined]
+        end
+
+      instructions =
+        instructions ++
+          [{:set_loc_uninitialized, loc}] ++
+          parent ++
+          [
+            {:set_loc_uninitialized, proto_loc},
+            {:constant, length(constants)},
+            {:define_class, name, flags}
+          ]
+
+      constants = [ctor_fn | constants]
+      {methods, statics} = partition_class_body(body)
+
+      with {:ok, instructions, constants} <-
+             emit_define_methods(methods, scope, instructions, constants, callbacks) do
+        instructions =
+          instructions ++
+            [
+              :undefined,
+              {:put_loc, proto_loc},
+              :drop,
+              {:set_loc, loc},
+              {:close_loc, proto_loc},
+              {:put_var, name}
+            ]
+
+        emit_define_statics(statics, loc, scope, instructions, constants, callbacks)
+      end
+    end
+  end
+
+  defp compile_class_ctor(body, name, callbacks) do
+    case Enum.find(body, &match?(%AST.MethodDefinition{kind: :constructor}, &1)) do
+      %AST.MethodDefinition{value: v} ->
+        callbacks.compile_function.(v, name)
+
+      nil ->
+        callbacks.compile_function.(
+          %AST.FunctionExpression{
+            type: :function_expression,
+            id: nil,
+            params: [],
+            body: %AST.BlockStatement{type: :block_statement, body: []},
+            async: false,
+            generator: false
+          },
+          name
+        )
+    end
+  end
+
+  defp partition_class_body(body) do
+    Enum.reduce(body, {[], []}, fn
+      %AST.MethodDefinition{kind: :constructor}, acc -> acc
+      %AST.MethodDefinition{static: false} = m, {ms, ss} -> {[m | ms], ss}
+      %AST.MethodDefinition{static: true} = m, {ms, ss} -> {ms, [m | ss]}
+      %AST.FieldDefinition{static: true} = f, {ms, ss} -> {ms, [f | ss]}
+      _, acc -> acc
+    end)
+    |> then(fn {m, s} -> {Enum.reverse(m), Enum.reverse(s)} end)
+  end
+
+  defp emit_define_methods([], _s, i, c, _cb), do: {:ok, i, c}
+
+  defp emit_define_methods([m | rest], s, i, c, cb) do
+    with {:ok, i, c} <- emit_define_method(m, s, i, c, cb),
+         do: emit_define_methods(rest, s, i, c, cb)
+  end
+
+  defp emit_define_method(
+         %AST.MethodDefinition{kind: k, computed: false, key: %AST.Identifier{name: n}, value: v},
+         _s,
+         i,
+         c,
+         cb
+       ) do
+    flags =
+      case k do
+        :get -> 1
+        :set -> 2
+        _ -> 0
+      end
+
+    with {:ok, f} <- cb.compile_function.(v, n) do
+      home = if f.need_home_object, do: [:set_home_object], else: []
+      {:ok, i ++ [{:closure, length(c)}] ++ home ++ [{:define_method, n, flags}], [f | c]}
+    end
+  end
+
+  defp emit_define_method(
+         %AST.MethodDefinition{kind: k, computed: true, key: key, value: v},
+         s,
+         i,
+         c,
+         cb
+       ) do
+    flags =
+      case k do
+        :get -> 1
+        :set -> 2
+        _ -> 0
+      end
+
+    with {:ok, i, c} <- cb.compile_expression.(key, s, i, c),
+         {:ok, f} <- cb.compile_function.(v, nil) do
+      {:ok, i ++ [{:closure, length(c)}, {:define_method_computed, flags}], [f | c]}
+    end
+  end
+
+  defp emit_define_method(_, _, _, _, _), do: {:error, {:unsupported, :class_element}}
+
+  defp emit_define_statics([], _l, _s, i, c, _cb), do: {:ok, i, c}
+
+  defp emit_define_statics([m | rest], l, s, i, c, cb) do
+    with {:ok, i, c} <- emit_define_static(m, l, s, i, c, cb),
+         do: emit_define_statics(rest, l, s, i, c, cb)
+  end
+
+  defp emit_define_static(
+         %AST.MethodDefinition{
+           static: true,
+           computed: false,
+           key: %AST.Identifier{name: n},
+           value: v
+         },
+         l,
+         _s,
+         i,
+         c,
+         cb
+       ) do
+    with {:ok, f} <- cb.compile_function.(v, n),
+         do: {:ok, i ++ [{:get_loc, l}, {:closure, length(c)}, {:put_field, n}], [f | c]}
+  end
+
+  defp emit_define_static(
+         %AST.MethodDefinition{static: true, computed: true, key: key, value: v},
+         l,
+         s,
+         i,
+         c,
+         cb
+       ) do
+    with {:ok, i, c} <- cb.compile_expression.(key, s, i ++ [{:get_loc, l}], c),
+         {:ok, f} <- cb.compile_function.(v, nil) do
+      {:ok, i ++ [{:closure, length(c)}, :define_array_el, :drop], [f | c]}
+    end
+  end
+
+  defp emit_define_static(
+         %AST.FieldDefinition{
+           static: true,
+           computed: false,
+           key: %AST.Identifier{name: n},
+           value: v
+         },
+         l,
+         s,
+         i,
+         c,
+         cb
+       ) do
+    with {:ok, i, c} <- cb.compile_expression.(v, s, i ++ [{:get_loc, l}], c),
+         do: {:ok, i ++ [{:put_field, n}], c}
+  end
+
+  defp emit_define_static(_, _, _, _, _, _), do: {:error, {:unsupported, :class_element}}
 
   defp nameable_expression?(%AST.FunctionExpression{id: nil}), do: true
   defp nameable_expression?(%AST.ArrowFunctionExpression{}), do: true

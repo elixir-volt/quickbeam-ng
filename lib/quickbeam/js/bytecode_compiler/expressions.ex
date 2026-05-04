@@ -55,6 +55,31 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
   def compile(%AST.Identifier{name: "this"}, _scope, instructions, constants, _callbacks),
     do: {:ok, instructions ++ [:push_this], constants}
 
+  def compile(
+        %AST.MemberExpression{
+          object: %AST.Identifier{name: "super"},
+          property: %AST.Identifier{name: prop},
+          computed: false
+        },
+        _scope,
+        instructions,
+        constants,
+        _callbacks
+      ) do
+    {key_instr, constants} = add_constant(prop, constants)
+
+    {:ok,
+     instructions ++
+       [
+         :push_this,
+         :dup,
+         {:get_field, "__proto__"},
+         {:get_field, "__proto__"},
+         key_instr,
+         :get_super_value
+       ], constants}
+  end
+
   def compile(%AST.Identifier{name: "undefined"}, _scope, instructions, constants, _callbacks),
     do: {:ok, instructions ++ [:undefined], constants}
 
@@ -723,6 +748,45 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
          [{:constant, length(constants)}] ++
          expr_instructions ++
          [call_op], [template_constant | constants]}
+    end
+  end
+
+  def compile(
+        %AST.CallExpression{
+          callee: %AST.MemberExpression{
+            object: %AST.Identifier{name: "super"},
+            property: %AST.Identifier{name: property},
+            computed: false
+          },
+          arguments: args
+        },
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    {key_instr, constants} = add_constant(property, constants)
+
+    with {:ok, args} <- expand_call_args(args),
+         {:ok, instructions, constants} <-
+           compile_call_args(
+             args,
+             scope,
+             instructions ++
+               [
+                 :push_this,
+                 :dup,
+                 {:get_field, "__proto__"},
+                 {:get_field, "__proto__"},
+                 key_instr,
+                 :get_super_value,
+                 :push_this,
+                 :swap
+               ],
+             constants,
+             callbacks
+           ) do
+      {:ok, instructions ++ [{:call_method, length(args)}], constants}
     end
   end
 

@@ -46,6 +46,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
       {:put_field, name} -> [name]
       {:set_name, name} -> [name]
       {:define_method, name, _flags} -> [name]
+      {:define_class, name, _flags} -> [name]
       {:throw_error, _type, atom_idx} -> [atom_idx]
       _ -> []
     end)
@@ -116,6 +117,9 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
 
   defp instruction_size({:throw_error, _type, _atom}, _width), do: 6
   defp instruction_size({:define_method, _name, _flags}, _width), do: 6
+  defp instruction_size({:define_class, _name, _flags}, _width), do: 6
+  defp instruction_size({:close_loc, _idx}, _width), do: 3
+  defp instruction_size({:set_loc_uninitialized, _idx}, _width), do: 3
 
   defp instruction_size(instruction, _width), do: byte_size(encode_instruction(instruction))
 
@@ -313,6 +317,23 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
 
   defp encode_instruction(:drop, _atoms), do: <<Opcodes.num(:drop)>>
   defp encode_instruction(:set_proto, _atoms), do: <<Opcodes.num(:set_proto)>>
+  defp encode_instruction(:get_super_value, _atoms), do: <<Opcodes.num(:get_super_value)>>
+  defp encode_instruction(:put_super_value, _atoms), do: <<Opcodes.num(:put_super_value)>>
+  defp encode_instruction(:set_home_object, _atoms), do: <<Opcodes.num(:set_home_object)>>
+  defp encode_instruction(:check_ctor, _atoms), do: <<Opcodes.num(:check_ctor)>>
+  defp encode_instruction(:instanceof, _atoms), do: <<Opcodes.num(:instanceof)>>
+
+  defp encode_instruction({:define_class, name, flags}, atoms),
+    do: <<Opcodes.num(:define_class), atom_index!(atoms, name)::little-32, flags>>
+
+  defp encode_instruction({:define_method_computed, flags}, _atoms),
+    do: <<Opcodes.num(:define_method_computed), flags>>
+
+  defp encode_instruction({:close_loc, idx}, _atoms),
+    do: <<Opcodes.num(:close_loc), idx::little-16>>
+
+  defp encode_instruction({:set_loc_uninitialized, idx}, _atoms),
+    do: <<Opcodes.num(:set_loc_uninitialized), idx::little-16>>
 
   defp encode_instruction({:set_name, name}, atoms),
     do: <<Opcodes.num(:set_name), atom_index!(atoms, name)::little-32>>
@@ -382,6 +403,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp stack_effect({:put_field, _name}), do: {2, 0}
   defp stack_effect({:set_name, _name}), do: {1, 1}
   defp stack_effect({:define_method, _name, _flags}), do: {2, 1}
+  defp stack_effect({:define_class, _name, _flags}), do: {2, 2}
+  defp stack_effect({:define_method_computed, _flags}), do: {3, 1}
+  defp stack_effect({:close_loc, _idx}), do: {0, 0}
+  defp stack_effect({:set_loc_uninitialized, _idx}), do: {0, 0}
+  defp stack_effect(:set_home_object), do: {2, 2}
+  defp stack_effect(:check_ctor), do: {0, 0}
   defp stack_effect(:set_name_computed), do: {2, 2}
   defp stack_effect({:catch, _label}), do: {0, 1}
   defp stack_effect({:gosub, _label}), do: {0, 0}
