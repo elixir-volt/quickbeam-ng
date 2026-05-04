@@ -47,6 +47,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
       {:set_name, name} -> [name]
       {:define_method, name, _flags} -> [name]
       {:define_class, name, _flags} -> [name]
+      {:private_symbol, name} -> [name]
       {:throw_error, _type, atom_idx} -> [atom_idx]
       _ -> []
     end)
@@ -117,6 +118,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
 
   defp instruction_size({:throw_error, _type, _atom}, _width), do: 6
   defp instruction_size({:define_method, _name, _flags}, _width), do: 6
+  defp instruction_size({:private_symbol, _name}, _width), do: 5
   defp instruction_size({:define_class, _name, _flags}, _width), do: 6
   defp instruction_size({:close_loc, _idx}, _width), do: 3
   defp instruction_size({:set_loc_uninitialized, _idx}, _width), do: 3
@@ -322,6 +324,17 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp encode_instruction(:put_super_value, _atoms), do: <<Opcodes.num(:put_super_value)>>
   defp encode_instruction(:set_home_object, _atoms), do: <<Opcodes.num(:set_home_object)>>
   defp encode_instruction(:check_ctor, _atoms), do: <<Opcodes.num(:check_ctor)>>
+  defp encode_instruction(:add_brand, _atoms), do: <<Opcodes.num(:add_brand)>>
+  defp encode_instruction(:check_brand, _atoms), do: <<Opcodes.num(:check_brand)>>
+  defp encode_instruction(:get_private_field, _atoms), do: <<Opcodes.num(:get_private_field)>>
+  defp encode_instruction(:put_private_field, _atoms), do: <<Opcodes.num(:put_private_field)>>
+
+  defp encode_instruction(:define_private_field, _atoms),
+    do: <<Opcodes.num(:define_private_field)>>
+
+  defp encode_instruction({:private_symbol, name}, atoms),
+    do: <<Opcodes.num(:private_symbol), atom_index!(atoms, name)::little-32>>
+
   defp encode_instruction(:instanceof, _atoms), do: <<Opcodes.num(:instanceof)>>
 
   defp encode_instruction({:define_class, name, flags}, atoms),
@@ -410,6 +423,12 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Assembler do
   defp stack_effect({:set_loc_uninitialized, _idx}), do: {0, 0}
   defp stack_effect(:set_home_object), do: {2, 2}
   defp stack_effect(:check_ctor), do: {0, 0}
+  defp stack_effect(:add_brand), do: {2, 0}
+  defp stack_effect(:check_brand), do: {2, 2}
+  defp stack_effect(:get_private_field), do: {2, 1}
+  defp stack_effect(:put_private_field), do: {3, 0}
+  defp stack_effect(:define_private_field), do: {3, 1}
+  defp stack_effect({:private_symbol, _name}), do: {0, 1}
   defp stack_effect(:set_name_computed), do: {2, 2}
   defp stack_effect({:catch, _label}), do: {0, 1}
   defp stack_effect({:gosub, _label}), do: {0, 0}
