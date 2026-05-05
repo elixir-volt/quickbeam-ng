@@ -1,7 +1,7 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
+defmodule QuickBEAM.JS.Compiler.Expressions do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Captures, Emitter, Operators, Scope, Slots, Statements}
+  alias QuickBEAM.JS.Compiler.{Captures, Emitter, Operators, Scope, Slots, Statements}
   alias QuickBEAM.JS.Parser.AST
 
   def compile(expression, %Emitter{} = emitter) do
@@ -72,7 +72,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         _callbacks
       ) do
-    private_kinds = Process.get(:bytecode_compiler_private_kinds) || %{}
+    private_kinds = Process.get(:compiler_private_kinds) || %{}
 
     case Scope.resolve(scope, "##{pname}") do
       {:var_ref, idx} ->
@@ -240,7 +240,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       ) do
-    case Process.get(:bytecode_compiler_with_loc) do
+    case Process.get(:compiler_with_loc) do
       nil ->
         result = callbacks_delete_identifier_result(scope, name)
         {:ok, instructions ++ [result], constants}
@@ -1113,7 +1113,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         constants,
         callbacks
       ) do
-    case Process.get(:bytecode_compiler_super_class) do
+    case Process.get(:compiler_super_class) do
       %AST.Identifier{name: parent_name} ->
         with {:ok, args} <- expand_call_args(args),
              {:ok, instructions, constants} <-
@@ -1570,14 +1570,14 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
        do: {:error, {:unsupported, :assignment_expression}}
 
   defp compile_mutable_closure(expression, captures, instructions, constants, callbacks) do
-    parent_var_refs = Process.get(:bytecode_compiler_var_refs, %{})
+    parent_var_refs = Process.get(:compiler_var_refs, %{})
 
     capture_var_refs =
       captures
       |> Enum.with_index(map_size(parent_var_refs))
       |> Map.new(fn {name, idx} -> {name, idx} end)
 
-    Process.put(:bytecode_compiler_var_refs, Map.merge(parent_var_refs, capture_var_refs))
+    Process.put(:compiler_var_refs, Map.merge(parent_var_refs, capture_var_refs))
 
     closure_vars =
       Enum.map(captures, fn name ->
@@ -1591,17 +1591,17 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Expressions do
         }
       end)
 
-    prev_closure_scope = Process.get(:bytecode_compiler_closure_scope)
-    Process.put(:bytecode_compiler_closure_scope, capture_var_refs)
+    prev_closure_scope = Process.get(:compiler_closure_scope)
+    Process.put(:compiler_closure_scope, capture_var_refs)
 
     case callbacks.compile_function.(expression, function_name(expression.id)) do
       {:ok, function} ->
-        Process.put(:bytecode_compiler_closure_scope, prev_closure_scope)
+        Process.put(:compiler_closure_scope, prev_closure_scope)
         function = %{function | closure_vars: closure_vars}
         {:ok, instructions ++ [{:closure, length(constants)}], [function | constants]}
 
       {:error, _} = error ->
-        Process.put(:bytecode_compiler_closure_scope, prev_closure_scope)
+        Process.put(:compiler_closure_scope, prev_closure_scope)
         error
     end
   end

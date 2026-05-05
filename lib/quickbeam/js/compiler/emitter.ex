@@ -1,4 +1,4 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Emitter do
+defmodule QuickBEAM.JS.Compiler.Emitter do
   @moduledoc false
 
   defstruct [:scope, :callbacks, instructions: [], constants: []]

@@ -1,4 +1,4 @@
-Code.require_file("../test/support/js_bytecode_compiler_audit.ex", __DIR__)
+Code.require_file("../test/support/js_compiler_audit.ex", __DIR__)
 
 frontier_cases = [
   {"block let shadowing inner", "let x = 1; { let x = 2; x }"},
@@ -27,41 +27,37 @@ frontier_cases = [
   {"for in object", "let o = {a: 1, b: 2}; let s = ''; for (let k in o) { s = s + k; } s.length"}
 ]
 
-results = QuickBEAM.JS.BytecodeCompilerAudit.run(frontier_cases)
-summary = QuickBEAM.JS.BytecodeCompilerAudit.summary(results)
+results = QuickBEAM.JS.CompilerAudit.run(frontier_cases)
+summary = QuickBEAM.JS.CompilerAudit.summary(results)
 
 failures = summary.failures
 mismatches = summary.mismatches
 unsupported = summary.unsupported
 compiled = summary.compiled
-native_loadable = summary.native_loadable
 cases = summary.cases
 
 IO.puts(
-  "js_bytecode_frontier_cases=#{cases} " <>
-    "js_bytecode_frontier_compiled=#{compiled} " <>
-    "js_bytecode_frontier_unsupported=#{unsupported} " <>
-    "js_bytecode_frontier_mismatches=#{mismatches} " <>
-    "js_bytecode_frontier_native_loadable=#{native_loadable} " <>
-    "js_bytecode_frontier_failures=#{failures}"
+  "js_compiler_frontier_cases=#{cases} " <>
+    "js_compiler_frontier_compiled=#{compiled} " <>
+    "js_compiler_frontier_unsupported=#{unsupported} " <>
+    "js_compiler_frontier_mismatches=#{mismatches} " <>
+    "js_compiler_frontier_failures=#{failures}"
 )
 
 results
 |> Enum.reject(&(&1.status == :pass))
-|> Enum.take(String.to_integer(System.get_env("JS_BYTECODE_FRONTIER_FAILURE_LIMIT", "12")))
+|> Enum.take(String.to_integer(System.get_env("JS_COMPILER_FRONTIER_FAILURE_LIMIT", "12")))
 |> Enum.each(fn result ->
-  IO.puts("JS_BYTECODE_FRONTIER_#{String.upcase(to_string(result.status))} #{result.name}")
+  IO.puts("JS_COMPILER_FRONTIER_#{String.upcase(to_string(result.status))} #{result.name}")
   IO.puts("  source=#{result.source}")
   IO.puts("  expected=#{inspect(Map.get(result, :expected))}")
   IO.puts("  interpreter=#{inspect(Map.get(result, :interpreter))}")
   IO.puts("  compiler=#{inspect(Map.get(result, :compiler))}")
-  IO.puts("  native_load=#{inspect(Map.get(result, :native_load))}")
   IO.puts("  reason=#{inspect(Map.get(result, :reason))}")
 end)
 
-IO.puts("METRIC js_bytecode_frontier_cases=#{cases}")
-IO.puts("METRIC js_bytecode_frontier_compiled=#{compiled}")
-IO.puts("METRIC js_bytecode_frontier_unsupported=#{unsupported}")
-IO.puts("METRIC js_bytecode_frontier_mismatches=#{mismatches}")
-IO.puts("METRIC js_bytecode_frontier_native_loadable=#{native_loadable}")
-IO.puts("METRIC js_bytecode_frontier_failures=#{failures}")
+IO.puts("METRIC js_compiler_frontier_cases=#{cases}")
+IO.puts("METRIC js_compiler_frontier_compiled=#{compiled}")
+IO.puts("METRIC js_compiler_frontier_unsupported=#{unsupported}")
+IO.puts("METRIC js_compiler_frontier_mismatches=#{mismatches}")
+IO.puts("METRIC js_compiler_frontier_failures=#{failures}")

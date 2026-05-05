@@ -1,8 +1,9 @@
-defmodule QuickBEAM.JS.BytecodeCompilerTest do
+defmodule QuickBEAM.JS.CompilerTest do
   use ExUnit.Case, async: true
 
-  alias QuickBEAM.JS.BytecodeCompiler
-  alias QuickBEAM.VM.{Compiler, Heap, Interpreter}
+  alias QuickBEAM.JS.Compiler, as: JSCompiler
+  alias QuickBEAM.VM.{Heap, Interpreter}
+  alias QuickBEAM.VM.Compiler, as: VMCompiler
 
   describe "compile/1" do
     test "compiles arithmetic expression scripts" do
@@ -245,15 +246,15 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
       assert_compiles_to("let a=[function(){return 4}]; a[0]()", 4)
     end
 
-    test "does not materialize QuickJS bytecode binaries" do
-      assert {:error, {:unsupported, :quickjs_bytecode_materialization_removed}} =
-               BytecodeCompiler.compile_to_binary("function f(a){ return a + 1; } f(2)")
+    test "does not materialize binaries" do
+      assert {:error, {:unsupported, :binary_materialization_removed}} =
+               JSCompiler.compile_to_binary("function f(a){ return a + 1; } f(2)")
     end
 
     test "keeps the new frontend compiler separate from the VM compiler" do
-      assert {:ok, bytecode} = BytecodeCompiler.compile("1 + 2")
+      assert {:ok, bytecode} = JSCompiler.compile("1 + 2")
       assert %QuickBEAM.VM.Bytecode{} = bytecode
-      assert {:ok, 3} = Compiler.invoke(bytecode.value, [])
+      assert {:ok, 3} = VMCompiler.invoke(bytecode.value, [])
     end
 
     test "rewrites simple native QuickJS bytecode binaries" do
@@ -270,19 +271,19 @@ defmodule QuickBEAM.JS.BytecodeCompilerTest do
     end
 
     test "emits get_var for unresolved globals" do
-      assert {:ok, _bytecode} = BytecodeCompiler.compile("missing")
+      assert {:ok, _bytecode} = JSCompiler.compile("missing")
     end
   end
 
   defp assert_compiles_to(source, expected) do
     Task.async(fn ->
       Heap.reset()
-      assert {:ok, bytecode} = BytecodeCompiler.compile(source)
+      assert {:ok, bytecode} = JSCompiler.compile(source)
 
       assert {:ok, ^expected} =
                Interpreter.eval(bytecode.value, [], %{gas: 1_000_000}, bytecode.atoms)
 
-      assert {:ok, ^expected} = Compiler.invoke(bytecode.value, [])
+      assert {:ok, ^expected} = VMCompiler.invoke(bytecode.value, [])
     end)
     |> Task.await(30_000)
   end

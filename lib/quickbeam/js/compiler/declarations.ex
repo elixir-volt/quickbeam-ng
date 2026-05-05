@@ -1,7 +1,7 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Declarations do
+defmodule QuickBEAM.JS.Compiler.Declarations do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.Scope
+  alias QuickBEAM.JS.Compiler.Scope
   alias QuickBEAM.JS.Parser.AST
 
   def declare_program_locals(statements, scope), do: declare_statements(statements, scope)

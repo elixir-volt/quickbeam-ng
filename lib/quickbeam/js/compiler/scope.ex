@@ -1,4 +1,4 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Scope do
+defmodule QuickBEAM.JS.Compiler.Scope do
   @moduledoc false
 
   defstruct args: %{},

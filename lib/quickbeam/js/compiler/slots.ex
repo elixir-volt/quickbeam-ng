@@ -1,4 +1,4 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Slots do
+defmodule QuickBEAM.JS.Compiler.Slots do
   @moduledoc false
 
   def read({:arg, index}), do: {:get_arg, index}

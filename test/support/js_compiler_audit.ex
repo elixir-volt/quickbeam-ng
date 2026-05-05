@@ -1,8 +1,9 @@
-defmodule QuickBEAM.JS.BytecodeCompilerAudit do
+defmodule QuickBEAM.JS.CompilerAudit do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler
-  alias QuickBEAM.VM.{Bytecode, Compiler, Heap, Interpreter}
+  alias QuickBEAM.JS.Compiler, as: JSCompiler
+  alias QuickBEAM.VM.{Bytecode, Heap, Interpreter}
+  alias QuickBEAM.VM.Compiler, as: VMCompiler
   alias QuickBEAM.VM.Heap.Arrays
 
   def cases do
@@ -169,7 +170,6 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
       compiled: Map.get(frequencies, :pass, 0) + Map.get(frequencies, :mismatch, 0),
       unsupported: Map.get(frequencies, :unsupported, 0),
       mismatches: Map.get(frequencies, :mismatch, 0),
-      native_loadable: 0,
       failures: length(results) - Map.get(frequencies, :pass, 0)
     }
   end
@@ -210,7 +210,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
   end
 
   defp safe_compile(source) do
-    BytecodeCompiler.compile(source)
+    JSCompiler.compile(source)
   rescue
     exception ->
       {:error, {:compile_exception, exception.__struct__, Exception.message(exception)}}
@@ -237,7 +237,7 @@ defmodule QuickBEAM.JS.BytecodeCompilerAudit do
   end
 
   defp run_compiler(bytecode) do
-    safe_result(:compiler, fn -> normalize_result(Compiler.invoke(bytecode.value, [])) end)
+    safe_result(:compiler, fn -> normalize_result(VMCompiler.invoke(bytecode.value, [])) end)
   end
 
   defp safe_result(stage, fun) do

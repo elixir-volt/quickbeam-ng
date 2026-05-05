@@ -1,48 +1,44 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
+defmodule QuickBEAM.VM.Instructions do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.Assembler
-  alias QuickBEAM.VM.Bytecode.Function
-  alias QuickBEAM.VM.Bytecode.VarDef
+  alias QuickBEAM.VM.Opcodes
 
-  def build(opts) do
-    instructions = Keyword.fetch!(opts, :instructions)
-    args = Keyword.fetch!(opts, :args)
-    locals = Keyword.fetch!(opts, :locals)
-    extra_atoms = Assembler.atoms(instructions)
+  @op Opcodes.all_opcodes()
 
-    function = %Function{
-      name: Keyword.fetch!(opts, :name),
-      filename: "<elixir-bytecode-compiler>",
-      line_num: 1,
-      col_num: 1,
-      arg_count: length(args),
-      var_count: length(locals),
-      defined_arg_count: Keyword.get(opts, :defined_arg_count, length(args)),
-      stack_size: Assembler.stack_size(instructions),
-      locals: Keyword.get(opts, :local_defs, Enum.map(args ++ locals, &var_def/1)),
-      var_ref_count: Keyword.get(opts, :var_ref_count, 0),
-      closure_vars: Keyword.get(opts, :closure_vars, []),
-      constants: Keyword.fetch!(opts, :constants),
-      extra_atoms: extra_atoms,
-      byte_code: <<>>,
-      has_prototype: Keyword.fetch!(opts, :has_prototype),
-      has_simple_parameter_list: Keyword.fetch!(opts, :has_simple_parameter_list),
-      new_target_allowed: Keyword.fetch!(opts, :new_target_allowed),
-      arguments_allowed: true,
-      is_strict_mode: false,
-      has_debug_info: false,
-      source: Keyword.fetch!(opts, :source)
-    }
-
-    atoms = collect_atoms(function)
-    resolved = to_vm_instructions(instructions, atoms, function.arg_count)
-
-    %{function | atoms: atoms, instructions: resolved}
-    |> attach_own_constant_atoms()
+  def collect_atoms(instructions) do
+    instructions
+    |> Enum.flat_map(fn
+      {:define_field, name} when is_binary(name) -> [name]
+      {:get_var, name} -> [name]
+      {:put_var, name} -> [name]
+      {:get_field, name} -> [name]
+      {:get_field2, name} -> [name]
+      {:put_field, name} -> [name]
+      {:set_name, name} -> [name]
+      {:define_method, name, _flags} -> [name]
+      {:define_class, name, _flags} -> [name]
+      {:private_symbol, name} -> [name]
+      {:throw_error, _type, atom} -> [atom]
+      {:with_get_var, name, _label} -> [name]
+      {:with_put_var, name, _label} -> [name]
+      {:with_delete_var, name, _label} -> [name]
+      _ -> []
+    end)
+    |> Enum.uniq()
   end
 
-  defp to_vm_instructions(instructions, atoms, arg_count) do
+  def stack_size(instructions) when is_list(instructions) do
+    instructions
+    |> Enum.reject(&match?({:label, _name}, &1))
+    |> Enum.reduce({0, 0}, fn instruction, {depth, max_depth} ->
+      {pops, pushes} = stack_effect(instruction)
+      depth = max(depth - pops, 0) + pushes
+      {depth, max(max_depth, depth)}
+    end)
+    |> elem(1)
+  end
+
+  def finalize(instructions, atoms, arg_count) do
     atom_map =
       atoms
       |> Tuple.to_list()
@@ -60,8 +56,6 @@ defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
     |> Enum.map(&to_op(&1, labels, atom_map, arg_count))
     |> List.to_tuple()
   end
-
-  @op QuickBEAM.VM.Opcodes.all_opcodes()
 
   defp to_op(true, _labels, _atoms, _arg_count), do: op(:push_true)
   defp to_op(false, _labels, _atoms, _arg_count), do: op(:push_false)
@@ -168,69 +162,58 @@ defmodule QuickBEAM.JS.BytecodeCompiler.FunctionBuilder do
     do: {:tagged_int, index}
 
   defp atom_operand({:predefined, _} = predefined, _atoms), do: predefined
+  defp atom_operand(name, atoms), do: Map.fetch!(atoms, name)
 
-  defp atom_operand(name, atoms) do
-    Map.fetch!(atoms, name)
-  end
+  defp stack_effect({:call, argc}), do: {1 + argc, 1}
+  defp stack_effect({:call_method, argc}), do: {2 + argc, 1}
+  defp stack_effect({:call_constructor, argc}), do: {2 + argc, 1}
+  defp stack_effect({:get_var, _name}), do: {0, 1}
+  defp stack_effect({:put_var, _name}), do: {1, 0}
+  defp stack_effect({:array_from, count}), do: {count, 1}
+  defp stack_effect({:define_field, _name}), do: {2, 1}
+  defp stack_effect({:get_field, _name}), do: {1, 1}
+  defp stack_effect({:get_field2, _name}), do: {1, 2}
+  defp stack_effect({:put_field, _name}), do: {2, 0}
+  defp stack_effect({:set_name, _name}), do: {1, 1}
+  defp stack_effect({:define_method, _name, _flags}), do: {2, 1}
+  defp stack_effect({:define_class, _name, _flags}), do: {2, 2}
+  defp stack_effect({:define_method_computed, _flags}), do: {3, 1}
+  defp stack_effect({:close_loc, _idx}), do: {0, 0}
+  defp stack_effect({:set_loc_uninitialized, _idx}), do: {0, 0}
+  defp stack_effect(:set_home_object), do: {2, 2}
+  defp stack_effect(:check_ctor), do: {0, 0}
+  defp stack_effect(:check_ctor_return), do: {1, 2}
+  defp stack_effect(:add_brand), do: {2, 0}
+  defp stack_effect(:private_in), do: {2, 1}
+  defp stack_effect(:for_of_start), do: {1, 3}
+  defp stack_effect({:for_of_next, _idx}), do: {0, 2}
+  defp stack_effect({:with_get_var, _name, _label}), do: {1, 1}
+  defp stack_effect({:with_put_var, _name, _label}), do: {2, 1}
+  defp stack_effect({:with_delete_var, _name, _label}), do: {1, 1}
+  defp stack_effect(:check_brand), do: {2, 2}
+  defp stack_effect(:get_private_field), do: {2, 1}
+  defp stack_effect(:put_private_field), do: {3, 0}
+  defp stack_effect(:define_private_field), do: {3, 1}
+  defp stack_effect({:private_symbol, _name}), do: {0, 1}
+  defp stack_effect(:set_name_computed), do: {2, 2}
+  defp stack_effect({:catch, _label}), do: {0, 1}
+  defp stack_effect({:gosub, _label}), do: {0, 0}
+  defp stack_effect(:nip_catch), do: {2, 1}
+  defp stack_effect(:ret), do: {1, 0}
+  defp stack_effect({:eval, argc, _scope}), do: {1 + argc, 1}
+  defp stack_effect({op, _label}) when op in [:jump, :gosub], do: {0, 0}
+  defp stack_effect({op, _label}) when op in [:jump_if_false, :jump_if_true], do: {1, 0}
+  defp stack_effect({:catch, _label}), do: {0, 1}
+  defp stack_effect({:throw_error, _type, _atom}), do: {0, 0}
+  defp stack_effect({:rest, _start}), do: {0, 1}
 
-  defp attach_own_constant_atoms(%Function{atoms: atoms, constants: constants} = function) do
-    constants =
-      for c <- constants do
-        case c do
-          %Function{atoms: nil} -> attach_atoms(c, atoms)
-          %Function{} -> c
-          _ -> c
-        end
-      end
+  defp stack_effect({_op, _arg} = instruction),
+    do: opcode_stack_effect(to_op(instruction, %{}, %{}, 0))
 
-    %{function | constants: constants}
-  end
+  defp stack_effect(instruction), do: opcode_stack_effect(to_op(instruction, %{}, %{}, 0))
 
-  def collect_atoms(%Function{} = function) do
-    function
-    |> do_collect_atoms([])
-    |> Enum.reject(&(match?({:predefined, _}, &1) or is_nil(&1)))
-    |> Enum.uniq()
-    |> List.to_tuple()
-  end
-
-  def attach_atoms(%Function{} = function, atoms) do
-    function
-    |> Map.put(:atoms, atoms)
-    |> Map.update!(:constants, &attach_constant_atoms(&1, atoms))
-  end
-
-  def var_def(name) do
-    %VarDef{
-      name: name,
-      scope_level: 0,
-      scope_next: 0,
-      var_kind: 0,
-      is_const: false,
-      is_lexical: false,
-      is_captured: false
-    }
-  end
-
-  defp do_collect_atoms(%Function{} = function, acc) do
-    acc = [function.name, function.filename | acc]
-    acc = Enum.reduce(function.extra_atoms || [], acc, &[&1 | &2])
-    acc = Enum.reduce(function.locals, acc, fn %VarDef{name: name}, acc -> [name | acc] end)
-
-    Enum.reduce(function.constants, acc, fn
-      %Function{} = inner, acc -> do_collect_atoms(inner, acc)
-      value, acc when is_binary(value) -> [value | acc]
-      _value, acc -> acc
-    end)
-  end
-
-  defp attach_constant_atoms(constants, atoms) do
-    for constant <- constants do
-      case constant do
-        %Function{atoms: own} when own != nil and own != {} -> constant
-        %Function{} -> attach_atoms(constant, atoms)
-        _ -> constant
-      end
-    end
+  defp opcode_stack_effect({op, _args}) do
+    {_name, _size, pops, pushes, _format} = Opcodes.info(op)
+    {pops, pushes}
   end
 end

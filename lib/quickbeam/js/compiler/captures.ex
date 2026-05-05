@@ -1,7 +1,7 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Captures do
+defmodule QuickBEAM.JS.Compiler.Captures do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Scope, Slots}
+  alias QuickBEAM.JS.Compiler.{Scope, Slots}
   alias QuickBEAM.JS.Parser.AST
 
   def captured_names(

@@ -3,8 +3,8 @@ defmodule QuickBEAM.VM.Bytecode.Writer do
   Serializes decoded QuickJS bytecode structs back to QuickJS bytecode binaries.
 
   The writer intentionally mirrors `QuickBEAM.VM.Bytecode.decode/1` and the
-  vendored QuickJS `JS_WriteObject*` format. It currently covers the value forms
-  emitted by `QuickBEAM.JS.BytecodeCompiler` and simple decoded functions.
+  vendored QuickJS `JS_WriteObject*` format. It currently covers simple decoded
+  functions.
   """
 
   import Bitwise

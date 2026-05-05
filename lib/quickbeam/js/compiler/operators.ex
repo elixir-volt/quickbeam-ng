@@ -1,4 +1,4 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Operators do
+defmodule QuickBEAM.JS.Compiler.Operators do
   @moduledoc false
 
   def binary("+"), do: {:ok, :add}

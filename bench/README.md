@@ -48,13 +48,13 @@ mix run bench/js_parser_perf.exs
 mix run bench/js_parser_quickjs_audit.exs
 ```
 
-## JS bytecode compiler audits
+## JS compiler audits
 
 These cover the separate frontend compiler that lowers `QuickBEAM.JS.Parser` AST
-to QuickJS-compatible bytecode:
+to QuickBEAM VM instructions:
 
 ```sh
-mix run bench/js_bytecode_compiler_compat.exs
+mix run bench/js_compiler_compat.exs
 ```
 
 Useful environment variables:

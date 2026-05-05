@@ -1,7 +1,7 @@
-defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
+defmodule QuickBEAM.JS.Compiler.Statements do
   @moduledoc false
 
-  alias QuickBEAM.JS.BytecodeCompiler.{Captures, Emitter, Slots}
+  alias QuickBEAM.JS.Compiler.{Captures, Emitter, Slots}
   alias QuickBEAM.JS.Parser.AST
 
   def compile_all(statements, %Emitter{} = emitter) do
@@ -722,8 +722,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
          {:ok, instructions, constants} <-
            callbacks.compile_expression.(object, scope, instructions, constants) do
       instructions = instructions ++ [{:put_loc, with_loc}]
-      prev_with = Process.get(:bytecode_compiler_with_loc)
-      Process.put(:bytecode_compiler_with_loc, with_loc)
+      prev_with = Process.get(:compiler_with_loc)
+      Process.put(:compiler_with_loc, with_loc)
 
       result =
         case body do
@@ -734,7 +734,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
             compile(stmt, scope, instructions, constants, opts, callbacks)
         end
 
-      Process.put(:bytecode_compiler_with_loc, prev_with)
+      Process.put(:compiler_with_loc, prev_with)
       result
     else
       :error -> {:error, {:unsupported, :with_statement}}
@@ -895,21 +895,21 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
     is_derived = super_class != nil
     has_explicit_ctor = Enum.any?(body, &match?(%AST.MethodDefinition{kind: :constructor}, &1))
 
-    prev_derived = Process.get(:bytecode_compiler_derived_ctor, false)
+    prev_derived = Process.get(:compiler_derived_ctor, false)
 
-    prev_super = Process.get(:bytecode_compiler_super_class)
+    prev_super = Process.get(:compiler_super_class)
 
     if is_derived and has_explicit_ctor do
-      Process.put(:bytecode_compiler_derived_ctor, true)
-      Process.put(:bytecode_compiler_super_class, super_class)
+      Process.put(:compiler_derived_ctor, true)
+      Process.put(:compiler_super_class, super_class)
     end
 
     with {:loc, loc} <- callbacks.resolve.(scope, name),
          {:loc, proto_loc} <- callbacks.resolve.(scope, "<class_proto:#{name}>"),
          {:ok, ctor_fn} <-
            compile_class_ctor_with_private(body, name, field_names, scope, callbacks) do
-      Process.put(:bytecode_compiler_derived_ctor, prev_derived)
-      Process.put(:bytecode_compiler_super_class, prev_super)
+      Process.put(:compiler_derived_ctor, prev_derived)
+      Process.put(:compiler_super_class, prev_super)
 
       ctor_fn =
         if is_derived and has_explicit_ctor do
@@ -993,14 +993,14 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
       private_refs =
         private_names |> Enum.with_index() |> Map.new(fn {pn, i} -> {"##{pn}", i} end)
 
-      prev_priv = Process.get(:bytecode_compiler_class_private_scope)
-      Process.put(:bytecode_compiler_class_private_scope, {private_refs, private_locs})
-      prev_kinds = Process.get(:bytecode_compiler_private_kinds)
-      Process.put(:bytecode_compiler_private_kinds, private_kinds)
-      prev_vrefs = Process.get(:bytecode_compiler_var_refs) || %{}
+      prev_priv = Process.get(:compiler_class_private_scope)
+      Process.put(:compiler_class_private_scope, {private_refs, private_locs})
+      prev_kinds = Process.get(:compiler_private_kinds)
+      Process.put(:compiler_private_kinds, private_kinds)
+      prev_vrefs = Process.get(:compiler_var_refs) || %{}
 
       Process.put(
-        :bytecode_compiler_var_refs,
+        :compiler_var_refs,
         Enum.reduce(private_names, prev_vrefs, fn pn, a -> Map.put(a, "##{pn}", map_size(a)) end)
       )
 
@@ -1028,10 +1028,10 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
         end
 
       # Don't restore var_refs — keep accumulated for compile_program to pick up
-      Process.put(:bytecode_compiler_class_private_scope, prev_priv)
-      Process.put(:bytecode_compiler_private_kinds, prev_kinds)
-      Process.put(:bytecode_compiler_derived_ctor, prev_derived)
-      Process.put(:bytecode_compiler_super_class, prev_super)
+      Process.put(:compiler_class_private_scope, prev_priv)
+      Process.put(:compiler_private_kinds, prev_kinds)
+      Process.put(:compiler_derived_ctor, prev_derived)
+      Process.put(:compiler_super_class, prev_super)
       result
     end
   end
@@ -1108,7 +1108,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
           end)
 
         {:ok,
-         QuickBEAM.JS.BytecodeCompiler.FunctionBuilder.build(
+         QuickBEAM.JS.Compiler.FunctionBuilder.build(
            name: name,
            args: [],
            locals: [],
@@ -2285,7 +2285,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler.Statements do
        ) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(argument, scope, instructions, constants) do
-      is_derived = Process.get(:bytecode_compiler_derived_ctor, false)
+      is_derived = Process.get(:compiler_derived_ctor, false)
 
       ret_ops =
         if is_derived do

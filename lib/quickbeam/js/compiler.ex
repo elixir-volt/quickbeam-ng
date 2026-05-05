@@ -1,14 +1,14 @@
-defmodule QuickBEAM.JS.BytecodeCompiler do
+defmodule QuickBEAM.JS.Compiler do
   @moduledoc """
   Experimental JavaScript AST-to-QuickBEAM VM instruction compiler.
 
   This compiler is intentionally separate from `QuickBEAM.VM.Compiler`, which
   lowers VM instructions to BEAM code. This module starts from
-  `QuickBEAM.JS.Parser` AST and emits `%QuickBEAM.VM.Bytecode{}` values with
-  pre-resolved VM instructions, not materialized QuickJS bytecode binaries.
+  `QuickBEAM.JS.Parser` AST and emits VM functions with pre-resolved
+  instructions, not materialized QuickJS bytecode binaries.
   """
 
-  alias QuickBEAM.JS.BytecodeCompiler.{
+  alias QuickBEAM.JS.Compiler.{
     Declarations,
     Emitter,
     Expressions,
@@ -45,7 +45,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
     do: {:error, {:unsupported, {:source_type, source_type}}}
 
   def compile_to_binary(_source),
-    do: {:error, {:unsupported, :quickjs_bytecode_materialization_removed}}
+    do: {:error, {:unsupported, :binary_materialization_removed}}
 
   def compile_to_function(source) do
     with {:ok, %Bytecode{value: value}} <- compile(source), do: {:ok, value}
@@ -65,7 +65,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_statements(body, scope, [], [], top_level_globals(scope)) do
       instructions = finish_program(instructions)
-      var_refs = Process.get(:bytecode_compiler_var_refs) || %{}
+      var_refs = Process.get(:compiler_var_refs) || %{}
       local_names = scope.local_names
 
       {local_defs, var_ref_count} =
@@ -147,15 +147,15 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
         do: Scope.with_arguments_alias(scope, length(params)),
         else: scope
 
-    closure_scope = Process.get(:bytecode_compiler_closure_scope)
-    Process.delete(:bytecode_compiler_closure_scope)
-    class_priv = Process.get(:bytecode_compiler_class_private_scope)
+    closure_scope = Process.get(:compiler_closure_scope)
+    Process.delete(:compiler_closure_scope)
+    class_priv = Process.get(:compiler_class_private_scope)
     priv_refs = if class_priv, do: elem(class_priv, 0), else: %{}
     merged_refs = Map.merge(priv_refs, closure_scope || %{})
     scope = if merged_refs != %{}, do: Scope.with_var_refs(scope, merged_refs), else: scope
 
-    prev_var_refs = Process.get(:bytecode_compiler_var_refs)
-    Process.put(:bytecode_compiler_var_refs, %{})
+    prev_var_refs = Process.get(:compiler_var_refs)
+    Process.put(:compiler_var_refs, %{})
 
     with {:ok, scope} <- Declarations.declare_program_locals(function.body.body, scope),
          {:ok, instructions, constants} <- compile_param_patterns(pattern_params, scope, [], []),
@@ -167,8 +167,8 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
          {:ok, instructions, constants} <-
            compile_function_body(function.body.body, scope, instructions, constants, globals) do
       instructions = ensure_function_return(instructions)
-      var_refs = Process.get(:bytecode_compiler_var_refs, %{})
-      Process.put(:bytecode_compiler_var_refs, prev_var_refs)
+      var_refs = Process.get(:compiler_var_refs, %{})
+      Process.put(:compiler_var_refs, prev_var_refs)
 
       {local_defs, var_ref_count} =
         build_local_defs(params ++ scope.local_names, var_refs)
@@ -213,7 +213,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
        )}
     else
       error ->
-        Process.put(:bytecode_compiler_var_refs, prev_var_refs)
+        Process.put(:compiler_var_refs, prev_var_refs)
         error
     end
   end
@@ -409,7 +409,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
              {:ok,
               instructions ++
                 [
-                  QuickBEAM.JS.BytecodeCompiler.Slots.read(slot),
+                  QuickBEAM.JS.Compiler.Slots.read(slot),
                   {:get_field, key},
                   {:put_loc, loc}
                 ], constants}}
@@ -443,7 +443,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
              {:ok,
               instructions ++
                 [
-                  QuickBEAM.JS.BytecodeCompiler.Slots.read(slot),
+                  QuickBEAM.JS.Compiler.Slots.read(slot),
                   {:push_int, index},
                   :get_array_el,
                   {:put_loc, loc}
@@ -461,8 +461,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
   defp compile_rest_param(nil, instructions, constants), do: {:ok, instructions, constants}
 
   defp compile_rest_param({start, index}, instructions, constants) do
-    {:ok,
-     instructions ++ [{:rest, start}, QuickBEAM.JS.BytecodeCompiler.Slots.put({:arg, index})],
+    {:ok, instructions ++ [{:rest, start}, QuickBEAM.JS.Compiler.Slots.put({:arg, index})],
      constants}
   end
 
@@ -479,7 +478,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
              scope,
              instructions ++
                [
-                 QuickBEAM.JS.BytecodeCompiler.Slots.read(slot),
+                 QuickBEAM.JS.Compiler.Slots.read(slot),
                  :undefined,
                  :strict_eq,
                  {:jump_if_false, end_label}
@@ -490,7 +489,7 @@ defmodule QuickBEAM.JS.BytecodeCompiler do
       compile_param_defaults(
         rest,
         scope,
-        instructions ++ [QuickBEAM.JS.BytecodeCompiler.Slots.put(slot), {:label, end_label}],
+        instructions ++ [QuickBEAM.JS.Compiler.Slots.put(slot), {:label, end_label}],
         constants,
         globals
       )
