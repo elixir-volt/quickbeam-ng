@@ -168,95 +168,6 @@ defmodule QuickBEAM.JS.Compiler.Statements do
     end
   end
 
-  defp top_level_function_capture?(scope, name) do
-    Map.has_key?(scope.locals, "<ret>") and
-      MapSet.member?(Process.get(:compiler_top_level_function_names, MapSet.new()), name)
-  end
-
-  defp bind_function_declaration(scope, name, instructions, constants) do
-    case Scope.resolve(scope, name) do
-      {:loc, loc} ->
-        {:ok, instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}], constants}
-
-      :error ->
-        {:error, {:unsupported, {:unresolved_identifier, name}}}
-    end
-  end
-
-  defp references_arguments?(%AST.Identifier{name: "arguments"}), do: true
-  defp references_arguments?(%AST.FunctionDeclaration{}), do: false
-  defp references_arguments?(%AST.FunctionExpression{}), do: false
-  defp references_arguments?(%AST.ArrowFunctionExpression{}), do: false
-  defp references_arguments?(%AST.ClassDeclaration{}), do: false
-  defp references_arguments?(%AST.ClassExpression{}), do: false
-
-  defp references_arguments?(%{__struct__: _} = node) do
-    node
-    |> Map.from_struct()
-    |> Map.values()
-    |> Enum.any?(&references_arguments?/1)
-  end
-
-  defp references_arguments?(list) when is_list(list),
-    do: Enum.any?(list, &references_arguments?/1)
-
-  defp references_arguments?(_), do: false
-
-  defp compile_declaration_function(declaration, name, [], _scope, callbacks),
-    do: callbacks.compile_function.(declaration, name)
-
-  defp compile_declaration_function(declaration, name, captures, scope, callbacks) do
-    parent_var_refs = Process.get(:compiler_var_refs) || %{}
-
-    parent_capture_var_refs =
-      captures
-      |> Enum.with_index(map_size(parent_var_refs))
-      |> Map.new(fn {capture_name, idx} -> {capture_name, idx} end)
-
-    child_capture_var_refs =
-      captures
-      |> Enum.with_index()
-      |> Map.new(fn {capture_name, idx} -> {capture_name, idx} end)
-
-    Process.put(:compiler_var_refs, Map.merge(parent_var_refs, parent_capture_var_refs))
-
-    closure_vars =
-      Enum.map(captures, fn capture_name ->
-        {closure_type, var_idx} = capture_source_slot(scope, capture_name)
-
-        %QuickBEAM.VM.ClosureVar{
-          name: capture_name,
-          var_idx: var_idx,
-          closure_type: closure_type,
-          is_const: false,
-          is_lexical: true,
-          var_kind: 0
-        }
-      end)
-
-    prev_closure_scope = Process.get(:compiler_closure_scope)
-    Process.put(:compiler_closure_scope, child_capture_var_refs)
-
-    case callbacks.compile_function.(declaration, name) do
-      {:ok, function} ->
-        Process.put(:compiler_closure_scope, prev_closure_scope)
-        {:ok, %{function | closure_vars: closure_vars, var_ref_count: length(closure_vars)}}
-
-      {:error, _} = error ->
-        Process.put(:compiler_closure_scope, prev_closure_scope)
-        error
-    end
-  end
-
-  defp capture_source_slot(scope, name) do
-    case Scope.resolve(scope, name) do
-      {:arg, idx} -> {1, idx}
-      {:loc, idx} -> {0, idx}
-      {:var_ref, idx} -> {2, idx}
-      _ -> {0, Map.get(scope.locals, name, 0)}
-    end
-  end
-
   def compile(
         %AST.ClassDeclaration{
           id: %AST.Identifier{name: name},
@@ -857,6 +768,95 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
   def compile(statement, _scope, _instructions, _constants, _opts, _callbacks),
     do: {:error, {:unsupported, statement.type}}
+
+  defp top_level_function_capture?(scope, name) do
+    Map.has_key?(scope.locals, "<ret>") and
+      MapSet.member?(Process.get(:compiler_top_level_function_names, MapSet.new()), name)
+  end
+
+  defp bind_function_declaration(scope, name, instructions, constants) do
+    case Scope.resolve(scope, name) do
+      {:loc, loc} ->
+        {:ok, instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}], constants}
+
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
+    end
+  end
+
+  defp references_arguments?(%AST.Identifier{name: "arguments"}), do: true
+  defp references_arguments?(%AST.FunctionDeclaration{}), do: false
+  defp references_arguments?(%AST.FunctionExpression{}), do: false
+  defp references_arguments?(%AST.ArrowFunctionExpression{}), do: false
+  defp references_arguments?(%AST.ClassDeclaration{}), do: false
+  defp references_arguments?(%AST.ClassExpression{}), do: false
+
+  defp references_arguments?(%{__struct__: _} = node) do
+    node
+    |> Map.from_struct()
+    |> Map.values()
+    |> Enum.any?(&references_arguments?/1)
+  end
+
+  defp references_arguments?(list) when is_list(list),
+    do: Enum.any?(list, &references_arguments?/1)
+
+  defp references_arguments?(_), do: false
+
+  defp compile_declaration_function(declaration, name, [], _scope, callbacks),
+    do: callbacks.compile_function.(declaration, name)
+
+  defp compile_declaration_function(declaration, name, captures, scope, callbacks) do
+    parent_var_refs = Process.get(:compiler_var_refs) || %{}
+
+    parent_capture_var_refs =
+      captures
+      |> Enum.with_index(map_size(parent_var_refs))
+      |> Map.new(fn {capture_name, idx} -> {capture_name, idx} end)
+
+    child_capture_var_refs =
+      captures
+      |> Enum.with_index()
+      |> Map.new(fn {capture_name, idx} -> {capture_name, idx} end)
+
+    Process.put(:compiler_var_refs, Map.merge(parent_var_refs, parent_capture_var_refs))
+
+    closure_vars =
+      Enum.map(captures, fn capture_name ->
+        {closure_type, var_idx} = capture_source_slot(scope, capture_name)
+
+        %QuickBEAM.VM.ClosureVar{
+          name: capture_name,
+          var_idx: var_idx,
+          closure_type: closure_type,
+          is_const: false,
+          is_lexical: true,
+          var_kind: 0
+        }
+      end)
+
+    prev_closure_scope = Process.get(:compiler_closure_scope)
+    Process.put(:compiler_closure_scope, child_capture_var_refs)
+
+    case callbacks.compile_function.(declaration, name) do
+      {:ok, function} ->
+        Process.put(:compiler_closure_scope, prev_closure_scope)
+        {:ok, %{function | closure_vars: closure_vars, var_ref_count: length(closure_vars)}}
+
+      {:error, _} = error ->
+        Process.put(:compiler_closure_scope, prev_closure_scope)
+        error
+    end
+  end
+
+  defp capture_source_slot(scope, name) do
+    case Scope.resolve(scope, name) do
+      {:arg, idx} -> {1, idx}
+      {:loc, idx} -> {0, idx}
+      {:var_ref, idx} -> {2, idx}
+      _ -> {0, Map.get(scope.locals, name, 0)}
+    end
+  end
 
   defp compile_if_alternate(nil, _scope, instructions, constants, [tail?: true], _callbacks),
     do: {:ok, instructions ++ [:undefined, {:set_loc, 0}], constants}

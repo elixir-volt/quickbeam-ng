@@ -108,6 +108,11 @@ defmodule QuickBEAM.JS.CompilerTest do
       assert_compiles_to("let o={x:1}; delete o.x; o.x === undefined", true)
       assert_compiles_to("let o={x:1}; delete o['x']; o.x === undefined", true)
       assert_compiles_to("var x = 1; delete x", false)
+
+      assert_compiles_to(
+        ~S/var z; var a = {b:{c:2}}; [delete z?.b["c"], delete a?.b["c"], JSON.stringify(a)].join("|")/,
+        "true|true|{\"b\":{}}"
+      )
     end
 
     test "compiles sequence expressions" do
@@ -149,6 +154,11 @@ defmodule QuickBEAM.JS.CompilerTest do
 
     test "compiles constructor calls" do
       assert_compiles_to("function C(){ this.x = 3; } let c = new C(); c.x", 3)
+
+      assert_compiles_to(
+        ~S/function *G() {} let ex; try { new G() } catch (err) { ex = err } [ex instanceof TypeError, ex && ex.message].join("|")/,
+        "true|G is not a constructor"
+      )
     end
 
     test "compiles simple classes" do
@@ -258,6 +268,25 @@ defmodule QuickBEAM.JS.CompilerTest do
 
     test "compiles direct eval with caller arguments" do
       assert_compiles_to("function f(){ return eval('arguments[0]') } f(7)", 7)
+    end
+
+    test "throws SyntaxError for direct eval parse errors" do
+      assert_compiles_to(
+        ~S|let ex; try { eval('(function({await}) { "use strict"; return 1; })({})') } catch (err) { ex = err } ex instanceof SyntaxError|,
+        true
+      )
+    end
+
+    test "preserves object property order in compiled mode" do
+      assert_compiles_to(
+        ~S|let a = { get: 2, set: 3, async: 4, get a(){ return this.get } }; JSON.stringify(a)|,
+        ~S|{"get":2,"set":3,"async":4,"a":2}|
+      )
+
+      assert_compiles_to(
+        ~S|let o = Object.create({}, {x:{value:2, enumerable:true}}); o.x + ":" + Object.keys(o).length|,
+        "2:1"
+      )
     end
   end
 

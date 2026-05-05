@@ -1417,16 +1417,6 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
     compile_direct_eval_call(callee, args, scope, instructions, constants, callbacks)
   end
 
-  defp simple_eval_strict_self_assignment?(code) do
-    with {:ok, %AST.Program{body: [%AST.ExpressionStatement{expression: expression}]}} <-
-           QuickBEAM.JS.Parser.parse(code),
-         %AST.AssignmentExpression{operator: "=", left: %AST.Identifier{name: name}} <- expression do
-      strict_self_binding?(name)
-    else
-      _ -> false
-    end
-  end
-
   defp compile_direct_call(callee, args, scope, instructions, constants, callbacks) do
     with {:ok, args} <- expand_call_args(args),
          {:ok, instructions, constants} <-
@@ -1444,6 +1434,16 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
          {:ok, instructions, constants} <-
            compile_call_args(args, scope, instructions, constants, callbacks) do
       {:ok, instructions ++ [{:eval, length(args), 0}], constants}
+    end
+  end
+
+  defp simple_eval_strict_self_assignment?(code) do
+    with {:ok, %AST.Program{body: [%AST.ExpressionStatement{expression: expression}]}} <-
+           QuickBEAM.JS.Parser.parse(code),
+         %AST.AssignmentExpression{operator: "=", left: %AST.Identifier{name: name}} <- expression do
+      strict_self_binding?(name)
+    else
+      _ -> false
     end
   end
 
