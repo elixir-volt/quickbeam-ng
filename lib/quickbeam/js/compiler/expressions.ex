@@ -1448,17 +1448,24 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
   end
 
   defp simple_eval_expression(code) do
-    with {:ok,
-          %AST.Program{
-            body: [%AST.ExpressionStatement{expression: %AST.Identifier{name: name} = expression}]
-          }} <-
+    with {:ok, %AST.Program{body: [%AST.ExpressionStatement{expression: expression}]}} <-
            QuickBEAM.JS.Parser.parse(code),
-         false <- name in ["undefined", "NaN"] do
+         true <- simple_eval_expression?(expression) do
       {:ok, expression}
     else
       _ -> :error
     end
   end
+
+  defp simple_eval_expression?(%AST.Identifier{name: name}), do: name not in ["undefined", "NaN"]
+
+  defp simple_eval_expression?(%AST.UnaryExpression{
+         operator: "delete",
+         argument: %AST.Identifier{}
+       }),
+       do: true
+
+  defp simple_eval_expression?(_expression), do: false
 
   defp simple_eval_var_declarations(code) do
     with {:ok, program} <- QuickBEAM.JS.Parser.parse(code),

@@ -752,6 +752,13 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   def eval_or_call(ctx, fun, args), do: Invocation.invoke_runtime(ctx, fun, args)
 
   defp eval_source(ctx, code) do
+    case simple_eval_delete_identifier(code, ctx) do
+      {:ok, result} -> result
+      :error -> compile_eval_source(ctx, code)
+    end
+  end
+
+  defp compile_eval_source(ctx, code) do
     with {:ok, program} <- QuickBEAM.JS.Compiler.compile(code) do
       globals =
         ctx.globals
@@ -784,6 +791,24 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
       _ ->
         :undefined
+    end
+  end
+
+  defp simple_eval_delete_identifier(code, ctx) do
+    with {:ok,
+          %QuickBEAM.JS.Parser.AST.Program{
+            body: [
+              %QuickBEAM.JS.Parser.AST.ExpressionStatement{
+                expression: %QuickBEAM.JS.Parser.AST.UnaryExpression{
+                  operator: "delete",
+                  argument: %QuickBEAM.JS.Parser.AST.Identifier{name: name}
+                }
+              }
+            ]
+          }} <- QuickBEAM.JS.Parser.parse(code) do
+      {:ok, not Map.has_key?(context_globals(ctx), name)}
+    else
+      _ -> :error
     end
   end
 

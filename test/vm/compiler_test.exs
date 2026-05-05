@@ -1444,6 +1444,16 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, 1} = Compiler.invoke(fun, [Heap.wrap(%{"x" => 7})])
     end
 
+    test "preserves object spread keys after literal fields", %{rt: rt} do
+      fun =
+        compile_and_decode(
+          rt,
+          ~S|let o={c:3,d:4}; let r; new function(obj){ r=Object.keys(obj).length+":"+JSON.stringify(obj); }({a:1,b:2,...o}); r|
+        ).value
+
+      assert {:ok, ~S|4:{"a":1,"b":2,"c":3,"d":4}|} = Compiler.invoke(fun, [])
+    end
+
     test "compiles for-of loops over arrays", %{rt: rt} do
       fun =
         compile_and_decode(rt, "(function(a){ let s=0; for (const x of a) s += x; return s })")
@@ -2045,6 +2055,12 @@ defmodule QuickBEAM.VM.CompilerTest do
         ).value
 
       assert {:ok, 2} = Compiler.invoke(fun, [])
+    end
+
+    test "direct eval delete preserves var binding", %{rt: rt} do
+      fun = compile_and_decode(rt, ~S/var x = 1; var d = eval("delete x"); d + "|" + x/).value
+
+      assert {:ok, "false|1"} = Compiler.invoke(fun, [])
     end
 
     test "resumes compiled generators at first yield", %{rt: rt} do
