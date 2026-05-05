@@ -23,6 +23,11 @@ defmodule QuickBEAM.JS.CompilerTest do
       assert_compiles_to("let x = 0; if (1 > 2) x = 3; else x = 4; x", 4)
     end
 
+    test "assignment expressions return the assigned value" do
+      assert_compiles_to("let x = 1; (x = 4) + x", 8)
+      assert_compiles_to("x = 4", 4)
+    end
+
     test "compiles constants and unary expressions" do
       assert_compiles_to("'quick'", "quick")
       assert_compiles_to("let x = 2; -x", -2)

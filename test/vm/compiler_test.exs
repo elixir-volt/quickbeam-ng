@@ -1461,6 +1461,16 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, "true:true"} = Compiler.invoke(fun, [])
     end
 
+    test "compiles object method super property lookup", %{rt: rt} do
+      fun =
+        compile_and_decode(
+          rt,
+          ~S|var obj = { method() { return super.toString; } }; obj.toString = null; obj.method() === Object.prototype.toString|
+        ).value
+
+      assert {:ok, true} = Compiler.invoke(fun, [])
+    end
+
     test "compiles for-of loops over arrays", %{rt: rt} do
       fun =
         compile_and_decode(rt, "(function(a){ let s=0; for (const x of a) s += x; return s })")

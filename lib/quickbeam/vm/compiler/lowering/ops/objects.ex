@@ -13,7 +13,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
           State.bind(
             state,
             Builder.temp_name(state.temp),
-            Builder.remote_call(QuickBEAM.VM.Heap, :wrap, [Builder.literal(%{})])
+            State.compiler_call(state, :new_object, [])
           )
 
         {:ok, State.push(state, obj, {:shaped_object, %{}})}

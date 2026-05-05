@@ -76,10 +76,14 @@ defmodule QuickBEAM.JS.Compiler.Statements do
       slot = callbacks.resolve.(scope, name)
 
       if slot == :error do
-        {:ok, instructions ++ [{:put_var, name}], constants}
+        if Keyword.fetch!(opts, :tail?) do
+          {:ok, instructions ++ [:dup, {:put_var, name}, {:set_loc, 0}], constants}
+        else
+          {:ok, instructions ++ [{:put_var, name}], constants}
+        end
       else
         if Keyword.fetch!(opts, :tail?) do
-          {:ok, instructions ++ [Slots.write(slot), {:set_loc, 0}], constants}
+          {:ok, instructions ++ [:dup, Slots.put(slot), {:set_loc, 0}], constants}
         else
           {:ok, instructions ++ [Slots.put(slot)], constants}
         end

@@ -649,10 +649,10 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
           {:ok, instructions, constants}
 
         callbacks.resolve.(scope, name) == :error ->
-          {:ok, instructions ++ [{:put_var, name}], constants}
+          {:ok, instructions ++ [:dup, {:put_var, name}], constants}
 
         true ->
-          {:ok, instructions ++ [Slots.write(callbacks.resolve.(scope, name))], constants}
+          {:ok, instructions ++ [:dup, Slots.put(callbacks.resolve.(scope, name))], constants}
       end
     end
   end
@@ -701,7 +701,7 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
       slot = callbacks.resolve.(scope, name)
 
       read_op = if slot == :error, do: {:get_var, name}, else: Slots.read(slot)
-      write_op = if slot == :error, do: {:put_var, name}, else: Slots.write(slot)
+      write_op = if slot == :error, do: {:put_var, name}, else: Slots.put(slot)
 
       with {:ok, instructions, constants} <-
              callbacks.compile_expression.(
@@ -710,7 +710,7 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
                instructions ++ [read_op],
                constants
              ) do
-        {:ok, instructions ++ [op, write_op], constants}
+        {:ok, instructions ++ [op, :dup, write_op], constants}
       end
     end
   end
