@@ -1301,19 +1301,50 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
 
   defp compile_direct_call(
          %AST.Identifier{name: "eval"} = callee,
+         [%AST.Literal{value: code}],
+         scope,
+         instructions,
+         constants,
+         callbacks
+       )
+       when is_binary(code) do
+    case simple_eval_var_declarations(code) do
+      {:ok, declarations} ->
+        compile_simple_eval_var_declarations(
+          declarations,
+          scope,
+          instructions,
+          constants,
+          callbacks
+        )
+
+      :error ->
+        case simple_eval_expression(code) do
+          {:ok, expression} ->
+            callbacks.compile_expression.(expression, scope, instructions, constants)
+
+          :error ->
+            compile_direct_eval_call(
+              callee,
+              [%AST.Literal{value: code}],
+              scope,
+              instructions,
+              constants,
+              callbacks
+            )
+        end
+    end
+  end
+
+  defp compile_direct_call(
+         %AST.Identifier{name: "eval"} = callee,
          args,
          scope,
          instructions,
          constants,
          callbacks
        ) do
-    with {:ok, args} <- expand_call_args(args),
-         {:ok, instructions, constants} <-
-           callbacks.compile_expression.(callee, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_call_args(args, scope, instructions, constants, callbacks) do
-      {:ok, instructions ++ [{:eval, length(args), 0}], constants}
-    end
+    compile_direct_eval_call(callee, args, scope, instructions, constants, callbacks)
   end
 
   defp compile_direct_call(callee, args, scope, instructions, constants, callbacks) do
@@ -1325,6 +1356,102 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
       {:ok, instructions ++ [{:call, length(args)}], constants}
     end
   end
+
+  defp compile_direct_eval_call(callee, args, scope, instructions, constants, callbacks) do
+    with {:ok, args} <- expand_call_args(args),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(callee, scope, instructions, constants),
+         {:ok, instructions, constants} <-
+           compile_call_args(args, scope, instructions, constants, callbacks) do
+      {:ok, instructions ++ [{:eval, length(args), 0}], constants}
+    end
+  end
+
+  defp simple_eval_expression(code) do
+    with {:ok, %AST.Program{body: [%AST.ExpressionStatement{expression: expression}]}} <-
+           QuickBEAM.JS.Parser.parse(code) do
+      {:ok, expression}
+    else
+      _ -> :error
+    end
+  end
+
+  defp simple_eval_var_declarations(code) do
+    with {:ok, program} <- QuickBEAM.JS.Parser.parse(code),
+         true <- Enum.all?(program.body, &match?(%AST.VariableDeclaration{kind: :var}, &1)) do
+      declarations =
+        Enum.flat_map(program.body, fn %AST.VariableDeclaration{declarations: declarations} ->
+          declarations
+        end)
+
+      if declarations == [], do: :error, else: {:ok, declarations}
+    else
+      _ -> :error
+    end
+  end
+
+  defp compile_simple_eval_var_declarations(
+         declarations,
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    Enum.reduce_while(declarations, {:ok, instructions, constants}, fn declaration,
+                                                                       {:ok, instructions,
+                                                                        constants} ->
+      case compile_simple_eval_var_declaration(
+             declaration,
+             scope,
+             instructions,
+             constants,
+             callbacks
+           ) do
+        {:ok, instructions, constants} -> {:cont, {:ok, instructions, constants}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, instructions, constants} -> {:ok, instructions ++ [:undefined], constants}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp compile_simple_eval_var_declaration(
+         %AST.VariableDeclarator{id: %AST.Identifier{name: name}, init: init},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    slot = Scope.resolve(scope, name)
+
+    instructions =
+      if init == nil,
+        do: instructions ++ [:undefined],
+        else: instructions
+
+    with {:ok, instructions, constants} <-
+           if(init == nil,
+             do: {:ok, instructions, constants},
+             else: callbacks.compile_expression.(init, scope, instructions, constants)
+           ) do
+      case slot do
+        :error -> {:ok, instructions ++ [{:put_var, name}], constants}
+        {:global, _} -> {:ok, instructions ++ [{:put_var, name}], constants}
+        slot -> {:ok, instructions ++ [Slots.put(slot)], constants}
+      end
+    end
+  end
+
+  defp compile_simple_eval_var_declaration(
+         _declaration,
+         _scope,
+         _instructions,
+         _constants,
+         _callbacks
+       ),
+       do: :error
 
   defp compile_destructuring_assignment([], _scope, instructions, constants, _callbacks),
     do: {:ok, instructions, constants}

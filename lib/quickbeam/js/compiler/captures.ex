@@ -12,12 +12,13 @@ defmodule QuickBEAM.JS.Compiler.Captures do
       params
       |> Enum.flat_map(&pattern_names/1)
       |> Kernel.++(self_name(function))
+      |> Kernel.++(function_arguments_name(function))
       |> Kernel.++(function_local_names(body))
       |> MapSet.new()
 
     available = Scope.names(scope)
 
-    body
+    [body | params]
     |> collect_identifiers([])
     |> Enum.reject(&MapSet.member?(declared, &1))
     |> Enum.filter(&(&1 in available))
@@ -87,6 +88,10 @@ defmodule QuickBEAM.JS.Compiler.Captures do
   defp self_name(%AST.FunctionExpression{id: %AST.Identifier{} = id}), do: [identifier_name(id)]
   defp self_name(_function), do: []
 
+  defp function_arguments_name(%AST.ArrowFunctionExpression{}), do: []
+  defp function_arguments_name(%{type: :arrow_function_expression}), do: []
+  defp function_arguments_name(_function), do: ["arguments"]
+
   defp function_local_names(statements), do: collect_declaration_names(statements, [])
 
   defp collect_declaration_names([], acc), do: acc
@@ -127,8 +132,34 @@ defmodule QuickBEAM.JS.Compiler.Captures do
   defp collect_identifiers(list, acc) when is_list(list),
     do: Enum.reduce(list, acc, &collect_identifiers/2)
 
+  defp collect_identifiers(%AST.FunctionExpression{}, acc), do: acc
+  defp collect_identifiers(%AST.FunctionDeclaration{}, acc), do: acc
+  defp collect_identifiers(%AST.ArrowFunctionExpression{}, acc), do: acc
+  defp collect_identifiers(%AST.ClassExpression{}, acc), do: acc
+  defp collect_identifiers(%AST.ClassDeclaration{}, acc), do: acc
+
+  defp collect_identifiers(%AST.VariableDeclaration{declarations: declarations}, acc),
+    do: collect_identifiers(declarations, acc)
+
+  defp collect_identifiers(%AST.VariableDeclarator{init: init}, acc),
+    do: collect_identifiers(init, acc)
+
   defp collect_identifiers(%AST.MemberExpression{computed: false, object: object}, acc),
     do: collect_identifiers(object, acc)
+
+  defp collect_identifiers(
+         %AST.CallExpression{
+           callee: %AST.Identifier{name: "eval"},
+           arguments: [%AST.Literal{value: code} | _]
+         },
+         acc
+       )
+       when is_binary(code) do
+    case QuickBEAM.JS.Parser.parse(code) do
+      {:ok, program} -> collect_identifiers(program, acc)
+      _ -> acc
+    end
+  end
 
   defp collect_identifiers(%AST.Identifier{name: name}, acc), do: [name | acc]
 

@@ -135,6 +135,12 @@ defmodule QuickBEAM.JS.Compiler do
     scope = Scope.new(params, globals)
     self_binding_name = function_self_binding_name(function)
     scope = if self_binding_name, do: Scope.declare_local(scope, self_binding_name), else: scope
+
+    scope =
+      function
+      |> eval_declared_names()
+      |> Enum.reduce(scope, &Scope.declare_local(&2, &1))
+
     scope = declare_param_patterns(scope, pattern_params)
     uses_arguments? = references_arguments?([function.body | function.params])
     has_params? = function.params != []
@@ -277,6 +283,70 @@ defmodule QuickBEAM.JS.Compiler do
     do: name
 
   defp function_self_binding_name(_function), do: nil
+
+  defp eval_declared_names(function),
+    do:
+      [function.body | function.params]
+      |> eval_literal_sources()
+      |> Enum.flat_map(&eval_var_names/1)
+      |> Enum.uniq()
+
+  defp eval_literal_sources(%AST.CallExpression{
+         callee: %AST.Identifier{name: "eval"},
+         arguments: [%AST.Literal{value: code} | _]
+       })
+       when is_binary(code),
+       do: [code]
+
+  defp eval_literal_sources(%AST.FunctionExpression{}), do: []
+  defp eval_literal_sources(%AST.FunctionDeclaration{}), do: []
+  defp eval_literal_sources(%AST.ArrowFunctionExpression{}), do: []
+  defp eval_literal_sources(%AST.ClassExpression{}), do: []
+  defp eval_literal_sources(%AST.ClassDeclaration{}), do: []
+
+  defp eval_literal_sources(%{__struct__: _} = node),
+    do: node |> Map.from_struct() |> Map.values() |> eval_literal_sources()
+
+  defp eval_literal_sources(list) when is_list(list),
+    do: Enum.flat_map(list, &eval_literal_sources/1)
+
+  defp eval_literal_sources(_value), do: []
+
+  defp eval_var_names(code) do
+    with {:ok, program} <- QuickBEAM.JS.Parser.parse(code) do
+      Enum.flat_map(program.body, fn
+        %AST.VariableDeclaration{kind: :var, declarations: declarations} ->
+          Enum.flat_map(declarations, &eval_pattern_names(&1.id))
+
+        _ ->
+          []
+      end)
+    else
+      _ -> []
+    end
+  end
+
+  defp eval_pattern_names(%AST.Identifier{name: name}), do: [name]
+
+  defp eval_pattern_names(%AST.ObjectPattern{properties: properties}),
+    do: Enum.flat_map(properties, &eval_pattern_names/1)
+
+  defp eval_pattern_names(%AST.ArrayPattern{elements: elements}),
+    do: elements |> Enum.reject(&is_nil/1) |> Enum.flat_map(&eval_pattern_names/1)
+
+  defp eval_pattern_names(%AST.Property{value: value}), do: eval_pattern_names(value)
+  defp eval_pattern_names(%AST.RestElement{argument: argument}), do: eval_pattern_names(argument)
+  defp eval_pattern_names(%AST.AssignmentPattern{left: left}), do: eval_pattern_names(left)
+  defp eval_pattern_names(_pattern), do: []
+
+  defp references_arguments?(%AST.FunctionExpression{}), do: false
+  defp references_arguments?(%AST.FunctionDeclaration{}), do: false
+
+  defp references_arguments?(%AST.ArrowFunctionExpression{body: body, params: params}),
+    do: references_arguments?([body | params])
+
+  defp references_arguments?(%AST.ClassExpression{}), do: false
+  defp references_arguments?(%AST.ClassDeclaration{}), do: false
 
   defp references_arguments?(%AST.BlockStatement{body: body}), do: references_arguments?(body)
 
