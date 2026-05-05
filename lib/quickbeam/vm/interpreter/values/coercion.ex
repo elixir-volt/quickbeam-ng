@@ -148,7 +148,10 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   def to_string_val(s) when is_binary(s), do: s
   def to_string_val({:closure, _, %{source: src}}) when is_binary(src) and src != "", do: src
   def to_string_val({:closure, _, _}), do: "function () { [native code] }"
-  def to_string_val(%QuickBEAM.VM.Function{source: src}) when is_binary(src) and src != "", do: src
+
+  def to_string_val(%QuickBEAM.VM.Function{source: src}) when is_binary(src) and src != "",
+    do: src
+
   def to_string_val(%QuickBEAM.VM.Function{}), do: "function () { [native code] }"
   def to_string_val({:builtin, name, _}), do: "function #{name}() { [native code] }"
   def to_string_val({:bound, _, _, _, _}), do: "function () { [native code] }"

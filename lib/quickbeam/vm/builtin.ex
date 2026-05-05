@@ -342,7 +342,7 @@ defmodule QuickBEAM.VM.Builtin do
 
   # ── Runtime dispatch ──
 
-    alias QuickBEAM.VM.JSThrow
+  alias QuickBEAM.VM.JSThrow
 
   @doc "Dispatches a VM callable value to its underlying Elixir callback."
   def call({:builtin, _, cb}, args, this), do: cb.(args, this)

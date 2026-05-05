@@ -1,4 +1,4 @@
-defmodule QuickBEAM.JSError do
+defmodule QuickBEAM.JS.Error do
   defexception [:message, :name, :stack]
 
   @type t :: %__MODULE__{

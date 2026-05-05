@@ -1454,6 +1454,13 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, ~S|4:{"a":1,"b":2,"c":3,"d":4}|} = Compiler.invoke(fun, [])
     end
 
+    test "normalizes numeric object literal keys", %{rt: rt} do
+      fun =
+        compile_and_decode(rt, ~S|var object = {1 : true}; object[1] + ":" + object["1"]|).value
+
+      assert {:ok, "true:true"} = Compiler.invoke(fun, [])
+    end
+
     test "compiles for-of loops over arrays", %{rt: rt} do
       fun =
         compile_and_decode(rt, "(function(a){ let s=0; for (const x of a) s += x; return s })")

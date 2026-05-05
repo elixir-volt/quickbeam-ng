@@ -33,7 +33,7 @@ defmodule QuickBEAM.Server do
       defp js_error_transform do
         fn
           {:ok, value} -> {:ok, value}
-          {:error, value} -> {:error, QuickBEAM.JSError.from_js_value(value)}
+          {:error, value} -> {:error, QuickBEAM.JS.Error.from_js_value(value)}
         end
       end
 

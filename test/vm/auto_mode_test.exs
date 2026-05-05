@@ -28,7 +28,7 @@ defmodule QuickBEAM.VM.AutoModeTest do
     {:ok, rt} = QuickBEAM.start(mode: :auto, apis: false)
 
     try do
-      assert {:error, %QuickBEAM.JSError{name: "Error", message: "boom"}} =
+      assert {:error, %QuickBEAM.JS.Error{name: "Error", message: "boom"}} =
                QuickBEAM.eval(rt, "throw new Error('boom')")
     after
       QuickBEAM.stop(rt)

@@ -88,7 +88,7 @@ defmodule QuickBEAM.Runtime do
   end
 
   @spec compile(GenServer.server(), String.t(), String.t()) ::
-          {:ok, binary()} | {:error, QuickBEAM.JSError.t() | String.t()}
+          {:ok, binary()} | {:error, QuickBEAM.JS.Error.t() | String.t()}
   def compile(server, code, filename \\ "") when is_binary(code) and is_binary(filename) do
     GenServer.call(server, {:compile, code, filename}, :infinity)
   end
@@ -374,7 +374,7 @@ defmodule QuickBEAM.Runtime do
         {:ok, state}
 
       {^ref, {:error, value}} when is_map(value) ->
-        {:error, {:script_error, path, QuickBEAM.JSError.from_js_value(value)}, state}
+        {:error, {:script_error, path, QuickBEAM.JS.Error.from_js_value(value)}, state}
 
       {^ref, {:error, reason}} ->
         {:error, {:script_error, path, reason}, state}
@@ -485,7 +485,7 @@ defmodule QuickBEAM.Runtime do
 
       case result do
         {:ok, value} -> {:ok, value}
-        {:error, value} -> {:error, QuickBEAM.JSError.from_js_value(value)}
+        {:error, value} -> {:error, QuickBEAM.JS.Error.from_js_value(value)}
       end
     end
 
@@ -509,7 +509,7 @@ defmodule QuickBEAM.Runtime do
     transform = fn
       {:ok, {:bytes, bytecode}} -> {:ok, bytecode}
       {:ok, bytecode} -> {:ok, bytecode}
-      {:error, value} -> {:error, QuickBEAM.JSError.from_js_value(value)}
+      {:error, value} -> {:error, QuickBEAM.JS.Error.from_js_value(value)}
     end
 
     {:noreply, put_pending(state, ref, from, transform)}
@@ -520,7 +520,7 @@ defmodule QuickBEAM.Runtime do
 
     transform = fn
       {:ok, value} -> {:ok, value}
-      {:error, value} -> {:error, QuickBEAM.JSError.from_js_value(value)}
+      {:error, value} -> {:error, QuickBEAM.JS.Error.from_js_value(value)}
     end
 
     {:noreply, put_pending(state, ref, from, transform)}
@@ -536,7 +536,7 @@ defmodule QuickBEAM.Runtime do
 
     transform = fn
       {:ok, _} -> :ok
-      {:error, value} -> {:error, QuickBEAM.JSError.from_js_value(value)}
+      {:error, value} -> {:error, QuickBEAM.JS.Error.from_js_value(value)}
     end
 
     {:noreply, put_pending(state, ref, from, transform)}

@@ -38,7 +38,9 @@ defmodule QuickBEAM.VM.Runtime.Function do
   def proto_property({:closure, _, %QuickBEAM.VM.Function{} = f}, "length"),
     do: f.defined_arg_count
 
-  def proto_property({:closure, _, %QuickBEAM.VM.Function{} = f}, "fileName"), do: f.filename || ""
+  def proto_property({:closure, _, %QuickBEAM.VM.Function{} = f}, "fileName"),
+    do: f.filename || ""
+
   def proto_property({:closure, _, %QuickBEAM.VM.Function{} = f}, "lineNumber"), do: f.line_num
   def proto_property({:closure, _, %QuickBEAM.VM.Function{} = f}, "columnNumber"), do: f.col_num
 
@@ -54,11 +56,20 @@ defmodule QuickBEAM.VM.Runtime.Function do
     {:builtin, "toString",
      fn _, _ ->
        case fun do
-         {:closure, _, %QuickBEAM.VM.Function{source: src}} when is_binary(src) and src != "" -> src
-         %QuickBEAM.VM.Function{source: src} when is_binary(src) and src != "" -> src
-         {:builtin, name, _} -> "function #{name}() { [native code] }"
-         {:bound, _, _, _, _} -> "function () { [native code] }"
-         _ -> "function () { [native code] }"
+         {:closure, _, %QuickBEAM.VM.Function{source: src}} when is_binary(src) and src != "" ->
+           src
+
+         %QuickBEAM.VM.Function{source: src} when is_binary(src) and src != "" ->
+           src
+
+         {:builtin, name, _} ->
+           "function #{name}() { [native code] }"
+
+         {:bound, _, _, _, _} ->
+           "function () { [native code] }"
+
+         _ ->
+           "function () { [native code] }"
        end
      end}
   end

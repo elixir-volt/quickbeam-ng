@@ -31,7 +31,6 @@ defmodule QuickBEAM.VM.Interpreter.Values do
             sar: 2,
             shr: 2}
 
-  
   # --- Truthiness ---
 
   @doc "Returns JavaScript truthiness for a VM value."

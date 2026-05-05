@@ -72,7 +72,7 @@ defmodule QuickBEAM.JSEngineTest do
 
         case QuickBEAM.eval(rt, code, mode: :beam, filename: unquote(file)) do
           {:ok, _} -> :ok
-          {:error, %QuickBEAM.JSError{message: msg}} -> flunk("JS: #{msg}")
+          {:error, %QuickBEAM.JS.Error{message: msg}} -> flunk("JS: #{msg}")
           {:error, err} -> flunk("JS error: #{inspect(err)}")
         end
       end

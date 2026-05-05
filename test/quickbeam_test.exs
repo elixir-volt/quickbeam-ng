@@ -80,26 +80,26 @@ defmodule QuickBEAMTest do
   end
 
   describe "errors" do
-    test "thrown errors return JSError", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{message: "boom", name: "Error"}} =
+    test "thrown errors return JS errors", %{rt: rt} do
+      assert {:error, %QuickBEAM.JS.Error{message: "boom", name: "Error"}} =
                QuickBEAM.eval(rt, ~s[throw new Error("boom")])
     end
 
     test "reference errors", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{name: "ReferenceError"} = err} =
+      assert {:error, %QuickBEAM.JS.Error{name: "ReferenceError"} = err} =
                QuickBEAM.eval(rt, "undeclaredVar")
 
       assert err.message =~ "is not defined"
     end
 
     test "syntax errors", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{name: "SyntaxError"}} =
+      assert {:error, %QuickBEAM.JS.Error{name: "SyntaxError"}} =
                QuickBEAM.eval(rt, "if (")
     end
 
     @tag :nif_only
     test "error has stack trace", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{stack: stack}} =
+      assert {:error, %QuickBEAM.JS.Error{stack: stack}} =
                QuickBEAM.eval(rt, ~s[throw new Error("test")])
 
       assert is_binary(stack)
@@ -107,12 +107,12 @@ defmodule QuickBEAMTest do
     end
 
     test "thrown non-Error values", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{message: "just a string"}} =
+      assert {:error, %QuickBEAM.JS.Error{message: "just a string"}} =
                QuickBEAM.eval(rt, ~s[throw "just a string"])
     end
 
     test "TypeError", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{name: "TypeError"}} =
+      assert {:error, %QuickBEAM.JS.Error{name: "TypeError"}} =
                QuickBEAM.eval(rt, "null.foo")
     end
   end
@@ -124,7 +124,7 @@ defmodule QuickBEAMTest do
 
     @tag :nif_only
     test "Promise.reject", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{message: "nope"}} =
+      assert {:error, %QuickBEAM.JS.Error{message: "nope"}} =
                QuickBEAM.eval(rt, "Promise.reject(new Error('nope'))")
     end
 
@@ -172,7 +172,7 @@ defmodule QuickBEAMTest do
 
   describe "load_module" do
     test "returns a JS error when top-level module evaluation throws", %{rt: rt} do
-      assert {:error, %QuickBEAM.JSError{name: "Error", message: "boom"}} =
+      assert {:error, %QuickBEAM.JS.Error{name: "Error", message: "boom"}} =
                QuickBEAM.load_module(rt, "broken", ~s[throw new Error("boom")])
     end
   end
@@ -379,7 +379,7 @@ defmodule QuickBEAMTest do
     @tag :nif_only
     test "compile reports syntax errors" do
       {:ok, rt} = QuickBEAM.start()
-      {:error, %QuickBEAM.JSError{}} = QuickBEAM.compile(rt, "function {")
+      {:error, %QuickBEAM.JS.Error{}} = QuickBEAM.compile(rt, "function {")
       QuickBEAM.stop(rt)
     end
 
@@ -518,7 +518,7 @@ defmodule QuickBEAMTest do
       code = "function deep(n) { return n <= 0 ? 0 : deep(n - 1) }; deep(50)"
 
       {:ok, rt_small} = QuickBEAM.start(apis: false, max_stack_size: 128 * 1024)
-      {:error, %QuickBEAM.JSError{name: "RangeError"}} = QuickBEAM.eval(rt_small, code)
+      {:error, %QuickBEAM.JS.Error{name: "RangeError"}} = QuickBEAM.eval(rt_small, code)
       QuickBEAM.stop(rt_small)
 
       {:ok, rt_large} = QuickBEAM.start(apis: false, max_stack_size: 16 * 1024 * 1024)
@@ -530,7 +530,7 @@ defmodule QuickBEAMTest do
     test "memory_limit caps allocation" do
       {:ok, rt} = QuickBEAM.start(memory_limit: 1024 * 1024)
 
-      {:error, %QuickBEAM.JSError{}} =
+      {:error, %QuickBEAM.JS.Error{}} =
         QuickBEAM.eval(rt, "new Array(100000).fill('x'.repeat(100))")
 
       QuickBEAM.stop(rt)

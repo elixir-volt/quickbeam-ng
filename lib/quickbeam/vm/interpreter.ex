@@ -18,7 +18,7 @@ defmodule QuickBEAM.VM.Interpreter do
     Stacktrace
   }
 
-  alias QuickBEAM.JSError
+  alias QuickBEAM.JS.Error, as: JSError
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
   alias QuickBEAM.VM.JSThrow
 

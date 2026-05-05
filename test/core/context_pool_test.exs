@@ -337,7 +337,7 @@ defmodule QuickBEAM.Core.ContextPoolTest do
     {:ok, ctx} =
       QuickBEAM.Context.start_link(pool: pool, apis: false, max_reductions: 1_000)
 
-    assert {:error, %QuickBEAM.JSError{message: "interrupted"}} =
+    assert {:error, %QuickBEAM.JS.Error{message: "interrupted"}} =
              QuickBEAM.Context.eval(
                ctx,
                "(() => { let s = 0; for(let i = 0; i < 10000000; i++) s += i; return s })()"

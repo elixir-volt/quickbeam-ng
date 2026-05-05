@@ -127,7 +127,7 @@ defmodule QuickBEAM.JS.Parser.QuickJSAcceptanceAuditTest do
               {:ok, _} ->
                 :ok
 
-              {:error, %QuickBEAM.JSError{name: name, message: message}} ->
+              {:error, %QuickBEAM.JS.Error{name: name, message: message}} ->
                 {:error, name, message}
             end
 

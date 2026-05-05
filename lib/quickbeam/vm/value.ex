@@ -1,7 +1,6 @@
 defmodule QuickBEAM.VM.Value do
   @moduledoc "Type definitions and guards for JS values in the BEAM VM."
 
-  
   @type heap_ref :: reference() | pos_integer()
   @type object :: {:obj, heap_ref()}
   @type closure :: {:closure, map(), QuickBEAM.VM.Function.t()}

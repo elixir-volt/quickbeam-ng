@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   import QuickBEAM.VM.Heap.Keys
 
-    alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime

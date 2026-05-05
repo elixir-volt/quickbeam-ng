@@ -104,7 +104,7 @@ cases =
 cases = if limit == :infinity, do: cases, else: Enum.take(cases, limit)
 
 js_error? = fn
-  {:error, %QuickBEAM.JSError{}} -> true
+  {:error, %QuickBEAM.JS.Error{}} -> true
   {:error, {:js_throw, _}} -> true
   _ -> false
 end

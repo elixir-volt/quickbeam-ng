@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   import QuickBEAM.VM.Heap.Keys
   use QuickBEAM.VM.Builtin
 
-    alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.Get

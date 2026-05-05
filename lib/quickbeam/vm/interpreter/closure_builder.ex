@@ -103,6 +103,8 @@ defmodule QuickBEAM.VM.Interpreter.ClosureBuilder do
        }),
        do: n
 
-  defp current_function_arg_count(%Context{current_func: %QuickBEAM.VM.Function{arg_count: n}}), do: n
+  defp current_function_arg_count(%Context{current_func: %QuickBEAM.VM.Function{arg_count: n}}),
+    do: n
+
   defp current_function_arg_count(%Context{arg_buf: arg_buf}), do: tuple_size(arg_buf)
 end

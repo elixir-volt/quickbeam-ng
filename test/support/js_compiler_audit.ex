@@ -280,7 +280,7 @@ defmodule QuickBEAM.JS.CompilerAudit do
   defp normalize({:closure, _captures, %QuickBEAM.VM.Function{}}), do: :function
   defp normalize({:builtin, name, callback}) when is_function(callback), do: {:builtin, name}
   defp normalize(%QuickBEAM.VM.Function{}), do: :function
-  defp normalize(%QuickBEAM.JSError{} = error), do: {:js_error, error.name, error.message}
+  defp normalize(%QuickBEAM.JS.Error{} = error), do: {:js_error, error.name, error.message}
   defp normalize(value) when is_list(value), do: {:array, Enum.map(value, &normalize/1)}
 
   defp normalize(%struct{} = value) when is_atom(struct), do: {struct, inspect(value)}

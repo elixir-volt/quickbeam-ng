@@ -36,6 +36,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   @doc "Writes a field using the fast shape path when possible."
   def put_field({:obj, ref}, key, val) do
+    key = normalize_key(key)
+
     case Process.get(ref) do
       {:shape, shape_id, offsets, vals, proto} ->
         shape_put(ref, shape_id, offsets, vals, proto, key, val)
@@ -415,7 +417,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           _ -> {:accessor, fun, nil}
         end
 
-      Map.put(map, key, desc)
+      put_property_preserving_order(map, key, desc)
     end)
   end
 
@@ -427,9 +429,17 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           _ -> {:accessor, nil, fun}
         end
 
-      result = Map.put(map, key, desc)
-      result
+      put_property_preserving_order(map, key, desc)
     end)
+  end
+
+  defp put_property_preserving_order(map, key, value) do
+    if not Map.has_key?(map, key) and (is_binary(key) or is_integer(key)) do
+      order = Map.get(map, key_order(), [])
+      Map.put(Map.put(map, key, value), key_order(), [key | order])
+    else
+      Map.put(map, key, value)
+    end
   end
 
   defp invoke_setter(fun, val, this_obj) do

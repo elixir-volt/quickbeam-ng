@@ -2,7 +2,7 @@ defmodule QuickBEAM do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.Bytecode
-  alias QuickBEAM.JSError
+  alias QuickBEAM.JS.Error, as: JSError
   alias QuickBEAM.Native
   alias QuickBEAM.Runtime
   alias QuickBEAM.VM.BytecodeParser, as: BeamBytecodeParser
@@ -67,7 +67,7 @@ defmodule QuickBEAM do
   """
 
   @type runtime :: GenServer.server()
-  @type js_result :: {:ok, term()} | {:error, QuickBEAM.JSError.t()}
+  @type js_result :: {:ok, term()} | {:error, QuickBEAM.JS.Error.t()}
 
   @doc false
   def child_spec(opts) do
@@ -136,7 +136,7 @@ defmodule QuickBEAM do
       The runtime remains usable after a timeout.
 
           QuickBEAM.eval(rt, "while(true) {}", timeout: 1000)
-          # => {:error, %QuickBEAM.JSError{message: "interrupted", ...}}
+          # => {:error, %QuickBEAM.JS.Error{message: "interrupted", ...}}
 
     * `:vars` — a map of variable names to values, available in the code as
       globals. Values are converted using the standard BEAM→JS conversion.
@@ -830,7 +830,7 @@ defmodule QuickBEAM do
   into any runtime with `load_bytecode/2`. Useful for precompilation, caching,
   and transferring compiled code between runtimes or nodes.
   """
-  @spec compile(runtime(), String.t()) :: {:ok, binary()} | {:error, QuickBEAM.JSError.t()}
+  @spec compile(runtime(), String.t()) :: {:ok, binary()} | {:error, QuickBEAM.JS.Error.t()}
   def compile(runtime, code) do
     Runtime.compile(runtime, code)
   end
@@ -989,7 +989,7 @@ defmodule QuickBEAM do
       {:ok, mine} = QuickBEAM.globals(rt, user_only: true)
       # ["myVar", "myFunc"]
   """
-  @spec globals(runtime(), keyword()) :: {:ok, [String.t()]} | {:error, QuickBEAM.JSError.t()}
+  @spec globals(runtime(), keyword()) :: {:ok, [String.t()]} | {:error, QuickBEAM.JS.Error.t()}
   def globals(runtime, opts \\ []) do
     user_only = Keyword.get(opts, :user_only, false)
 

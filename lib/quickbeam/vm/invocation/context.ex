@@ -42,7 +42,8 @@ defmodule QuickBEAM.VM.Invocation.Context do
       do: ctx
 
   def attach_method_state(
-        %Context{current_func: {:closure, _, %QuickBEAM.VM.Function{need_home_object: false}}} = ctx
+        %Context{current_func: {:closure, _, %QuickBEAM.VM.Function{need_home_object: false}}} =
+          ctx
       ),
       do: ctx
 
