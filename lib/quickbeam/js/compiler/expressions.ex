@@ -123,8 +123,15 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
   def compile(%AST.Identifier{name: "NaN"}, _scope, instructions, constants, _callbacks),
     do: {:ok, instructions ++ [{:get_var, "NaN"}], constants}
 
-  def compile(%AST.Identifier{name: "arguments"}, _scope, instructions, constants, _callbacks),
-    do: {:ok, instructions ++ [{:get_var, "arguments"}], constants}
+  def compile(%AST.Identifier{name: "arguments"}, scope, instructions, constants, callbacks) do
+    case callbacks.resolve.(scope, "arguments") do
+      slot when slot in [:error, {:global, "arguments"}] ->
+        {:ok, instructions ++ [{:get_var, "arguments"}], constants}
+
+      slot ->
+        {:ok, instructions ++ [Slots.read(slot)], constants}
+    end
+  end
 
   def compile(
         %AST.MemberExpression{
@@ -889,7 +896,7 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
         callbacks
       ) do
     expression = %AST.FunctionExpression{
-      type: :function_expression,
+      type: :arrow_function_expression,
       id: nil,
       params: params,
       body: arrow_body(body),
@@ -910,8 +917,11 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
     name = function_name(id)
 
     with {:ok, factory} <-
-           Statements.class_factory_from_expression(name, super_class, body, scope) do
-      compile(factory, scope, instructions, constants, callbacks)
+           Statements.class_factory_from_expression(name, super_class, body, scope),
+         {:ok, instructions, constants} <-
+           compile(factory, scope, instructions, constants, callbacks) do
+      bind_name = if is_binary(name), do: [:dup, {:put_var, name}], else: []
+      {:ok, instructions ++ [{:call, 0}] ++ bind_name, constants}
     end
   end
 
@@ -1109,16 +1119,21 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
       ) do
     case Process.get(:compiler_super_class) do
       %AST.Identifier{name: parent_name} ->
-        with {:ok, args} <- expand_call_args(args),
-             {:ok, instructions, constants} <-
-               compile_call_args(
-                 args,
-                 scope,
-                 instructions ++ [{:get_var, parent_name}, {:get_var, parent_name}],
-                 constants,
-                 callbacks
-               ) do
-          {:ok, instructions ++ [{:call_constructor, length(args)}], constants}
+        with {:ok, args} <- expand_call_args(args) do
+          if args == [] do
+            {:ok, instructions ++ [:init_ctor], constants}
+          else
+            with {:ok, instructions, constants} <-
+                   compile_call_args(
+                     args,
+                     scope,
+                     instructions ++ [{:get_var, parent_name}, {:get_var, parent_name}],
+                     constants,
+                     callbacks
+                   ) do
+              {:ok, instructions ++ [{:call_constructor, length(args)}], constants}
+            end
+          end
         end
 
       _ ->

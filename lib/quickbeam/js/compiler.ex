@@ -133,10 +133,17 @@ defmodule QuickBEAM.JS.Compiler do
   defp compile_function_full(function, name, globals) do
     {params, defaults, rest_param, pattern_params} = normalize_params(function.params)
     scope = Scope.new(params, globals)
+    self_binding_name = function_self_binding_name(function)
+    scope = if self_binding_name, do: Scope.declare_local(scope, self_binding_name), else: scope
     scope = declare_param_patterns(scope, pattern_params)
-    uses_arguments? = references_arguments?(function.body)
+    uses_arguments? = references_arguments?([function.body | function.params])
     has_params? = function.params != []
-    uses_arguments_object? = uses_arguments? and not has_params?
+
+    lexical_arguments? =
+      match?(%AST.ArrowFunctionExpression{}, function) or
+        function.type == :arrow_function_expression
+
+    uses_arguments_object? = uses_arguments? and not lexical_arguments?
     scope = if uses_arguments_object?, do: Scope.declare_local(scope, "<arguments>"), else: scope
 
     scope =
@@ -158,12 +165,18 @@ defmodule QuickBEAM.JS.Compiler do
          {:ok, instructions, constants} <- compile_param_patterns(pattern_params, scope, [], []),
          {:ok, instructions, constants} <- compile_rest_param(rest_param, instructions, constants),
          {:ok, instructions, constants} <-
-           compile_param_defaults(defaults, scope, instructions, constants, globals),
+           compile_self_binding_prologue(self_binding_name, scope, instructions, constants),
          {:ok, instructions, constants} <-
            compile_arguments_prologue(uses_arguments_object?, scope, instructions, constants),
          {:ok, instructions, constants} <-
+           compile_param_defaults(defaults, scope, instructions, constants, globals),
+         {:ok, instructions, constants} <-
            compile_function_body(function.body.body, scope, instructions, constants, globals) do
-      instructions = ensure_function_return(instructions)
+      instructions =
+        instructions
+        |> ensure_function_return()
+        |> ensure_derived_constructor_return()
+
       var_refs = Process.get(:compiler_var_refs, %{})
       Process.put(:compiler_var_refs, prev_var_refs)
 
@@ -202,7 +215,7 @@ defmodule QuickBEAM.JS.Compiler do
          var_ref_count: var_ref_count,
          constants: Enum.reverse(constants),
          instructions: instructions,
-         defined_arg_count: defined_arg_count(params, rest_param),
+         defined_arg_count: defined_arg_count(params, defaults, rest_param),
          has_prototype: true,
          has_simple_parameter_list: defaults == [] and rest_param == nil,
          new_target_allowed: true,
@@ -242,21 +255,28 @@ defmodule QuickBEAM.JS.Compiler do
   defp function_kind(%{generator: true}), do: 1
   defp function_kind(_), do: 0
 
-  defp compile_function_stub(_function, name) do
+  defp compile_function_stub(function, name) do
+    {params, defaults, rest_param, _pattern_params} = normalize_params(function.params || [])
+
     {:ok,
      FunctionBuilder.build(
        name: name,
-       args: [],
+       args: params,
        locals: [],
        constants: [],
        instructions: [:return_undef],
-       defined_arg_count: 0,
+       defined_arg_count: defined_arg_count(params, defaults, rest_param),
        has_prototype: true,
        has_simple_parameter_list: true,
        new_target_allowed: true,
        source: ""
      )}
   end
+
+  defp function_self_binding_name(%AST.FunctionExpression{id: %AST.Identifier{name: name}}),
+    do: name
+
+  defp function_self_binding_name(_function), do: nil
 
   defp references_arguments?(%AST.BlockStatement{body: body}), do: references_arguments?(body)
 
@@ -275,6 +295,16 @@ defmodule QuickBEAM.JS.Compiler do
 
   defp references_arguments?(_), do: false
 
+  defp compile_self_binding_prologue(nil, _scope, instructions, constants),
+    do: {:ok, instructions, constants}
+
+  defp compile_self_binding_prologue(name, scope, instructions, constants) do
+    case Scope.resolve(scope, name) do
+      {:loc, loc} -> {:ok, instructions ++ [{:special_object, 2}, {:put_loc, loc}], constants}
+      _ -> {:ok, instructions, constants}
+    end
+  end
+
   defp compile_arguments_prologue(false, _scope, instructions, constants),
     do: {:ok, instructions, constants}
 
@@ -290,6 +320,14 @@ defmodule QuickBEAM.JS.Compiler do
 
   defp finish_program([]), do: [:undefined, {:set_loc, 0}, :return]
   defp finish_program(instructions), do: instructions ++ [:return]
+
+  defp ensure_derived_constructor_return(instructions) do
+    if Process.get(:compiler_derived_ctor, false) and List.last(instructions) == :return_undef do
+      Enum.drop(instructions, -1) ++ [:push_this, :return]
+    else
+      instructions
+    end
+  end
 
   defp ensure_function_return([]), do: [:return_undef]
 
@@ -355,8 +393,27 @@ defmodule QuickBEAM.JS.Compiler do
 
   defp synthetic_param_name(index), do: "<param:#{index}>"
 
-  defp defined_arg_count(params, nil), do: length(params)
-  defp defined_arg_count(_params, {start, _index}), do: start
+  defp defined_arg_count(params, defaults, rest_param) do
+    default_indexes =
+      Enum.map(defaults, fn
+        {name, _default} when is_binary(name) ->
+          Enum.find_index(params, &(&1 == name)) || length(params)
+
+        {index, _default} when is_integer(index) ->
+          index
+      end)
+
+    rest_indexes =
+      case rest_param do
+        {start, _index} -> [start]
+        nil -> []
+      end
+
+    case default_indexes ++ rest_indexes do
+      [] -> length(params)
+      indexes -> Enum.min(indexes)
+    end
+  end
 
   defp declare_param_patterns(scope, pattern_params) do
     Enum.reduce(pattern_params, scope, fn {_index, _name, pattern}, scope ->
@@ -473,7 +530,12 @@ defmodule QuickBEAM.JS.Compiler do
 
   defp compile_param_defaults([{name, default} | rest], scope, instructions, constants, globals) do
     end_label = unique_label(:default_param_end)
-    slot = Scope.resolve(scope, name)
+
+    slot =
+      case name do
+        index when is_integer(index) -> {:arg, index}
+        name when is_binary(name) -> Scope.resolve(scope, name)
+      end
 
     with {:ok, instructions, constants} <-
            compile_expression(

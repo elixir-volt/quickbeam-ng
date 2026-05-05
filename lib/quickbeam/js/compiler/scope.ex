@@ -33,16 +33,30 @@ defmodule QuickBEAM.JS.Compiler.Scope do
     end
   end
 
-  def names(%__MODULE__{} = scope),
-    do: Map.keys(scope.args) ++ scope.local_names ++ Map.keys(scope.var_refs)
+  def names(%__MODULE__{} = scope) do
+    aliases = if Map.has_key?(scope.locals, "<arguments>"), do: ["arguments"], else: []
+    Map.keys(scope.args) ++ scope.local_names ++ aliases ++ Map.keys(scope.var_refs)
+  end
 
   def resolve(%__MODULE__{} = scope, name) when is_binary(name) do
     cond do
-      Map.has_key?(scope.var_refs, name) -> {:var_ref, Map.fetch!(scope.var_refs, name)}
-      Map.has_key?(scope.args, name) -> {:arg, Map.fetch!(scope.args, name)}
-      Map.has_key?(scope.locals, name) -> {:loc, Map.fetch!(scope.locals, name)}
-      MapSet.member?(scope.globals, name) -> {:global, name}
-      true -> :error
+      name == "arguments" and Map.has_key?(scope.locals, "<arguments>") ->
+        {:loc, Map.fetch!(scope.locals, "<arguments>")}
+
+      Map.has_key?(scope.var_refs, name) ->
+        {:var_ref, Map.fetch!(scope.var_refs, name)}
+
+      Map.has_key?(scope.args, name) ->
+        {:arg, Map.fetch!(scope.args, name)}
+
+      Map.has_key?(scope.locals, name) ->
+        {:loc, Map.fetch!(scope.locals, name)}
+
+      MapSet.member?(scope.globals, name) ->
+        {:global, name}
+
+      true ->
+        :error
     end
   end
 end

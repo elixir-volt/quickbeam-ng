@@ -66,6 +66,12 @@ defmodule QuickBEAM.VM.Names do
 
   def rename_function(%QuickBEAM.VM.Function{} = fun, name), do: %{fun | name: name}
   def rename_function({:builtin, _, cb}, name), do: {:builtin, name, cb}
+
+  def rename_function({:obj, ref} = obj, name) do
+    QuickBEAM.VM.Heap.update_obj(ref, %{}, &Map.put(&1, "name", name))
+    obj
+  end
+
   def rename_function(other, _name), do: other
 
   def normalize_property_key(idx) do

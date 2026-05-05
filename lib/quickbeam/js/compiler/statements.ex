@@ -1,7 +1,7 @@
 defmodule QuickBEAM.JS.Compiler.Statements do
   @moduledoc false
 
-  alias QuickBEAM.JS.Compiler.{Captures, Emitter, Slots}
+  alias QuickBEAM.JS.Compiler.{Captures, Emitter, Scope, Slots}
   alias QuickBEAM.JS.Parser.AST
 
   def compile_all(statements, %Emitter{} = emitter) do
@@ -141,23 +141,111 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         callbacks
       ) do
     captures = Captures.captured_names(declaration, scope)
-    declaration = Captures.prepend_params(declaration, captures)
 
-    with {:ok, function} <- callbacks.compile_function.(declaration, name),
-         {:ok, instructions, constants} <-
-           Captures.bind(
-             captures,
-             scope,
-             instructions ++ [{:closure, length(constants)}],
-             [function | constants]
-           ) do
-      case callbacks.resolve.(scope, name) do
-        {:loc, loc} ->
-          {:ok, instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}], constants}
-
-        :error ->
-          {:error, {:unsupported, {:unresolved_identifier, name}}}
+    if captures != [] and references_arguments?(declaration.body) do
+      with {:ok, function} <-
+             compile_declaration_function(declaration, name, captures, scope, callbacks) do
+        instructions = instructions ++ [{:closure, length(constants)}]
+        constants = [function | constants]
+        bind_function_declaration(scope, name, instructions, constants)
       end
+    else
+      declaration = Captures.prepend_params(declaration, captures)
+
+      with {:ok, function} <- callbacks.compile_function.(declaration, name),
+           {:ok, instructions, constants} <-
+             Captures.bind(
+               captures,
+               scope,
+               instructions ++ [{:closure, length(constants)}],
+               [function | constants]
+             ) do
+        bind_function_declaration(scope, name, instructions, constants)
+      end
+    end
+  end
+
+  defp bind_function_declaration(scope, name, instructions, constants) do
+    case Scope.resolve(scope, name) do
+      {:loc, loc} ->
+        {:ok, instructions ++ [:dup, {:put_loc, loc}, {:put_var, name}], constants}
+
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
+    end
+  end
+
+  defp references_arguments?(%AST.Identifier{name: "arguments"}), do: true
+  defp references_arguments?(%AST.FunctionDeclaration{}), do: false
+  defp references_arguments?(%AST.FunctionExpression{}), do: false
+  defp references_arguments?(%AST.ArrowFunctionExpression{}), do: false
+  defp references_arguments?(%AST.ClassDeclaration{}), do: false
+  defp references_arguments?(%AST.ClassExpression{}), do: false
+
+  defp references_arguments?(%{__struct__: _} = node) do
+    node
+    |> Map.from_struct()
+    |> Map.values()
+    |> Enum.any?(&references_arguments?/1)
+  end
+
+  defp references_arguments?(list) when is_list(list),
+    do: Enum.any?(list, &references_arguments?/1)
+
+  defp references_arguments?(_), do: false
+
+  defp compile_declaration_function(declaration, name, [], _scope, callbacks),
+    do: callbacks.compile_function.(declaration, name)
+
+  defp compile_declaration_function(declaration, name, captures, scope, callbacks) do
+    parent_var_refs = Process.get(:compiler_var_refs) || %{}
+
+    parent_capture_var_refs =
+      captures
+      |> Enum.with_index(map_size(parent_var_refs))
+      |> Map.new(fn {capture_name, idx} -> {capture_name, idx} end)
+
+    child_capture_var_refs =
+      captures
+      |> Enum.with_index()
+      |> Map.new(fn {capture_name, idx} -> {capture_name, idx} end)
+
+    Process.put(:compiler_var_refs, Map.merge(parent_var_refs, parent_capture_var_refs))
+
+    closure_vars =
+      Enum.map(captures, fn capture_name ->
+        {closure_type, var_idx} = capture_source_slot(scope, capture_name)
+
+        %QuickBEAM.VM.ClosureVar{
+          name: capture_name,
+          var_idx: var_idx,
+          closure_type: closure_type,
+          is_const: false,
+          is_lexical: true,
+          var_kind: 0
+        }
+      end)
+
+    prev_closure_scope = Process.get(:compiler_closure_scope)
+    Process.put(:compiler_closure_scope, child_capture_var_refs)
+
+    case callbacks.compile_function.(declaration, name) do
+      {:ok, function} ->
+        Process.put(:compiler_closure_scope, prev_closure_scope)
+        {:ok, %{function | closure_vars: closure_vars, var_ref_count: length(closure_vars)}}
+
+      {:error, _} = error ->
+        Process.put(:compiler_closure_scope, prev_closure_scope)
+        error
+    end
+  end
+
+  defp capture_source_slot(scope, name) do
+    case Scope.resolve(scope, name) do
+      {:arg, idx} -> {1, idx}
+      {:loc, idx} -> {0, idx}
+      {:var_ref, idx} -> {2, idx}
+      _ -> {0, Map.get(scope.locals, name, 0)}
     end
   end
 
@@ -771,13 +859,13 @@ defmodule QuickBEAM.JS.Compiler.Statements do
   defp compile_if_alternate(alternate, scope, instructions, constants, opts, callbacks),
     do: compile(alternate, scope, instructions, constants, opts, callbacks)
 
-  defp class_factory(name, super_class, body) do
+  defp class_factory(_name, super_class, body) do
     with {:ok, super_name} <- class_super_name(super_class),
          {:ok, properties} <- class_properties(body, super_name) do
       {:ok,
        %AST.FunctionExpression{
          type: :function_expression,
-         id: %AST.Identifier{type: :identifier, name: name},
+         id: nil,
          params: [],
          body: %AST.BlockStatement{
            type: :block_statement,
@@ -1024,7 +1112,16 @@ defmodule QuickBEAM.JS.Compiler.Statements do
               [:undefined, {:put_loc, proto_loc}, :drop, {:set_loc, loc}, {:close_loc, proto_loc}] ++
               close_privates ++ [{:put_var, name}]
 
-          emit_define_statics(statics, loc, scope, instructions, constants, callbacks)
+          emit_define_statics(
+            statics,
+            loc,
+            scope,
+            instructions,
+            constants,
+            callbacks,
+            name,
+            super_class_name(super_class)
+          )
         end
 
       # Don't restore var_refs — keep accumulated for compile_program to pick up
@@ -1124,6 +1221,40 @@ defmodule QuickBEAM.JS.Compiler.Statements do
     end
   end
 
+  defp public_field_init_statements(body) do
+    Enum.flat_map(body, fn
+      %AST.FieldDefinition{static: false, computed: false, value: nil} ->
+        []
+
+      %AST.FieldDefinition{
+        static: false,
+        computed: false,
+        key: %AST.Identifier{name: name},
+        value: value
+      } ->
+        [
+          %AST.ExpressionStatement{
+            type: :expression_statement,
+            expression: %AST.AssignmentExpression{
+              type: :assignment_expression,
+              operator: "=",
+              left: %AST.MemberExpression{
+                type: :member_expression,
+                object: %AST.Identifier{type: :identifier, name: "this"},
+                property: %AST.Identifier{type: :identifier, name: name},
+                computed: false,
+                optional: false
+              },
+              right: value
+            }
+          }
+        ]
+
+      _ ->
+        []
+    end)
+  end
+
   defp compile_class_ctor(body, name, callbacks) do
     case Enum.find(body, &match?(%AST.MethodDefinition{kind: :constructor}, &1)) do
       %AST.MethodDefinition{value: v} ->
@@ -1135,7 +1266,10 @@ defmodule QuickBEAM.JS.Compiler.Statements do
             type: :function_expression,
             id: nil,
             params: [],
-            body: %AST.BlockStatement{type: :block_statement, body: []},
+            body: %AST.BlockStatement{
+              type: :block_statement,
+              body: public_field_init_statements(body)
+            },
             async: false,
             generator: false
           },
@@ -1242,11 +1376,11 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
   defp emit_define_method(_, _, _, _, _), do: {:error, {:unsupported, :class_element}}
 
-  defp emit_define_statics([], _l, _s, i, c, _cb), do: {:ok, i, c}
+  defp emit_define_statics([], _l, _s, i, c, _cb, _class_name, _super_name), do: {:ok, i, c}
 
-  defp emit_define_statics([m | rest], l, s, i, c, cb) do
-    with {:ok, i, c} <- emit_define_static(m, l, s, i, c, cb),
-         do: emit_define_statics(rest, l, s, i, c, cb)
+  defp emit_define_statics([m | rest], l, s, i, c, cb, class_name, super_name) do
+    with {:ok, i, c} <- emit_define_static(m, l, s, i, c, cb, class_name, super_name),
+         do: emit_define_statics(rest, l, s, i, c, cb, class_name, super_name)
   end
 
   defp emit_define_static(
@@ -1260,9 +1394,11 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          _s,
          i,
          c,
-         cb
+         cb,
+         _class_name,
+         super_name
        ) do
-    with {:ok, f} <- cb.compile_function.(v, n),
+    with {:ok, f} <- cb.compile_function.(rewrite_static_super(v, super_name), n),
          do: {:ok, i ++ [{:get_loc, l}, {:closure, length(c)}, {:put_field, n}], [f | c]}
   end
 
@@ -1272,10 +1408,12 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          s,
          i,
          c,
-         cb
+         cb,
+         _class_name,
+         super_name
        ) do
     with {:ok, i, c} <- cb.compile_expression.(key, s, i ++ [{:get_loc, l}], c),
-         {:ok, f} <- cb.compile_function.(v, nil) do
+         {:ok, f} <- cb.compile_function.(rewrite_static_super(v, super_name), nil) do
       {:ok, i ++ [{:closure, length(c)}, :define_array_el, :drop], [f | c]}
     end
   end
@@ -1291,13 +1429,16 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          s,
          i,
          c,
-         cb
+         cb,
+         class_name,
+         _super_name
        ) do
-    with {:ok, i, c} <- cb.compile_expression.(v, s, i ++ [{:get_loc, l}], c),
+    with {:ok, i, c} <-
+           cb.compile_expression.(rewrite_static_this(v, class_name), s, i ++ [{:get_loc, l}], c),
          do: {:ok, i ++ [{:put_field, n}], c}
   end
 
-  defp emit_define_static(_, _, _, _, _, _), do: {:error, {:unsupported, :class_element}}
+  defp emit_define_static(_, _, _, _, _, _, _, _), do: {:error, {:unsupported, :class_element}}
 
   defp nameable_expression?(%AST.FunctionExpression{id: nil}), do: true
   defp nameable_expression?(%AST.ArrowFunctionExpression{}), do: true
@@ -1362,7 +1503,7 @@ defmodule QuickBEAM.JS.Compiler.Statements do
        ) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(
-             value,
+             rewrite_static_this(value, class_name),
              scope,
              instructions ++ [{:get_var, class_name}],
              constants
@@ -1401,10 +1542,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
   defp compile_static_member(_member, _name, _scope, _instructions, _constants, _callbacks),
     do: {:error, {:unsupported, :class_element}}
 
-  def class_factory_from_expression(name, super_class, body, _scope) do
-    {instance_body, _static_body} = Enum.split_with(body, &(!static_member?(&1)))
-    class_factory(name, super_class, instance_body)
-  end
+  def class_factory_from_expression(name, super_class, body, _scope),
+    do: class_factory(name, super_class, body)
 
   defp super_class_name(%AST.Identifier{name: name}), do: name
   defp super_class_name(_), do: nil
@@ -1455,6 +1594,33 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
   defp class_property(
          %AST.MethodDefinition{
+           kind: kind,
+           static: true,
+           computed: computed,
+           key: key,
+           value: value
+         },
+         super_name
+       )
+       when kind in [:method, :get, :set] do
+    property_kind = if kind == :method, do: :init, else: kind
+
+    {:ok,
+     [
+       %AST.Property{
+         type: :property,
+         key: key,
+         value: rewrite_static_super(value, super_name),
+         kind: property_kind,
+         method: false,
+         shorthand: false,
+         computed: computed
+       }
+     ]}
+  end
+
+  defp class_property(
+         %AST.MethodDefinition{
            kind: :constructor,
            value: %AST.FunctionExpression{body: %AST.BlockStatement{body: body}}
          },
@@ -1468,6 +1634,86 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
   defp class_property(%AST.FieldDefinition{}, _super_name),
     do: {:error, {:unsupported, :class_element}}
+
+  defp rewrite_static_this(%AST.Identifier{name: "this"}, class_name),
+    do: %AST.Identifier{type: :identifier, name: class_name}
+
+  defp rewrite_static_this(
+         %AST.MemberExpression{object: object, property: property} = expression,
+         class_name
+       ) do
+    %{
+      expression
+      | object: rewrite_static_this(object, class_name),
+        property: rewrite_static_this(property, class_name)
+    }
+  end
+
+  defp rewrite_static_this(%{__struct__: _} = node, class_name) do
+    updates =
+      node
+      |> Map.from_struct()
+      |> Enum.map(fn
+        {key, value} when is_list(value) ->
+          {key, Enum.map(value, &rewrite_static_this(&1, class_name))}
+
+        {key, value} ->
+          {key, rewrite_static_this(value, class_name)}
+      end)
+      |> Map.new()
+
+    struct(node, updates)
+  end
+
+  defp rewrite_static_this(value, _class_name), do: value
+
+  defp rewrite_static_super(value, nil), do: value
+
+  defp rewrite_static_super(%AST.FunctionExpression{body: body} = function, super_name),
+    do: %{function | body: rewrite_static_super(body, super_name)}
+
+  defp rewrite_static_super(%AST.BlockStatement{body: body} = block, super_name),
+    do: %{block | body: Enum.map(body, &rewrite_static_super(&1, super_name))}
+
+  defp rewrite_static_super(%AST.ReturnStatement{argument: argument} = statement, super_name),
+    do: %{statement | argument: rewrite_static_super(argument, super_name)}
+
+  defp rewrite_static_super(
+         %AST.ExpressionStatement{expression: expression} = statement,
+         super_name
+       ),
+       do: %{statement | expression: rewrite_static_super(expression, super_name)}
+
+  defp rewrite_static_super(
+         %AST.CallExpression{callee: callee, arguments: args} = expression,
+         super_name
+       ) do
+    %{
+      expression
+      | callee: rewrite_static_super(callee, super_name),
+        arguments: Enum.map(args, &rewrite_static_super(&1, super_name))
+    }
+  end
+
+  defp rewrite_static_super(
+         %AST.MemberExpression{object: %AST.Identifier{name: "super"}} = expression,
+         super_name
+       ) do
+    %{expression | object: %AST.Identifier{type: :identifier, name: super_name}}
+  end
+
+  defp rewrite_static_super(
+         %AST.MemberExpression{object: object, property: property} = expression,
+         super_name
+       ) do
+    %{
+      expression
+      | object: rewrite_static_super(object, super_name),
+        property: rewrite_static_super(property, super_name)
+    }
+  end
+
+  defp rewrite_static_super(expression, _super_name), do: expression
 
   defp rewrite_super(value, nil), do: value
 

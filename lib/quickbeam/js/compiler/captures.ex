@@ -127,6 +127,9 @@ defmodule QuickBEAM.JS.Compiler.Captures do
   defp collect_identifiers(list, acc) when is_list(list),
     do: Enum.reduce(list, acc, &collect_identifiers/2)
 
+  defp collect_identifiers(%AST.MemberExpression{computed: false, object: object}, acc),
+    do: collect_identifiers(object, acc)
+
   defp collect_identifiers(%AST.Identifier{name: name}, acc), do: [name | acc]
 
   defp collect_identifiers(%_{} = node, acc) do
