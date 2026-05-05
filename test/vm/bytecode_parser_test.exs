@@ -1,7 +1,7 @@
-defmodule QuickBEAM.VM.BytecodeTest do
+defmodule QuickBEAM.VM.BytecodeParserTest do
   use ExUnit.Case, async: true
 
-  alias QuickBEAM.VM.{Bytecode, Function}
+  alias QuickBEAM.VM.{BytecodeParser, Function}
 
   setup do
     {:ok, rt} = QuickBEAM.start()
@@ -17,11 +17,11 @@ defmodule QuickBEAM.VM.BytecodeTest do
     %{rt: rt}
   end
 
-  # Helper: compile JS code and decode the bytecode.
+  # Helper: compile JS code with QuickJS and parse the resulting bytecode into VM IR.
   # The top-level is always an eval wrapper; extract the first Function from cpool.
   defp compile_and_decode(rt, code) do
     {:ok, bc} = QuickBEAM.compile(rt, code)
-    {:ok, parsed} = Bytecode.decode(bc)
+    {:ok, parsed} = BytecodeParser.decode(bc)
     parsed
   end
 
@@ -65,7 +65,7 @@ defmodule QuickBEAM.VM.BytecodeTest do
       parsed = compile_and_decode(rt, ~s|"hello"|)
       fun = parsed.value
       assert is_struct(fun, Function)
-      # String literals are pushed by bytecode ops, not stored in cpool for simple cases
+      # String literals are pushed by VM instructions, not stored in cpool for simple cases
       assert fun.stack_size > 0
       assert tuple_size(fun.instructions) > 0
     end
@@ -75,6 +75,15 @@ defmodule QuickBEAM.VM.BytecodeTest do
         parsed = compile_and_decode(rt, code)
         assert is_struct(parsed.value, Function)
       end
+    end
+
+    test "converts QuickJS pc2line offsets to instruction-index source positions", %{rt: rt} do
+      parsed = compile_and_decode(rt, "let x=1;\nlet y=2;\nx+y")
+      fun = parsed.value
+
+      assert tuple_size(fun.source_positions) == tuple_size(fun.instructions)
+      assert Enum.member?(Tuple.to_list(fun.source_positions), {3, 1})
+      assert QuickBEAM.VM.SourcePosition.source_position(fun, 8) == {3, 1}
     end
   end
 
@@ -191,15 +200,15 @@ defmodule QuickBEAM.VM.BytecodeTest do
     test "bad version", %{rt: rt} do
       {:ok, bc} = QuickBEAM.compile(rt, "42")
       bad_bc = <<0, binary_part(bc, 1, byte_size(bc) - 1)::binary>>
-      assert {:error, {:bad_version, 0}} = Bytecode.decode(bad_bc)
+      assert {:error, {:bad_version, 0}} = BytecodeParser.decode(bad_bc)
     end
 
     test "truncated data" do
-      assert {:error, _} = Bytecode.decode(<<24, 0, 0, 0, 0>>)
+      assert {:error, _} = BytecodeParser.decode(<<24, 0, 0, 0, 0>>)
     end
 
     test "empty binary" do
-      assert {:error, _} = Bytecode.decode(<<>>)
+      assert {:error, _} = BytecodeParser.decode(<<>>)
     end
   end
 

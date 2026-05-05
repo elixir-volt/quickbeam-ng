@@ -11,7 +11,7 @@ Code.require_file("support/preact_vm.exs", __DIR__)
 source = Bench.PreactVM.bundle_source!()
 props = Bench.PreactVM.props()
 
-# ── BEAM VM (interpreter + compiler share the same decoded bytecode) ──
+# ── BEAM VM (interpreter + compiler share the same parsed VM instructions) ──
 
 beam_run = fn invoke ->
   %{render_app: app, js_props: jp} = Bench.PreactVM.ensure_case!(source, props)

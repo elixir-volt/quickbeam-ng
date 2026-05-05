@@ -64,7 +64,7 @@ defmodule QuickBEAM.VM.Compiler do
 
   defp unwrap_resolved_promise(value, _depth), do: value
 
-  @doc "Compiles a bytecode function for optimized execution."
+  @doc "Compiles a VM function for optimized execution."
   def compile(%QuickBEAM.VM.Function{} = fun) do
     atoms = Heap.get_fn_atoms(fun, Heap.get_atoms())
     module = module_name(fun, atoms)

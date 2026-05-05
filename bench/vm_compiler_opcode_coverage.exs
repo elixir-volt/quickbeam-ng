@@ -2,7 +2,7 @@ Mix.Task.run("app.start")
 
 Code.require_file("../test/support/vm_compiler_audit.ex", __DIR__)
 
-alias QuickBEAM.VM.{Bytecode, Compiler, Decoder, Heap, Opcodes}
+alias QuickBEAM.VM.{BytecodeParser, Compiler, InstructionDecoder, Heap, Opcodes}
 alias QuickBEAM.VM.Compiler.Analysis.CFG
 alias QuickBEAM.VM.Compiler.Diagnostics
 
@@ -12,7 +12,7 @@ compile_source = fn source ->
 
   try do
     with {:ok, bytecode} <- QuickBEAM.compile(rt, source),
-         {:ok, parsed} <- Bytecode.decode(bytecode) do
+         {:ok, parsed} <- BytecodeParser.decode(bytecode) do
       {:ok, parsed}
     end
   after
@@ -50,7 +50,7 @@ opcode_rows = fn %QuickBEAM.VM.Function{instructions: instructions} when is_tupl
 end
 
 synthetic_function = fn byte_code ->
-  {:ok, instructions} = Decoder.decode(byte_code, 0)
+  {:ok, instructions} = InstructionDecoder.decode(byte_code, 0)
 
   %QuickBEAM.VM.Function{
     id: :erlang.unique_integer([:positive, :monotonic]),

@@ -11,6 +11,7 @@ defmodule QuickBEAM.VM.Function do
     col_num: 1,
     pc2line: <<>>,
     source: <<>>,
+    source_positions: nil,
     arg_count: 0,
     var_count: 0,
     defined_arg_count: 0,

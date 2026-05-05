@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
   alias QuickBEAM.VM.ObjectModel.{Delete, Get, Put}
 
-  @doc "Lowers a bytecode instruction or function into compiler IR."
+  @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, next_entry, stack_depths, name_args) do
     case name_args do
       {{:ok, :with_get_var}, [atom_idx, target, _is_with]} ->

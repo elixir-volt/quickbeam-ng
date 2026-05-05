@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.CompilerAudit do
   @moduledoc false
 
-  alias QuickBEAM.VM.{Bytecode, Compiler, Heap, Interpreter}
+  alias QuickBEAM.VM.{BytecodeParser, Compiler, Heap, Interpreter}
   alias QuickBEAM.VM.Heap.Arrays
 
   @gas 1_000_000_000
@@ -382,7 +382,7 @@ defmodule QuickBEAM.VM.CompilerAudit do
 
     try do
       case QuickBEAM.compile(rt, source) do
-        {:ok, bytecode} -> Bytecode.decode(bytecode)
+        {:ok, bytecode} -> BytecodeParser.decode(bytecode)
         error -> error
       end
     after

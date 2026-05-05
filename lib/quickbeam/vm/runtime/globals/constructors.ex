@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 1]
 
-  alias QuickBEAM.VM.{Bytecode, Heap}
+  alias QuickBEAM.VM.{BytecodeParser, Heap}
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Runtime
@@ -94,7 +94,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
 
       case QuickBEAM.Runtime.compile(ctx.runtime_pid, code) do
         {:ok, bytecode} ->
-          case Bytecode.decode(bytecode) do
+          case BytecodeParser.decode(bytecode) do
             {:ok, parsed} ->
               case Interpreter.eval(
                      parsed.value,

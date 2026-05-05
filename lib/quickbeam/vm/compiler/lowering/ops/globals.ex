@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.GlobalEnv
 
-  @doc "Lowers a bytecode instruction or function into compiler IR."
+  @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, name_args) do
     case name_args do
       {{:ok, :get_var}, [atom_idx]} ->

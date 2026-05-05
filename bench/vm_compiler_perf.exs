@@ -1,7 +1,7 @@
 Mix.Task.run("app.start")
 Code.require_file("support/common.exs", __DIR__)
 
-alias QuickBEAM.VM.{Bytecode, Compiler, Heap, Interpreter}
+alias QuickBEAM.VM.{BytecodeParser, Compiler, Heap, Interpreter}
 
 iterations = Bench.Support.env_integer("COMPILER_PERF_ITERATIONS", 2000)
 gas = 1_000_000_000
@@ -24,7 +24,7 @@ workload_specs = [
 
 prepare_function = fn rt, source ->
   {:ok, bytecode} = QuickBEAM.compile(rt, source)
-  {:ok, parsed} = Bytecode.decode(bytecode)
+  {:ok, parsed} = BytecodeParser.decode(bytecode)
   fun = hd(for %QuickBEAM.VM.Function{} = f <- parsed.value.constants, do: f)
 
   store_atoms = fn store_atoms, %QuickBEAM.VM.Function{} = fun ->

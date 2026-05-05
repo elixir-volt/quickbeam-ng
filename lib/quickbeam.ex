@@ -5,7 +5,7 @@ defmodule QuickBEAM do
   alias QuickBEAM.JSError
   alias QuickBEAM.Native
   alias QuickBEAM.Runtime
-  alias QuickBEAM.VM.Bytecode, as: BeamBytecode
+  alias QuickBEAM.VM.BytecodeParser, as: BeamBytecodeParser
   alias QuickBEAM.VM.Compiler, as: BeamCompiler
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter
@@ -220,7 +220,7 @@ defmodule QuickBEAM do
 
     case Runtime.compile(runtime, compile_code, Keyword.get(opts, :filename, "")) do
       {:ok, bc} ->
-        case BeamBytecode.decode(bc) do
+        case BeamBytecodeParser.decode(bc) do
           {:ok, parsed} ->
             result = eval_beam_bytecode(parsed, runtime, handler_globals, mode)
 
@@ -690,7 +690,7 @@ defmodule QuickBEAM do
 
     case Runtime.compile(runtime, wrapper) do
       {:ok, bc} ->
-        case BeamBytecode.decode(bc) do
+        case BeamBytecodeParser.decode(bc) do
           {:ok, parsed} ->
             case Interpreter.eval(
                    parsed.value,
@@ -818,7 +818,7 @@ defmodule QuickBEAM do
 
   defp disasm_beam(runtime, code, opts) do
     with {:ok, bytecode} <- Runtime.compile(runtime, code, Keyword.get(opts, :filename, "")),
-         {:ok, parsed} <- BeamBytecode.decode(bytecode) do
+         {:ok, parsed} <- BeamBytecodeParser.decode(bytecode) do
       BeamCompiler.disasm(parsed.value)
     end
   end

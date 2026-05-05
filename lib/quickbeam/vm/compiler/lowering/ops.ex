@@ -17,7 +17,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops do
     WithScope
   }
 
-  @doc "Lowers one bytecode instruction into compiler state changes."
+  @doc "Lowers one VM instruction into compiler state changes."
   def lower_instruction(
         {op, args},
         idx,

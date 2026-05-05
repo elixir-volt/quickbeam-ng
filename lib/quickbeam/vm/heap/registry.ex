@@ -40,9 +40,8 @@ defmodule QuickBEAM.VM.Heap.Registry do
 
   ## Caches (safe to drop — recomputed on demand)
   - `{:qb_compiled, key}` — compiled function cache
-  - `{:qb_decoded, key}` — decoded bytecode instruction cache
-  - `{:qb_fn_atoms, bytecode}` — per-function atom table cache
-  - `{:qb_capture_keys, bytecode}` — closure capture-key tuple cache
+  - `{:qb_fn_atoms, key}` — per-function atom table cache
+  - `{:qb_capture_keys, key}` — closure capture-key tuple cache
   - `{:qb_wrap_cache, keys_tuple}` — shape info cache for `Heap.wrap_keyed/2`
   - `{:qb_regexp_result, ref}` — last RegExp exec result (indices, groups)
   - `{:qb_string_codepoints, string}` — codepoint list cache for string iteration

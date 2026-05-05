@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.CompilerDifferentialTest do
   use ExUnit.Case, async: true
 
-  alias QuickBEAM.VM.{Bytecode, Compiler, Heap, Interpreter}
+  alias QuickBEAM.VM.{BytecodeParser, Compiler, Heap, Interpreter}
 
   setup do
     Heap.reset()
@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.CompilerDifferentialTest do
 
   defp prepare_function(rt, js) do
     {:ok, bc} = QuickBEAM.compile(rt, js)
-    {:ok, parsed} = Bytecode.decode(bc)
+    {:ok, parsed} = BytecodeParser.decode(bc)
     fun = hd(for %QuickBEAM.VM.Function{} = f <- parsed.value.constants, do: f)
     Heap.put_fn_atoms(fun, parsed.atoms)
     fun

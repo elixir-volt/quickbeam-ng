@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.AnalysisTest do
   use ExUnit.Case, async: true
 
-  alias QuickBEAM.VM.{Bytecode, Heap}
+  alias QuickBEAM.VM.{BytecodeParser, Heap}
   alias QuickBEAM.VM.Compiler.Analysis.{CFG, Stack, Types}
 
   setup do
@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.Compiler.AnalysisTest do
 
   defp compile_parsed(rt, code) do
     {:ok, bc} = QuickBEAM.compile(rt, code)
-    {:ok, parsed} = Bytecode.decode(bc)
+    {:ok, parsed} = BytecodeParser.decode(bc)
     parsed
   end
 

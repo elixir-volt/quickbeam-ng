@@ -47,7 +47,7 @@ defmodule QuickBEAM.VM.Heap.Context do
   def get_base_globals, do: Process.get(:qb_base_globals_cache)
   def put_base_globals(globals), do: Process.put(:qb_base_globals_cache, globals)
 
-  @doc "Returns the current bytecode atom table."
+  @doc "Returns the current VM atom table."
   def get_atoms, do: Process.get(:qb_atoms, {})
   def put_atoms(atoms), do: Process.put(:qb_atoms, atoms)
 

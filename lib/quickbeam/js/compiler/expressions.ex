@@ -1267,7 +1267,7 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
     with {:ok, rt} <- QuickBEAM.start(apis: false) do
       try do
         with {:ok, binary} <- QuickBEAM.compile(rt, raw),
-             {:ok, %{value: %{constants: constants}}} <- QuickBEAM.VM.Bytecode.decode(binary),
+             {:ok, %{value: %{constants: constants}}} <- QuickBEAM.VM.BytecodeParser.decode(binary),
              bytecode when is_binary(bytecode) <-
                Enum.find(constants, &regexp_bytecode_constant?(&1, pattern)) do
           {:ok, bytecode}

@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Decoder do
+defmodule QuickBEAM.VM.InstructionDecoder do
   @compile {:inline,
             get_u8: 2,
             get_i8: 2,
@@ -10,9 +10,9 @@ defmodule QuickBEAM.VM.Decoder do
             resolve_label: 2,
             short_form_operands: 2}
   @moduledoc """
-  Decodes raw QuickJS bytecode bytes into instruction tuples.
+  Decodes a raw QuickJS function bytecode body into VM instruction tuples.
 
-  Returns a tuple of {opcode_integer, args} indexed by instruction position
+  Returns a list of `{opcode_integer, args}` indexed by instruction position
   (NOT byte offset). Labels are resolved to instruction indices via a
   byte-offset-to-index map. Opcodes are raw integer tags for O(1) BEAM JIT
   jump-table dispatch.
@@ -24,7 +24,7 @@ defmodule QuickBEAM.VM.Decoder do
   @type instruction :: {non_neg_integer(), [term()]}
 
   @spec decode(binary()) :: {:ok, [instruction()]} | {:error, term()}
-  @doc "Decodes VM bytecode into structured instructions."
+  @doc "Decodes a QuickJS function bytecode body into structured VM instructions."
   def decode(byte_code, arg_count \\ 0) when is_binary(byte_code) do
     case build_offset_map(byte_code) do
       {:ok, offset_map} ->

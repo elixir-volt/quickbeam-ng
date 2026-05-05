@@ -1,6 +1,6 @@
-defmodule QuickBEAM.VM.Bytecode do
+defmodule QuickBEAM.VM.BytecodeParser do
   @moduledoc """
-  Parses QuickJS bytecode binaries into Elixir data structures.
+  Parses QuickJS bytecode binaries into VM program/function instruction IR.
 
   Binary format matches JS_WriteObjectAtoms / JS_ReadObjectAtoms / JS_ReadFunctionTag
   in priv/c_src/quickjs.c exactly.
@@ -27,10 +27,12 @@ defmodule QuickBEAM.VM.Bytecode do
   @tag_template_object Opcodes.bc_tag_template_object()
   @tag_regexp Opcodes.bc_tag_regexp()
 
-  defstruct [:version, :atoms, :value]
+  @pc2line_base -1
+  @pc2line_range 5
+  @pc2line_op_first 1
 
-  @doc "Decodes a QuickJS bytecode binary into a `%QuickBEAM.VM.Bytecode{}` structure."
-  @spec decode(binary()) :: {:ok, struct()} | {:error, term()}
+  @doc "Decodes a QuickJS bytecode binary into a `%QuickBEAM.VM.Program{}`."
+  @spec decode(binary()) :: {:ok, QuickBEAM.VM.Program.t()} | {:error, term()}
   def decode(data) when is_binary(data) do
     with {:ok, version, rest} <- LEB128.read_u8(data),
          :ok <- validate_version(version),
@@ -351,7 +353,7 @@ defmodule QuickBEAM.VM.Bytecode do
       else
         <<byte_code::binary-size(byte_code_len), rest::binary>> = rest
 
-        with {:ok, instructions} <- QuickBEAM.VM.Decoder.decode(byte_code, arg_count) do
+        with {:ok, instructions} <- QuickBEAM.VM.InstructionDecoder.decode(byte_code, arg_count) do
           {debug_info, rest} = read_debug_info(rest, flags_map.has_debug_info, atoms)
 
           fun = %QuickBEAM.VM.Function{
@@ -371,6 +373,7 @@ defmodule QuickBEAM.VM.Bytecode do
             col_num: debug_info.col_num,
             pc2line: debug_info.pc2line,
             source: debug_info.source,
+            source_positions: source_positions(byte_code, debug_info),
             is_strict_mode: strict > 0,
             has_prototype: flags_map.has_prototype,
             has_simple_parameter_list: flags_map.has_simple_parameter_list,
@@ -533,4 +536,105 @@ defmodule QuickBEAM.VM.Bytecode do
       _ -> {%{filename: nil, line_num: 1, col_num: 1, pc2line: <<>>, source: <<>>}, data}
     end
   end
+
+  defp source_positions(
+         byte_code,
+         %{pc2line: pc2line, line_num: line_num, col_num: col_num} = debug_info
+       ) do
+    offsets = instruction_offsets(byte_code)
+    entries = pc2line_entries(pc2line, line_num, col_num)
+
+    offsets
+    |> positions_for_offsets(entries)
+    |> Enum.map(&maybe_apply_source_hint(&1, debug_info))
+    |> List.to_tuple()
+  end
+
+  defp instruction_offsets(byte_code),
+    do: instruction_offsets(byte_code, byte_size(byte_code), 0, [])
+
+  defp instruction_offsets(_byte_code, len, pos, acc) when pos >= len, do: Enum.reverse(acc)
+
+  defp instruction_offsets(byte_code, len, pos, acc) do
+    op = :binary.at(byte_code, pos)
+
+    case Opcodes.info(op) do
+      {_name, size, _n_pop, _n_push, _fmt} ->
+        instruction_offsets(byte_code, len, pos + size, [pos | acc])
+
+      _ ->
+        Enum.reverse(acc)
+    end
+  end
+
+  defp pc2line_entries(<<>>, line_num, col_num), do: [{0, line_num, col_num}]
+
+  defp pc2line_entries(pc2line, line_num, col_num) do
+    [{0, line_num, col_num} | do_pc2line_entries(pc2line, 0, line_num, col_num, [])]
+  end
+
+  defp do_pc2line_entries(<<>>, _pc, _line_num, _col_num, acc), do: Enum.reverse(acc)
+
+  defp do_pc2line_entries(data, pc, line_num, col_num, acc) do
+    <<op_byte, rest::binary>> = data
+
+    case next_pc2line_entry(op_byte, rest, pc, line_num, col_num) do
+      {:ok, next_pc, next_line, next_col, rest} ->
+        do_pc2line_entries(rest, next_pc, next_line, next_col, [
+          {next_pc, next_line, next_col} | acc
+        ])
+
+      :error ->
+        Enum.reverse(acc)
+    end
+  end
+
+  defp next_pc2line_entry(0, rest, pc, line_num, col_num) do
+    with {:ok, diff_pc, rest} <- LEB128.read_unsigned(rest),
+         {:ok, diff_line, rest} <- LEB128.read_signed(rest),
+         {:ok, diff_col, rest} <- LEB128.read_signed(rest) do
+      {:ok, pc + diff_pc, line_num + diff_line, col_num + diff_col, rest}
+    else
+      _ -> :error
+    end
+  end
+
+  defp next_pc2line_entry(op_byte, rest, pc, line_num, col_num) do
+    op = op_byte - @pc2line_op_first
+
+    with {:ok, diff_col, rest} <- LEB128.read_signed(rest) do
+      {:ok, pc + div(op, @pc2line_range), line_num + rem(op, @pc2line_range) + @pc2line_base,
+       col_num + diff_col, rest}
+    else
+      _ -> :error
+    end
+  end
+
+  defp positions_for_offsets(offsets, [{_pc, line, col} | rest]) do
+    {positions, _current, _rest} =
+      Enum.reduce(offsets, {[], {line, col}, rest}, fn offset, {positions, current, entries} ->
+        {current, entries} = advance_source_position(offset, current, entries)
+        {[current | positions], current, entries}
+      end)
+
+    Enum.reverse(positions)
+  end
+
+  defp advance_source_position(offset, _current, [{pc, line, col} | rest]) when pc <= offset,
+    do: advance_source_position(offset, {line, col}, rest)
+
+  defp advance_source_position(_offset, current, entries), do: {current, entries}
+
+  defp maybe_apply_source_hint(pos, %{source: source}) when is_binary(source) do
+    case Regex.scan(~r/line\s+(\d+),\s*column\s+(\d+)/, source, capture: :all_but_first) do
+      [[hint_line, hint_col]] ->
+        hint = {String.to_integer(hint_line), String.to_integer(hint_col)}
+        if pos > hint, do: hint, else: pos
+
+      _ ->
+        pos
+    end
+  end
+
+  defp maybe_apply_source_hint(pos, _debug_info), do: pos
 end

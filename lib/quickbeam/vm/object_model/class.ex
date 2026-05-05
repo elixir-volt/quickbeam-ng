@@ -41,7 +41,7 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
     end
   end
 
-  @doc "Extracts the underlying bytecode function from closure values."
+  @doc "Extracts the underlying VM function from closure values."
   def raw_function({:closure, _, %QuickBEAM.VM.Function{} = fun}), do: fun
   def raw_function(%QuickBEAM.VM.Function{} = fun), do: fun
   def raw_function(other), do: other

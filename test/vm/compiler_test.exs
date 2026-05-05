@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.CompilerTest do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
-  alias QuickBEAM.VM.{Bytecode, Compiler, Heap, Interpreter, Opcodes}
+  alias QuickBEAM.VM.{BytecodeParser, Compiler, Heap, Interpreter, Opcodes}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.ObjectModel.Get
 
@@ -24,7 +24,7 @@ defmodule QuickBEAM.VM.CompilerTest do
 
   defp compile_and_decode(rt, code) do
     {:ok, bc} = QuickBEAM.compile(rt, code)
-    {:ok, parsed} = Bytecode.decode(bc)
+    {:ok, parsed} = BytecodeParser.decode(bc)
     cache_function_atoms(parsed.value, parsed.atoms)
     parsed
   end
@@ -72,7 +72,7 @@ defmodule QuickBEAM.VM.CompilerTest do
   end
 
   defp synthetic_function(byte_code, atoms \\ {"<synthetic>"}) do
-    {:ok, instructions} = QuickBEAM.VM.Decoder.decode(byte_code, 0)
+    {:ok, instructions} = QuickBEAM.VM.InstructionDecoder.decode(byte_code, 0)
 
     %QuickBEAM.VM.Function{
       id: :erlang.unique_integer([:positive, :monotonic]),

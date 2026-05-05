@@ -1,5 +1,5 @@
 defmodule QuickBEAM.VM.Compiler.Lowering do
-  @moduledoc "Bytecode-to-Erlang lowering pipeline: analyses control flow and types, then emits abstract-form block functions."
+  @moduledoc "VM-instruction-to-Erlang lowering pipeline: analyses control flow and types, then emits abstract-form block functions."
 
   alias QuickBEAM.VM.Compiler.Analysis.{CFG, Stack, Types}
   alias QuickBEAM.VM.Compiler.Lowering.Builder
@@ -10,7 +10,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
   @large_frame_slot_threshold 200
   @line 1
 
-  @doc "Lowers a bytecode instruction or function into compiler IR."
+  @doc "Lowers a VM instruction or function into compiler IR."
   def lower(fun, instructions) do
     entries = CFG.block_entries(instructions)
     slot_count = fun.arg_count + fun.var_count

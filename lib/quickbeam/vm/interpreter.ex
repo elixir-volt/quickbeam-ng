@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Interpreter do
 
   alias QuickBEAM.VM.{
     Builtin,
-    Bytecode,
+    BytecodeParser,
     GlobalEnv,
     Heap,
     Invocation,
@@ -158,7 +158,7 @@ defmodule QuickBEAM.VM.Interpreter do
     end
   end
 
-  @doc "Invoke a bytecode function or closure from external code."
+  @doc "Invoke a VM function or closure from external code."
   def invoke(fun, args, gas), do: Invocation.invoke(fun, args, gas)
 
   @doc """
@@ -444,7 +444,7 @@ defmodule QuickBEAM.VM.Interpreter do
 
   defp eval_code(code, caller_frame, gas, ctx, var_objs, keep_declared?) do
     with {:ok, bc} <- QuickBEAM.Runtime.compile(ctx.runtime_pid, code),
-         {:ok, parsed} <- Bytecode.decode(bc) do
+         {:ok, parsed} <- BytecodeParser.decode(bc) do
       declared_names = eval_declared_names(parsed.value, parsed.atoms)
       eval_globals = collect_caller_locals(caller_frame, ctx)
       captured_globals = collect_captured_globals(ctx.current_func)
@@ -1329,7 +1329,7 @@ defmodule QuickBEAM.VM.Interpreter do
     )
   end
 
-  @doc "Invokes a bytecode function through the interpreter fallback path."
+  @doc "Invokes a VM function through the interpreter fallback path."
   def invoke_function_fallback(%QuickBEAM.VM.Function{} = fun, args, gas, ctx) do
     invoke_function(fun, args, gas, ctx)
   end

@@ -1,11 +1,11 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   @moduledoc "Stack manipulation opcodes: push constants, dup, drop, swap, rot, perm, insert, nip, nop."
 
-    alias QuickBEAM.VM.Compiler.Analysis.Types, as: AnalysisTypes
+  alias QuickBEAM.VM.Compiler.Analysis.Types, as: AnalysisTypes
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
-  @doc "Lowers a bytecode instruction or function into compiler IR."
+  @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, constants, arg_count, name_args) do
     case name_args do
       {{:ok, :push_i32}, [value]} ->

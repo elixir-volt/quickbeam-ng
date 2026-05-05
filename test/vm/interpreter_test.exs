@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.InterpreterTest do
   use ExUnit.Case, async: true
 
-  alias QuickBEAM.VM.{Bytecode, Interpreter}
+  alias QuickBEAM.VM.{BytecodeParser, Interpreter}
 
   setup do
     {:ok, rt} = QuickBEAM.start()
@@ -20,7 +20,7 @@ defmodule QuickBEAM.VM.InterpreterTest do
   # Compile JS → decode → eval on BEAM
   defp eval_js(rt, code) do
     {:ok, bc} = QuickBEAM.compile(rt, code)
-    {:ok, parsed} = Bytecode.decode(bc)
+    {:ok, parsed} = BytecodeParser.decode(bc)
     Interpreter.eval(parsed.value, [], %{}, parsed.atoms)
   end
 

@@ -1,11 +1,11 @@
 defmodule QuickBEAM.VM.Interpreter.Setup do
-  @moduledoc "Builds interpreter contexts and stores bytecode atom tables before execution."
+  @moduledoc "Builds interpreter contexts and stores VM atom tables before execution."
 
   alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
 
-  @doc "Builds the interpreter context used for evaluating decoded bytecode."
+  @doc "Builds the interpreter context used for evaluating VM instructions."
   def build_eval_context(opts, atoms, gas) do
     base_globals = Runtime.global_bindings()
     persistent = Heap.get_persistent_globals() |> Map.drop(Map.keys(base_globals))

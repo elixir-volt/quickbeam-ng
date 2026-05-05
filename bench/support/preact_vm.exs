@@ -36,7 +36,7 @@ defmodule Bench.PreactVM do
 
   def build_case!(rt, source, props) do
     {:ok, bytecode} = QuickBEAM.compile(rt, source)
-    {:ok, parsed} = QuickBEAM.VM.Bytecode.decode(bytecode)
+    {:ok, parsed} = QuickBEAM.VM.BytecodeParser.decode(bytecode)
     cache_function_atoms(parsed)
 
     :ok = QuickBEAM.set_global(rt, "__bench_props", props, mode: :beam)
