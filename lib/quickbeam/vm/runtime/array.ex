@@ -276,6 +276,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
           list when is_list(list) ->
             true
 
+          %{"__proxy_revoked__" => true} ->
+            JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
           %{proxy_target() => target} ->
             is_array(target, depth + 1)
 

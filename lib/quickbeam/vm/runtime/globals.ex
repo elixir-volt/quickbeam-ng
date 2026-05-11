@@ -420,6 +420,11 @@ defmodule QuickBEAM.VM.Runtime.Globals do
                 revoke_fn =
                   {:builtin, "revoke",
                    fn _, _ ->
+                     case proxy do
+                       {:obj, proxy_ref} -> Heap.put_obj_key(proxy_ref, "__proxy_revoked__", true)
+                       _ -> :ok
+                     end
+
                      :undefined
                    end}
 
