@@ -124,6 +124,9 @@ defmodule QuickBEAM.VM.Runtime.Map do
     end
   end
 
+  @doc "Returns the MapData size for Map.prototype.size."
+  def size(this), do: this |> require_strong_map_ref!() |> data() |> map_size()
+
   @doc "Returns a prototype property value for the given JavaScript property key."
   def proto_property("get"), do: {:builtin, "get", &get/2}
   def proto_property("set"), do: {:builtin, "set", &set/2}
@@ -177,6 +180,8 @@ defmodule QuickBEAM.VM.Runtime.Map do
   end
 
   defp require_strong_map_ref!(_), do: JSThrow.type_error!("Method requires a Map")
+
+  defp data(ref), do: Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
 
   defp normalize_key(k) when is_float(k) and k == trunc(k), do: trunc(k)
   defp normalize_key(k), do: k

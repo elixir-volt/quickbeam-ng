@@ -198,6 +198,16 @@ defmodule QuickBEAM.VM.Runtime.Globals do
            group_by = {:builtin, "groupBy", fn args, _this -> JSMap.group_by(args) end}
            Heap.put_ctor_static(ctor, "groupBy", group_by)
 
+           sym_species = {:symbol, "Symbol.species"}
+
+           Heap.put_ctor_static(
+             ctor,
+             sym_species,
+             {:accessor, {:builtin, "get [Symbol.species]", fn _args, this -> this end}, nil}
+           )
+
+           Heap.put_ctor_prop_desc(ctor, sym_species, %{enumerable: false, configurable: true})
+
            case Heap.get_ctor_statics(ctor)["prototype"] do
              {:obj, proto_ref} ->
                for name <-
@@ -216,6 +226,23 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
                Heap.put_prop_desc(proto_ref, sym_iter, %{
                  writable: true,
+                 enumerable: false,
+                 configurable: true
+               })
+
+               Heap.put_obj_key(
+                 proto_ref,
+                 "size",
+                 {:accessor, {:builtin, "get size", fn _args, this -> JSMap.size(this) end}, nil}
+               )
+
+               Heap.put_prop_desc(proto_ref, "size", %{enumerable: false, configurable: true})
+
+               sym_to_string_tag = {:symbol, "Symbol.toStringTag"}
+               Heap.put_obj_key(proto_ref, sym_to_string_tag, "Map")
+
+               Heap.put_prop_desc(proto_ref, sym_to_string_tag, %{
+                 writable: false,
                  enumerable: false,
                  configurable: true
                })
