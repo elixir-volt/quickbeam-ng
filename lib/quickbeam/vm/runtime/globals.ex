@@ -92,6 +92,20 @@ defmodule QuickBEAM.VM.Runtime.Globals do
           ConstructorRegistry.put_prototype(ctor, proto)
           Heap.put_array_proto(proto)
 
+          case proto do
+            {:obj, proto_ref} ->
+              Heap.put_obj_key(proto_ref, "constructor", ctor)
+
+              Heap.put_prop_desc(proto_ref, "constructor", %{
+                writable: true,
+                enumerable: false,
+                configurable: true
+              })
+
+            _ ->
+              :ok
+          end
+
           sym_species = {:symbol, "Symbol.species"}
 
           Heap.put_ctor_static(
