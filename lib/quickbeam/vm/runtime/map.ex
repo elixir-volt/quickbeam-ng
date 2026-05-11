@@ -449,26 +449,67 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   defp keys(_, this) do
     ref = require_strong_map_ref!(this)
-    order = Heap.get_obj(ref, %{}) |> Map.get(key_order(), []) |> Enum.reverse()
-    Heap.wrap_iterator(order)
+    make_map_iterator(ref, :keys)
   end
 
   defp values(_, this) do
     ref = require_strong_map_ref!(this)
-    obj = Heap.get_obj(ref, %{})
-    data = Map.get(obj, map_data(), %{})
-    order = Map.get(obj, key_order(), []) |> Enum.reverse()
-    Heap.wrap_iterator(Enum.map(order, &Map.get(data, &1)))
+    make_map_iterator(ref, :values)
   end
 
   defp entries(_, this) do
     ref = require_strong_map_ref!(this)
-    obj = Heap.get_obj(ref, %{})
-    data = Map.get(obj, map_data(), %{})
-    order = Map.get(obj, key_order(), []) |> Enum.reverse()
-    items = Enum.map(order, fn key -> Heap.wrap([key, Map.get(data, key)]) end)
-    Heap.wrap_iterator(items)
+    make_map_iterator(ref, :entries)
   end
+
+  defp make_map_iterator(ref, mode) do
+    state_ref = make_ref()
+    Process.put(state_ref, ordered_keys(ref))
+
+    next_fn =
+      {:builtin, "next",
+       fn _, _ ->
+         next_map_iterator_value(ref, state_ref, mode)
+       end}
+
+    Heap.wrap(%{
+      "next" => next_fn,
+      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _, this -> this end}
+    })
+  end
+
+  defp next_map_iterator_value(ref, state_ref, mode) do
+    case next_present_key(ref, Process.get(state_ref, [])) do
+      {:done, pending} ->
+        Process.put(state_ref, pending)
+        Heap.wrap(%{"value" => :undefined, "done" => true})
+
+      {key, pending} ->
+        Process.put(state_ref, pending)
+        data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
+
+        Heap.wrap(%{
+          "value" => map_iterator_result(mode, key, Map.get(data, key)),
+          "done" => false
+        })
+    end
+  end
+
+  defp next_present_key(_ref, []), do: {:done, []}
+
+  defp next_present_key(ref, [key | rest]) do
+    data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
+
+    if Map.has_key?(data, key) do
+      {key, rest}
+    else
+      next_present_key(ref, rest)
+    end
+  end
+
+  defp map_iterator_result(:keys, key, _value), do: key
+  defp map_iterator_result(:values, _key, value), do: value
+  defp map_iterator_result(:entries, key, value), do: Heap.wrap([key, value])
 
   defp require_entry_pair([k, v | _]), do: {k, v}
   defp require_entry_pair([k]), do: {k, :undefined}
@@ -495,7 +536,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
     end
 
     this_arg = List.first(rest) || :undefined
-    for_each_live(ref, callback, this_arg, ordered_keys(ref))
+    for_each_live(ref, callback, this_arg, ordered_keys(ref), [])
   end
 
   defp for_each(_, this) do
@@ -503,9 +544,9 @@ defmodule QuickBEAM.VM.Runtime.Map do
     JSThrow.type_error!("callbackfn is not a function")
   end
 
-  defp for_each_live(_ref, _callback, _this_arg, []), do: :undefined
+  defp for_each_live(_ref, _callback, _this_arg, [], _seen), do: :undefined
 
-  defp for_each_live(ref, callback, this_arg, [key | _]) do
+  defp for_each_live(ref, callback, this_arg, [key | rest], seen) do
     data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
 
     case Map.fetch(data, key) do
@@ -516,17 +557,25 @@ defmodule QuickBEAM.VM.Runtime.Map do
         :ok
     end
 
-    for_each_live(ref, callback, this_arg, keys_after_current(ref, key))
+    for_each_live(ref, callback, this_arg, next_for_each_keys(ref, key, rest), [key | seen])
   end
 
   defp ordered_keys(ref), do: Heap.get_obj(ref, %{}) |> Map.get(key_order(), []) |> Enum.reverse()
 
-  defp keys_after_current(ref, key) do
+  defp next_for_each_keys(ref, current_key, rest) do
     keys = ordered_keys(ref)
+    rest = Enum.filter(rest, &(&1 in keys))
 
-    case Enum.find_index(keys, &(&1 == key)) do
-      nil -> keys
-      index -> Enum.drop(keys, index + 1)
+    case List.last(rest) do
+      nil ->
+        case Enum.find_index(keys, &(&1 == current_key)) do
+          nil -> keys
+          index -> Enum.drop(keys, index + 1)
+        end
+
+      last_rest_key ->
+        suffix = keys |> Enum.drop_while(&(&1 != last_rest_key)) |> Enum.drop(1)
+        rest ++ (suffix -- rest)
     end
   end
 end
