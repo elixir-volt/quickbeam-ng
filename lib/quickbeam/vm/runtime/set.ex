@@ -193,7 +193,16 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp set_difference(set_ref, other) do
     validate_set_like!(other)
-    constructor().([data(set_ref) -- other_data(other)], nil)
+    items = data(set_ref)
+
+    result =
+      if length(items) <= other_size(other) do
+        Enum.reject(items, &other_has(other, &1))
+      else
+        items -- other_data(other)
+      end
+
+    constructor().([result], nil)
   end
 
   defp intersection([other | _], this),
@@ -203,8 +212,18 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp set_intersection(set_ref, other) do
     validate_set_like!(other)
-    other_items = other_data(other)
-    constructor().([Enum.filter(data(set_ref), &(&1 in other_items))], nil)
+    items = data(set_ref)
+
+    result =
+      if length(items) <= other_size(other) do
+        Enum.filter(items, &other_has(other, &1))
+      else
+        other
+        |> other_data()
+        |> Enum.filter(&(&1 in items))
+      end
+
+    constructor().([result], nil)
   end
 
   defp union([other | _], this), do: this |> require_strong_set_ref!() |> set_union(other)
