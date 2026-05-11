@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, Put}
   alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
@@ -292,7 +292,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp is_array(_, _), do: false
 
   static "from" do
-    from(args)
+    from(args, this)
   end
 
   static "of" do
@@ -300,7 +300,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   static "fromAsync" do
-    PromiseState.resolved(from(args))
+    PromiseState.resolved(from(args, this))
   end
 
   # ── Mutation helpers ──
@@ -845,7 +845,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   # ── Array.from ──
 
-  defp from(args) do
+  defp from(args, constructor) do
     {source, map_fn} =
       case args do
         [s, f | _] when f != :undefined and f != nil -> {s, f}
@@ -864,30 +864,66 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
     this_arg = Enum.at(args, 2, :undefined)
 
-    result =
+    {result, construct_args} =
       cond do
         array_like_source?(source) ->
-          array_like_from(source, map_fn, this_arg)
+          len = array_like_length(source)
+          {array_like_from(source, map_fn, this_arg), [len]}
 
         iterable_source?(source) ->
           iterator_method = Get.get(source, {:symbol, "Symbol.iterator"})
           iterator = QuickBEAM.VM.Invocation.invoke_with_receiver(iterator_method, [], source)
-          iterator_to_list(iterator, [], map_fn, this_arg, 0)
+          {iterator_to_list(iterator, [], map_fn, this_arg, 0), []}
 
         true ->
           list = coerce_to_list(source)
 
-          if map_fn do
-            Enum.map(Enum.with_index(list), fn {val, idx} ->
-              QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [val, idx], this_arg)
-            end)
-          else
-            list
-          end
+          result =
+            if map_fn do
+              Enum.map(Enum.with_index(list), fn {val, idx} ->
+                QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [val, idx], this_arg)
+              end)
+            else
+              list
+            end
+
+          {result, [length(result)]}
       end
 
-    Heap.wrap(result)
+    from_result(result, constructor, construct_args)
   end
+
+  defp from_result(list, {:builtin, "Array", _}, _construct_args), do: Heap.wrap(list)
+
+  defp from_result(list, constructor, _construct_args) when constructor in [nil, :undefined],
+    do: Heap.wrap(list)
+
+  defp from_result(list, constructor, construct_args) do
+    if constructable_from?(constructor) do
+      target = QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, construct_args)
+
+      Enum.with_index(list, fn value, index ->
+        Put.put(target, Integer.to_string(index), value)
+      end)
+
+      Put.put(target, "length", length(list))
+      target
+    else
+      Heap.wrap(list)
+    end
+  end
+
+  defp constructable_from?({:builtin, name, _}) do
+    case QuickBEAM.VM.Builtin.named_meta(name) do
+      %QuickBEAM.VM.Builtin.Meta{constructable?: true} -> true
+      _ -> false
+    end
+  end
+
+  defp constructable_from?(%QuickBEAM.VM.Function{has_prototype: true}), do: true
+  defp constructable_from?({:closure, _, %QuickBEAM.VM.Function{has_prototype: true}}), do: true
+  defp constructable_from?({:bound, _, _, _, _}), do: true
+  defp constructable_from?(_), do: false
 
   defp coerce_to_list({:obj, ref} = obj) do
     iterator_method = Get.get(obj, {:symbol, "Symbol.iterator"})
