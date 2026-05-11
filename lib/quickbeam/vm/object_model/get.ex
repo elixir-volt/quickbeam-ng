@@ -378,10 +378,19 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_own({:builtin, name, _}, "name"), do: name
 
-  defp get_own({:builtin, name, _}, "length") do
-    case QuickBEAM.VM.Builtin.named_meta(name) do
-      %QuickBEAM.VM.Builtin.Meta{length: length} -> length
-      _ -> :undefined
+  defp get_own({:builtin, name, _} = builtin, "length") do
+    case Heap.get_ctor_statics(builtin) do
+      %{"length" => :deleted} ->
+        :undefined
+
+      %{"length" => length} ->
+        length
+
+      _ ->
+        case QuickBEAM.VM.Builtin.named_meta(name) do
+          %QuickBEAM.VM.Builtin.Meta{length: length} -> length
+          _ -> :undefined
+        end
     end
   end
 
