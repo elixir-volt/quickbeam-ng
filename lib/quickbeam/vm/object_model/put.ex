@@ -1081,6 +1081,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           i < length(list) ->
             Heap.put_obj(ref, List.replace_at(list, i, val))
 
+          Heap.get_array_prop(ref, "__arguments__") == true ->
+            Heap.put_array_prop(ref, key, val)
+
           true ->
             padded = list ++ List.duplicate(:undefined, i - length(list)) ++ [val]
             Heap.put_obj(ref, padded)

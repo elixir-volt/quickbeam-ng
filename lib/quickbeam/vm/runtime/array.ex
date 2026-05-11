@@ -774,32 +774,46 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp every({:obj, _} = obj, args), do: every_array_like(obj, args)
 
-  defp every(value, args) when is_boolean(value) or is_number(value) or is_binary(value) do
+  defp every(callable, args) do
+    if QuickBEAM.VM.Builtin.callable?(callable) do
+      every_array_like(callable, args)
+    else
+      every_non_callable(callable, args)
+    end
+  end
+
+  defp every_non_callable(value, args)
+       when is_boolean(value) or is_number(value) or is_binary(value) do
     value
     |> primitive_object()
     |> every_array_like(args)
   end
 
-  defp every({:qb_arr, arr}, args), do: every(:array.to_list(arr), args)
+  defp every_non_callable({:qb_arr, arr}, args), do: every_non_callable(:array.to_list(arr), args)
 
-  defp every(list, [fun | _]) when is_list(list) do
+  defp every_non_callable(list, [fun | rest]) when is_list(list) do
     unless QuickBEAM.VM.Builtin.callable?(fun) do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
+    this_arg = List.first(rest) || :undefined
+
     Enum.all?(Enum.with_index(list), fn {val, idx} ->
-      Runtime.truthy?(Runtime.call_callback(fun, [val, idx, list]))
+      Runtime.truthy?(
+        QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [val, idx, list], this_arg)
+      )
     end)
   end
 
-  defp every(_, _), do: JSThrow.type_error!("callbackfn is not a function")
+  defp every_non_callable(_, _), do: JSThrow.type_error!("callbackfn is not a function")
 
-  defp every_array_like(this, [fun | _]) do
+  defp every_array_like(this, [fun | rest]) do
     unless QuickBEAM.VM.Builtin.callable?(fun) do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
     len = array_like_length(this)
+    this_arg = List.first(rest) || :undefined
 
     if len == 0 do
       true
@@ -808,7 +822,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         value = Get.get(this, Integer.to_string(idx))
 
         Runtime.truthy?(
-          QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], :undefined)
+          QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
         )
       end)
     end
@@ -820,10 +834,19 @@ defmodule QuickBEAM.VM.Runtime.Array do
     do: QuickBEAM.VM.Runtime.Globals.Constructors.object([value], nil)
 
   defp array_like_length({:obj, ref}) do
-    case Heap.get_obj(ref) do
-      {:qb_arr, arr} -> :array.size(arr)
-      list when is_list(list) -> length(list)
-      _ -> max(Runtime.to_int(Get.get({:obj, ref}, "length")), 0)
+    if Heap.get_array_prop(ref, "__arguments__") == true do
+      max(Runtime.to_int(Get.get({:obj, ref}, "length")), 0)
+    else
+      case Heap.get_obj(ref) do
+        {:qb_arr, arr} ->
+          :array.size(arr)
+
+        list when is_list(list) ->
+          length(list)
+
+        _ ->
+          max(Runtime.to_int(Get.get({:obj, ref}, "length")), 0)
+      end
     end
   end
 
