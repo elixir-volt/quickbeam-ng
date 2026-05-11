@@ -4,6 +4,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Collections
 
@@ -22,7 +23,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
-    list = Heap.to_list(items)
+    list = group_items(items)
     ref = make_ref()
     groups = %{}
     order = []
@@ -155,6 +156,43 @@ defmodule QuickBEAM.VM.Runtime.Map do
   def weak_proto_property("has"), do: {:builtin, "has", &weak_has/2}
   def weak_proto_property("delete"), do: {:builtin, "delete", &weak_delete/2}
   def weak_proto_property(_), do: :undefined
+
+  defp group_items(list) when is_list(list), do: list
+  defp group_items({:qb_arr, arr}), do: :array.to_list(arr)
+  defp group_items(text) when is_binary(text), do: String.codepoints(text)
+
+  defp group_items({:obj, _} = obj) do
+    iterator_method = Get.get(obj, {:symbol, "Symbol.iterator"})
+
+    unless Builtin.callable?(iterator_method) do
+      JSThrow.type_error!("object is not iterable")
+    end
+
+    iterator = Invocation.invoke_with_receiver(iterator_method, [], obj)
+    iterator_to_list(iterator, [])
+  end
+
+  defp group_items(_), do: JSThrow.type_error!("object is not iterable")
+
+  defp iterator_to_list(iterator, acc) do
+    next_fn = Get.get(iterator, "next")
+
+    unless Builtin.callable?(next_fn) do
+      JSThrow.type_error!("Iterator next is not callable")
+    end
+
+    result = Invocation.invoke_with_receiver(next_fn, [], iterator)
+
+    unless match?({:obj, _}, result) or is_map(result) do
+      JSThrow.type_error!("Iterator result is not an object")
+    end
+
+    if Get.get(result, "done") == true do
+      Enum.reverse(acc)
+    else
+      iterator_to_list(iterator, [Get.get(result, "value") | acc])
+    end
+  end
 
   defp require_map_ref!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do

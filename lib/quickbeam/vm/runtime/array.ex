@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
+  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
@@ -775,12 +776,19 @@ defmodule QuickBEAM.VM.Runtime.Array do
     Heap.wrap(result)
   end
 
-  defp coerce_to_list({:obj, ref}) do
-    case Heap.get_obj(ref) do
-      {:qb_arr, arr} -> :array.to_list(arr)
-      l when is_list(l) -> l
-      map when is_map(map) -> Heap.to_list({:obj, ref})
-      _ -> []
+  defp coerce_to_list({:obj, ref} = obj) do
+    iterator_method = Get.get(obj, {:symbol, "Symbol.iterator"})
+
+    if QuickBEAM.VM.Builtin.callable?(iterator_method) do
+      iterator = QuickBEAM.VM.Invocation.invoke_with_receiver(iterator_method, [], obj)
+      iterator_to_list(iterator, [])
+    else
+      case Heap.get_obj(ref) do
+        {:qb_arr, arr} -> :array.to_list(arr)
+        l when is_list(l) -> l
+        map when is_map(map) -> Heap.to_list({:obj, ref})
+        _ -> []
+      end
     end
   end
 
@@ -797,6 +805,26 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp coerce_to_list(n) when is_number(n), do: []
   defp coerce_to_list(b) when is_boolean(b), do: []
   defp coerce_to_list(_), do: []
+
+  defp iterator_to_list(iterator, acc) do
+    next_fn = Get.get(iterator, "next")
+
+    unless QuickBEAM.VM.Builtin.callable?(next_fn) do
+      JSThrow.type_error!("Iterator next is not callable")
+    end
+
+    result = QuickBEAM.VM.Invocation.invoke_with_receiver(next_fn, [], iterator)
+
+    unless match?({:obj, _}, result) or is_map(result) do
+      JSThrow.type_error!("Iterator result is not an object")
+    end
+
+    if Get.get(result, "done") == true do
+      Enum.reverse(acc)
+    else
+      iterator_to_list(iterator, [Get.get(result, "value") | acc])
+    end
+  end
 
   defp copy_within({:obj, ref}, args) do
     list = Heap.obj_to_list(ref)
