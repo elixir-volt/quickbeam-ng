@@ -398,7 +398,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
         "size" => length(new_items)
     })
 
-    true
+    value in items
   end
 
   defp delete(_, this), do: require_setlike_ref!(this)
