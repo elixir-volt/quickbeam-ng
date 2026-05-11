@@ -84,7 +84,8 @@ defmodule QuickBEAM.VM.Runtime.Map do
       Heap.put_obj(ref, %{
         map_data() => entries,
         key_order() => order,
-        "size" => map_size(entries)
+        "size" => map_size(entries),
+        proto() => Runtime.global_class_proto("Map")
       })
 
       {:obj, ref}
