@@ -267,6 +267,15 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
                Heap.put_prop_desc(proto_ref, "size", %{enumerable: false, configurable: true})
 
+               sym_to_string_tag = {:symbol, "Symbol.toStringTag"}
+               Heap.put_obj_key(proto_ref, sym_to_string_tag, "Set")
+
+               Heap.put_prop_desc(proto_ref, sym_to_string_tag, %{
+                 writable: false,
+                 enumerable: false,
+                 configurable: true
+               })
+
                QuickBEAM.VM.ObjectModel.Put.put({:obj, proto_ref}, "constructor", ctor)
 
                Heap.put_prop_desc(proto_ref, "constructor", %{
