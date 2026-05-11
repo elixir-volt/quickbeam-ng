@@ -145,12 +145,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
     do: {:builtin, "getOrInsertComputed", &get_or_insert_computed/2}
 
   def proto_property("size") do
-    {:builtin, "size",
-     fn _, {:obj, ref} ->
-       Heap.get_obj(ref, %{})
-       |> Map.get(map_data(), %{})
-       |> map_size()
-     end}
+    {:accessor, {:builtin, "get size", fn _args, this -> size(this) end}, nil}
   end
 
   def proto_property(_), do: :undefined
