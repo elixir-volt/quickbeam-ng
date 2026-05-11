@@ -76,14 +76,14 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
   def array?(existing), do: is_list(existing) or match?({:qb_arr, _}, existing)
 
   defp define_length_property!(obj, ref, desc_obj, desc, fields) do
+    length_value = if fields.value_present, do: length_value!(fields.value)
+
     if fields.getter_present or fields.setter_present or Map.get(desc, "configurable") == true or
          Map.get(desc, "enumerable") == true do
       throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
     end
 
     current_attrs = length_attrs(ref)
-
-    length_value = if fields.value_present, do: length_value!(fields.value)
 
     if current_attrs.writable == false and
          (Map.get(desc, "writable") == true or
