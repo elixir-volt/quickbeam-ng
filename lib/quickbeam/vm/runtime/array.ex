@@ -756,17 +756,24 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp find_index(_, _), do: -1
 
+  defp every(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+  defp every(:undefined, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
   defp every({:obj, ref}, args), do: every(Heap.obj_to_list(ref), args)
 
   defp every({:qb_arr, arr}, args), do: every(:array.to_list(arr), args)
 
   defp every(list, [fun | _]) when is_list(list) do
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("callbackfn is not a function")
+    end
+
     Enum.all?(Enum.with_index(list), fn {val, idx} ->
       Runtime.truthy?(Runtime.call_callback(fun, [val, idx, list]))
     end)
   end
 
-  defp every(_, _), do: true
+  defp every(_, _), do: JSThrow.type_error!("callbackfn is not a function")
 
   defp some({:obj, ref}, args), do: some(Heap.obj_to_list(ref), args)
 
