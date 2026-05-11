@@ -544,20 +544,49 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp array_element_to_string(nil), do: ""
   defp array_element_to_string(val), do: Runtime.stringify(val)
 
-  defp concat({:obj, ref}, args) do
-    list = Heap.obj_to_list(ref)
-    result = Enum.reduce(args, list, &concat_item(&1, &2))
-    Heap.wrap(result)
+  @max_safe_integer 9_007_199_254_740_991
+
+  defp concat(this, args) do
+    [this | args]
+    |> Enum.reduce([], &concat_item/2)
+    |> Heap.wrap()
   end
 
-  defp concat({:qb_arr, arr}, args), do: concat(:array.to_list(arr), args)
+  defp concat_item(value, acc) do
+    if concat_spreadable?(value) do
+      acc ++ concat_spread_values(value, length(acc))
+    else
+      acc ++ [value]
+    end
+  end
 
-  defp concat(list, args) when is_list(list), do: Enum.reduce(args, list, &concat_item(&1, &2))
+  defp concat_spreadable?(value) do
+    spreadable = Get.get(value, {:symbol, "Symbol.isConcatSpreadable"})
 
-  defp concat_item({:obj, r}, acc), do: acc ++ Heap.obj_to_list(r)
-  defp concat_item({:qb_arr, arr}, acc), do: acc ++ :array.to_list(arr)
-  defp concat_item(a, acc) when is_list(a), do: acc ++ a
-  defp concat_item(val, acc), do: acc ++ [val]
+    if spreadable != :undefined do
+      Runtime.truthy?(spreadable)
+    else
+      is_array(value)
+    end
+  end
+
+  defp concat_spread_values(value, current_length) do
+    len = concat_length(value)
+
+    if current_length + len > @max_safe_integer do
+      JSThrow.type_error!("Invalid array length")
+    end
+
+    if len == 0 do
+      []
+    else
+      for index <- 0..(len - 1), do: Get.get(value, Integer.to_string(index))
+    end
+  end
+
+  defp concat_length({:qb_arr, arr}), do: :array.size(arr)
+  defp concat_length(list) when is_list(list), do: length(list)
+  defp concat_length(value), do: max(Runtime.to_int(Get.get(value, "length")), 0)
 
   defp reverse({:obj, ref}, _) do
     list = Heap.obj_to_list(ref)
