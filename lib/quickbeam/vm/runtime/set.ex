@@ -15,7 +15,10 @@ defmodule QuickBEAM.VM.Runtime.Set do
   def constructor do
     fn args, _this ->
       ref = make_ref()
-      items = args |> arg(0, nil) |> Heap.to_list() |> Enum.uniq()
+
+      items =
+        args |> arg(0, nil) |> Heap.to_list() |> Enum.map(&normalize_set_value/1) |> Enum.uniq()
+
       Heap.put_obj(ref, set_object(ref, items))
       {:obj, ref}
     end
@@ -65,145 +68,18 @@ defmodule QuickBEAM.VM.Runtime.Set do
   def proto_property("isDisjointFrom"), do: {:builtin, "isDisjointFrom", &disjoint?/2}
   def proto_property(_), do: :undefined
 
-  defp set_object(set_ref, items) do
-    methods =
-      object heap: false do
-        method "values" do
-          values_iterator(set_ref)
-        end
-
-        method "keys" do
-          values_iterator(set_ref)
-        end
-
-        method "entries" do
-          entries_iterator(set_ref)
-        end
-
-        method "add" do
-          add_value(set_ref, hd(args))
-        end
-
-        method "delete" do
-          delete_value(set_ref, hd(args))
-        end
-
-        method "clear" do
-          update_data(set_ref, [])
-          :undefined
-        end
-
-        method "has" do
-          hd(args) in data(set_ref)
-        end
-
-        method "forEach" do
-          for_each_value(set_ref, hd(args))
-        end
-
-        method "difference" do
-          set_difference(set_ref, hd(args))
-        end
-
-        method "intersection" do
-          set_intersection(set_ref, hd(args))
-        end
-
-        method "union" do
-          set_union(set_ref, hd(args))
-        end
-
-        method "symmetricDifference" do
-          set_symmetric_difference(set_ref, hd(args))
-        end
-
-        method "isSubsetOf" do
-          set_subset?(set_ref, hd(args))
-        end
-
-        method "isSupersetOf" do
-          set_superset?(set_ref, hd(args))
-        end
-
-        method "isDisjointFrom" do
-          set_disjoint?(set_ref, hd(args))
-        end
-
-        prop(set_data(), items)
-        prop("size", length(items))
-      end
-
-    Map.put(methods, {:symbol, "Symbol.iterator"}, methods["values"])
+  defp set_object(_set_ref, items) do
+    %{
+      set_data() => items,
+      "size" => length(items),
+      proto() => Runtime.global_class_proto("Set")
+    }
   end
 
   defp data(set_ref), do: Heap.get_obj(set_ref, %{}) |> Map.get(set_data(), [])
 
-  defp update_data(set_ref, new_data) do
-    map = Heap.get_obj(set_ref, %{})
-
-    Heap.put_obj(set_ref, %{
-      map
-      | set_data() => new_data,
-        "size" => length(new_data)
-    })
-  end
-
-  defp values_iterator(set_ref) do
-    items = data(set_ref)
-    pos_ref = make_ref()
-    Heap.put_obj(pos_ref, %{pos: 0, list: items})
-
-    next_fn =
-      {:builtin, "next",
-       fn _, _ ->
-         state = Heap.get_obj(pos_ref, %{pos: 0, list: []})
-         list = if is_list(state.list), do: state.list, else: []
-
-         if state.pos >= length(list) do
-           Heap.put_obj(pos_ref, %{state | pos: state.pos + 1})
-           Heap.wrap(%{"value" => :undefined, "done" => true})
-         else
-           value = Enum.at(list, state.pos)
-           Heap.put_obj(pos_ref, %{state | pos: state.pos + 1})
-           Heap.wrap(%{"value" => value, "done" => false})
-         end
-       end}
-
-    object do
-      prop("next", next_fn)
-
-      symbol_method "Symbol.iterator" do
-        this
-      end
-    end
-  end
-
-  defp entries_iterator(set_ref) do
-    set_ref
-    |> data()
-    |> Enum.map(fn value -> Heap.wrap([value, value]) end)
-    |> Heap.wrap_iterator()
-  end
-
-  defp add_value(set_ref, value) do
-    items = data(set_ref)
-    unless value in items, do: update_data(set_ref, items ++ [value])
-    {:obj, set_ref}
-  end
-
-  defp delete_value(set_ref, value) do
-    items = data(set_ref)
-    update_data(set_ref, List.delete(items, value))
-    value in items
-  end
-
-  defp for_each_value(set_ref, callback) do
-    for value <- data(set_ref) do
-      Runtime.call_callback(callback, [value, value])
-    end
-
-    :undefined
-  end
+  defp normalize_set_value(value) when is_float(value) and value == 0.0, do: 0
+  defp normalize_set_value(value), do: value
 
   defp other_data(other) do
     case other do
@@ -444,7 +320,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   defp has([value | _], this) do
     ref = require_setlike_ref!(this)
     items = Heap.get_obj(ref, %{}) |> Map.get(set_data(), [])
-    value in items
+    normalize_set_value(value) in items
   end
 
   defp has(_, this), do: require_setlike_ref!(this)
@@ -453,6 +329,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
     ref = require_setlike_ref!(this)
     obj = Heap.get_obj(ref, %{})
     if Map.get(obj, :weak), do: Collections.validate_weak_key!(value, "WeakSet")
+    value = normalize_set_value(value)
     items = Map.get(obj, set_data(), [])
 
     unless value in items do
@@ -473,6 +350,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   defp delete([value | _], this) do
     ref = require_setlike_ref!(this)
     obj = Heap.get_obj(ref, %{})
+    value = normalize_set_value(value)
     items = Map.get(obj, set_data(), [])
     new_items = List.delete(items, value)
 
@@ -500,7 +378,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
     ref
     |> Heap.get_obj(%{})
     |> Map.get(set_data(), [])
-    |> Heap.wrap()
+    |> Heap.wrap_iterator()
   end
 
   defp entries(_, this) do
@@ -510,7 +388,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
     |> Heap.get_obj(%{})
     |> Map.get(set_data(), [])
     |> Enum.map(fn value -> Heap.wrap([value, value]) end)
-    |> Heap.wrap()
+    |> Heap.wrap_iterator()
   end
 
   defp for_each([callback | _], this) do
