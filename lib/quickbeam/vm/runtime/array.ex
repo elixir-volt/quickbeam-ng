@@ -1032,6 +1032,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp iterator_to_list(iterator, acc), do: iterator_to_list(iterator, acc, nil, :undefined, 0)
 
+  defp close_iterator(iterator) do
+    return_fn = Get.get(iterator, "return")
+
+    if QuickBEAM.VM.Builtin.callable?(return_fn) do
+      QuickBEAM.VM.Invocation.invoke_with_receiver(return_fn, [], iterator)
+    end
+  end
+
   defp iterator_to_list(iterator, acc, map_fn, this_arg, index) do
     next_fn = Get.get(iterator, "next")
 
@@ -1052,7 +1060,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
       mapped =
         if map_fn do
-          QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
+          try do
+            QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
+          catch
+            {:js_throw, _} = thrown ->
+              close_iterator(iterator)
+              throw(thrown)
+          end
         else
           value
         end
