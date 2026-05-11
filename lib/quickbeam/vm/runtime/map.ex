@@ -151,8 +151,20 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   def proto_property(_), do: :undefined
 
-  defp normalize_key(k) when is_float(k) and k == trunc(k), do: trunc(k)
-  defp normalize_key(k), do: k
+  def weak_proto_property("get"), do: {:builtin, "get", &weak_get/2}
+  def weak_proto_property("set"), do: {:builtin, "set", &weak_set/2}
+  def weak_proto_property("has"), do: {:builtin, "has", &weak_has/2}
+  def weak_proto_property("delete"), do: {:builtin, "delete", &weak_delete/2}
+  def weak_proto_property(_), do: :undefined
+
+  defp require_map_ref!({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) and is_map_key(map, map_data()) -> ref
+      _ -> JSThrow.type_error!("Method requires a Map")
+    end
+  end
+
+  defp require_map_ref!(_), do: JSThrow.type_error!("Method requires a Map")
 
   defp require_strong_map_ref!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
@@ -165,6 +177,9 @@ defmodule QuickBEAM.VM.Runtime.Map do
   end
 
   defp require_strong_map_ref!(_), do: JSThrow.type_error!("Method requires a Map")
+
+  defp normalize_key(k) when is_float(k) and k == trunc(k), do: trunc(k)
+  defp normalize_key(k), do: k
 
   defp entries_from_list(entries) do
     pairs =
@@ -182,10 +197,13 @@ defmodule QuickBEAM.VM.Runtime.Map do
     {Map.new(pairs), order}
   end
 
-  defp get([key | _], {:obj, ref}) do
+  defp get([key | _], this) do
+    ref = require_strong_map_ref!(this)
     data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
     Map.get(data, normalize_key(key), :undefined)
   end
+
+  defp get(_, this), do: require_strong_map_ref!(this)
 
   defp get_or_insert([key, value | _], this) do
     ref = require_strong_map_ref!(this)
@@ -242,9 +260,9 @@ defmodule QuickBEAM.VM.Runtime.Map do
     )
   end
 
-  defp set([key, val | _], {:obj, ref}) do
+  defp set([key, val | _], this) do
+    ref = require_strong_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
-    if Map.get(obj, :weak), do: Collections.validate_weak_key!(key, "WeakMap")
     key = normalize_key(key)
     data = Map.get(obj, map_data(), %{})
     order = Map.get(obj, key_order(), [])
@@ -263,12 +281,18 @@ defmodule QuickBEAM.VM.Runtime.Map do
     {:obj, ref}
   end
 
-  defp has([key | _], {:obj, ref}) do
+  defp set(_, this), do: require_strong_map_ref!(this)
+
+  defp has([key | _], this) do
+    ref = require_strong_map_ref!(this)
     data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
     Map.has_key?(data, normalize_key(key))
   end
 
-  defp delete([key | _], {:obj, ref}) do
+  defp has(_, this), do: require_strong_map_ref!(this)
+
+  defp delete([key | _], this) do
+    ref = require_strong_map_ref!(this)
     key = normalize_key(key)
     obj = Heap.get_obj(ref, %{})
     data = Map.get(obj, map_data(), %{})
@@ -284,28 +308,73 @@ defmodule QuickBEAM.VM.Runtime.Map do
       })
     )
 
-    true
+    Map.has_key?(data, key)
   end
 
-  defp clear(_, {:obj, ref}) do
+  defp delete(_, this), do: require_strong_map_ref!(this)
+
+  defp weak_get([key | _], this) do
+    ref = require_map_ref!(this)
+    data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
+    Map.get(data, key, :undefined)
+  end
+
+  defp weak_get(_, this), do: require_map_ref!(this)
+
+  defp weak_set([key, value | _], this) do
+    ref = require_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
-    Heap.put_obj(ref, %{obj | map_data() => %{}, "size" => 0})
+    if Map.get(obj, :weak), do: Collections.validate_weak_key!(key, "WeakMap")
+    data = Map.get(obj, map_data(), %{})
+    new_data = Map.put(data, key, value)
+    Heap.put_obj(ref, Map.merge(obj, %{map_data() => new_data, "size" => map_size(new_data)}))
+    {:obj, ref}
+  end
+
+  defp weak_set(_, this), do: require_map_ref!(this)
+
+  defp weak_has([key | _], this) do
+    ref = require_map_ref!(this)
+    data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
+    Map.has_key?(data, key)
+  end
+
+  defp weak_has(_, this), do: require_map_ref!(this)
+
+  defp weak_delete([key | _], this) do
+    ref = require_map_ref!(this)
+    obj = Heap.get_obj(ref, %{})
+    data = Map.get(obj, map_data(), %{})
+    new_data = Map.delete(data, key)
+    Heap.put_obj(ref, Map.merge(obj, %{map_data() => new_data, "size" => map_size(new_data)}))
+    Map.has_key?(data, key)
+  end
+
+  defp weak_delete(_, this), do: require_map_ref!(this)
+
+  defp clear(_, this) do
+    ref = require_strong_map_ref!(this)
+    obj = Heap.get_obj(ref, %{})
+    Heap.put_obj(ref, %{obj | map_data() => %{}, "size" => 0, key_order() => []})
     :undefined
   end
 
-  defp keys(_, {:obj, ref}) do
+  defp keys(_, this) do
+    ref = require_strong_map_ref!(this)
     order = Heap.get_obj(ref, %{}) |> Map.get(key_order(), []) |> Enum.reverse()
     Heap.wrap_iterator(order)
   end
 
-  defp values(_, {:obj, ref}) do
+  defp values(_, this) do
+    ref = require_strong_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
     data = Map.get(obj, map_data(), %{})
     order = Map.get(obj, key_order(), []) |> Enum.reverse()
     Heap.wrap_iterator(Enum.map(order, &Map.get(data, &1)))
   end
 
-  defp entries(_, {:obj, ref}) do
+  defp entries(_, this) do
+    ref = require_strong_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
     data = Map.get(obj, map_data(), %{})
     order = Map.get(obj, key_order(), []) |> Enum.reverse()
@@ -350,18 +419,46 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   defp entry_to_kv(_), do: {nil, nil}
 
-  defp for_each([cb | _], {:obj, ref}) do
-    obj = Heap.get_obj(ref, %{})
-    data = Map.get(obj, map_data(), %{})
-    order = Map.get(obj, key_order(), []) |> Enum.reverse()
+  defp for_each([callback | rest], this) do
+    ref = require_strong_map_ref!(this)
 
-    Enum.each(order, fn key ->
-      case Map.fetch(data, key) do
-        {:ok, value} -> Runtime.call_callback(cb, [value, key, {:obj, ref}])
-        :error -> :ok
-      end
-    end)
+    unless Builtin.callable?(callback) do
+      JSThrow.type_error!("callbackfn is not a function")
+    end
 
-    :undefined
+    this_arg = List.first(rest) || :undefined
+    for_each_live(ref, callback, this_arg, ordered_keys(ref))
+  end
+
+  defp for_each(_, this) do
+    require_strong_map_ref!(this)
+    JSThrow.type_error!("callbackfn is not a function")
+  end
+
+  defp for_each_live(_ref, _callback, _this_arg, []), do: :undefined
+
+  defp for_each_live(ref, callback, this_arg, [key | _]) do
+    data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
+
+    case Map.fetch(data, key) do
+      {:ok, value} ->
+        Invocation.invoke_with_receiver(callback, [value, key, {:obj, ref}], this_arg)
+
+      :error ->
+        :ok
+    end
+
+    for_each_live(ref, callback, this_arg, keys_after_current(ref, key))
+  end
+
+  defp ordered_keys(ref), do: Heap.get_obj(ref, %{}) |> Map.get(key_order(), []) |> Enum.reverse()
+
+  defp keys_after_current(ref, key) do
+    keys = ordered_keys(ref)
+
+    case Enum.find_index(keys, &(&1 == key)) do
+      nil -> keys
+      index -> Enum.drop(keys, index + 1)
+    end
   end
 end

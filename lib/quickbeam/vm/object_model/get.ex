@@ -578,6 +578,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         # For type-specialized objects (Map, Set, Date, etc.), check type methods first.
         type_result =
           cond do
+            Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) ->
+              JSMap.weak_proto_property(key)
+
             Map.has_key?(map, map_data()) ->
               JSMap.proto_property(key)
 
@@ -647,6 +650,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
       map when is_map(map) ->
         cond do
+          Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) ->
+            JSMap.weak_proto_property(key)
+
           Map.has_key?(map, map_data()) ->
             JSMap.proto_property(key)
 
