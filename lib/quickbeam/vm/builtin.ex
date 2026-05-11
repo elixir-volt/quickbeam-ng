@@ -347,6 +347,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("flat"), do: meta("flat", [length: 0, constructable: false], :proto)
   def named_meta("flatMap"), do: meta("flatMap", [length: 1, constructable: false], :proto)
   def named_meta("from"), do: meta("from", [length: 1, constructable: false], :static)
+  def named_meta("fromAsync"), do: meta("fromAsync", [length: 1, constructable: false], :static)
   def named_meta("of"), do: meta("of", [length: 0, constructable: false], :static)
   def named_meta("isArray"), do: meta("isArray", [length: 1, constructable: false], :static)
   def named_meta("groupBy"), do: meta("groupBy", [length: 2, constructable: false], :static)

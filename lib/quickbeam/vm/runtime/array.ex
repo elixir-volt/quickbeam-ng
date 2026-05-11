@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
@@ -282,6 +283,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   static "of" do
     Heap.wrap(args)
+  end
+
+  static "fromAsync" do
+    PromiseState.resolved(from(args))
   end
 
   # ── Mutation helpers ──
