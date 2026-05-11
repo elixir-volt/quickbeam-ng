@@ -264,6 +264,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   def put({:closure, _, %QuickBEAM.VM.Function{}} = c, key, val),
     do: put_callable_property(c, key, val)
 
+  def put({:builtin, _name, map} = b, key, val) when is_map(map) do
+    Heap.put_ctor_static(b, key, val)
+  end
+
   def put({:builtin, _, _} = b, key, val), do: put_callable_property(b, key, val)
   def put({:bound, _, _, _, _} = b, key, val), do: put_callable_property(b, key, val)
 

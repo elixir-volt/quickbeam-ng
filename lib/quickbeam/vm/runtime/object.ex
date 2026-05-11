@@ -157,6 +157,11 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_to_string({tag, _, %QuickBEAM.VM.Function{}}) when tag in [:closure, :bound],
     do: "[object Function]"
 
+  defp object_to_string({:builtin, name, map} = obj) when is_map(map) do
+    custom_tag = Get.get(obj, {:symbol, "Symbol.toStringTag"})
+    "[object #{if is_binary(custom_tag), do: custom_tag, else: name}]"
+  end
+
   defp object_to_string({:builtin, _, _}), do: "[object Function]"
 
   defp object_to_string({:obj, ref} = obj) do
