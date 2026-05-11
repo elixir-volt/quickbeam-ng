@@ -802,18 +802,25 @@ defmodule QuickBEAM.VM.Runtime.Array do
     this_arg = Enum.at(args, 2, :undefined)
 
     result =
-      if array_like_source?(source) do
-        array_like_from(source, map_fn, this_arg)
-      else
-        list = coerce_to_list(source)
+      cond do
+        array_like_source?(source) ->
+          array_like_from(source, map_fn, this_arg)
 
-        if map_fn do
-          Enum.map(Enum.with_index(list), fn {val, idx} ->
-            QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [val, idx], this_arg)
-          end)
-        else
-          list
-        end
+        iterable_source?(source) ->
+          iterator_method = Get.get(source, {:symbol, "Symbol.iterator"})
+          iterator = QuickBEAM.VM.Invocation.invoke_with_receiver(iterator_method, [], source)
+          iterator_to_list(iterator, [], map_fn, this_arg, 0)
+
+        true ->
+          list = coerce_to_list(source)
+
+          if map_fn do
+            Enum.map(Enum.with_index(list), fn {val, idx} ->
+              QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [val, idx], this_arg)
+            end)
+          else
+            list
+          end
       end
 
     Heap.wrap(result)
@@ -865,6 +872,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp array_like_source?(_), do: false
 
+  defp iterable_source?({:obj, _} = obj),
+    do: QuickBEAM.VM.Builtin.callable?(Get.get(obj, {:symbol, "Symbol.iterator"}))
+
+  defp iterable_source?({:qb_arr, _}), do: true
+  defp iterable_source?(list) when is_list(list), do: true
+  defp iterable_source?(text) when is_binary(text), do: true
+  defp iterable_source?(_), do: false
+
   defp array_like_to_list(obj) do
     len = max(Runtime.to_int(Get.get(obj, "length")), 0)
 
@@ -893,7 +908,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end
   end
 
-  defp iterator_to_list(iterator, acc) do
+  defp iterator_to_list(iterator, acc), do: iterator_to_list(iterator, acc, nil, :undefined, 0)
+
+  defp iterator_to_list(iterator, acc, map_fn, this_arg, index) do
     next_fn = Get.get(iterator, "next")
 
     unless QuickBEAM.VM.Builtin.callable?(next_fn) do
@@ -909,7 +926,16 @@ defmodule QuickBEAM.VM.Runtime.Array do
     if Get.get(result, "done") == true do
       Enum.reverse(acc)
     else
-      iterator_to_list(iterator, [Get.get(result, "value") | acc])
+      value = Get.get(result, "value")
+
+      mapped =
+        if map_fn do
+          QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
+        else
+          value
+        end
+
+      iterator_to_list(iterator, [mapped | acc], map_fn, this_arg, index + 1)
     end
   end
 
@@ -1020,30 +1046,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp to_sorted(_), do: :undefined
 
   defp make_array_iterator(arr, mode) do
-    list =
-      case arr do
-        {:obj, ref} ->
-          Heap.obj_to_list(ref)
-
-        {:qb_arr, arr} ->
-          :array.to_list(arr)
-
-        l when is_list(l) ->
-          l
-
-        s when is_binary(s) ->
-          String.codepoints(s)
-
-        _ ->
-          []
-      end
-
+    list_fn = array_iterator_list_fn(arr)
     idx_ref = :atomics.new(1, signed: false)
 
     next_fn =
       {:builtin, "next",
        fn _args, _this ->
          i = :atomics.get(idx_ref, 1)
+         list = list_fn.()
 
          if i >= length(list) do
            Heap.wrap(%{"value" => :undefined, "done" => true})
@@ -1069,6 +1079,15 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end
     end
   end
+
+  defp array_iterator_list_fn({:obj, ref}), do: fn -> Heap.obj_to_list(ref) end
+  defp array_iterator_list_fn({:qb_arr, arr}), do: fn -> :array.to_list(arr) end
+  defp array_iterator_list_fn(list) when is_list(list), do: fn -> list end
+
+  defp array_iterator_list_fn(string) when is_binary(string),
+    do: fn -> String.codepoints(string) end
+
+  defp array_iterator_list_fn(_), do: fn -> [] end
 
   # ── Internal ──
 

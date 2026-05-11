@@ -39,7 +39,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
         else
           updated =
             map
-            |> Map.delete(key)
+            |> delete_ordinary_key(key)
             |> remove_key_order_entry(key)
 
           Heap.put_obj(ref, updated)
@@ -66,6 +66,26 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   def delete_property(_obj, _key), do: true
+
+  defp delete_ordinary_key(map, key) when is_integer(key) and key >= 0 do
+    map |> Map.delete(key) |> Map.delete(Integer.to_string(key))
+  end
+
+  defp delete_ordinary_key(map, key) do
+    case parse_array_index_key(key) do
+      :error -> Map.delete(map, key)
+      index -> map |> Map.delete(key) |> Map.delete(index)
+    end
+  end
+
+  defp parse_array_index_key(key) when is_binary(key) do
+    case Integer.parse(key) do
+      {idx, ""} when idx >= 0 -> idx
+      _ -> :error
+    end
+  end
+
+  defp parse_array_index_key(_key), do: :error
 
   defp remove_key_order_entry(map, key) when is_binary(key) or is_integer(key) do
     case Map.get(map, key_order()) do
