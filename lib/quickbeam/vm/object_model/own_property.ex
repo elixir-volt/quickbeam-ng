@@ -91,10 +91,18 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     do: Map.get(Heap.get_ctor_statics(target), key) == :deleted
 
   defp module_static_present?(module, key) when is_atom(module) do
-    function_exported?(module, :static_property, 1) and module.static_property(key) != :undefined
+    module_static_value(module, key) != :undefined
   end
 
   defp module_static_present?(_module, _key), do: false
+
+  defp module_static_value(module, key) when is_atom(module) do
+    if function_exported?(module, :static_property, 1),
+      do: module.static_property(key),
+      else: :undefined
+  end
+
+  defp module_static_value(_module, _key), do: :undefined
 
   defp present?(ref, data, key) when is_list(data) do
     present_array_property?(ref, key)
@@ -253,8 +261,8 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
         is_map(map) and Map.has_key?(map, prop_key) ->
           Map.get(map, prop_key)
 
-        module != nil and function_exported?(module, :static_property, 1) ->
-          module.static_property(prop_key)
+        module_static_value(module, prop_key) != :undefined ->
+          module_static_value(module, prop_key)
 
         prop_key == "length" and is_function(map) ->
           builtin_function_length(map, name)
