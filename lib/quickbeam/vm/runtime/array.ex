@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Get, Put}
+  alias QuickBEAM.VM.ObjectModel.{Define, Get, Put}
   alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
@@ -926,7 +926,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       target = QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, construct_args)
 
       Enum.with_index(list, fn value, index ->
-        Put.put(target, Integer.to_string(index), value)
+        create_data_property_or_throw(target, Integer.to_string(index), value)
       end)
 
       Put.put(target, "length", length(list))
@@ -934,6 +934,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
     else
       Heap.wrap(list)
     end
+  end
+
+  defp create_data_property_or_throw(target, key, value) do
+    desc = %{"value" => value, "writable" => true, "enumerable" => true, "configurable" => true}
+    Define.property(target, key, Heap.wrap(desc), desc)
   end
 
   defp constructable_from?({:builtin, name, _}) do
