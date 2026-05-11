@@ -64,32 +64,32 @@ defmodule QuickBEAM.VM.Runtime.Map do
     fn args, _this ->
       ref = make_ref()
 
-      {entries, order} =
-        case args do
-          [list] when is_list(list) ->
-            entries_from_list(list)
-
-          [{:obj, r}] ->
-            stored = Heap.get_obj(r, [])
-
-            if is_list(stored) or match?({:qb_arr, _}, stored) do
-              entries_from_list(Heap.to_list({:obj, r}))
-            else
-              {%{}, []}
-            end
-
-          _ ->
-            {%{}, []}
-        end
-
       Heap.put_obj(ref, %{
-        map_data() => entries,
-        key_order() => order,
-        "size" => map_size(entries),
+        map_data() => %{},
+        key_order() => [],
+        "size" => 0,
         proto() => Runtime.global_class_proto("Map")
       })
 
-      {:obj, ref}
+      map = {:obj, ref}
+
+      case args do
+        [] ->
+          map
+
+        [iterable | _] when iterable in [nil, :undefined] ->
+          map
+
+        [iterable | _] ->
+          adder = Get.get(map, "set")
+
+          unless Builtin.callable?(adder) do
+            JSThrow.type_error!("Map.prototype.set is not callable")
+          end
+
+          construct_from_iterable(iterable, map, adder)
+          map
+      end
     end
   end
 
@@ -174,6 +174,71 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   defp group_items(_), do: JSThrow.type_error!("object is not iterable")
 
+  defp construct_from_iterable(list, map, adder) when is_list(list) do
+    Enum.each(list, fn entry ->
+      {key, value} = require_entry_pair(entry)
+      Invocation.invoke_with_receiver(adder, [key, value], map)
+    end)
+  end
+
+  defp construct_from_iterable({:qb_arr, arr}, map, adder) do
+    construct_from_iterable(:array.to_list(arr), map, adder)
+  end
+
+  defp construct_from_iterable({:obj, _} = iterable, map, adder) do
+    iterator_method = Get.get(iterable, {:symbol, "Symbol.iterator"})
+
+    unless Builtin.callable?(iterator_method) do
+      JSThrow.type_error!("object is not iterable")
+    end
+
+    iterator = Invocation.invoke_with_receiver(iterator_method, [], iterable)
+    construct_from_iterator(iterator, map, adder)
+  end
+
+  defp construct_from_iterable(_, _map, _adder), do: JSThrow.type_error!("object is not iterable")
+
+  defp construct_from_iterator(iterator, map, adder) do
+    next_fn = Get.get(iterator, "next")
+
+    unless Builtin.callable?(next_fn) do
+      JSThrow.type_error!("Iterator next is not callable")
+    end
+
+    result = Invocation.invoke_with_receiver(next_fn, [], iterator)
+
+    unless match?({:obj, _}, result) or is_map(result) do
+      close_iterator(iterator)
+      JSThrow.type_error!("Iterator result is not an object")
+    end
+
+    unless Get.get(result, "done") == true do
+      entry = Get.get(result, "value")
+
+      try do
+        {key, value} = require_entry_pair(entry)
+        Invocation.invoke_with_receiver(adder, [key, value], map)
+      catch
+        {:js_throw, _} = thrown ->
+          close_iterator(iterator)
+          throw(thrown)
+      end
+
+      construct_from_iterator(iterator, map, adder)
+    end
+  end
+
+  defp close_iterator(iterator) do
+    case Get.get(iterator, "return") do
+      return_fn when return_fn not in [nil, :undefined] ->
+        if Builtin.callable?(return_fn),
+          do: Invocation.invoke_with_receiver(return_fn, [], iterator)
+
+      _ ->
+        :undefined
+    end
+  end
+
   defp iterator_to_list(iterator, acc) do
     next_fn = Get.get(iterator, "next")
 
@@ -219,22 +284,6 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   defp normalize_key(k) when is_float(k) and k == trunc(k), do: trunc(k)
   defp normalize_key(k), do: k
-
-  defp entries_from_list(entries) do
-    pairs =
-      Enum.map(entries, fn entry ->
-        {key, value} = entry_to_kv(entry)
-        {normalize_key(key), value}
-      end)
-
-    order =
-      pairs
-      |> Enum.map(fn {key, _value} -> key end)
-      |> Enum.uniq()
-      |> Enum.reverse()
-
-    {Map.new(pairs), order}
-  end
 
   defp get([key | _], this) do
     ref = require_strong_map_ref!(this)
@@ -421,42 +470,22 @@ defmodule QuickBEAM.VM.Runtime.Map do
     Heap.wrap_iterator(items)
   end
 
-  defp entry_to_kv([k, v | _]), do: {k, v}
-  defp entry_to_kv([k]), do: {k, :undefined}
+  defp require_entry_pair([k, v | _]), do: {k, v}
+  defp require_entry_pair([k]), do: {k, :undefined}
 
-  defp entry_to_kv({:obj, eref}) do
-    case Heap.get_obj(eref, []) do
-      [k, v | _] ->
-        {k, v}
+  defp require_entry_pair({:obj, _} = entry) do
+    key = Get.get(entry, "0")
+    value = Get.get(entry, "1")
 
-      [k] ->
-        {k, :undefined}
-
-      {:qb_arr, arr} ->
-        list = :array.to_list(arr)
-
-        case list do
-          [k, v | _] -> {k, v}
-          [k] -> {k, :undefined}
-          _ -> {nil, nil}
-        end
-
-      _ ->
-        {nil, nil}
+    if key == :undefined and value == :undefined and Heap.to_list(entry) == [] do
+      JSThrow.type_error!("Iterator value is not an entry object")
+    else
+      {key, value}
     end
   end
 
-  defp entry_to_kv({:qb_arr, arr}) do
-    list = :array.to_list(arr)
-
-    case list do
-      [k, v | _] -> {k, v}
-      [k] -> {k, :undefined}
-      _ -> {nil, nil}
-    end
-  end
-
-  defp entry_to_kv(_), do: {nil, nil}
+  defp require_entry_pair({:qb_arr, arr}), do: require_entry_pair(:array.to_list(arr))
+  defp require_entry_pair(_), do: JSThrow.type_error!("Iterator value is not an entry object")
 
   defp for_each([callback | rest], this) do
     ref = require_strong_map_ref!(this)
