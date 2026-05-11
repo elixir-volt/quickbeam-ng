@@ -353,6 +353,23 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("delete"), do: meta("delete", [length: 1, constructable: false], :proto)
   def named_meta("clear"), do: meta("clear", [length: 0, constructable: false], :proto)
   def named_meta("add"), do: meta("add", [length: 1, constructable: false], :proto)
+  def named_meta("difference"), do: meta("difference", [length: 1, constructable: false], :proto)
+
+  def named_meta("intersection"),
+    do: meta("intersection", [length: 1, constructable: false], :proto)
+
+  def named_meta("union"), do: meta("union", [length: 1, constructable: false], :proto)
+
+  def named_meta("symmetricDifference"),
+    do: meta("symmetricDifference", [length: 1, constructable: false], :proto)
+
+  def named_meta("isSubsetOf"), do: meta("isSubsetOf", [length: 1, constructable: false], :proto)
+
+  def named_meta("isSupersetOf"),
+    do: meta("isSupersetOf", [length: 1, constructable: false], :proto)
+
+  def named_meta("isDisjointFrom"),
+    do: meta("isDisjointFrom", [length: 1, constructable: false], :proto)
 
   def named_meta("hasOwnProperty"),
     do: meta("hasOwnProperty", [length: 1, constructable: false], :proto)

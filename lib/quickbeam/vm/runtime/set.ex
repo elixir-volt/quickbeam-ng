@@ -53,6 +53,16 @@ defmodule QuickBEAM.VM.Runtime.Set do
   def proto_property("entries"), do: {:builtin, "entries", &entries/2}
   def proto_property({:symbol, "Symbol.iterator"}), do: proto_property("values")
   def proto_property("forEach"), do: {:builtin, "forEach", &for_each/2}
+  def proto_property("difference"), do: {:builtin, "difference", &difference/2}
+  def proto_property("intersection"), do: {:builtin, "intersection", &intersection/2}
+  def proto_property("union"), do: {:builtin, "union", &union/2}
+
+  def proto_property("symmetricDifference"),
+    do: {:builtin, "symmetricDifference", &symmetric_difference/2}
+
+  def proto_property("isSubsetOf"), do: {:builtin, "isSubsetOf", &subset?/2}
+  def proto_property("isSupersetOf"), do: {:builtin, "isSupersetOf", &superset?/2}
+  def proto_property("isDisjointFrom"), do: {:builtin, "isDisjointFrom", &disjoint?/2}
   def proto_property(_), do: :undefined
 
   defp set_object(set_ref, items) do
@@ -92,31 +102,31 @@ defmodule QuickBEAM.VM.Runtime.Set do
         end
 
         method "difference" do
-          difference(set_ref, hd(args))
+          set_difference(set_ref, hd(args))
         end
 
         method "intersection" do
-          intersection(set_ref, hd(args))
+          set_intersection(set_ref, hd(args))
         end
 
         method "union" do
-          union(set_ref, hd(args))
+          set_union(set_ref, hd(args))
         end
 
         method "symmetricDifference" do
-          symmetric_difference(set_ref, hd(args))
+          set_symmetric_difference(set_ref, hd(args))
         end
 
         method "isSubsetOf" do
-          subset?(set_ref, hd(args))
+          set_subset?(set_ref, hd(args))
         end
 
         method "isSupersetOf" do
-          superset?(set_ref, hd(args))
+          set_superset?(set_ref, hd(args))
         end
 
         method "isDisjointFrom" do
-          disjoint?(set_ref, hd(args))
+          set_disjoint?(set_ref, hd(args))
         end
 
         prop(set_data(), items)
@@ -284,35 +294,59 @@ defmodule QuickBEAM.VM.Runtime.Set do
     end
   end
 
-  defp difference(set_ref, other) do
+  defp difference([other | _], this),
+    do: this |> require_strong_set_ref!() |> set_difference(other)
+
+  defp difference(_, this), do: require_strong_set_ref!(this)
+
+  defp set_difference(set_ref, other) do
     validate_set_like!(other)
     constructor().([data(set_ref) -- other_data(other)], nil)
   end
 
-  defp intersection(set_ref, other) do
+  defp intersection([other | _], this),
+    do: this |> require_strong_set_ref!() |> set_intersection(other)
+
+  defp intersection(_, this), do: require_strong_set_ref!(this)
+
+  defp set_intersection(set_ref, other) do
     validate_set_like!(other)
     other_items = other_data(other)
     constructor().([Enum.filter(data(set_ref), &(&1 in other_items))], nil)
   end
 
-  defp union(set_ref, other) do
+  defp union([other | _], this), do: this |> require_strong_set_ref!() |> set_union(other)
+  defp union(_, this), do: require_strong_set_ref!(this)
+
+  defp set_union(set_ref, other) do
     validate_set_like!(other)
     constructor().([Enum.uniq(data(set_ref) ++ other_data(other))], nil)
   end
 
-  defp symmetric_difference(set_ref, other) do
+  defp symmetric_difference([other | _], this),
+    do: this |> require_strong_set_ref!() |> set_symmetric_difference(other)
+
+  defp symmetric_difference(_, this), do: require_strong_set_ref!(this)
+
+  defp set_symmetric_difference(set_ref, other) do
     validate_set_like!(other)
     items = data(set_ref)
     other_items = other_data(other)
     constructor().([(items -- other_items) ++ (other_items -- items)], nil)
   end
 
-  defp subset?(set_ref, other) do
+  defp subset?([other | _], this), do: this |> require_strong_set_ref!() |> set_subset?(other)
+  defp subset?(_, this), do: require_strong_set_ref!(this)
+
+  defp set_subset?(set_ref, other) do
     other_items = other_data(other)
     Enum.all?(data(set_ref), &(&1 in other_items))
   end
 
-  defp superset?(set_ref, other) do
+  defp superset?([other | _], this), do: this |> require_strong_set_ref!() |> set_superset?(other)
+  defp superset?(_, this), do: require_strong_set_ref!(this)
+
+  defp set_superset?(set_ref, other) do
     items = data(set_ref)
     size = other_size(other)
 
@@ -324,7 +358,10 @@ defmodule QuickBEAM.VM.Runtime.Set do
     end
   end
 
-  defp disjoint?(set_ref, other) do
+  defp disjoint?([other | _], this), do: this |> require_strong_set_ref!() |> set_disjoint?(other)
+  defp disjoint?(_, this), do: require_strong_set_ref!(this)
+
+  defp set_disjoint?(set_ref, other) do
     items = data(set_ref)
     size = other_size(other)
 
@@ -383,12 +420,37 @@ defmodule QuickBEAM.VM.Runtime.Set do
     end
   end
 
-  defp has([value | _], {:obj, ref}) do
+  defp require_setlike_ref!({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) and is_map_key(map, set_data()) -> ref
+      _ -> JSThrow.type_error!("Method requires a Set")
+    end
+  end
+
+  defp require_setlike_ref!(_), do: JSThrow.type_error!("Method requires a Set")
+
+  defp require_strong_set_ref!({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) and is_map_key(map, set_data()) and not is_map_key(map, :weak) ->
+        ref
+
+      _ ->
+        JSThrow.type_error!("Method requires a Set")
+    end
+  end
+
+  defp require_strong_set_ref!(_), do: JSThrow.type_error!("Method requires a Set")
+
+  defp has([value | _], this) do
+    ref = require_setlike_ref!(this)
     items = Heap.get_obj(ref, %{}) |> Map.get(set_data(), [])
     value in items
   end
 
-  defp add([value | _], {:obj, ref}) do
+  defp has(_, this), do: require_setlike_ref!(this)
+
+  defp add([value | _], this) do
+    ref = require_setlike_ref!(this)
     obj = Heap.get_obj(ref, %{})
     if Map.get(obj, :weak), do: Collections.validate_weak_key!(value, "WeakSet")
     items = Map.get(obj, set_data(), [])
@@ -406,7 +468,10 @@ defmodule QuickBEAM.VM.Runtime.Set do
     {:obj, ref}
   end
 
-  defp delete([value | _], {:obj, ref}) do
+  defp add(_, this), do: require_setlike_ref!(this)
+
+  defp delete([value | _], this) do
+    ref = require_setlike_ref!(this)
     obj = Heap.get_obj(ref, %{})
     items = Map.get(obj, set_data(), [])
     new_items = List.delete(items, value)
@@ -420,20 +485,27 @@ defmodule QuickBEAM.VM.Runtime.Set do
     true
   end
 
-  defp clear(_, {:obj, ref}) do
+  defp delete(_, this), do: require_setlike_ref!(this)
+
+  defp clear(_, this) do
+    ref = require_setlike_ref!(this)
     obj = Heap.get_obj(ref, %{})
     Heap.put_obj(ref, %{obj | set_data() => [], "size" => 0})
     :undefined
   end
 
-  defp values(_, {:obj, ref}) do
+  defp values(_, this) do
+    ref = require_setlike_ref!(this)
+
     ref
     |> Heap.get_obj(%{})
     |> Map.get(set_data(), [])
     |> Heap.wrap()
   end
 
-  defp entries(_, {:obj, ref}) do
+  defp entries(_, this) do
+    ref = require_setlike_ref!(this)
+
     ref
     |> Heap.get_obj(%{})
     |> Map.get(set_data(), [])
@@ -441,7 +513,8 @@ defmodule QuickBEAM.VM.Runtime.Set do
     |> Heap.wrap()
   end
 
-  defp for_each([callback | _], {:obj, ref}) do
+  defp for_each([callback | _], this) do
+    ref = require_setlike_ref!(this)
     items = Heap.get_obj(ref, %{}) |> Map.get(set_data(), [])
 
     Enum.each(items, fn value ->
@@ -450,4 +523,6 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
     :undefined
   end
+
+  defp for_each(_, this), do: require_setlike_ref!(this)
 end
