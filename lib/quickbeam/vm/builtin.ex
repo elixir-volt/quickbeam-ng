@@ -103,6 +103,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("Boolean"), do: meta("Boolean", [length: 1, constructable: true], :constructor)
   def named_meta("RegExp"), do: meta("RegExp", [length: 2, constructable: true], :constructor)
   def named_meta("Date"), do: meta("Date", [length: 7, constructable: true], :constructor)
+  def named_meta("Set"), do: meta("Set", [length: 0, constructable: true], :constructor)
   def named_meta("assign"), do: meta("assign", [length: 2, constructable: false], :static)
   def named_meta("create"), do: meta("create", [length: 2, constructable: false], :static)
 
