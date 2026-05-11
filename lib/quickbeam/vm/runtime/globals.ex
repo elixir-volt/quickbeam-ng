@@ -195,6 +195,13 @@ defmodule QuickBEAM.VM.Runtime.Globals do
       "Map" =>
         (fn ->
            ctor = register("Map", JSMap.constructor(), auto_proto: true)
+
+           Heap.put_ctor_prop_desc(ctor, "prototype", %{
+             writable: false,
+             enumerable: false,
+             configurable: false
+           })
+
            group_by = {:builtin, "groupBy", fn args, _this -> JSMap.group_by(args) end}
            Heap.put_ctor_static(ctor, "groupBy", group_by)
 
