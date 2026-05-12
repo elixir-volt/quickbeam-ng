@@ -13,6 +13,53 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Object
 
+  @method_lengths %{
+    "apply" => 3,
+    "construct" => 2,
+    "defineProperty" => 3,
+    "deleteProperty" => 2,
+    "get" => 2,
+    "getOwnPropertyDescriptor" => 2,
+    "getPrototypeOf" => 1,
+    "has" => 2,
+    "isExtensible" => 1,
+    "ownKeys" => 1,
+    "preventExtensions" => 1,
+    "set" => 3,
+    "setPrototypeOf" => 2
+  }
+
+  def install_metadata({:builtin, _name, map} = reflect) when is_map(map) do
+    Enum.each(@method_lengths, fn {name, length} ->
+      Heap.put_prop_desc(reflect, name, %{writable: true, enumerable: false, configurable: true})
+
+      case Get.get(reflect, name) do
+        {:builtin, _, _} = method ->
+          Heap.put_ctor_static(method, "length", length)
+
+          Heap.put_ctor_prop_desc(method, "length", %{
+            writable: false,
+            enumerable: false,
+            configurable: true
+          })
+
+        _ ->
+          :ok
+      end
+    end)
+
+    tag = {:symbol, "Symbol.toStringTag"}
+    Heap.put_ctor_static(reflect, tag, "Reflect")
+    Heap.put_prop_desc(reflect, tag, %{writable: false, enumerable: false, configurable: true})
+
+    case Heap.get_object_prototype() do
+      {:obj, _} = object_proto -> Heap.put_ctor_static(reflect, proto(), object_proto)
+      _ -> :ok
+    end
+
+    reflect
+  end
+
   js_object "Reflect" do
     method "apply" do
       [target, this_arg | rest] = args

@@ -538,7 +538,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
          end).(),
       "Math" => Math.object(),
       "JSON" => JSON.object(),
-      "Reflect" => Reflect.object(),
+      "Reflect" => Reflect.object() |> Reflect.install_metadata(),
       "console" => Console.object(),
       "parseInt" => builtin("parseInt", &GlobalNumeric.parse_int/2),
       "parseFloat" => builtin("parseFloat", &GlobalNumeric.parse_float/2),

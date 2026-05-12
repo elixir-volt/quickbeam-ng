@@ -132,6 +132,16 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("getPrototypeOf"),
     do: meta("getPrototypeOf", [length: 1, constructable: false], :static)
 
+  def named_meta("construct"), do: meta("construct", [length: 2, constructable: false], :static)
+
+  def named_meta("deleteProperty"),
+    do: meta("deleteProperty", [length: 2, constructable: false], :static)
+
+  def named_meta("ownKeys"), do: meta("ownKeys", [length: 1, constructable: false], :static)
+
+  def named_meta("setPrototypeOf"),
+    do: meta("setPrototypeOf", [length: 2, constructable: false], :static)
+
   def named_meta("keys"), do: meta("keys", [length: 1, constructable: false], :static)
   def named_meta("values"), do: meta("values", [length: 1, constructable: false], :static)
   def named_meta("entries"), do: meta("entries", [length: 1, constructable: false], :static)
