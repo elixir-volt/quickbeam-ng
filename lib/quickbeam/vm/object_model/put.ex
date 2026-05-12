@@ -1127,6 +1127,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           match?(%{writable: false}, Heap.get_prop_desc(ref, key)) ->
             reject_failed_write!()
 
+          i >= :array.size(arr) and Heap.get_array_prop(ref, "__arguments__") == true ->
+            Heap.put_array_prop(ref, key, val)
+
           i >= :array.size(arr) and proto_has_setter?(i) ->
             invoke_proto_setter(obj, i, val)
 
