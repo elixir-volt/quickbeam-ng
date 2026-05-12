@@ -568,9 +568,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own(_, _), do: :undefined
 
   defp typed_array_property(obj, map, key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> TypedArray.get_element(obj, idx)
-      _ -> get_map_property(map, key, obj)
+    case PropertyKey.array_index(key) do
+      {:ok, idx} -> TypedArray.get_element(obj, idx)
+      :error -> get_map_property(map, key, obj)
     end
   end
 

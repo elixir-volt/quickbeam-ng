@@ -392,8 +392,8 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   end
 
   defp typed_array_descriptor(obj, prop_name) do
-    case Integer.parse(prop_name) do
-      {idx, ""} when idx >= 0 ->
+    case PropertyKey.array_index(prop_name) do
+      {:ok, idx} ->
         val = TypedArray.get_element(obj, idx)
 
         if val == :undefined do
