@@ -417,6 +417,7 @@ defmodule QuickBEAM.VM.Builtin do
           build_object: 1,
           object: 1,
           object: 2,
+          builtin_definition: 2,
           constructor: 2,
           constructor: 3,
           arg: 2,
@@ -501,6 +502,44 @@ defmodule QuickBEAM.VM.Builtin do
     quote do
       @__has_static true
       def static_property(unquote(name)), do: unquote(value)
+    end
+  end
+
+  @doc "Defines declarative installation metadata for a JavaScript builtin."
+  defmacro builtin_definition(name, opts) do
+    constructor = Keyword.fetch!(opts, :constructor)
+    length = Keyword.get(opts, :length)
+    phase = Keyword.get(opts, :phase, :runtime)
+    prototype_parent = Keyword.get(opts, :prototype_parent, :object)
+    constructor_descriptor = Keyword.get(opts, :constructor_descriptor, %{})
+    prototype_descriptor = Keyword.get(opts, :prototype_descriptor, %{})
+    prototype_properties = Keyword.get(opts, :prototype_properties, [])
+    realm_intrinsic = Keyword.get(opts, :realm_intrinsic)
+    auto_install? = Keyword.get(opts, :auto_install?, true)
+
+    quote do
+      def builtin_definition do
+        struct!(QuickBEAM.VM.Builtin.Definition, %{
+          name: unquote(name),
+          constructor: unquote(constructor),
+          length: unquote(length),
+          phase: unquote(phase),
+          prototype_parent: unquote(prototype_parent),
+          constructor_descriptor:
+            Map.merge(
+              %{writable: true, enumerable: false, configurable: true},
+              unquote(Macro.escape(constructor_descriptor))
+            ),
+          prototype_descriptor:
+            Map.merge(
+              %{writable: false, enumerable: false, configurable: false},
+              unquote(Macro.escape(prototype_descriptor))
+            ),
+          prototype_properties: unquote(prototype_properties),
+          realm_intrinsic: unquote(realm_intrinsic),
+          auto_install?: unquote(auto_install?)
+        })
+      end
     end
   end
 
