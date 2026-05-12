@@ -821,7 +821,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
-    this_arg = List.first(rest) || :undefined
+    this_arg =
+      case rest do
+        [value | _] -> value
+        _ -> :undefined
+      end
 
     list
     |> Enum.take(len)
@@ -842,22 +846,35 @@ defmodule QuickBEAM.VM.Runtime.Array do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
-    this_arg = List.first(rest) || :undefined
+    this_arg =
+      case rest do
+        [value | _] -> value
+        _ -> :undefined
+      end
 
     if len == 0 do
       true
     else
       Enum.all?(0..(len - 1), fn idx ->
-        value = Get.get(this, Integer.to_string(idx))
+        key = Integer.to_string(idx)
 
-        Runtime.truthy?(
-          QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
-        )
+        if Put.has_property(this, key) do
+          value = Get.get(this, key)
+
+          Runtime.truthy?(
+            QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
+          )
+        else
+          true
+        end
       end)
     end
   end
 
-  defp every_array_like(_this, _args), do: JSThrow.type_error!("callbackfn is not a function")
+  defp every_array_like(this, _args) do
+    _len = array_like_length(this)
+    JSThrow.type_error!("callbackfn is not a function")
+  end
 
   defp primitive_object(value),
     do: QuickBEAM.VM.Runtime.Globals.Constructors.object([value], nil)
