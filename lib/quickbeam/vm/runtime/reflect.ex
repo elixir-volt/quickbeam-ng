@@ -72,7 +72,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
         )
       end
 
-      call_args = Heap.to_list(args_array)
+      call_args = create_list_from_array_like(args_array)
 
       Interpreter.invoke_with_receiver(
         target,
@@ -84,24 +84,27 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
     method "construct" do
       [target, args_array | rest] = args
-      call_args = Heap.to_list(args_array)
+      call_args = create_list_from_array_like(args_array)
       new_target = arg(rest, 0, target)
       Invocation.construct_runtime(target, new_target, call_args)
     end
 
     method "get" do
       [obj, key | _] = args
+      require_object!(obj, "Reflect.get")
       Get.get(obj, key)
     end
 
     method "set" do
       [obj, key, val | rest] = args
+      require_object!(obj, "Reflect.set")
       receiver = arg(rest, 0, obj)
       Values.truthy?(Put.set(obj, key, val, receiver))
     end
 
     method "deleteProperty" do
       [obj, key | _] = args
+      require_object!(obj, "Reflect.deleteProperty")
       Delete.delete_property(obj, key)
     end
 
@@ -174,16 +177,40 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
     method "has" do
       [obj, key | _] = args
+      require_object!(obj, "Reflect.has")
       HasProperty.has_property?(obj, key)
     end
 
     method "ownKeys" do
-      case hd(args) do
-        {:obj, _} = obj -> Heap.wrap(own_keys_for(obj))
-        _ -> Heap.wrap([])
-      end
+      obj = hd(args)
+      require_object!(obj, "Reflect.ownKeys")
+      Heap.wrap(own_keys_for(obj))
     end
   end
+
+  defp create_list_from_array_like(value) do
+    require_object!(value, "CreateListFromArrayLike")
+
+    length = value |> Get.get("length") |> Runtime.to_number()
+    length = if is_number(length) and length > 0, do: trunc(length), else: 0
+
+    for index <- 0..(length - 1)//1 do
+      Get.get(value, Integer.to_string(index))
+    end
+  end
+
+  defp require_object!(value, name) do
+    unless object?(value) do
+      JSThrow.type_error!("#{name} called on non-object")
+    end
+  end
+
+  defp object?({:obj, _}), do: true
+  defp object?(%QuickBEAM.VM.Function{}), do: true
+  defp object?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
+  defp object?({:bound, _, _, _, _}), do: true
+  defp object?({:builtin, _, _}), do: true
+  defp object?(_), do: false
 
   defp prevent_extensions({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
