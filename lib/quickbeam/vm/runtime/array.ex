@@ -985,7 +985,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp constructable_from?(%QuickBEAM.VM.Function{has_prototype: true}), do: true
   defp constructable_from?({:closure, _, %QuickBEAM.VM.Function{has_prototype: true}}), do: true
-  defp constructable_from?({:bound, _, _, _, _}), do: true
+
+  defp constructable_from?({:bound, _, _inner, orig_fun, _bound_args}),
+    do: constructable_from?(orig_fun)
+
   defp constructable_from?(_), do: false
 
   defp coerce_to_list({:obj, ref} = obj) do
