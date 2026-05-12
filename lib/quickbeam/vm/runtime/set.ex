@@ -14,13 +14,21 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor do
-    fn args, _this ->
-      ref = make_ref()
+    fn args, this ->
+      {ref, instance_proto} =
+        case this do
+          {:obj, this_ref} ->
+            existing = Heap.get_obj(this_ref, %{})
+            {this_ref, Map.get(existing, proto(), Runtime.global_class_proto("Set"))}
+
+          _ ->
+            {make_ref(), Runtime.global_class_proto("Set")}
+        end
 
       items =
         args |> arg(0, nil) |> Heap.to_list() |> Enum.map(&normalize_set_value/1) |> Enum.uniq()
 
-      Heap.put_obj(ref, set_object(ref, items))
+      Heap.put_obj(ref, set_object(ref, items, instance_proto))
       {:obj, ref}
     end
   end
@@ -98,11 +106,11 @@ defmodule QuickBEAM.VM.Runtime.Set do
   def weak_proto_property("delete"), do: {:builtin, "delete", &weak_delete/2}
   def weak_proto_property(_), do: :undefined
 
-  defp set_object(_set_ref, items) do
+  defp set_object(_set_ref, items, instance_proto) do
     %{
       set_data() => items,
       "size" => length(items),
-      proto() => Runtime.global_class_proto("Set")
+      proto() => instance_proto
     }
   end
 

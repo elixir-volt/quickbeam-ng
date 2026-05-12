@@ -328,9 +328,22 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
            case Heap.get_ctor_statics(ctor)["prototype"] do
              {:obj, proto_ref} ->
+               Heap.put_obj_key(proto_ref, "__proto__", Heap.get_object_prototype())
+
                for name <-
                      ~w(has add delete clear values keys entries forEach difference intersection union symmetricDifference isSubsetOf isSupersetOf isDisjointFrom) do
-                 Heap.put_obj_key(proto_ref, name, JSSet.proto_property(name))
+                 method = JSSet.proto_property(name)
+                 Heap.put_obj_key(proto_ref, name, method)
+
+                 if name in ~w(keys values entries) do
+                   Heap.put_ctor_static(method, "length", 0)
+
+                   Heap.put_ctor_prop_desc(method, "length", %{
+                     writable: false,
+                     enumerable: false,
+                     configurable: true
+                   })
+                 end
 
                  Heap.put_prop_desc(proto_ref, name, %{
                    writable: true,
