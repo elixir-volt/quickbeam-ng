@@ -118,7 +118,15 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_value_of(value), do: value
 
   defp prototype_of?([{:obj, ref} | _], {:obj, proto_ref}) do
-    prototype_chain_contains?(Map.get(Heap.get_obj(ref, %{}), proto()), proto_ref)
+    prototype =
+      case Heap.get_obj(ref, %{}) do
+        {:qb_arr, _} -> Heap.get_array_proto(ref)
+        data when is_list(data) -> Heap.get_array_proto(ref)
+        map when is_map(map) -> Map.get(map, proto())
+        _ -> nil
+      end
+
+    prototype_chain_contains?(prototype, proto_ref)
   end
 
   defp prototype_of?([{:builtin, _, _} | _], {:obj, proto_ref}) do
