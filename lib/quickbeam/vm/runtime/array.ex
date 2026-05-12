@@ -1325,22 +1325,43 @@ defmodule QuickBEAM.VM.Runtime.Array do
             [end_value | _] -> normalize_copy_index(end_value, len)
           end
 
-        slice = Enum.slice(list, start_idx, max(end_idx - start_idx, 0))
+        current_len = Runtime.to_int(Get.get(obj, "length"))
 
-        new_list =
-          list
-          |> Enum.with_index()
-          |> Enum.map(fn {item, i} ->
-            offset = i - target
-            if i >= target and offset < length(slice), do: Enum.at(slice, offset), else: item
-          end)
+        if current_len != len and target >= current_len do
+          copy_within_sparse_tail(obj, ref, target, start_idx, current_len)
+        else
+          slice = Enum.slice(list, start_idx, max(end_idx - start_idx, 0))
 
-        Heap.put_obj(ref, new_list)
-        {:obj, ref}
+          new_list =
+            list
+            |> Enum.with_index()
+            |> Enum.map(fn {item, i} ->
+              offset = i - target
+              if i >= target and offset < length(slice), do: Enum.at(slice, offset), else: item
+            end)
+
+          Heap.put_obj(ref, new_list)
+          {:obj, ref}
+        end
     end
   end
 
   defp copy_within(_, _), do: :undefined
+
+  defp copy_within_sparse_tail(obj, ref, target, start_idx, current_len) do
+    count = max(current_len - start_idx, 0)
+
+    Enum.each(0..max(count - 1, -1), fn offset ->
+      from_key = Integer.to_string(start_idx + offset)
+
+      if HasProperty.has_property?(obj, from_key) do
+        Heap.put_array_prop(ref, Integer.to_string(target + offset), Get.get(obj, from_key))
+      end
+    end)
+
+    if count > 0, do: Heap.put_array_prop(ref, "length", target + count)
+    obj
+  end
 
   defp copy_within_object(obj, args) do
     len = copy_within_length!(obj)
