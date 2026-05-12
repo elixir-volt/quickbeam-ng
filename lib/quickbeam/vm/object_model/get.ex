@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.ObjectModel.Get do
   @moduledoc "JS property resolution: own properties, prototype chain, getters."
 
-  import Bitwise, only: [band: 2]
+  import Bitwise, only: [band: 2, bor: 2, bsr: 2]
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.{Heap, JSThrow}
@@ -248,14 +248,34 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp wrapped_string_property(string, key) when is_binary(string) do
     case PropertyKey.array_index(key) do
-      {:ok, idx} ->
-        string
-        |> String.graphemes()
-        |> Enum.at(idx, :undefined)
-
-      :error ->
-        JSString.proto_property(key)
+      {:ok, idx} -> utf16_code_unit_at(string, idx)
+      :error -> JSString.proto_property(key)
     end
+  end
+
+  defp utf16_code_unit_at(string, index) do
+    string
+    |> utf16_code_units()
+    |> Enum.at(index, :undefined)
+  end
+
+  defp utf16_code_units(string) do
+    string
+    |> String.to_charlist()
+    |> Enum.flat_map(fn
+      cp when cp > 0xFFFF ->
+        cp = cp - 0x10000
+        [surrogate_binary(div(cp, 0x400) + 0xD800), surrogate_binary(rem(cp, 0x400) + 0xDC00)]
+
+      cp ->
+        [<<cp::utf8>>]
+    end)
+  rescue
+    UnicodeConversionError -> String.graphemes(string)
+  end
+
+  defp surrogate_binary(unit) do
+    <<bor(0xE0, bsr(unit, 12)), bor(0x80, band(bsr(unit, 6), 0x3F)), bor(0x80, band(unit, 0x3F))>>
   end
 
   defp wrapped_proto_property(map, key) do
