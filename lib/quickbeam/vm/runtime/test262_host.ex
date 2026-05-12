@@ -5,6 +5,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
+  alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
 
@@ -39,6 +40,10 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     weak_set_ctor = realm_constructor("WeakSet", JSSet.weak_constructor(), weak_set_proto)
     Heap.put_obj_key(elem(weak_set_proto, 1), "constructor", weak_set_ctor)
 
+    weak_ref_proto = Heap.wrap(%{"__proto__" => object_proto})
+    weak_ref_ctor = realm_constructor("WeakRef", JSWeakRef.constructor(), weak_ref_proto)
+    Heap.put_obj_key(elem(weak_ref_proto, 1), "constructor", weak_ref_ctor)
+
     function_proto = QuickBEAM.VM.Runtime.Function.prototype()
 
     function_ctor =
@@ -49,7 +54,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         map_proto,
         set_proto,
         weak_map_proto,
-        weak_set_proto
+        weak_set_proto,
+        weak_ref_proto
       )
 
     global =
@@ -60,7 +66,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Map" => map_ctor,
         "Set" => set_ctor,
         "WeakMap" => weak_map_ctor,
-        "WeakSet" => weak_set_ctor
+        "WeakSet" => weak_set_ctor,
+        "WeakRef" => weak_ref_ctor
       })
 
     Heap.wrap(%{"global" => global})
@@ -73,6 +80,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       %{set_proto: set_proto} when intrinsic == :set -> set_proto
       %{weak_map_proto: weak_map_proto} when intrinsic == :weak_map -> weak_map_proto
       %{weak_set_proto: weak_set_proto} when intrinsic == :weak_set -> weak_set_proto
+      %{weak_ref_proto: weak_ref_proto} when intrinsic == :weak_ref -> weak_ref_proto
       %{object_proto: object_proto} when intrinsic == :object -> object_proto
       _ -> nil
     end
@@ -92,7 +100,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          map_proto,
          set_proto,
          weak_map_proto,
-         weak_set_proto
+         weak_set_proto,
+         weak_ref_proto
        ) do
     cb = fn _args, _this ->
       fun = {:builtin, "anonymous", fn _, this -> this end}
@@ -105,7 +114,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         map_proto: map_proto,
         set_proto: set_proto,
         weak_map_proto: weak_map_proto,
-        weak_set_proto: weak_set_proto
+        weak_set_proto: weak_set_proto,
+        weak_ref_proto: weak_ref_proto
       })
 
       fun
@@ -120,7 +130,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       map_proto: map_proto,
       set_proto: set_proto,
       weak_map_proto: weak_map_proto,
-      weak_set_proto: weak_set_proto
+      weak_set_proto: weak_set_proto,
+      weak_ref_proto: weak_ref_proto
     })
 
     ctor

@@ -23,7 +23,8 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     Reflect,
     Symbol,
     Test262Host,
-    TypedArray
+    TypedArray,
+    WeakRef
   }
 
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
@@ -495,7 +496,57 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
            ctor
          end).(),
-      "WeakRef" => register("WeakRef", fn _, _ -> Runtime.new_object() end),
+      "WeakRef" =>
+        (fn ->
+           ctor = register("WeakRef", WeakRef.constructor(), auto_proto: true)
+
+           Heap.put_ctor_static(ctor, "length", 1)
+
+           Heap.put_ctor_prop_desc(ctor, "length", %{
+             writable: false,
+             enumerable: false,
+             configurable: true
+           })
+
+           Heap.put_ctor_prop_desc(ctor, "prototype", %{
+             writable: false,
+             enumerable: false,
+             configurable: false
+           })
+
+           case Heap.get_ctor_statics(ctor)["prototype"] do
+             {:obj, proto_ref} ->
+               Heap.put_obj_key(proto_ref, "__proto__", Heap.get_object_prototype())
+
+               Heap.put_prop_desc(proto_ref, "constructor", %{
+                 writable: true,
+                 enumerable: false,
+                 configurable: true
+               })
+
+               Heap.put_obj_key(proto_ref, "deref", WeakRef.proto_property("deref"))
+
+               Heap.put_prop_desc(proto_ref, "deref", %{
+                 writable: true,
+                 enumerable: false,
+                 configurable: true
+               })
+
+               sym_to_string_tag = {:symbol, "Symbol.toStringTag"}
+               Heap.put_obj_key(proto_ref, sym_to_string_tag, "WeakRef")
+
+               Heap.put_prop_desc(proto_ref, sym_to_string_tag, %{
+                 writable: false,
+                 enumerable: false,
+                 configurable: true
+               })
+
+             _ ->
+               :ok
+           end
+
+           ctor
+         end).(),
       "FinalizationRegistry" =>
         register("FinalizationRegistry", &Constructors.finalization_registry/2),
       "DataView" => register("DataView", fn _, _ -> Runtime.new_object() end),

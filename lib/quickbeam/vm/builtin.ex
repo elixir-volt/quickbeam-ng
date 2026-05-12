@@ -106,6 +106,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("Date"), do: meta("Date", [length: 7, constructable: true], :constructor)
   def named_meta("Map"), do: meta("Map", [length: 0, constructable: true], :constructor)
   def named_meta("Set"), do: meta("Set", [length: 0, constructable: true], :constructor)
+  def named_meta("WeakRef"), do: meta("WeakRef", [length: 1, constructable: true], :constructor)
   def named_meta("assign"), do: meta("assign", [length: 2, constructable: false], :static)
   def named_meta("create"), do: meta("create", [length: 2, constructable: false], :static)
 
@@ -356,6 +357,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("has"), do: meta("has", [length: 1, constructable: false], :proto)
   def named_meta("delete"), do: meta("delete", [length: 1, constructable: false], :proto)
   def named_meta("clear"), do: meta("clear", [length: 0, constructable: false], :proto)
+  def named_meta("deref"), do: meta("deref", [length: 0, constructable: false], :proto)
 
   def named_meta("getOrInsert"),
     do: meta("getOrInsert", [length: 2, constructable: false], :proto)
@@ -706,7 +708,8 @@ defmodule QuickBEAM.VM.Builtin do
   alias QuickBEAM.VM.JSThrow
 
   @doc "Dispatches a VM callable value to its underlying Elixir callback."
-  def call({:builtin, name, _cb}, _args, _this) when name in ~w(Map Set WeakMap WeakSet) do
+  def call({:builtin, name, _cb}, _args, _this)
+      when name in ~w(Map Set WeakMap WeakSet WeakRef) do
     JSThrow.type_error!("Constructor #{name} requires 'new'")
   end
 
