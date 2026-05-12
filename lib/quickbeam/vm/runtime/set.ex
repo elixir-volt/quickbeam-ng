@@ -4,6 +4,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   import QuickBEAM.VM.Heap.Keys
   use QuickBEAM.VM.Builtin
 
+  alias QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
@@ -37,26 +38,33 @@ defmodule QuickBEAM.VM.Runtime.Set do
             {make_ref(), Runtime.global_class_proto("WeakSet")}
         end
 
-      items =
-        case args do
-          [source | _] ->
-            Heap.to_list(source)
-            |> Enum.each(&Collections.validate_weak_key!(&1, "WeakSet"))
-
-            Heap.to_list(source)
-
-          _ ->
-            []
-        end
-
       Heap.put_obj(ref, %{
-        set_data() => items,
-        "size" => length(items),
+        set_data() => [],
+        "size" => 0,
         :weak => true,
         proto() => instance_proto
       })
 
-      {:obj, ref}
+      set = {:obj, ref}
+
+      case args do
+        [] ->
+          set
+
+        [source | _] when source in [nil, :undefined] ->
+          set
+
+        [source | _] ->
+          prototype_adder = Get.get(Runtime.global_class_proto("WeakSet"), "add")
+
+          unless Builtin.callable?(prototype_adder) do
+            JSThrow.type_error!("WeakSet.prototype.add is not callable")
+          end
+
+          adder = Get.get(set, "add")
+          construct_weak_set_from_iterable(source, set, adder)
+          set
+      end
     end
   end
 
@@ -99,6 +107,53 @@ defmodule QuickBEAM.VM.Runtime.Set do
   end
 
   defp data(set_ref), do: Heap.get_obj(set_ref, %{}) |> Map.get(set_data(), [])
+
+  defp construct_weak_set_from_iterable({:obj, _} = iterable, set, adder) do
+    iterator_method = Get.get(iterable, {:symbol, "Symbol.iterator"})
+
+    unless Builtin.callable?(iterator_method) do
+      JSThrow.type_error!("object is not iterable")
+    end
+
+    iterator = call_with_this(iterator_method, [], iterable)
+    construct_weak_set_from_iterator(iterator, set, adder)
+  end
+
+  defp construct_weak_set_from_iterable(list, set, adder) when is_list(list) do
+    Enum.each(list, &call_with_this(adder, [&1], set))
+  end
+
+  defp construct_weak_set_from_iterable(_, _set, _adder),
+    do: JSThrow.type_error!("object is not iterable")
+
+  defp construct_weak_set_from_iterator(iterator, set, adder) do
+    next_fn = Get.get(iterator, "next")
+
+    unless Builtin.callable?(next_fn) do
+      JSThrow.type_error!("Iterator next is not callable")
+    end
+
+    result = call_with_this(next_fn, [], iterator)
+
+    unless match?({:obj, _}, result) or is_map(result) do
+      call_iterator_return(iterator)
+      JSThrow.type_error!("Iterator result is not an object")
+    end
+
+    unless Get.get(result, "done") == true do
+      value = Get.get(result, "value")
+
+      try do
+        call_with_this(adder, [value], set)
+      catch
+        {:js_throw, _} = thrown ->
+          call_iterator_return(iterator)
+          throw(thrown)
+      end
+
+      construct_weak_set_from_iterator(iterator, set, adder)
+    end
+  end
 
   defp normalize_set_value(value) when is_float(value) and value == 0.0, do: 0
   defp normalize_set_value(value), do: value
@@ -366,14 +421,14 @@ defmodule QuickBEAM.VM.Runtime.Set do
     end
   end
 
-  defp require_setlike_ref!({:obj, ref}) do
+  defp require_weak_set_ref!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
-      map when is_map(map) and is_map_key(map, set_data()) -> ref
-      _ -> JSThrow.type_error!("Method requires a Set")
+      map when is_map(map) and is_map_key(map, set_data()) and is_map_key(map, :weak) -> ref
+      _ -> JSThrow.type_error!("Method requires a WeakSet")
     end
   end
 
-  defp require_setlike_ref!(_), do: JSThrow.type_error!("Method requires a Set")
+  defp require_weak_set_ref!(_), do: JSThrow.type_error!("Method requires a WeakSet")
 
   defp require_strong_set_ref!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
@@ -436,15 +491,15 @@ defmodule QuickBEAM.VM.Runtime.Set do
   defp delete(_, this), do: require_strong_set_ref!(this)
 
   defp weak_has([value | _], this) do
-    ref = require_setlike_ref!(this)
+    ref = require_weak_set_ref!(this)
     items = Heap.get_obj(ref, %{}) |> Map.get(set_data(), [])
     value in items
   end
 
-  defp weak_has(_, this), do: require_setlike_ref!(this)
+  defp weak_has(_, this), do: require_weak_set_ref!(this)
 
   defp weak_add([value | _], this) do
-    ref = require_setlike_ref!(this)
+    ref = require_weak_set_ref!(this)
     obj = Heap.get_obj(ref, %{})
     if Map.get(obj, :weak), do: Collections.validate_weak_key!(value, "WeakSet")
     items = Map.get(obj, set_data(), [])
@@ -456,10 +511,13 @@ defmodule QuickBEAM.VM.Runtime.Set do
     {:obj, ref}
   end
 
-  defp weak_add(_, this), do: require_setlike_ref!(this)
+  defp weak_add(_, this) do
+    require_weak_set_ref!(this)
+    Collections.validate_weak_key!(:undefined, "WeakSet")
+  end
 
   defp weak_delete([value | _], this) do
-    ref = require_setlike_ref!(this)
+    ref = require_weak_set_ref!(this)
     obj = Heap.get_obj(ref, %{})
     items = Map.get(obj, set_data(), [])
     new_items = List.delete(items, value)
@@ -467,7 +525,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
     value in items
   end
 
-  defp weak_delete(_, this), do: require_setlike_ref!(this)
+  defp weak_delete(_, this), do: require_weak_set_ref!(this)
 
   defp clear(_, this) do
     ref = require_strong_set_ref!(this)
