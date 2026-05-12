@@ -1472,9 +1472,23 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp require_object_coercible!(_), do: :ok
 
-  defp array_at({:obj, ref}, [idx | _]) do
-    list = Heap.obj_to_list(ref)
-    array_at(list, [idx])
+  defp array_at({:obj, ref} = obj, [idx | _]) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} ->
+        len = QuickBEAM.VM.Runtime.TypedArray.element_count(obj)
+        i = Runtime.to_int(idx)
+        i = if i < 0, do: len + i, else: i
+
+        cond do
+          i < 0 or i >= len -> :undefined
+          QuickBEAM.VM.Runtime.TypedArray.out_of_bounds?(obj) -> :undefined
+          true -> QuickBEAM.VM.Runtime.TypedArray.get_element(obj, i)
+        end
+
+      _ ->
+        list = Heap.obj_to_list(ref)
+        array_at(list, [idx])
+    end
   end
 
   defp array_at({:qb_arr, arr}, args), do: array_at(:array.to_list(arr), args)
