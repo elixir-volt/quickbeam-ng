@@ -588,15 +588,66 @@ defmodule QuickBEAM.VM.Runtime.Array do
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
   defp concat(this, args) do
-    [concat_receiver(this) | args]
-    |> Enum.reduce([], &concat_item/2)
-    |> Heap.wrap()
+    receiver = concat_receiver(this)
+
+    values =
+      [receiver | args]
+      |> Enum.reduce([], &concat_item/2)
+
+    concat_result(receiver, values)
   end
 
   defp concat_receiver({:obj, _} = obj), do: obj
   defp concat_receiver({:qb_arr, _} = arr), do: arr
   defp concat_receiver(list) when is_list(list), do: list
   defp concat_receiver(value), do: QuickBEAM.VM.Runtime.Globals.Constructors.object([value], nil)
+
+  defp concat_result(receiver, values) do
+    case concat_species_constructor(receiver) do
+      :array ->
+        Heap.wrap(values)
+
+      constructor ->
+        target = QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, [0])
+
+        Enum.with_index(values, fn value, index ->
+          create_data_property_or_throw(target, Integer.to_string(index), value)
+        end)
+
+        Put.put(target, "length", length(values))
+        target
+    end
+  end
+
+  defp concat_species_constructor(receiver) do
+    if is_array(receiver) do
+      constructor = Get.get(receiver, "constructor")
+      concat_species_from_constructor(constructor)
+    else
+      :array
+    end
+  end
+
+  defp concat_species_from_constructor({:builtin, "Array", _}), do: :array
+  defp concat_species_from_constructor(:undefined), do: :array
+
+  defp concat_species_from_constructor({:obj, _} = constructor) do
+    species = Get.get(constructor, {:symbol, "Symbol.species"})
+
+    cond do
+      species in [nil, :undefined] -> :array
+      constructable_from?(species) -> species
+      true -> JSThrow.type_error!("object.constructor[Symbol.species] is not a constructor")
+    end
+  end
+
+  defp concat_species_from_constructor(constructor) do
+    if constructable_from?(constructor) do
+      constructor
+    else
+      JSThrow.type_error!("object.constructor is not a constructor")
+    end
+  end
 
   defp concat_item(value, acc) do
     if concat_spreadable?(value) do
