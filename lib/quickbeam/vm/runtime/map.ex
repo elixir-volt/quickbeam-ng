@@ -267,14 +267,14 @@ defmodule QuickBEAM.VM.Runtime.Map do
     end
   end
 
-  defp require_map_ref!({:obj, ref}) do
+  defp require_weak_map_ref!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
-      map when is_map(map) and is_map_key(map, map_data()) -> ref
-      _ -> JSThrow.type_error!("Method requires a Map")
+      map when is_map(map) and is_map_key(map, map_data()) and is_map_key(map, :weak) -> ref
+      _ -> JSThrow.type_error!("Method requires a WeakMap")
     end
   end
 
-  defp require_map_ref!(_), do: JSThrow.type_error!("Method requires a Map")
+  defp require_weak_map_ref!(_), do: JSThrow.type_error!("Method requires a WeakMap")
 
   defp require_strong_map_ref!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
@@ -410,15 +410,15 @@ defmodule QuickBEAM.VM.Runtime.Map do
   defp delete(_, this), do: require_strong_map_ref!(this)
 
   defp weak_get([key | _], this) do
-    ref = require_map_ref!(this)
+    ref = require_weak_map_ref!(this)
     data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
     Map.get(data, key, :undefined)
   end
 
-  defp weak_get(_, this), do: require_map_ref!(this)
+  defp weak_get(_, this), do: require_weak_map_ref!(this)
 
   defp weak_set([key, value | _], this) do
-    ref = require_map_ref!(this)
+    ref = require_weak_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
     if Map.get(obj, :weak), do: Collections.validate_weak_key!(key, "WeakMap")
     data = Map.get(obj, map_data(), %{})
@@ -427,18 +427,18 @@ defmodule QuickBEAM.VM.Runtime.Map do
     {:obj, ref}
   end
 
-  defp weak_set(_, this), do: require_map_ref!(this)
+  defp weak_set(_, this), do: require_weak_map_ref!(this)
 
   defp weak_has([key | _], this) do
-    ref = require_map_ref!(this)
+    ref = require_weak_map_ref!(this)
     data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
     Map.has_key?(data, key)
   end
 
-  defp weak_has(_, this), do: require_map_ref!(this)
+  defp weak_has(_, this), do: require_weak_map_ref!(this)
 
   defp weak_delete([key | _], this) do
-    ref = require_map_ref!(this)
+    ref = require_weak_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
     data = Map.get(obj, map_data(), %{})
     new_data = Map.delete(data, key)
@@ -446,10 +446,11 @@ defmodule QuickBEAM.VM.Runtime.Map do
     Map.has_key?(data, key)
   end
 
-  defp weak_delete(_, this), do: require_map_ref!(this)
+  defp weak_delete(_, this), do: require_weak_map_ref!(this)
 
-  defp weak_get_or_insert([key, value | _], this) do
-    ref = require_map_ref!(this)
+  defp weak_get_or_insert([key | rest], this) do
+    value = List.first(rest, :undefined)
+    ref = require_weak_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
     if Map.get(obj, :weak), do: Collections.validate_weak_key!(key, "WeakMap")
     data = Map.get(obj, map_data(), %{})
@@ -468,10 +469,10 @@ defmodule QuickBEAM.VM.Runtime.Map do
     end
   end
 
-  defp weak_get_or_insert(_, this), do: require_map_ref!(this)
+  defp weak_get_or_insert(_, this), do: require_weak_map_ref!(this)
 
   defp weak_get_or_insert_computed([key, callback | _], this) do
-    ref = require_map_ref!(this)
+    ref = require_weak_map_ref!(this)
     obj = Heap.get_obj(ref, %{})
     if Map.get(obj, :weak), do: Collections.validate_weak_key!(key, "WeakMap")
 
@@ -499,7 +500,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
     end
   end
 
-  defp weak_get_or_insert_computed(_, this), do: require_map_ref!(this)
+  defp weak_get_or_insert_computed(_, this), do: require_weak_map_ref!(this)
 
   defp clear(_, this) do
     ref = require_strong_map_ref!(this)
