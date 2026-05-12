@@ -394,8 +394,16 @@ defmodule QuickBEAM.VM.Runtime.Globals do
         (fn ->
            ctor = register("WeakMap", JSMap.weak_constructor(), auto_proto: true)
 
+           Heap.put_ctor_prop_desc(ctor, "prototype", %{
+             writable: false,
+             enumerable: false,
+             configurable: false
+           })
+
            case Heap.get_ctor_statics(ctor)["prototype"] do
              {:obj, proto_ref} ->
+               Heap.put_obj_key(proto_ref, "__proto__", Heap.get_object_prototype())
+
                Heap.put_prop_desc(proto_ref, "constructor", %{
                  writable: true,
                  enumerable: false,
