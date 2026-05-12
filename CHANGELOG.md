@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.10.11
 
 - Hide vendored C symbols in the native library to avoid collisions with other NIFs
+- Update optional `npm_ex` dependency to 0.7.1
 
 ## 0.10.10
 
