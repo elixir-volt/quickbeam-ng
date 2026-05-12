@@ -299,6 +299,17 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   def put({:builtin, _, _} = b, key, val), do: put_callable_property(b, key, val)
   def put({:bound, _, _, _, _} = b, key, val), do: put_callable_property(b, key, val)
 
+  def put({:regexp, _, _, ref}, key, val) do
+    key = normalize_key(key)
+
+    Process.put(
+      {:qb_regexp_props, ref},
+      Map.put(Process.get({:qb_regexp_props, ref}, %{}), key, val)
+    )
+
+    :ok
+  end
+
   def put(_, _, _), do: :ok
 
   defp put_length_property(obj, ref, val) do
@@ -1042,6 +1053,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
+  def get_element({:regexp, _, _, _} = regexp, key) do
+    Get.get(regexp, PropertyKey.normalize(key))
+  end
+
   def get_element({:obj, ref}, {:symbol, _} = sym_key) do
     case Heap.get_obj(ref, %{}) do
       map when is_map(map) ->
@@ -1074,6 +1089,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   def put_element({:closure, _, %QuickBEAM.VM.Function{}} = closure, key, val) do
     put(closure, PropertyKey.normalize(key), val)
+  end
+
+  def put_element({:regexp, _, _, _} = regexp, key, val) do
+    put(regexp, PropertyKey.normalize(key), val)
   end
 
   def put_element({:obj, ref} = obj, key, val) do

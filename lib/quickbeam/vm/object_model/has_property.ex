@@ -40,6 +40,8 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
 
   def has_property?({:builtin, _, _} = builtin, key), do: Get.get(builtin, key) != :undefined
   def has_property?({:bound, _, _, _, _} = bound, key), do: Get.get(bound, key) != :undefined
+  def has_property?({:regexp, _, _, _} = regexp, key), do: Get.get(regexp, key) != :undefined
+  def has_property?({:regexp, _, _} = regexp, key), do: Get.get(regexp, key) != :undefined
   def has_property?(map, key) when is_map(map), do: Map.has_key?(map, key)
 
   def has_property?({:qb_arr, arr}, key) when is_integer(key),

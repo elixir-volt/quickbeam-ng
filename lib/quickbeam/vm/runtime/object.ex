@@ -136,6 +136,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_to_string({:symbol, _}), do: "[object Symbol]"
   defp object_to_string({:symbol, _, _}), do: "[object Symbol]"
   defp object_to_string({:regexp, _, _}), do: "[object RegExp]"
+  defp object_to_string({:regexp, _, _, _}), do: "[object RegExp]"
   defp object_to_string(%QuickBEAM.VM.Function{}), do: "[object Function]"
 
   defp object_to_string({tag, _, %QuickBEAM.VM.Function{}}) when tag in [:closure, :bound],

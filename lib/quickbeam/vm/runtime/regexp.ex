@@ -55,7 +55,15 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     nif_exec(bytecode, s, 0) != nil
   end
 
+  defp test({:regexp, bytecode, _source, _ref}, [s | _])
+       when is_binary(bytecode) and is_binary(s) do
+    nif_exec(bytecode, s, 0) != nil
+  end
+
   defp test(_, _), do: false
+
+  defp exec({:regexp, bytecode, source, _ref}, args),
+    do: exec({:regexp, bytecode, source}, args)
 
   defp exec({:regexp, bytecode, _source}, [s | _]) when is_binary(bytecode) and is_binary(s) do
     case nif_exec(bytecode, s, 0) do
@@ -91,6 +99,11 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp exec(_, _), do: nil
 
+  defp regexp_to_string({:regexp, bytecode, source, _ref}) do
+    flags = Get.regexp_flags(bytecode)
+    "/#{source}/#{flags}"
+  end
+
   defp regexp_to_string({:regexp, bytecode, source}) do
     flags = Get.regexp_flags(bytecode)
     "/#{source}/#{flags}"
@@ -98,6 +111,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_to_string(_), do: "/(?:)/"
 
+  defp regexp_source({:regexp, _bytecode, source, _ref}) when is_binary(source), do: source
   defp regexp_source({:regexp, _bytecode, source}) when is_binary(source), do: source
   defp regexp_source(_), do: "(?:)"
 
@@ -107,6 +121,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       fn _, this ->
         case this do
           {:regexp, bytecode, _source} -> String.contains?(Get.regexp_flags(bytecode), flag)
+          {:regexp, bytecode, _source, _ref} -> String.contains?(Get.regexp_flags(bytecode), flag)
           _ -> false
         end
       end}, nil}

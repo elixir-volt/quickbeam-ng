@@ -476,9 +476,18 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp get_own({:regexp, bytecode, _source}, "flags"), do: regexp_flags(bytecode)
+  defp get_own({:regexp, bytecode, _source, _ref}, "flags"), do: regexp_flags(bytecode)
   defp get_own({:regexp, _bytecode, source}, "source") when is_binary(source), do: source
+  defp get_own({:regexp, _bytecode, source, _ref}, "source") when is_binary(source), do: source
 
-  defp get_own({:regexp, _, _}, key), do: RegExp.proto_property(key)
+  defp get_own({:regexp, _, _, ref}, key) do
+    case Map.get(Process.get({:qb_regexp_props, ref}, %{}), key, :undefined) do
+      :undefined -> regexp_prototype_property(key)
+      value -> value
+    end
+  end
+
+  defp get_own({:regexp, _, _}, key), do: regexp_prototype_property(key)
 
   defp get_own(%QuickBEAM.VM.Function{} = f, "prototype") do
     Heap.get_or_create_prototype(f)
@@ -566,6 +575,13 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp get_own(_, _), do: :undefined
+
+  defp regexp_prototype_property(key) do
+    case get(Runtime.global_class_proto("RegExp"), key) do
+      :undefined -> RegExp.proto_property(key)
+      value -> value
+    end
+  end
 
   defp typed_array_property(obj, map, key) do
     case PropertyKey.array_index(key) do

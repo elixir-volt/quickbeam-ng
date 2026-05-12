@@ -593,6 +593,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     Heap.wrap(init)
   end
 
+  def regexp_literal(_ctx \\ nil, pattern, flags), do: {:regexp, pattern, flags, make_ref()}
+
   @doc "Converts an iterable or array-like value to a JavaScript array object."
   def array_from(_ctx \\ nil, list), do: Heap.wrap(list)
 

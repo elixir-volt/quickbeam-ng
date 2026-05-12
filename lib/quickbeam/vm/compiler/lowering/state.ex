@@ -186,7 +186,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def regexp_literal(state) do
     with {:ok, pattern, _pattern_type, state} <- pop_typed(state),
          {:ok, flags, _flags_type, state} <- pop_typed(state) do
-      {:ok, push(state, Builder.tuple_expr([Builder.atom(:regexp), pattern, flags]), :unknown)}
+      {:ok, push(state, compiler_call(state, :regexp_literal, [pattern, flags]), :unknown)}
     end
   end
 

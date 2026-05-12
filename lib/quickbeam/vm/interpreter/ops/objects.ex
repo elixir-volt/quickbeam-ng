@@ -675,7 +675,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       # ── regexp literal ──
 
       defp run({@op_regexp, []}, pc, frame, [pattern, flags | rest], gas, ctx) do
-        run(pc + 1, frame, [{:regexp, pattern, flags} | rest], gas, ctx)
+        run(pc + 1, frame, [{:regexp, pattern, flags, make_ref()} | rest], gas, ctx)
       end
 
       # ── Object spread (copy_data_properties with mask) ──
