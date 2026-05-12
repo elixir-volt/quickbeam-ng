@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.{Delete, Get, HasProperty, Prototype, Put}
+  alias QuickBEAM.VM.ObjectModel.{Delete, Get, HasProperty, OwnProperty, Prototype, Put}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Object
 
@@ -389,10 +389,41 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
           validate_proxy_own_keys_invariant(target, trap_keys)
         end
 
-      map ->
-        own_keys(map)
+      {:qb_arr, arr} ->
+        sparse_array_keys(ref, :array.to_list(arr))
+
+      list when is_list(list) ->
+        sparse_array_keys(ref, list)
+
+      _ ->
+        OwnProperty.descriptor_keys({:obj, ref})
     end
   end
+
+  defp sparse_array_keys(ref, list) do
+    indexed_keys =
+      list
+      |> Enum.with_index()
+      |> Enum.reject(fn {value, _index} -> value == :undefined end)
+      |> Enum.map(fn {_value, index} -> Integer.to_string(index) end)
+
+    side_keys =
+      ref
+      |> Heap.get_array_props()
+      |> Map.keys()
+      |> Enum.reject(&(&1 == "length" or internal_key?(&1)))
+
+    indexed_keys ++ side_keys ++ ["length"]
+  end
+
+  defp internal_key?(key)
+       when key in [key_order(), proto(), map_data(), proxy_target(), proxy_handler(), set_data()],
+       do: true
+
+  defp internal_key?(key) when is_binary(key),
+    do: String.starts_with?(key, "__") and String.ends_with?(key, "__")
+
+  defp internal_key?(_), do: false
 
   defp validate_proxy_own_keys_invariant(target, trap_keys) do
     target_keys = own_keys_for(target)
@@ -426,25 +457,4 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   end
 
   defp target_prop_desc({:obj, ref}, key), do: Heap.get_prop_desc(ref, key)
-
-  defp own_keys(map) when is_map(map) do
-    map
-    |> Map.keys()
-    |> Enum.reject(&internal_key?/1)
-    |> Enum.map(&normalize_key/1)
-  end
-
-  defp own_keys(_), do: []
-
-  defp internal_key?(key)
-       when key in [key_order(), proto(), map_data(), proxy_target(), proxy_handler(), set_data()],
-       do: true
-
-  defp internal_key?(key) when is_binary(key),
-    do: String.starts_with?(key, "__") and String.ends_with?(key, "__")
-
-  defp internal_key?(_), do: false
-
-  defp normalize_key(key) when is_integer(key) and key >= 0, do: Integer.to_string(key)
-  defp normalize_key(key), do: key
 end
