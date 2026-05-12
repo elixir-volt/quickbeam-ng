@@ -472,9 +472,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         case Map.fetch(offsets, key) do
           {:ok, offset} ->
             case elem(vals, offset) do
-              {:accessor, _, setter} when setter != nil ->
-                invoke_setter(setter, val, receiver)
-                true
+              {:accessor, _, _} ->
+                false
 
               _ ->
                 if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
@@ -504,9 +503,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
               false
             end
 
-          {:accessor, _, setter} when setter != nil ->
-            invoke_setter(setter, val, receiver)
-            true
+          {:accessor, _, _} ->
+            false
 
           _ ->
             if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
