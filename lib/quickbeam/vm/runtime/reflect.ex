@@ -206,10 +206,20 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   defp validate_constructable!({:closure, _, %QuickBEAM.VM.Function{}}), do: :ok
   defp validate_constructable!({:bound, _, _, _, _}), do: :ok
 
-  defp validate_constructable!({:builtin, name, _}) do
+  defp validate_constructable!({:builtin, name, _} = builtin) do
     case QuickBEAM.VM.Builtin.named_meta(name) do
-      %QuickBEAM.VM.Builtin.Meta{constructable?: true} -> :ok
-      _ -> JSThrow.type_error!("#{name} is not a constructor")
+      %QuickBEAM.VM.Builtin.Meta{constructable?: true} ->
+        :ok
+
+      nil ->
+        if QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(builtin, :object) do
+          :ok
+        else
+          JSThrow.type_error!("#{name} is not a constructor")
+        end
+
+      _ ->
+        JSThrow.type_error!("#{name} is not a constructor")
     end
   end
 
