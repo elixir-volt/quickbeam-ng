@@ -11,7 +11,7 @@ leaving the BEAM.
 
 ```elixir
 def deps do
-  [{:quickbeam, "~> 0.7.1"}]
+  [{:quickbeam, "~> 0.10.10"}]
 end
 ```
 
@@ -438,7 +438,7 @@ QuickBEAM can use [`npm_ex`](https://hex.pm/packages/npm) to install npm package
 ```elixir
 def deps do
   [
-    {:quickbeam, "~> 0.7.1"},
+    {:quickbeam, "~> 0.10.10"},
     {:npm, "~> 0.7.0"}
   ]
 end

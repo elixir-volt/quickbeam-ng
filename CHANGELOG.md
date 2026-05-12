@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.10
+
+- Update `npm_ex` to 0.7 and make it optional for consumers
+- Update `oxc` to 0.12.1
+- Update npm toolchain packages with supply-chain policy checks
+- Fix lint/static-analysis issues and quiet Bandit test timestamp warnings
+
 ## 0.10.8
 
 - Fix precompiled NIF workflow for Linux ARM target
