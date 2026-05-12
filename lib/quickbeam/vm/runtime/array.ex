@@ -218,18 +218,22 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   proto "values" do
+    require_object_coercible!(this)
     make_array_iterator(this, :values)
   end
 
   proto "keys" do
+    require_object_coercible!(this)
     make_array_iterator(this, :keys)
   end
 
   proto "entries" do
+    require_object_coercible!(this)
     make_array_iterator(this, :entries)
   end
 
   proto {:symbol, "Symbol.iterator"} do
+    require_object_coercible!(this)
     make_array_iterator(this, :values)
   end
 
