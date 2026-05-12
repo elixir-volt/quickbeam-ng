@@ -497,6 +497,12 @@ defmodule QuickBEAM.VM.Runtime.Object do
           map when is_map(map) ->
             get_own_prototype({:obj, ref})
 
+          {:qb_arr, _} ->
+            Heap.get_array_proto(ref)
+
+          list when is_list(list) ->
+            Heap.get_array_proto(ref)
+
           _ ->
             nil
         end
