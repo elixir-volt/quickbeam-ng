@@ -9,7 +9,17 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.{Delete, Get, HasProperty, OwnProperty, Prototype, Put}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    Delete,
+    Get,
+    HasProperty,
+    OwnProperty,
+    Prototype,
+    Put,
+    WrappedPrimitive
+  }
+
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Object
 
@@ -395,8 +405,31 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       list when is_list(list) ->
         sparse_array_keys(ref, list)
 
+      map when is_map(map) ->
+        wrapped_string_keys(map, OwnProperty.descriptor_keys({:obj, ref}))
+
       _ ->
         OwnProperty.descriptor_keys({:obj, ref})
+    end
+  end
+
+  defp wrapped_string_keys(map, keys) do
+    case WrappedPrimitive.value(map, :string) do
+      {:ok, string} when is_binary(string) ->
+        string_keys =
+          if String.length(string) == 0,
+            do: [],
+            else: Enum.map(0..(String.length(string) - 1), &Integer.to_string/1)
+
+        side_keys =
+          keys
+          |> Enum.reject(&internal_key?/1)
+          |> Enum.reject(&(&1 in ["length", "toString", "valueOf"]))
+
+        ["length" | string_keys ++ side_keys]
+
+      _ ->
+        keys
     end
   end
 
