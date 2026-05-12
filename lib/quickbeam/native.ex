@@ -5,12 +5,13 @@ defmodule QuickBEAM.Native do
 
   @c_src_dir Path.expand("../../priv/c_src", __DIR__)
   @hidden_cflags ["-fvisibility=hidden"]
-  @lexbor_cflags [
+  @lexbor_base_cflags [
     "-std=c99",
     "-DLEXBOR_STATIC",
     "-I#{@c_src_dir}",
     "-I#{@c_src_dir}/lexbor/ports/posix"
-  ] ++ @hidden_cflags
+  ]
+  @lexbor_cflags @lexbor_base_cflags ++ @hidden_cflags
 
   @lexbor_src Path.wildcard("priv/c_src/lexbor/{core,dom,html,tag,ns,css,selectors}/**/*.c")
               |> Enum.concat(Path.wildcard("priv/c_src/lexbor/ports/posix/**/*.c"))
@@ -19,7 +20,7 @@ defmodule QuickBEAM.Native do
                 {:priv, String.replace_prefix(path, "priv/", ""), @lexbor_cflags}
               end)
 
-  @wamr_cflags [
+  @wamr_base_cflags [
     "-std=c11",
     "-D_GNU_SOURCE",
     "-DWASM_ENABLE_INTERP=1",
@@ -65,7 +66,8 @@ defmodule QuickBEAM.Native do
     "-I#{@c_src_dir}/wamr/shared/platform/include",
     "-I#{@c_src_dir}/wamr/shared/mem-alloc",
     "-I#{@c_src_dir}/wamr/shared/platform/#{if(:os.type() == {:unix, :darwin}, do: "darwin", else: "linux")}"
-  ] ++ @hidden_cflags
+  ]
+  @wamr_cflags @wamr_base_cflags ++ @hidden_cflags
 
   @wamr_src (Path.wildcard("priv/c_src/wamr/interpreter/wasm_loader.c") ++
                Path.wildcard("priv/c_src/wamr/interpreter/wasm_interp_classic.c") ++

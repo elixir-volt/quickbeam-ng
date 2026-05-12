@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Hide vendored C symbols in the native library to avoid collisions with other NIFs
+
 ## 0.10.10
 
 - Update `npm_ex` to 0.7 and make it optional for consumers
