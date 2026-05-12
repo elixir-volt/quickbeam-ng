@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.{Delete, Get, HasProperty, Put}
+  alias QuickBEAM.VM.ObjectModel.{Delete, Get, HasProperty, Prototype, Put}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Object
 
@@ -130,21 +130,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
     method "setPrototypeOf" do
       [obj, proto | _] = args
-
-      case obj do
-        {:obj, _} ->
-          try do
-            Object.static_property("setPrototypeOf")
-            |> Invocation.invoke_callback_or_throw([obj, proto])
-
-            true
-          catch
-            {:js_throw, _reason} -> false
-          end
-
-        _ ->
-          JSThrow.type_error!("Reflect.setPrototypeOf called on non-object")
-      end
+      reflect_set_prototype_of(obj, proto)
     end
 
     method "defineProperty" do
@@ -186,6 +172,60 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       obj = hd(args)
       require_object!(obj, "Reflect.ownKeys")
       Heap.wrap(own_keys_for(obj))
+    end
+  end
+
+  defp reflect_set_prototype_of({:obj, ref} = obj, proto) do
+    unless proto == nil or object?(proto) do
+      JSThrow.type_error!("Reflect.setPrototypeOf prototype must be an object or null")
+    end
+
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, proxy_handler() => _handler} ->
+        try do
+          Object.static_property("setPrototypeOf")
+          |> Invocation.invoke_callback_or_throw([obj, proto])
+
+          true
+        catch
+          {:js_throw, _reason} -> false
+        end
+
+      _ ->
+        reflect_set_ordinary_prototype(obj, ref, proto)
+    end
+  end
+
+  defp reflect_set_prototype_of(_obj, _proto),
+    do: JSThrow.type_error!("Reflect.setPrototypeOf called on non-object")
+
+  defp reflect_set_ordinary_prototype(obj, ref, proto) do
+    current = Prototype.get(obj)
+
+    cond do
+      proto == obj ->
+        false
+
+      current == proto ->
+        true
+
+      not Heap.extensible?(ref) ->
+        false
+
+      prototype_chain_contains?(proto, ref) ->
+        false
+
+      true ->
+        Prototype.set(obj, proto)
+        true
+    end
+  end
+
+  defp prototype_chain_contains?(proto, ref) do
+    case proto do
+      {:obj, proto_ref} when proto_ref == ref -> true
+      {:obj, _} -> prototype_chain_contains?(Prototype.get(proto), ref)
+      _ -> false
     end
   end
 
