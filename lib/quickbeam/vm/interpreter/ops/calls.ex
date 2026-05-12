@@ -81,6 +81,23 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
 
       defp proxy_construct_result(_ctx, _ctor, _new_target, _args), do: :not_proxy_constructor
 
+      defp constructor_target({:closure, _, %QuickBEAM.VM.Function{} = f}), do: f
+      defp constructor_target(%QuickBEAM.VM.Function{} = f), do: f
+      defp constructor_target({:bound, _, inner, _, _}), do: constructor_target(inner)
+      defp constructor_target({:builtin, _, _} = builtin), do: builtin
+      defp constructor_target(_), do: nil
+
+      defp constructor_prototype(new_target) do
+        case Get.get(new_target, "prototype") do
+          {:obj, _} = proto -> proto
+          %QuickBEAM.VM.Function{} = proto -> proto
+          {:closure, _, %QuickBEAM.VM.Function{}} = proto -> proto
+          {:bound, _, _, _, _} = proto -> proto
+          {:builtin, _, _} = proto -> proto
+          _ -> nil
+        end
+      end
+
       defp construct_non_proxy(ctor, new_target, rev_args, gas, ctx) do
         raw_ctor =
           case ctor do
@@ -138,19 +155,15 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
 
         this_ref = make_ref()
 
-        raw_new_target =
-          case new_target do
-            {:closure, _, %QuickBEAM.VM.Function{} = f} -> f
-            %QuickBEAM.VM.Function{} = f -> f
-            _ -> nil
-          end
+        raw_new_target = constructor_target(new_target)
 
         proto =
           if raw_new_target != nil and raw_new_target != raw_ctor do
-            Heap.get_class_proto(raw_new_target) || Heap.get_class_proto(raw_ctor) ||
-              Heap.get_or_create_prototype(ctor)
+            constructor_prototype(new_target) || Heap.get_class_proto(raw_new_target) ||
+              Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
           else
-            Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
+            constructor_prototype(new_target) || Heap.get_class_proto(raw_ctor) ||
+              Heap.get_or_create_prototype(ctor)
           end
 
         init = if proto, do: %{proto() => proto}, else: %{}

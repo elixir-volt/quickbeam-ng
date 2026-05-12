@@ -335,7 +335,8 @@ defmodule QuickBEAM.VM.Invocation do
             Heap.get_class_proto(raw_new_target) ||
             Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
         else
-          Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
+          normalize_constructor_prototype(Get.get(new_target, "prototype")) ||
+            Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
         end
 
       init = if ctor_proto, do: %{proto() => ctor_proto}, else: %{}
@@ -696,5 +697,9 @@ defmodule QuickBEAM.VM.Invocation do
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :object)
 
   defp normalize_constructor_prototype({:obj, _} = object_proto), do: object_proto
+  defp normalize_constructor_prototype(%QuickBEAM.VM.Function{} = fun), do: fun
+  defp normalize_constructor_prototype({:closure, _, %QuickBEAM.VM.Function{}} = fun), do: fun
+  defp normalize_constructor_prototype({:bound, _, _, _, _} = fun), do: fun
+  defp normalize_constructor_prototype({:builtin, _, _} = fun), do: fun
   defp normalize_constructor_prototype(_), do: nil
 end
