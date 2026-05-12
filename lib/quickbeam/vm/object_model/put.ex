@@ -855,6 +855,14 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
+  def has_property(%QuickBEAM.VM.Function{} = fun, key) do
+    Get.get(fun, key) != :undefined
+  end
+
+  def has_property({:closure, _, %QuickBEAM.VM.Function{}} = closure, key) do
+    Get.get(closure, key) != :undefined
+  end
+
   def has_property({:builtin, _, _} = b, key) do
     Get.get(b, key) != :undefined
   end
