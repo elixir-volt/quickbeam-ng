@@ -300,11 +300,30 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   static "of" do
-    Heap.wrap(args)
+    of(args, this)
   end
 
   static "fromAsync" do
     PromiseState.resolved(from(args, this))
+  end
+
+  defp of(args, {:builtin, "Array", _}), do: Heap.wrap(args)
+  defp of(args, nil), do: Heap.wrap(args)
+  defp of(args, :undefined), do: Heap.wrap(args)
+
+  defp of(args, constructor) do
+    if constructable_from?(constructor) do
+      target = QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, [length(args)])
+
+      Enum.with_index(args, fn value, index ->
+        create_data_property_or_throw(target, Integer.to_string(index), value)
+      end)
+
+      Put.put(target, "length", length(args))
+      target
+    else
+      Heap.wrap(args)
+    end
   end
 
   # ── Mutation helpers ──

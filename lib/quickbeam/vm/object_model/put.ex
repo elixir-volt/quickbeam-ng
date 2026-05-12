@@ -180,13 +180,22 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   end
 
   @doc "Writes a JavaScript property while respecting arrays, proxies, descriptors, accessors, and constructor statics."
-  def put({:obj, ref} = _obj, "length", val) do
-    case Heap.get_prop_desc(ref, "length") do
-      %{writable: false} ->
-        :ok
+  def put({:obj, ref} = obj, "length", val) do
+    case Heap.get_obj_raw(ref) do
+      map when is_map(map) ->
+        case Map.get(map, "length") do
+          {:accessor, _getter, setter} when setter != nil ->
+            invoke_setter(setter, val, obj)
+
+          {:accessor, _getter, nil} ->
+            reject_failed_write!()
+
+          _ ->
+            put_length_property(obj, ref, val)
+        end
 
       _ ->
-        put_length({:obj, ref}, val)
+        put_length_property(obj, ref, val)
     end
   end
 
@@ -290,6 +299,13 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   def put({:bound, _, _, _, _} = b, key, val), do: put_callable_property(b, key, val)
 
   def put(_, _, _), do: :ok
+
+  defp put_length_property(obj, ref, val) do
+    case Heap.get_prop_desc(ref, "length") do
+      %{writable: false} -> :ok
+      _ -> put_length(obj, val)
+    end
+  end
 
   defp put_length({:obj, ref}, val) do
     case Heap.get_obj_raw(ref) do
