@@ -815,13 +815,18 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp every_non_callable({:qb_arr, arr}, args), do: every_non_callable(:array.to_list(arr), args)
 
   defp every_non_callable(list, [fun | rest]) when is_list(list) do
+    len = length(list)
+
     unless QuickBEAM.VM.Builtin.callable?(fun) do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
     this_arg = List.first(rest) || :undefined
 
-    Enum.all?(Enum.with_index(list), fn {val, idx} ->
+    list
+    |> Enum.take(len)
+    |> Enum.with_index()
+    |> Enum.all?(fn {val, idx} ->
       Runtime.truthy?(
         QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [val, idx, list], this_arg)
       )
@@ -831,11 +836,12 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp every_non_callable(_, _), do: JSThrow.type_error!("callbackfn is not a function")
 
   defp every_array_like(this, [fun | rest]) do
+    len = array_like_length(this)
+
     unless QuickBEAM.VM.Builtin.callable?(fun) do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
-    len = array_like_length(this)
     this_arg = List.first(rest) || :undefined
 
     if len == 0 do
