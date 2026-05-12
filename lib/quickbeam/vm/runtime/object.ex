@@ -643,14 +643,17 @@ defmodule QuickBEAM.VM.Runtime.Object do
             end
 
           map when is_map(map) ->
+            set_ordinary_prototype_or_throw!(obj, ref, new_proto)
             Heap.put_obj(ref, Map.put(map, proto(), new_proto))
             obj
 
           data when is_list(data) ->
+            set_ordinary_prototype_or_throw!(obj, ref, new_proto)
             Heap.put_array_prop(ref, "__proto__", new_proto)
             obj
 
           {:qb_arr, _} ->
+            set_ordinary_prototype_or_throw!(obj, ref, new_proto)
             Heap.put_array_prop(ref, "__proto__", new_proto)
             obj
 
@@ -663,6 +666,14 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
       _ ->
         :undefined
+    end
+  end
+
+  defp set_ordinary_prototype_or_throw!(obj, ref, new_proto) do
+    if not Heap.extensible?(ref) and new_proto != Prototype.get(obj) do
+      throw(
+        {:js_throw, Heap.make_error("Cannot set prototype of non-extensible object", "TypeError")}
+      )
     end
   end
 
