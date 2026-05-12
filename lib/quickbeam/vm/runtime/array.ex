@@ -1517,6 +1517,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
     case Heap.get_obj(ref, %{}) do
       %{typed_array() => true} ->
         fn ->
+          if QuickBEAM.VM.Runtime.TypedArray.out_of_bounds?(obj) do
+            JSThrow.type_error!("TypedArray is out of bounds")
+          end
+
           count = QuickBEAM.VM.Runtime.TypedArray.element_count(obj)
 
           if count > 0 do

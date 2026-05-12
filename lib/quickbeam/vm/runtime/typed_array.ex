@@ -134,6 +134,38 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     if b == nil, do: :undefined, else: read_element(b, idx, type(ref))
   end
 
+  @doc "Returns whether a typed-array view is currently out of bounds."
+  def out_of_bounds?({:obj, ref}) do
+    s = state(ref)
+
+    case Map.get(s, "buffer") do
+      {:obj, buf_ref} ->
+        case Heap.get_obj(buf_ref, %{}) do
+          %{"__detached__" => true} ->
+            true
+
+          m when is_map(m) ->
+            byte_len = byte_size(Map.get(m, buffer(), <<>>))
+            offset = Map.get(s, "byteOffset", 0)
+
+            if Map.get(s, "__length_tracking__") do
+              byte_len < offset
+            else
+              fixed = Map.get(s, "__fixed_byte_length__", Map.get(s, "byteLength", 0))
+              max(byte_len - offset, 0) < fixed
+            end
+
+          _ ->
+            false
+        end
+
+      _ ->
+        false
+    end
+  end
+
+  def out_of_bounds?(_), do: false
+
   @doc "Returns the currently addressable element count for a typed-array value."
   def element_count({:obj, ref}) do
     s = state(ref)
