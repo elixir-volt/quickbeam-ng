@@ -18,6 +18,11 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKey do
   def array_index(k) when is_integer(k) and k >= 0 and k <= 4_294_967_294, do: {:ok, k}
   def array_index(k) when is_integer(k) and k >= 0, do: :error
 
+  def array_index(k) when is_float(k) and k >= 0 and k <= 4_294_967_294 and k == trunc(k),
+    do: {:ok, trunc(k)}
+
+  def array_index(k) when is_float(k) and k >= 0, do: :error
+
   def array_index(k) when is_binary(k) do
     case Integer.parse(k) do
       {idx, ""} when idx >= 0 and idx <= 4_294_967_294 ->
