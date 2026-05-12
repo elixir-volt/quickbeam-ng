@@ -344,10 +344,20 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp set_subset?(set_ref, other) do
     record = validate_set_like!(other)
+
+    length(data(set_ref)) <= record.size and
+      live_subset?(set_ref, record, 0)
+  end
+
+  defp live_subset?(set_ref, record, index) do
     items = data(set_ref)
 
-    length(items) <= record.size and
-      Enum.all?(items, &other_has_with(record.has, record.object, &1))
+    if index >= length(items) do
+      true
+    else
+      other_has_with(record.has, record.object, Enum.at(items, index)) and
+        live_subset?(set_ref, record, index + 1)
+    end
   end
 
   defp superset?([other | _], this), do: this |> require_strong_set_ref!() |> set_superset?(other)
