@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   use QuickBEAM.VM.Builtin
 
+  alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.GlobalNumeric
 
@@ -40,9 +41,9 @@ defmodule QuickBEAM.VM.Runtime.Number do
   end
 
   defp unwrap_number({:obj, ref}) do
-    case QuickBEAM.VM.Heap.get_obj(ref, %{}) do
-      %{"__wrapped_number__" => value} -> value
-      _ -> :nan
+    case QuickBEAM.VM.Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:number) do
+      {:ok, value} -> value
+      :error -> :nan
     end
   end
 

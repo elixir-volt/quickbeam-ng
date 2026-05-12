@@ -513,7 +513,13 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
                       match?({:qb_arr, _}, data) or is_list(data)
 
                     {{:obj, ref}, {:builtin, "BigInt", _}} ->
-                      Map.has_key?(Heap.get_obj(ref, %{}), "__wrapped_bigint__")
+                      match?(
+                        {:ok, _},
+                        QuickBEAM.VM.ObjectModel.WrappedPrimitive.value(
+                          Heap.get_obj(ref, %{}),
+                          :bigint
+                        )
+                      )
 
                     {{:obj, ref}, {:builtin, "Date", _}} ->
                       Map.has_key?(Heap.get_obj(ref, %{}), date_ms())

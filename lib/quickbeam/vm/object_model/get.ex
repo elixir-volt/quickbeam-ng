@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
 
-  alias QuickBEAM.VM.ObjectModel.PropertyKey
+  alias QuickBEAM.VM.ObjectModel.{PropertyKey, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.ArrayBuffer
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
   alias QuickBEAM.VM.Runtime.String, as: JSString
@@ -199,14 +199,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp wrapped_shape_length(offsets, vals) do
-    case Map.fetch(offsets, "__wrapped_string__") do
+    case Map.fetch(offsets, WrappedPrimitive.slot(:string)) do
       {:ok, off} -> string_length(elem(vals, off))
       :error -> map_size(offsets)
     end
   end
 
   defp wrapped_map_length(map) do
-    case Map.fetch(map, "__wrapped_string__") do
+    case WrappedPrimitive.value(map, :string) do
       {:ok, value} -> string_length(value)
       :error -> map_size(map)
     end
@@ -214,14 +214,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp wrapped_shape_proto_property(offsets, vals, key) do
     cond do
-      Map.has_key?(offsets, "__wrapped_number__") ->
+      Map.has_key?(offsets, WrappedPrimitive.slot(:number)) ->
         Number.proto_property(key)
 
-      Map.has_key?(offsets, "__wrapped_string__") ->
-        offset = Map.fetch!(offsets, "__wrapped_string__")
+      Map.has_key?(offsets, WrappedPrimitive.slot(:string)) ->
+        offset = Map.fetch!(offsets, WrappedPrimitive.slot(:string))
         wrapped_string_property(elem(vals, offset), key)
 
-      Map.has_key?(offsets, "__wrapped_boolean__") ->
+      Map.has_key?(offsets, WrappedPrimitive.slot(:boolean)) ->
         Boolean.proto_property(key)
 
       true ->
@@ -244,23 +244,26 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp wrapped_proto_property(map, key) do
-    cond do
-      Map.has_key?(map, "__wrapped_symbol__") ->
-        get_own(Map.fetch!(map, "__wrapped_symbol__"), key)
+    case WrappedPrimitive.type(map) do
+      :symbol ->
+        {:ok, value} = WrappedPrimitive.value(map, :symbol)
+        get_own(value, key)
 
-      Map.has_key?(map, "__wrapped_number__") ->
+      :number ->
         Number.proto_property(key)
 
-      Map.has_key?(map, "__wrapped_string__") ->
-        wrapped_string_property(Map.fetch!(map, "__wrapped_string__"), key)
+      :string ->
+        {:ok, value} = WrappedPrimitive.value(map, :string)
+        wrapped_string_property(value, key)
 
-      Map.has_key?(map, "__wrapped_boolean__") ->
+      :boolean ->
         Boolean.proto_property(key)
 
-      Map.has_key?(map, "__wrapped_bigint__") ->
-        get_own(Map.fetch!(map, "__wrapped_bigint__"), key)
+      :bigint ->
+        {:ok, value} = WrappedPrimitive.value(map, :bigint)
+        get_own(value, key)
 
-      true ->
+      _ ->
         :undefined
     end
   end

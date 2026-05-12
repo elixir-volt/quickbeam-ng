@@ -1190,11 +1190,23 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   defp special_builtin_instance?({:obj, ref}, ctor) do
     case builtin_name(ctor) do
-      "Array" -> match?({:qb_arr, _}, Heap.get_obj(ref)) or is_list(Heap.get_obj(ref))
-      "BigInt" -> Map.has_key?(Heap.get_obj(ref, %{}), "__wrapped_bigint__")
-      "Date" -> Map.has_key?(Heap.get_obj(ref, %{}), date_ms())
-      "Object" -> true
-      _ -> false
+      "Array" ->
+        match?({:qb_arr, _}, Heap.get_obj(ref)) or is_list(Heap.get_obj(ref))
+
+      "BigInt" ->
+        match?(
+          {:ok, _},
+          QuickBEAM.VM.ObjectModel.WrappedPrimitive.value(Heap.get_obj(ref, %{}), :bigint)
+        )
+
+      "Date" ->
+        Map.has_key?(Heap.get_obj(ref, %{}), date_ms())
+
+      "Object" ->
+        true
+
+      _ ->
+        false
     end
   end
 

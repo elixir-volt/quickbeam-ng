@@ -4,7 +4,15 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.{Heap, Invocation, Runtime}
-  alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor, PropertyKey}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    ArrayExotic,
+    Get,
+    PropertyDescriptor,
+    PropertyKey,
+    WrappedPrimitive
+  }
+
   alias QuickBEAM.VM.Runtime.TypedArray
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
 
@@ -213,18 +221,22 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     Enum.sort_by(indexes, &array_index_value/1) ++ strings ++ symbols
   end
 
-  defp wrapped_string_index_present?(%{"__wrapped_string__" => string}, key)
-       when is_binary(string) do
-    case parse_array_index_key(key) do
-      idx when is_integer(idx) -> idx < Get.string_length(string)
-      :error -> false
+  defp wrapped_string_index_present?(map, key) when is_map(map) do
+    with {:ok, string} when is_binary(string) <- WrappedPrimitive.value(map, :string),
+         idx when is_integer(idx) <- parse_array_index_key(key) do
+      idx < Get.string_length(string)
+    else
+      _ -> false
     end
   end
 
   defp wrapped_string_index_present?(_map, _key), do: false
 
-  defp wrapped_string_index_keys(%{"__wrapped_string__" => string}) when is_binary(string) do
-    array_indices(Get.string_length(string))
+  defp wrapped_string_index_keys(map) when is_map(map) do
+    case WrappedPrimitive.value(map, :string) do
+      {:ok, string} when is_binary(string) -> array_indices(Get.string_length(string))
+      _ -> []
+    end
   end
 
   defp wrapped_string_index_keys(_map), do: []
@@ -406,22 +418,14 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp map_descriptor(ref, data, prop_name) do
     prop_desc = Heap.get_prop_desc(ref, prop_name)
+    wrapped_string_length = wrapped_string_length_descriptor(data, prop_name)
 
     case Map.fetch(data, prop_name) do
       _ when prop_name == proto() and prop_desc == nil ->
         :undefined
 
-      _ when prop_name == "length" and is_map_key(data, "__wrapped_string__") ->
-        case Map.fetch!(data, "__wrapped_string__") do
-          string when is_binary(string) ->
-            PropertyDescriptor.data_object(
-              QuickBEAM.VM.ObjectModel.Get.string_length(string),
-              PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
-            )
-
-          _ ->
-            :undefined
-        end
+      _ when wrapped_string_length != nil ->
+        wrapped_string_length
 
       :error ->
         wrapped_string_index_descriptor(data, prop_name) ||
@@ -442,19 +446,31 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     end
   end
 
-  defp wrapped_string_index_descriptor(%{"__wrapped_string__" => string}, prop_name)
-       when is_binary(string) do
-    case Integer.parse(prop_name) do
-      {idx, ""} when idx >= 0 ->
-        if idx < Get.string_length(string) do
-          PropertyDescriptor.data_object(
-            QuickBEAM.VM.Runtime.String.utf16_code_unit_at(string, idx),
-            PropertyDescriptor.attrs(writable: false, enumerable: true, configurable: false)
-          )
-        end
+  defp wrapped_string_length_descriptor(data, "length") when is_map(data) do
+    case WrappedPrimitive.value(data, :string) do
+      {:ok, string} when is_binary(string) ->
+        PropertyDescriptor.data_object(
+          QuickBEAM.VM.ObjectModel.Get.string_length(string),
+          PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+        )
 
       _ ->
         nil
+    end
+  end
+
+  defp wrapped_string_length_descriptor(_data, _prop_name), do: nil
+
+  defp wrapped_string_index_descriptor(data, prop_name) when is_map(data) do
+    with {:ok, string} when is_binary(string) <- WrappedPrimitive.value(data, :string),
+         {idx, ""} when idx >= 0 <- Integer.parse(prop_name),
+         true <- idx < Get.string_length(string) do
+      PropertyDescriptor.data_object(
+        QuickBEAM.VM.Runtime.String.utf16_code_unit_at(string, idx),
+        PropertyDescriptor.attrs(writable: false, enumerable: true, configurable: false)
+      )
+    else
+      _ -> nil
     end
   end
 

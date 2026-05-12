@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
   alias QuickBEAM.VM.{Heap, Invocation, Runtime}
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, WrappedPrimitive}
 
   @doc "Coerces a VM value using JavaScript ToNumber semantics."
   def to_number(val) when is_number(val), do: val
@@ -173,22 +173,9 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
         end)
 
       map when is_map(map) ->
-        wrapped_key =
-          cond do
-            Map.has_key?(map, "__wrapped_string__") -> "__wrapped_string__"
-            Map.has_key?(map, "__wrapped_number__") -> "__wrapped_number__"
-            Map.has_key?(map, "__wrapped_boolean__") -> "__wrapped_boolean__"
-            Map.has_key?(map, "__wrapped_bigint__") -> "__wrapped_bigint__"
-            Map.has_key?(map, "__wrapped_symbol__") -> "__wrapped_symbol__"
-            true -> nil
-          end
-
-        cond do
-          wrapped_key != nil ->
-            to_string_val(Map.get(map, wrapped_key))
-
-          true ->
-            object_to_string_primitive(obj, map)
+        case WrappedPrimitive.value(map) do
+          {:ok, value} -> to_string_val(value)
+          :error -> object_to_string_primitive(obj, map)
         end
 
       _ ->
@@ -236,64 +223,56 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
     data = Heap.get_obj(ref, %{})
 
     if is_map(data) do
-      wrapped_key =
-        cond do
-          Map.has_key?(data, "__wrapped_bigint__") -> "__wrapped_bigint__"
-          Map.has_key?(data, "__wrapped_number__") -> "__wrapped_number__"
-          Map.has_key?(data, "__wrapped_string__") -> "__wrapped_string__"
-          Map.has_key?(data, "__wrapped_boolean__") -> "__wrapped_boolean__"
-          Map.has_key?(data, "__wrapped_symbol__") -> "__wrapped_symbol__"
-          true -> nil
-        end
+      case WrappedPrimitive.value(data) do
+        {:ok, value} ->
+          value
 
-      if wrapped_key != nil do
-        Map.get(data, wrapped_key)
-      else
-        sym_key = {:symbol, "Symbol.toPrimitive"}
+        :error ->
+          sym_key = {:symbol, "Symbol.toPrimitive"}
 
-        raw_prim = Map.get(data, sym_key) || Get.get(obj, sym_key)
+          raw_prim = Map.get(data, sym_key) || Get.get(obj, sym_key)
 
-        to_prim =
-          case raw_prim do
-            {:accessor, getter, _} when getter != nil ->
-              Get.call_getter(getter, obj)
+          to_prim =
+            case raw_prim do
+              {:accessor, getter, _} when getter != nil ->
+                Get.call_getter(getter, obj)
 
-            other ->
-              other
-          end
+              other ->
+                other
+            end
 
-        if to_prim != nil and to_prim != :undefined do
-          if not callable?(to_prim) do
-            throw(
-              {:js_throw, Heap.make_error("Symbol.toPrimitive is not a function", "TypeError")}
-            )
-          end
+          if to_prim != nil and to_prim != :undefined do
+            if not callable?(to_prim) do
+              throw(
+                {:js_throw, Heap.make_error("Symbol.toPrimitive is not a function", "TypeError")}
+              )
+            end
 
-          result =
-            Invocation.invoke_with_receiver(to_prim, ["default"], Runtime.gas_budget(), obj)
+            result =
+              Invocation.invoke_with_receiver(to_prim, ["default"], Runtime.gas_budget(), obj)
 
-          if is_object(result) do
-            throw(
-              {:js_throw,
-               Heap.make_error("Cannot convert object to primitive value", "TypeError")}
-            )
+            if is_object(result) do
+              throw(
+                {:js_throw,
+                 Heap.make_error("Cannot convert object to primitive value", "TypeError")}
+              )
+            else
+              result
+            end
           else
-            result
+            call_to_primitive(data, obj, "valueOf") ||
+              if(not has_own_method?(data, "valueOf"),
+                do: proto_to_primitive(data, obj, "valueOf")
+              ) ||
+              call_to_primitive(data, obj, "toString") ||
+              if(not has_own_method?(data, "toString"),
+                do: proto_to_primitive(data, obj, "toString") || get_to_primitive(obj, "toString")
+              ) ||
+              throw(
+                {:js_throw,
+                 Heap.make_error("Cannot convert object to primitive value", "TypeError")}
+              )
           end
-        else
-          call_to_primitive(data, obj, "valueOf") ||
-            if(not has_own_method?(data, "valueOf"),
-              do: proto_to_primitive(data, obj, "valueOf")
-            ) ||
-            call_to_primitive(data, obj, "toString") ||
-            if(not has_own_method?(data, "toString"),
-              do: proto_to_primitive(data, obj, "toString") || get_to_primitive(obj, "toString")
-            ) ||
-            throw(
-              {:js_throw,
-               Heap.make_error("Cannot convert object to primitive value", "TypeError")}
-            )
-        end
       end
     else
       obj

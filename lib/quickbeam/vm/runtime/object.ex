@@ -8,7 +8,17 @@ defmodule QuickBEAM.VM.Runtime.Object do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.{Define, Get, OwnProperty, PropertyDescriptor, PropertyKey, Put}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    Define,
+    Get,
+    OwnProperty,
+    PropertyDescriptor,
+    PropertyKey,
+    Put,
+    WrappedPrimitive
+  }
+
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
@@ -105,17 +115,11 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp object_value_of({:obj, _} = obj), do: obj
 
-  defp object_value_of(value) when is_binary(value),
-    do: Heap.wrap(%{"__wrapped_string__" => value})
-
-  defp object_value_of(value) when is_number(value),
-    do: Heap.wrap(%{"__wrapped_number__" => value})
-
-  defp object_value_of(value) when is_boolean(value),
-    do: Heap.wrap(%{"__wrapped_boolean__" => value})
-
-  defp object_value_of({:symbol, _, _} = value), do: Heap.wrap(%{"__wrapped_symbol__" => value})
-  defp object_value_of({:symbol, _} = value), do: Heap.wrap(%{"__wrapped_symbol__" => value})
+  defp object_value_of(value) when is_binary(value), do: WrappedPrimitive.wrap(value)
+  defp object_value_of(value) when is_number(value), do: WrappedPrimitive.wrap(value)
+  defp object_value_of(value) when is_boolean(value), do: WrappedPrimitive.wrap(value)
+  defp object_value_of({:symbol, _, _} = value), do: WrappedPrimitive.wrap(value)
+  defp object_value_of({:symbol, _} = value), do: WrappedPrimitive.wrap(value)
   defp object_value_of(value), do: value
 
   defp prototype_of?([{:obj, ref} | _], {:obj, proto_ref}) do
@@ -182,29 +186,16 @@ defmodule QuickBEAM.VM.Runtime.Object do
         {:qb_arr, _} ->
           if Heap.get_array_prop(ref, "__arguments__") == true, do: "Arguments", else: "Array"
 
-        %{"__wrapped_string__" => _} ->
-          "String"
-
-        %{"__wrapped_number__" => _} ->
-          "Number"
-
-        %{"__wrapped_boolean__" => _} ->
-          "Boolean"
-
-        %{map_data() => _, :weak => true} ->
-          "WeakMap"
-
-        %{map_data() => _} ->
-          "Map"
-
-        %{set_data() => _, :weak => true} ->
-          "WeakSet"
-
-        %{set_data() => _} ->
-          "Set"
-
-        %{date_ms() => _} ->
-          "Date"
+        map when is_map(map) ->
+          cond do
+            (tag = WrappedPrimitive.tag(map)) != nil -> tag
+            Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) -> "WeakMap"
+            Map.has_key?(map, map_data()) -> "Map"
+            Map.has_key?(map, set_data()) and Map.has_key?(map, :weak) -> "WeakSet"
+            Map.has_key?(map, set_data()) -> "Set"
+            Map.has_key?(map, date_ms()) -> "Date"
+            true -> "Object"
+          end
 
         _ ->
           "Object"
@@ -884,12 +875,9 @@ defmodule QuickBEAM.VM.Runtime.Object do
         pair
 
       _ ->
-        case Heap.get_obj(entry, %{}) do
-          %{"__wrapped_string__" => <<key::utf8, value::utf8, _::binary>>} ->
-            [<<key::utf8>>, <<value::utf8>>]
-
-          _ ->
-            entry_pair_from_properties(entry)
+        case Heap.get_obj(entry, %{}) |> WrappedPrimitive.value(:string) do
+          {:ok, <<key::utf8, value::utf8, _::binary>>} -> [<<key::utf8>>, <<value::utf8>>]
+          _ -> entry_pair_from_properties(entry)
         end
     end
   end
@@ -1241,8 +1229,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp target_string_index?(ref, key) do
     case Heap.get_obj_raw(ref) do
       map when is_map(map) and is_binary(key) ->
-        case {Map.get(map, "__wrapped_string__"), Integer.parse(key)} do
-          {string, {index, ""}} when is_binary(string) and index >= 0 ->
+        case {WrappedPrimitive.value(map, :string), Integer.parse(key)} do
+          {{:ok, string}, {index, ""}} when is_binary(string) and index >= 0 ->
             index < Get.string_length(string)
 
           _ ->

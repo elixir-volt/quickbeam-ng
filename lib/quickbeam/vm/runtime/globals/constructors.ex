@@ -8,15 +8,14 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   alias QuickBEAM.VM.{BytecodeParser, Heap}
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
+  alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
   alias QuickBEAM.VM.Runtime
 
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
   def object([arg | _], _) do
     case arg do
       {:symbol, _, _} = symbol ->
-        ref = make_ref()
-        Heap.put_obj(ref, %{"__wrapped_symbol__" => symbol})
-        {:obj, ref}
+        WrappedPrimitive.wrap(symbol)
 
       {:obj, _} = obj ->
         obj
@@ -31,16 +30,16 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
         value
 
       value when is_binary(value) ->
-        wrap_primitive("String", "__wrapped_string__", value)
+        WrappedPrimitive.wrap(:string, value)
 
       value when is_number(value) or value in [:nan, :infinity, :neg_infinity] ->
-        wrap_primitive("Number", "__wrapped_number__", value)
+        WrappedPrimitive.wrap(:number, value)
 
       value when is_boolean(value) ->
-        wrap_primitive("Boolean", "__wrapped_boolean__", value)
+        WrappedPrimitive.wrap(:boolean, value)
 
       {:bigint, _} = value ->
-        wrap_primitive("BigInt", "__wrapped_bigint__", value)
+        WrappedPrimitive.wrap(:bigint, value)
 
       _ ->
         ordinary_object()
@@ -56,19 +55,6 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       case QuickBEAM.VM.Runtime.Constructors.class_proto("Object") do
         {:obj, _} = proto -> %{"__proto__" => proto}
         _ -> %{}
-      end
-
-    Heap.put_obj(ref, data)
-    {:obj, ref}
-  end
-
-  defp wrap_primitive(constructor_name, slot, value) do
-    ref = make_ref()
-
-    data =
-      case QuickBEAM.VM.Runtime.Constructors.class_proto(constructor_name) do
-        {:obj, _} = proto -> %{slot => value, "__proto__" => proto}
-        _ -> %{slot => value}
       end
 
     Heap.put_obj(ref, data)
@@ -109,7 +95,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
   def string(args, {:obj, _} = this) do
     val = args |> arg(0, "") |> Runtime.stringify()
-    QuickBEAM.VM.ObjectModel.Put.put(this, "__wrapped_string__", val)
+    QuickBEAM.VM.ObjectModel.Put.put(this, WrappedPrimitive.slot(:string), val)
     this
   end
 
@@ -118,7 +104,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
   def number(args, {:obj, _} = this) do
     val = args |> arg(0, 0) |> Runtime.to_number()
-    QuickBEAM.VM.ObjectModel.Put.put(this, "__wrapped_number__", val)
+    QuickBEAM.VM.ObjectModel.Put.put(this, WrappedPrimitive.slot(:number), val)
     this
   end
 

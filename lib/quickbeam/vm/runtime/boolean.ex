@@ -2,6 +2,7 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
   @moduledoc "JavaScript `Boolean` constructor and prototype builtins."
 
   use QuickBEAM.VM.Builtin
+  alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
   alias QuickBEAM.VM.Runtime
 
   proto "toString" do
@@ -13,9 +14,9 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
   end
 
   defp unwrap_boolean({:obj, ref}) do
-    case QuickBEAM.VM.Heap.get_obj(ref, %{}) do
-      %{"__wrapped_boolean__" => value} -> value
-      _ -> true
+    case QuickBEAM.VM.Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:boolean) do
+      {:ok, value} -> value
+      :error -> true
     end
   end
 
@@ -26,7 +27,7 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
     fn
       args, {:obj, _} = this ->
         val = args |> arg(0, false) |> Runtime.truthy?()
-        QuickBEAM.VM.ObjectModel.Put.put(this, "__wrapped_boolean__", val)
+        QuickBEAM.VM.ObjectModel.Put.put(this, WrappedPrimitive.slot(:boolean), val)
         this
 
       args, _ ->

@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.RegExp
 
@@ -217,9 +217,9 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp unwrap_string({:obj, ref}) do
-    case QuickBEAM.VM.Heap.get_obj(ref, %{}) do
-      %{"__wrapped_string__" => value} -> value
-      _ -> ""
+    case QuickBEAM.VM.Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:string) do
+      {:ok, value} -> value
+      :error -> ""
     end
   end
 
