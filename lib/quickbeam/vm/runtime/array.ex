@@ -589,12 +589,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp concat(this, args) do
     receiver = concat_receiver(this)
+    target = concat_target(receiver)
 
     values =
       [receiver | args]
       |> Enum.reduce([], &concat_item/2)
 
-    concat_result(receiver, values)
+    concat_result(target, values)
   end
 
   defp concat_receiver({:obj, _} = obj), do: obj
@@ -602,13 +603,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp concat_receiver(list) when is_list(list), do: list
   defp concat_receiver(value), do: QuickBEAM.VM.Runtime.Globals.Constructors.object([value], nil)
 
-  defp concat_result(receiver, entries) do
-    target =
-      case concat_species_constructor(receiver) do
-        :array -> Heap.wrap([])
-        constructor -> QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, [0])
-      end
+  defp concat_target(receiver) do
+    case concat_species_constructor(receiver) do
+      :array -> Heap.wrap([])
+      constructor -> QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, [0])
+    end
+  end
 
+  defp concat_result(target, entries) do
     Enum.with_index(entries, fn
       {:present, value}, index ->
         create_data_property_or_throw(target, Integer.to_string(index), value)
