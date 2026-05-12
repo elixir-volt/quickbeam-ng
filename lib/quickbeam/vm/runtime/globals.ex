@@ -402,7 +402,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
                  configurable: true
                })
 
-               for name <- ~w(get set has delete) do
+               for name <- ~w(get set has delete getOrInsert getOrInsertComputed) do
                  Heap.put_obj_key(proto_ref, name, JSMap.weak_proto_property(name))
 
                  Heap.put_prop_desc(proto_ref, name, %{

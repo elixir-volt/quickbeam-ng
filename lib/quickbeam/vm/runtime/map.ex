@@ -158,6 +158,11 @@ defmodule QuickBEAM.VM.Runtime.Map do
   def weak_proto_property("set"), do: {:builtin, "set", &weak_set/2}
   def weak_proto_property("has"), do: {:builtin, "has", &weak_has/2}
   def weak_proto_property("delete"), do: {:builtin, "delete", &weak_delete/2}
+  def weak_proto_property("getOrInsert"), do: {:builtin, "getOrInsert", &weak_get_or_insert/2}
+
+  def weak_proto_property("getOrInsertComputed"),
+    do: {:builtin, "getOrInsertComputed", &weak_get_or_insert_computed/2}
+
   def weak_proto_property(_), do: :undefined
 
   defp group_items(list) when is_list(list), do: list
@@ -442,6 +447,59 @@ defmodule QuickBEAM.VM.Runtime.Map do
   end
 
   defp weak_delete(_, this), do: require_map_ref!(this)
+
+  defp weak_get_or_insert([key, value | _], this) do
+    ref = require_map_ref!(this)
+    obj = Heap.get_obj(ref, %{})
+    if Map.get(obj, :weak), do: Collections.validate_weak_key!(key, "WeakMap")
+    data = Map.get(obj, map_data(), %{})
+
+    case Map.fetch(data, key) do
+      {:ok, existing} ->
+        existing
+
+      :error ->
+        Heap.put_obj(
+          ref,
+          Map.merge(obj, %{map_data() => Map.put(data, key, value), "size" => map_size(data) + 1})
+        )
+
+        value
+    end
+  end
+
+  defp weak_get_or_insert(_, this), do: require_map_ref!(this)
+
+  defp weak_get_or_insert_computed([key, callback | _], this) do
+    ref = require_map_ref!(this)
+    obj = Heap.get_obj(ref, %{})
+    if Map.get(obj, :weak), do: Collections.validate_weak_key!(key, "WeakMap")
+
+    unless Builtin.callable?(callback) do
+      JSThrow.type_error!("callbackfn is not a function")
+    end
+
+    data = Map.get(obj, map_data(), %{})
+
+    case Map.fetch(data, key) do
+      {:ok, existing} ->
+        existing
+
+      :error ->
+        value = Invocation.invoke_with_receiver(callback, [key], :undefined)
+        obj = Heap.get_obj(ref, %{})
+        data = Map.get(obj, map_data(), %{})
+
+        Heap.put_obj(
+          ref,
+          Map.merge(obj, %{map_data() => Map.put(data, key, value), "size" => map_size(data) + 1})
+        )
+
+        value
+    end
+  end
+
+  defp weak_get_or_insert_computed(_, this), do: require_map_ref!(this)
 
   defp clear(_, this) do
     ref = require_strong_map_ref!(this)
