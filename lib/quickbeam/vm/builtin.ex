@@ -706,6 +706,10 @@ defmodule QuickBEAM.VM.Builtin do
   alias QuickBEAM.VM.JSThrow
 
   @doc "Dispatches a VM callable value to its underlying Elixir callback."
+  def call({:builtin, name, _cb}, _args, _this) when name in ~w(Map Set WeakMap WeakSet) do
+    JSThrow.type_error!("Constructor #{name} requires 'new'")
+  end
+
   def call({:builtin, _, cb}, args, this) when is_function(cb, 2), do: cb.(args, this)
 
   def call({:bound, _, inner, _, _}, args, this), do: call(inner, args, this)
