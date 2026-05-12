@@ -96,14 +96,22 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   @doc "Helper for js `map` and `weakmap` built-ins: constructor, `get`/`set`/`has`/`delete`, and iteration."
   def weak_constructor do
-    fn args, _this ->
-      ref = make_ref()
+    fn args, this ->
+      {ref, instance_proto} =
+        case this do
+          {:obj, this_ref} ->
+            existing = Heap.get_obj(this_ref, %{})
+            {this_ref, Map.get(existing, proto(), Runtime.global_class_proto("WeakMap"))}
+
+          _ ->
+            {make_ref(), Runtime.global_class_proto("WeakMap")}
+        end
 
       Heap.put_obj(ref, %{
         map_data() => %{},
         "size" => 0,
         :weak => true,
-        proto() => Runtime.global_class_proto("WeakMap")
+        proto() => instance_proto
       })
 
       map = {:obj, ref}

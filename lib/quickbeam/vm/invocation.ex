@@ -665,6 +665,9 @@ defmodule QuickBEAM.VM.Invocation do
   defp realm_default_prototype({:builtin, "Array", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :array)
 
+  defp realm_default_prototype({:builtin, "WeakMap", _}, new_target),
+    do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :weak_map)
+
   defp realm_default_prototype(_ctor, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :object)
 
