@@ -760,7 +760,7 @@ defmodule QuickBEAM.VM.Builtin do
 
   # ── Runtime dispatch ──
 
-  alias QuickBEAM.VM.JSThrow
+  alias QuickBEAM.VM.{Heap, JSThrow}
 
   @doc "Dispatches a VM callable value to its underlying Elixir callback."
   def call({:builtin, name, _cb}, _args, _this)
@@ -771,6 +771,10 @@ defmodule QuickBEAM.VM.Builtin do
   def call({:builtin, _, cb}, args, this) when is_function(cb, 2), do: cb.(args, this)
 
   def call({:bound, _, inner, _, _}, args, this), do: call(inner, args, this)
+
+  def call({:obj, _} = obj, _args, _this) do
+    if obj == Heap.get_func_proto(), do: :undefined, else: JSThrow.type_error!("not a function")
+  end
 
   def call(f, args, _this) when is_function(f, 2), do: f.(args, nil)
 
@@ -789,6 +793,8 @@ defmodule QuickBEAM.VM.Builtin do
   def callable?({:builtin, _, _}), do: true
 
   def callable?({:bound, _, _, _, _}), do: true
+
+  def callable?({:obj, _} = obj), do: obj == Heap.get_func_proto()
 
   def callable?(f) when is_function(f), do: true
 

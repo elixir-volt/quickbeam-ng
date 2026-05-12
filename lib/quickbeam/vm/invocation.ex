@@ -436,7 +436,11 @@ defmodule QuickBEAM.VM.Invocation do
         end
 
       _ ->
-        QuickBEAM.VM.JSThrow.type_error!("not a function")
+        if {:obj, ref} == Heap.get_func_proto() do
+          :undefined
+        else
+          QuickBEAM.VM.JSThrow.type_error!("not a function")
+        end
     end
   end
 
