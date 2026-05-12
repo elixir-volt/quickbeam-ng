@@ -64,6 +64,19 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   def get(_, _), do: :undefined
 
+  defp function_prototype_has_own?(key) do
+    case Heap.get_func_proto() do
+      {:obj, ref} ->
+        case Heap.get_obj_raw(ref) do
+          map when is_map(map) -> Map.has_key?(map, key)
+          _ -> false
+        end
+
+      _ ->
+        false
+    end
+  end
+
   defp get_symbol(value, sym_key) do
     case get_own(value, sym_key) do
       :undefined ->
@@ -416,7 +429,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
               :undefined
           end
 
-        if static_val == :undefined, do: Function.proto_property(b, key), else: static_val
+        cond do
+          static_val != :undefined -> static_val
+          function_prototype_has_own?(key) -> :undefined
+          true -> Function.proto_property(b, key)
+        end
     end
   end
 
