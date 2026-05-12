@@ -293,7 +293,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     do: put_callable_property(c, key, val)
 
   def put({:builtin, _name, map} = b, key, val) when is_map(map) do
-    Heap.put_ctor_static(b, key, val)
+    case callable_prop_desc(b, key) do
+      %{writable: false} -> reject_failed_write!()
+      _ -> Heap.put_ctor_static(b, key, val)
+    end
   end
 
   def put({:builtin, _, _} = b, key, val), do: put_callable_property(b, key, val)

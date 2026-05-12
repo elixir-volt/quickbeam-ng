@@ -31,9 +31,17 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
   def install_metadata({:builtin, _name, map} = reflect) when is_map(map) do
     Enum.each(@method_lengths, fn {name, length} ->
+      method = Map.get(map, name)
+      Heap.put_ctor_static(reflect, name, method)
       Heap.put_prop_desc(reflect, name, %{writable: true, enumerable: false, configurable: true})
 
-      case Get.get(reflect, name) do
+      Heap.put_ctor_prop_desc(reflect, name, %{
+        writable: true,
+        enumerable: false,
+        configurable: true
+      })
+
+      case method do
         {:builtin, _, _} = method ->
           Heap.put_ctor_static(method, "length", length)
 
@@ -51,6 +59,12 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     tag = {:symbol, "Symbol.toStringTag"}
     Heap.put_ctor_static(reflect, tag, "Reflect")
     Heap.put_prop_desc(reflect, tag, %{writable: false, enumerable: false, configurable: true})
+
+    Heap.put_ctor_prop_desc(reflect, tag, %{
+      writable: false,
+      enumerable: false,
+      configurable: true
+    })
 
     case Heap.get_object_prototype() do
       {:obj, _} = object_proto -> Heap.put_ctor_static(reflect, proto(), object_proto)
