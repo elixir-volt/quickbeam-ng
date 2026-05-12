@@ -1,6 +1,26 @@
 defmodule QuickBEAM.Server do
   @moduledoc false
 
+  @spec send_websocket(map(), term(), term(), term()) :: {:noreply, map()}
+  def send_websocket(state, socket_id, kind, payload) do
+    case Map.get(state.websockets, socket_id) do
+      {pid, _ref} -> GenServer.cast(pid, {:send, kind, payload})
+      nil -> :ok
+    end
+
+    {:noreply, state}
+  end
+
+  @spec close_websocket(map(), term(), term(), term()) :: {:noreply, map()}
+  def close_websocket(state, socket_id, code, reason) do
+    case Map.get(state.websockets, socket_id) do
+      {pid, _ref} -> GenServer.cast(pid, {:close, code, reason})
+      nil -> :ok
+    end
+
+    {:noreply, state}
+  end
+
   defmacro __using__(_opts) do
     quote do
       @spec call(GenServer.server(), String.t(), list(), keyword()) ::
@@ -117,7 +137,9 @@ defmodule QuickBEAM.Server do
       end
 
       defp pop_websocket(state, ref) do
-        case Enum.find(state.websockets, fn {_socket_id, {_pid, monitor_ref}} -> monitor_ref == ref end) do
+        case Enum.find(state.websockets, fn {_socket_id, {_pid, monitor_ref}} ->
+               monitor_ref == ref
+             end) do
           {socket_id, {_pid, _monitor_ref}} ->
             {true, %{state | websockets: Map.delete(state.websockets, socket_id)}}
 

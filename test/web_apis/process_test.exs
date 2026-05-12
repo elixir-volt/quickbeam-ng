@@ -169,7 +169,13 @@ defmodule QuickBEAM.WebAPIs.ProcessTest do
   describe "Process.monitor" do
     test "callback fires when monitored process exits normally", %{rt: rt} do
       test_pid = self()
-      pid = spawn(fn -> receive do :go -> :ok end end)
+
+      pid =
+        spawn(fn ->
+          receive do
+            :go -> :ok
+          end
+        end)
 
       QuickBEAM.eval(rt, """
         globalThis.downFired = false;
@@ -199,7 +205,9 @@ defmodule QuickBEAM.WebAPIs.ProcessTest do
 
       pid =
         spawn(fn ->
-          receive do :go -> exit(:kaboom) end
+          receive do
+            :go -> exit(:kaboom)
+          end
         end)
 
       QuickBEAM.eval(rt, """

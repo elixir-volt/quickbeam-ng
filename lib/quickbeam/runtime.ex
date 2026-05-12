@@ -539,7 +539,8 @@ defmodule QuickBEAM.Runtime do
 
   # ── NIF dispatch callbacks ──
 
-  defp nif_eval(state, code, timeout), do: QuickBEAM.Native.eval(state.resource, code, timeout, "")
+  defp nif_eval(state, code, timeout),
+    do: QuickBEAM.Native.eval(state.resource, code, timeout, "")
 
   defp nif_call(state, fn_name, args, timeout),
     do: QuickBEAM.Native.call_function(state.resource, fn_name, args, timeout)
@@ -657,21 +658,11 @@ defmodule QuickBEAM.Runtime do
   end
 
   def handle_info({:ws_send, socket_id, kind, payload}, state) do
-    case Map.get(state.websockets, socket_id) do
-      {pid, _ref} -> GenServer.cast(pid, {:send, kind, payload})
-      nil -> :ok
-    end
-
-    {:noreply, state}
+    QuickBEAM.Server.send_websocket(state, socket_id, kind, payload)
   end
 
   def handle_info({:ws_close, socket_id, code, reason}, state) do
-    case Map.get(state.websockets, socket_id) do
-      {pid, _ref} -> GenServer.cast(pid, {:close, code, reason})
-      nil -> :ok
-    end
-
-    {:noreply, state}
+    QuickBEAM.Server.close_websocket(state, socket_id, code, reason)
   end
 
   def handle_info({:websocket_event, message}, state) do

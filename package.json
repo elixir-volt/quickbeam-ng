@@ -3,13 +3,13 @@
     "@node-rs/argon2": "^2.0.2",
     "@node-rs/bcrypt": "^1.10.7",
     "@node-rs/crc32": "^1.10.6",
-    "sqlite-napi": "^1.0.1"
+    "sqlite-napi": "1.2.0"
   },
   "devDependencies": {
-    "jscpd": "^4.0.8",
-    "oxfmt": "^0.37.0",
-    "oxlint": "^1.52.0",
-    "oxlint-tsgolint": "^0.16.0"
+    "jscpd": "4.0.9",
+    "oxfmt": "0.48.0",
+    "oxlint": "1.63.0",
+    "oxlint-tsgolint": "0.22.1"
   },
   "private": true,
   "scripts": {
