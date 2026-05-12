@@ -15,6 +15,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     OwnProperty,
     PropertyDescriptor,
     PropertyKey,
+    Prototype,
     Put,
     WrappedPrimitive
   }
@@ -122,40 +123,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_value_of({:symbol, _} = value), do: WrappedPrimitive.wrap(value)
   defp object_value_of(value), do: value
 
-  defp prototype_of?([{:obj, ref} | _], {:obj, proto_ref}) do
-    prototype =
-      case Heap.get_obj(ref, %{}) do
-        {:qb_arr, _} -> Heap.get_array_proto(ref)
-        data when is_list(data) -> Heap.get_array_proto(ref)
-        map when is_map(map) -> Map.get(map, proto())
-        _ -> nil
-      end
-
-    prototype_chain_contains?(prototype, proto_ref)
-  end
-
-  defp prototype_of?([{:builtin, _, _} | _], {:obj, proto_ref}) do
-    case func_proto() do
-      {:obj, ^proto_ref} ->
-        true
-
-      {:obj, ref} ->
-        prototype_chain_contains?(Map.get(Heap.get_obj(ref, %{}), proto()), proto_ref)
-
-      _ ->
-        false
-    end
-  end
+  defp prototype_of?([value | _], {:obj, proto_ref}),
+    do: Prototype.chain_contains?(value, proto_ref)
 
   defp prototype_of?(_, _), do: false
-
-  defp prototype_chain_contains?({:obj, ref}, target_ref) when ref == target_ref, do: true
-
-  defp prototype_chain_contains?({:obj, ref}, target_ref) do
-    prototype_chain_contains?(Map.get(Heap.get_obj(ref, %{}), proto()), target_ref)
-  end
-
-  defp prototype_chain_contains?(_, _), do: false
 
   defp object_to_string(nil), do: "[object Null]"
   defp object_to_string(:undefined), do: "[object Undefined]"
@@ -487,50 +458,44 @@ defmodule QuickBEAM.VM.Runtime.Object do
             proxy_get_prototype_of(target, handler)
 
           map when is_map(map) ->
-            get_own_prototype({:obj, ref})
+            Prototype.get({:obj, ref})
 
           {:qb_arr, _} ->
-            Heap.get_array_proto(ref)
+            Prototype.get({:obj, ref})
 
           list when is_list(list) ->
-            Heap.get_array_proto(ref)
+            Prototype.get({:obj, ref})
 
           _ ->
             nil
         end
 
-      [{:qb_arr, _} | _] ->
-        func_proto()
+      [{:qb_arr, _} = value | _] ->
+        Prototype.get(value)
 
-      [val | _] when is_list(val) ->
-        Runtime.global_class_proto("Array")
+      [value | _] when is_list(value) ->
+        Prototype.get(value)
 
-      [{:builtin, _, _} = b | _] ->
-        case Map.get(Heap.get_ctor_statics(b), "__proto__") do
-          nil -> func_proto()
-          parent -> parent
-        end
+      [{:builtin, _, _} = value | _] ->
+        Prototype.get(value)
 
-      [{:closure, _, _} = c | _] ->
-        case Map.get(Heap.get_ctor_statics(c), "__proto__") do
-          nil -> func_proto()
-          parent -> parent
-        end
+      [{:closure, _, _} = value | _] ->
+        Prototype.get(value)
 
-      [%QuickBEAM.VM.Function{} | _] ->
-        func_proto()
+      [%QuickBEAM.VM.Function{} = value | _] ->
+        Prototype.get(value)
 
-      [val | _] when is_function(val) ->
-        func_proto()
+      [value | _] when is_function(value) ->
+        Prototype.get(value)
 
-      [val | _] when is_integer(val) or is_float(val) ->
-        Runtime.global_class_proto("Number")
+      [value | _] when is_integer(value) or is_float(value) ->
+        Prototype.get(value)
 
-      [val | _] when is_binary(val) ->
-        Runtime.global_class_proto("String")
+      [value | _] when is_binary(value) ->
+        Prototype.get(value)
 
-      [val | _] when is_boolean(val) ->
-        Runtime.global_class_proto("Boolean")
+      [value | _] when is_boolean(value) ->
+        Prototype.get(value)
 
       _ ->
         throw(
@@ -544,7 +509,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
     result =
       if trap == :undefined or trap == nil do
-        get_own_prototype(target)
+        Prototype.get(target)
       else
         Invocation.invoke_callback_or_throw(trap, [target])
       end
@@ -553,7 +518,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
       not prototype_value?(result) ->
         proxy_prototype_invariant_error()
 
-      not target_extensible_for_prototype?(target) and result != get_own_prototype(target) ->
+      not target_extensible_for_prototype?(target) and result != Prototype.get(target) ->
         proxy_prototype_invariant_error()
 
       true ->
@@ -573,7 +538,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
       end
 
     if success? and not target_extensible_for_prototype?(target) and
-         new_proto != get_own_prototype(target) do
+         new_proto != Prototype.get(target) do
       proxy_prototype_invariant_error()
     end
 
@@ -584,73 +549,13 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp prototype_value?({:obj, _}), do: true
   defp prototype_value?(_), do: false
 
-  defp get_own_prototype({:obj, ref}) do
-    map = Heap.get_obj(ref, %{})
-
-    cond do
-      Map.has_key?(map, :__internal_proto__) -> Map.get(map, :__internal_proto__)
-      Heap.get_prop_desc(ref, proto()) -> Heap.get_object_prototype()
-      true -> Map.get(map, proto(), nil)
-    end
-  end
-
-  defp get_own_prototype(_), do: nil
-
-  defp set_own_prototype({:obj, ref}, new_proto) do
-    case Heap.get_obj(ref, %{}) do
-      map when is_map(map) -> Heap.put_obj(ref, Map.put(map, proto(), new_proto))
-      _ -> :ok
-    end
-  end
+  defp set_own_prototype(target, new_proto), do: Prototype.set(target, new_proto)
 
   defp target_extensible_for_prototype?({:obj, ref}), do: Heap.extensible?(ref)
   defp target_extensible_for_prototype?(_), do: true
 
   defp proxy_prototype_invariant_error do
     throw({:js_throw, Heap.make_error("proxy prototype trap violates invariant", "TypeError")})
-  end
-
-  defp func_proto do
-    case Heap.get_func_proto() do
-      nil ->
-        call_fn =
-          {:builtin, "call",
-           fn [this | args], _ ->
-             Runtime.call_callback(this, args)
-           end}
-
-        apply_fn =
-          {:builtin, "apply",
-           fn [this, arg_array], _ ->
-             args =
-               case arg_array do
-                 {:obj, r} -> Heap.obj_to_list(r)
-                 _ -> []
-               end
-
-             Runtime.call_callback(this, args)
-           end}
-
-        bind_fn =
-          {:builtin, "bind",
-           fn [this | bound_args], func ->
-             {:bound, "bound", func, this, bound_args}
-           end}
-
-        proto =
-          object do
-            prop("call", call_fn)
-            prop("apply", apply_fn)
-            prop("bind", bind_fn)
-            prop("constructor", :undefined)
-          end
-
-        Heap.put_func_proto(proto)
-        proto
-
-      existing ->
-        existing
-    end
   end
 
   static "defineProperty", length: 3, constructable: false do
