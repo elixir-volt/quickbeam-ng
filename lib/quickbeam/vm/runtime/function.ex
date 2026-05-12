@@ -1,6 +1,7 @@
 defmodule QuickBEAM.VM.Runtime.Function do
   @moduledoc "JS `Function` prototype: `call`, `apply`, `bind`, and property access for name/length/fileName."
   alias QuickBEAM.VM.{Builtin, Heap, Invocation}
+  alias QuickBEAM.VM.ObjectModel.Get
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
   def prototype do
@@ -203,45 +204,45 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp fn_apply(fun, [], _this), do: invoke_fun(fun, [], :undefined)
 
   defp fn_bind(fun, [this_arg | bound_args], _this) do
-    orig_len =
-      case fun do
-        %QuickBEAM.VM.Function{defined_arg_count: n} -> n
-        {:closure, _, %QuickBEAM.VM.Function{defined_arg_count: n}} -> n
-        _ -> 0
-      end
+    orig_len = bind_target_length(fun)
+    orig_name = bind_target_name(fun)
 
-    orig_name =
-      case fun do
-        %QuickBEAM.VM.Function{name: n} when is_binary(n) -> n
-        {:closure, _, %QuickBEAM.VM.Function{name: n}} when is_binary(n) -> n
-        {:builtin, n, _} -> n
-        _ -> ""
-      end
-
-    bound_len = max(0, orig_len - length(bound_args))
+    bound_len = bound_length(orig_len, length(bound_args))
     bound_fn = fn args, _this2 -> invoke_fun(fun, bound_args ++ args, this_arg) end
     {:bound, bound_len, {:builtin, "bound " <> orig_name, bound_fn}, fun, bound_args}
   end
 
   defp fn_bind(fun, [], _this) do
-    orig_len =
-      case fun do
-        %QuickBEAM.VM.Function{defined_arg_count: n} -> n
-        {:closure, _, %QuickBEAM.VM.Function{defined_arg_count: n}} -> n
-        _ -> 0
-      end
-
-    orig_name =
-      case fun do
-        %QuickBEAM.VM.Function{name: n} when is_binary(n) -> n
-        {:closure, _, %QuickBEAM.VM.Function{name: n}} when is_binary(n) -> n
-        {:builtin, n, _} -> n
-        _ -> ""
-      end
+    orig_len = bind_target_length(fun)
+    orig_name = bind_target_name(fun)
 
     bound_fn = fn args, _this2 -> invoke_fun(fun, args, :undefined) end
     {:bound, orig_len, {:builtin, "bound " <> orig_name, bound_fn}, fun, []}
   end
+
+  defp bind_target_length(fun) do
+    case Get.get(fun, "length") do
+      n when is_number(n) -> integer_or_infinity(n)
+      :infinity -> :infinity
+      :neg_infinity -> 0
+      _ -> 0
+    end
+  end
+
+  defp bind_target_name(fun) do
+    case Get.get(fun, "name") do
+      name when is_binary(name) -> name
+      _ -> ""
+    end
+  end
+
+  defp integer_or_infinity(n) when is_integer(n), do: n
+  defp integer_or_infinity(n) when is_float(n), do: trunc(n)
+
+  defp bound_length(:infinity, _argc), do: :infinity
+  defp bound_length(:neg_infinity, _argc), do: 0
+  defp bound_length(n, argc) when is_number(n), do: max(0, n - argc)
+  defp bound_length(_, _argc), do: 0
 
   defp invoke_fun(fun, args, this_arg) do
     case fun do
