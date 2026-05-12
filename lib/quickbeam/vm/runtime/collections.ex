@@ -4,6 +4,10 @@ defmodule QuickBEAM.VM.Runtime.Collections do
   alias QuickBEAM.VM.{Heap, JSThrow}
 
   def validate_weak_key!({:obj, _}, _kind), do: :ok
+  def validate_weak_key!(%QuickBEAM.VM.Function{}, _kind), do: :ok
+  def validate_weak_key!({:closure, _, %QuickBEAM.VM.Function{}}, _kind), do: :ok
+  def validate_weak_key!({:builtin, _, _}, _kind), do: :ok
+  def validate_weak_key!({:bound, _, _, _, _}, _kind), do: :ok
   def validate_weak_key!({:symbol, "Symbol." <> _}, _kind), do: :ok
   def validate_weak_key!({:symbol, _, _}, _kind), do: :ok
 

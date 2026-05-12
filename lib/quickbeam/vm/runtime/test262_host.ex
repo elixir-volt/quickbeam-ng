@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime.Array
+  alias QuickBEAM.VM.Runtime.FinalizationRegistry, as: JSFinalizationRegistry
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
@@ -44,6 +45,21 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     weak_ref_ctor = realm_constructor("WeakRef", JSWeakRef.constructor(), weak_ref_proto)
     Heap.put_obj_key(elem(weak_ref_proto, 1), "constructor", weak_ref_ctor)
 
+    finalization_registry_proto = Heap.wrap(%{"__proto__" => object_proto})
+
+    finalization_registry_ctor =
+      realm_constructor(
+        "FinalizationRegistry",
+        JSFinalizationRegistry.constructor(),
+        finalization_registry_proto
+      )
+
+    Heap.put_obj_key(
+      elem(finalization_registry_proto, 1),
+      "constructor",
+      finalization_registry_ctor
+    )
+
     function_proto = QuickBEAM.VM.Runtime.Function.prototype()
 
     function_ctor =
@@ -55,7 +71,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         set_proto,
         weak_map_proto,
         weak_set_proto,
-        weak_ref_proto
+        weak_ref_proto,
+        finalization_registry_proto
       )
 
     global =
@@ -67,7 +84,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Set" => set_ctor,
         "WeakMap" => weak_map_ctor,
         "WeakSet" => weak_set_ctor,
-        "WeakRef" => weak_ref_ctor
+        "WeakRef" => weak_ref_ctor,
+        "FinalizationRegistry" => finalization_registry_ctor
       })
 
     Heap.wrap(%{"global" => global})
@@ -81,6 +99,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       %{weak_map_proto: weak_map_proto} when intrinsic == :weak_map -> weak_map_proto
       %{weak_set_proto: weak_set_proto} when intrinsic == :weak_set -> weak_set_proto
       %{weak_ref_proto: weak_ref_proto} when intrinsic == :weak_ref -> weak_ref_proto
+      %{finalization_registry_proto: proto} when intrinsic == :finalization_registry -> proto
       %{object_proto: object_proto} when intrinsic == :object -> object_proto
       _ -> nil
     end
@@ -101,7 +120,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          set_proto,
          weak_map_proto,
          weak_set_proto,
-         weak_ref_proto
+         weak_ref_proto,
+         finalization_registry_proto
        ) do
     cb = fn _args, _this ->
       fun = {:builtin, "anonymous", fn _, this -> this end}
@@ -115,7 +135,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         set_proto: set_proto,
         weak_map_proto: weak_map_proto,
         weak_set_proto: weak_set_proto,
-        weak_ref_proto: weak_ref_proto
+        weak_ref_proto: weak_ref_proto,
+        finalization_registry_proto: finalization_registry_proto
       })
 
       fun
@@ -131,7 +152,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       set_proto: set_proto,
       weak_map_proto: weak_map_proto,
       weak_set_proto: weak_set_proto,
-      weak_ref_proto: weak_ref_proto
+      weak_ref_proto: weak_ref_proto,
+      finalization_registry_proto: finalization_registry_proto
     })
 
     ctor

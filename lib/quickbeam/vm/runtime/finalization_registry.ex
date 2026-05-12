@@ -72,7 +72,7 @@ defmodule QuickBEAM.VM.Runtime.FinalizationRegistry do
       JSThrow.type_error!("FinalizationRegistry holdings must not be the target")
     end
 
-    unless token in [:undefined, nil] do
+    unless token == :undefined do
       Collections.validate_weak_key!(token, "FinalizationRegistry unregister token")
     end
 
