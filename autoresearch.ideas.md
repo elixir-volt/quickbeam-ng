@@ -26,3 +26,5 @@
 - Reflect bounded workload now at 4/153 failures; remaining failures are primitive-target TypeError tests for Reflect.isExtensible/preventExtensions, but existing core checks currently assert legacy false-return behavior for these primitive calls, so do not change without updating product expectations.
 
 - Set-like record caching for difference/intersection/isDisjointFrom/isSupersetOf still hangs focused class-order cases even when cached has uses call_with_this; do not retry simple record reuse unchanged. Investigate iterator/getter closure invocation state first.
+
+- Function workload improved to 87/509 via callable Function.prototype, function-object prototype construction, bind observable name/length reads, and Function.prototype.toString. Discarded primitive apply argArray rejection alone: focused test passed but broad Function regressed 87→89; retry only with full CreateListFromArrayLike semantics and old Sputnik apply cases together. Discarded callable-proxy callable? alone: stayed flat and did not fix Function.prototype.toString proxy paths.

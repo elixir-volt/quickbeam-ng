@@ -484,6 +484,9 @@ defmodule QuickBEAM.VM.Runtime.Object do
       [{:closure, _, _} = value | _] ->
         Prototype.get(value)
 
+      [{:bound, _, _, _, _} = value | _] ->
+        Prototype.get(value)
+
       [%QuickBEAM.VM.Function{} = value | _] ->
         Prototype.get(value)
 
