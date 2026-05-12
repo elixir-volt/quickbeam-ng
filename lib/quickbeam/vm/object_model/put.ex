@@ -847,7 +847,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         QuickBEAM.VM.ObjectModel.OwnProperty.present?({:obj, ref}, key)
 
       {:qb_arr, _} ->
-        QuickBEAM.VM.ObjectModel.OwnProperty.present?({:obj, ref}, key)
+        QuickBEAM.VM.ObjectModel.OwnProperty.present?({:obj, ref}, key) or
+          has_property(Heap.get_array_proto(ref), key)
 
       _ ->
         Get.get({:obj, ref}, key) != :undefined
@@ -1139,9 +1140,15 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           true ->
             Heap.array_set(ref, i, val)
+            mark_undefined_array_write(ref, key, val)
         end
     end
   end
+
+  defp mark_undefined_array_write(ref, key, :undefined),
+    do: Heap.put_prop_desc(ref, key, %{writable: true, enumerable: true, configurable: true})
+
+  defp mark_undefined_array_write(_ref, _key, _val), do: :ok
 
   defp put_list_index(obj, ref, list, i, val) do
     key = Integer.to_string(i)
@@ -1163,6 +1170,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           i < length(list) ->
             Heap.put_obj(ref, List.replace_at(list, i, val))
+            mark_undefined_array_write(ref, key, val)
 
           Heap.get_array_prop(ref, "__arguments__") == true ->
             Heap.put_array_prop(ref, key, val)
