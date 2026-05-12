@@ -1092,10 +1092,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
     Define.property(target, key, Heap.wrap(desc), desc)
   end
 
-  defp constructable_from?({:builtin, name, _}) do
+  defp constructable_from?({:builtin, name, _} = builtin) do
     case QuickBEAM.VM.Builtin.named_meta(name) do
       %QuickBEAM.VM.Builtin.Meta{constructable?: true} -> true
-      _ -> false
+      %QuickBEAM.VM.Builtin.Meta{constructable?: false} -> false
+      _ -> Heap.get_class_proto(builtin) != nil
     end
   end
 
