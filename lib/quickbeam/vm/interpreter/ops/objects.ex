@@ -666,7 +666,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
                 _ -> Values.stringify(key)
               end
 
-            Put.has_property(obj, coerced_key)
+            QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, coerced_key)
           end,
           false
         )

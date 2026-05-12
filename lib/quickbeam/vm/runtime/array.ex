@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Define, Delete, Get, Put}
+  alias QuickBEAM.VM.ObjectModel.{Define, Delete, Get, HasProperty, Put}
   alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
@@ -708,7 +708,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       for index <- 0..(len - 1) do
         key = Integer.to_string(index)
 
-        if Put.has_property(value, key) do
+        if HasProperty.has_property?(value, key) do
           {:present, Get.get(value, key)}
         else
           :hole
@@ -945,7 +945,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       Enum.all?(0..(len - 1), fn idx ->
         key = Integer.to_string(idx)
 
-        if Put.has_property(this, key) do
+        if HasProperty.has_property?(this, key) do
           value = Get.get(this, key)
 
           Runtime.truthy?(
@@ -1359,7 +1359,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       from_key = Integer.to_string(start_idx + offset)
       to_key = Integer.to_string(target + offset)
 
-      if Put.has_property(acc, from_key) do
+      if HasProperty.has_property?(acc, from_key) do
         Put.put(acc, to_key, Get.get(acc, from_key))
       else
         unless Delete.delete_property(acc, to_key) do

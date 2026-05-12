@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.ObjectModel.{Get, Put}
+  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty}
 
   def attrs(opts) do
     %{
@@ -34,7 +34,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
 
   def present?(source_obj, raw_desc, "value") do
     Map.has_key?(raw_desc, "value") or Get.get(source_obj, "value") != :undefined or
-      Put.has_property(source_obj, "value")
+      HasProperty.has_property?(source_obj, "value")
   end
 
   def present?(source_obj, raw_desc, key) do
@@ -88,7 +88,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
   defp get_value_or_default(source_obj, default) do
     case Get.get(source_obj, "value") do
       :undefined ->
-        if Put.has_property(source_obj, "value"), do: :undefined, else: default
+        if HasProperty.has_property?(source_obj, "value"), do: :undefined, else: default
 
       value ->
         value

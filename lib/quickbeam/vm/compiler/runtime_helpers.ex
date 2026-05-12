@@ -75,7 +75,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
       JSThrow.type_error!("right-hand side of 'in' should be an object")
     end
 
-    QuickBEAM.VM.ObjectModel.Put.has_property(obj, Names.normalize_property_key(key))
+    QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, Names.normalize_property_key(key))
   end
 
   @doc "Applies JavaScript logical NOT."
@@ -1496,7 +1496,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   def for_in_next(_ctx \\ nil, iter)
 
   def for_in_next(ctx, {:for_in_iterator, [key | rest_keys], obj}) do
-    if Put.has_property(obj, key) do
+    if QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, key) do
       {false, key, {:for_in_iterator, rest_keys, obj}}
     else
       for_in_next(ctx, {:for_in_iterator, rest_keys, obj})

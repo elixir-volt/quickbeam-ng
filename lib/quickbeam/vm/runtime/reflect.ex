@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.{Delete, Get, Put}
+  alias QuickBEAM.VM.ObjectModel.{Delete, Get, HasProperty, Put}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Object
 
@@ -127,7 +127,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
     method "has" do
       [obj, key | _] = args
-      Put.has_property(obj, key)
+      HasProperty.has_property?(obj, key)
     end
 
     method "ownKeys" do

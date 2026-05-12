@@ -34,7 +34,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
              gas,
              ctx
            ) do
-        if Put.has_property(obj, key) do
+        if QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, key) do
           run(pc + 1, frame, [false, key, {:for_in_iterator, rest_keys, obj} | rest], gas, ctx)
         else
           run(instr, pc, frame, [{:for_in_iterator, rest_keys, obj} | rest], gas, ctx)

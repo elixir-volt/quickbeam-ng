@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Static do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.ObjectModel.{Get, Put}
+  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty}
 
   def delete_static(fun, key) do
     prop_key =
@@ -32,7 +32,7 @@ defmodule QuickBEAM.VM.ObjectModel.Static do
   end
 
   def with_has_property?({:obj, _} = obj, key) do
-    if Put.has_property(obj, key) do
+    if HasProperty.has_property?(obj, key) do
       unscopables = Get.get(obj, {:symbol, "Symbol.unscopables"})
 
       case unscopables do

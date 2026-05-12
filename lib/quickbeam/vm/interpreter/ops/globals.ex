@@ -14,7 +14,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
       defp run({@op_get_var_undef, [atom_idx]}, pc, frame, stack, gas, ctx) do
         if Names.resolve_atom(ctx, atom_idx) == "arguments" do
-          arguments = Map.get(ctx.globals, "arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
+          arguments =
+            Map.get(ctx.globals, "arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
+
           run(pc + 1, frame, [arguments | stack], gas, ctx)
         else
           val = GlobalEnv.get(ctx, atom_idx, :undefined)
@@ -38,7 +40,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
       defp run({@op_get_var, [atom_idx]}, pc, frame, stack, gas, ctx) do
         if Names.resolve_atom(ctx, atom_idx) == "arguments" do
-          arguments = Map.get(ctx.globals, "arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
+          arguments =
+            Map.get(ctx.globals, "arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
+
           run(pc + 1, frame, [arguments | stack], gas, ctx)
         else
           case GlobalEnv.fetch(ctx, atom_idx) do
@@ -252,7 +256,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
       defp run({@op_put_ref_value, []}, pc, frame, [val, key, obj | rest], gas, ctx)
            when is_binary(key) do
         if current_strict_mode?(ctx) and is_object(obj) and
-             not Put.has_property(obj, key) do
+             not QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, key) do
           throw_or_catch(
             frame,
             Heap.make_error("#{key} is not defined", "ReferenceError"),
