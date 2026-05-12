@@ -71,6 +71,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         end
 
         delete_array_index_metadata(ref, new_len, old_len)
+        delete_sparse_array_props_from(ref, new_len)
         Heap.put_obj_raw(ref, {:qb_arr, resize_sparse_array(arr, new_len, old_len)})
 
       true ->
@@ -99,6 +100,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         end
 
         delete_array_index_metadata(ref, new_len, old_len)
+        delete_sparse_array_props_from(ref, new_len)
         Heap.put_obj(ref, Enum.take(list, new_len))
 
       true ->
@@ -158,6 +160,22 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       key = Integer.to_string(i)
       Heap.delete_prop_desc(ref, key)
       Heap.delete_array_prop(ref, key)
+    end)
+  end
+
+  defp delete_sparse_array_props_from(ref, from) do
+    ref
+    |> Heap.get_array_props()
+    |> Map.keys()
+    |> Enum.each(fn key ->
+      case PropertyKey.array_index(key) do
+        {:ok, idx} when idx >= from ->
+          Heap.delete_prop_desc(ref, key)
+          Heap.delete_array_prop(ref, key)
+
+        _ ->
+          :ok
+      end
     end)
   end
 
@@ -1095,6 +1113,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           i >= :array.size(arr) and proto_has_setter?(i) ->
             invoke_proto_setter(obj, i, val)
+
+          i >= :array.size(arr) and huge_length_growth?(:array.size(arr), i + 1) ->
+            Heap.put_array_prop(ref, key, val)
+            Heap.put_array_prop(ref, "length", i + 1)
 
           true ->
             Heap.array_set(ref, i, val)
