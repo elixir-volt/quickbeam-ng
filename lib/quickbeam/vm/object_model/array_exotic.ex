@@ -122,7 +122,9 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
 
     case PropertyKey.array_index(prop_name) do
       {:ok, idx} ->
-        if idx >= current_length(ref) and match?(%{writable: false}, length_attrs(ref)) do
+        old_len = current_length(ref)
+
+        if idx >= old_len and match?(%{writable: false}, length_attrs(ref)) do
           throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
         end
 
@@ -164,6 +166,10 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
 
           true ->
             :ok
+        end
+
+        if idx >= old_len do
+          Put.put(obj, "length", idx + 1)
         end
 
         obj
