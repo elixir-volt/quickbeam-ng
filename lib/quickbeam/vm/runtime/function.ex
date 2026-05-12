@@ -35,12 +35,23 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
              fn_bind(this, args, this)
            end},
+        "toString" =>
+          {:builtin, "toString",
+           fn _args, this ->
+             unless Builtin.callable?(this),
+               do: throw({:js_throw, Heap.make_error("not a function", "TypeError")})
+
+             case this do
+               {:obj, _} -> "function () { [native code] }"
+               _ -> elem(proto_property(this, "toString"), 2).([], this)
+             end
+           end},
         {:symbol, "Symbol.hasInstance"} => has_instance
       })
 
     {:obj, ref} = proto
 
-    for name <- ~w(call apply bind) do
+    for name <- ~w(call apply bind toString) do
       Heap.put_prop_desc(ref, name, %{writable: true, enumerable: false, configurable: true})
     end
 
