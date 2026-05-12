@@ -409,6 +409,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
             case elem(vals, offset) do
               {:accessor, _, setter} when setter != nil ->
                 invoke_setter(setter, val, receiver)
+                true
 
               _ ->
                 if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
@@ -437,6 +438,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           {:accessor, _, setter} when setter != nil ->
             invoke_setter(setter, val, receiver)
+            true
 
           _ ->
             if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
@@ -522,9 +524,20 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   end
 
   defp write_receiver(receiver, key, val) do
-    put(receiver, key, val)
-    true
+    if receiver_object?(receiver) do
+      put(receiver, key, val)
+      true
+    else
+      false
+    end
   end
+
+  defp receiver_object?({:obj, _}), do: true
+  defp receiver_object?(%QuickBEAM.VM.Function{}), do: true
+  defp receiver_object?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
+  defp receiver_object?({:bound, _, _, _, _}), do: true
+  defp receiver_object?({:builtin, _, _}), do: true
+  defp receiver_object?(_), do: false
 
   def put(target, key, val, true), do: put(target, key, val)
 

@@ -100,13 +100,15 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       [target, args_array | rest] = args
       call_args = create_list_from_array_like(args_array)
       new_target = arg(rest, 0, target)
+      validate_constructable!(new_target)
       Invocation.construct_runtime(target, new_target, call_args)
     end
 
     method "get" do
-      [obj, key | _] = args
+      [obj, key | rest] = args
       require_object!(obj, "Reflect.get")
-      Get.get(obj, key)
+      receiver = arg(rest, 0, obj)
+      reflect_get(obj, key, receiver)
     end
 
     method "set" do
@@ -188,6 +190,62 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       Heap.wrap(own_keys_for(obj))
     end
   end
+
+  defp validate_constructable!(%QuickBEAM.VM.Function{}), do: :ok
+  defp validate_constructable!({:closure, _, %QuickBEAM.VM.Function{}}), do: :ok
+  defp validate_constructable!({:bound, _, _, _, _}), do: :ok
+
+  defp validate_constructable!({:builtin, name, _}) do
+    case QuickBEAM.VM.Builtin.named_meta(name) do
+      %QuickBEAM.VM.Builtin.Meta{constructable?: true} -> :ok
+      _ -> JSThrow.type_error!("#{name} is not a constructor")
+    end
+  end
+
+  defp validate_constructable!({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => target} -> validate_constructable!(target)
+      _ -> JSThrow.type_error!("newTarget is not a constructor")
+    end
+  end
+
+  defp validate_constructable!(_), do: JSThrow.type_error!("newTarget is not a constructor")
+
+  defp reflect_get(obj, key, receiver) do
+    case obj do
+      {:obj, ref} -> reflect_get_object(obj, Heap.get_obj_raw(ref), key, receiver)
+      _ -> Get.get(obj, key)
+    end
+  end
+
+  defp reflect_get_object(obj, raw, key, receiver) do
+    case raw do
+      {:shape, _shape_id, offsets, vals, _proto} ->
+        case Map.fetch(offsets, key) do
+          {:ok, offset} -> reflect_get_value(elem(vals, offset), receiver)
+          :error -> reflect_get_from_prototype(Prototype.get(obj), key, receiver)
+        end
+
+      map when is_map(map) ->
+        case Map.fetch(map, key) do
+          {:ok, value} -> reflect_get_value(value, receiver)
+          :error -> reflect_get_from_prototype(Prototype.get(obj), key, receiver)
+        end
+
+      _ ->
+        Get.get(obj, key)
+    end
+  end
+
+  defp reflect_get_value({:accessor, getter, _}, receiver) when getter != nil,
+    do: Get.call_getter(getter, receiver)
+
+  defp reflect_get_value({:accessor, nil, _}, _receiver), do: :undefined
+  defp reflect_get_value(value, _receiver), do: value
+
+  defp reflect_get_from_prototype(nil, _key, _receiver), do: :undefined
+  defp reflect_get_from_prototype(:undefined, _key, _receiver), do: :undefined
+  defp reflect_get_from_prototype(proto, key, receiver), do: reflect_get(proto, key, receiver)
 
   defp reflect_set_prototype_of({:obj, ref} = obj, proto) do
     unless proto == nil or object?(proto) do
