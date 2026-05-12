@@ -30,6 +30,8 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
 
   def set({:obj, ref}, new_proto) do
     case Heap.get_obj(ref, %{}) do
+      {:qb_arr, _} -> Heap.put_array_prop(ref, "__proto__", new_proto)
+      data when is_list(data) -> Heap.put_array_prop(ref, "__proto__", new_proto)
       map when is_map(map) -> Heap.put_obj(ref, Map.put(map, proto(), new_proto))
       _ -> :ok
     end

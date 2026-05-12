@@ -23,7 +23,7 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
         OwnProperty.present?(obj, key) or prototype_has_property?(obj, map, key)
 
       list when is_list(list) ->
-        OwnProperty.present?(obj, key)
+        OwnProperty.present?(obj, key) or has_array_prototype_property?(ref, key)
 
       {:qb_arr, _} ->
         OwnProperty.present?(obj, key) or has_array_prototype_property?(ref, key)

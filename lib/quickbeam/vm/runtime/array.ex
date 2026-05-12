@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Define, Delete, Get, HasProperty, Put}
+  alias QuickBEAM.VM.ObjectModel.{Define, Delete, Get, HasProperty, Prototype, Put}
   alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
@@ -1327,26 +1327,71 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
         current_len = Runtime.to_int(Get.get(obj, "length"))
 
-        if current_len != len and target >= current_len do
-          copy_within_sparse_tail(obj, ref, target, start_idx, current_len)
+        if current_len != len and start_idx >= current_len do
+          copy_within_from_sparse_source(obj, ref, len, current_len, target, start_idx)
         else
-          slice = Enum.slice(list, start_idx, max(end_idx - start_idx, 0))
+          if current_len != len and target >= current_len do
+            copy_within_sparse_tail(obj, ref, target, start_idx, current_len)
+          else
+            slice = Enum.slice(list, start_idx, max(end_idx - start_idx, 0))
 
-          new_list =
-            list
-            |> Enum.with_index()
-            |> Enum.map(fn {item, i} ->
-              offset = i - target
-              if i >= target and offset < length(slice), do: Enum.at(slice, offset), else: item
-            end)
+            new_list =
+              list
+              |> Enum.with_index()
+              |> Enum.map(fn {item, i} ->
+                offset = i - target
+                if i >= target and offset < length(slice), do: Enum.at(slice, offset), else: item
+              end)
 
-          Heap.put_obj(ref, new_list)
-          {:obj, ref}
+            Heap.put_obj(ref, new_list)
+            {:obj, ref}
+          end
         end
     end
   end
 
   defp copy_within(_, _), do: :undefined
+
+  defp copy_within_from_sparse_source(obj, ref, len, current_len, target, start_idx) do
+    count = max(min(len - start_idx, len - target), 0)
+
+    Enum.each(0..max(count - 1, -1), fn offset ->
+      from_key = Integer.to_string(start_idx + offset)
+      to = target + offset
+      to_key = Integer.to_string(to)
+
+      if HasProperty.has_property?(obj, from_key) do
+        value =
+          copy_within_sparse_source_value(obj, ref, start_idx + offset, current_len, from_key)
+
+        if to < current_len do
+          Put.put(obj, to_key, value)
+        else
+          Heap.put_array_prop(ref, to_key, value)
+          Heap.put_array_prop(ref, "length", to + 1)
+        end
+      else
+        if to < current_len do
+          unless Delete.delete_property(obj, to_key) do
+            JSThrow.type_error!("Cannot delete property")
+          end
+        end
+      end
+    end)
+
+    obj
+  end
+
+  defp copy_within_sparse_source_value(obj, ref, idx, current_len, key) do
+    if idx >= current_len do
+      case Prototype.get({:obj, ref}) do
+        {:obj, _} = proto -> Get.get(proto, key)
+        _ -> Get.get(obj, key)
+      end
+    else
+      Get.get(obj, key)
+    end
+  end
 
   defp copy_within_sparse_tail(obj, ref, target, start_idx, current_len) do
     count = max(current_len - start_idx, 0)

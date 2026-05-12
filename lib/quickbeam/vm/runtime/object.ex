@@ -646,6 +646,14 @@ defmodule QuickBEAM.VM.Runtime.Object do
             Heap.put_obj(ref, Map.put(map, proto(), new_proto))
             obj
 
+          data when is_list(data) ->
+            Heap.put_array_prop(ref, "__proto__", new_proto)
+            obj
+
+          {:qb_arr, _} ->
+            Heap.put_array_prop(ref, "__proto__", new_proto)
+            obj
+
           _ ->
             obj
         end
