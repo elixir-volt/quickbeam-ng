@@ -13,6 +13,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     Boolean,
     Console,
     Errors,
+    FinalizationRegistry,
     GlobalNumeric,
     JSON,
     Math,
@@ -548,7 +549,61 @@ defmodule QuickBEAM.VM.Runtime.Globals do
            ctor
          end).(),
       "FinalizationRegistry" =>
-        register("FinalizationRegistry", &Constructors.finalization_registry/2),
+        (fn ->
+           ctor =
+             register("FinalizationRegistry", FinalizationRegistry.constructor(),
+               auto_proto: true
+             )
+
+           Heap.put_ctor_static(ctor, "length", 1)
+
+           Heap.put_ctor_prop_desc(ctor, "length", %{
+             writable: false,
+             enumerable: false,
+             configurable: true
+           })
+
+           Heap.put_ctor_prop_desc(ctor, "prototype", %{
+             writable: false,
+             enumerable: false,
+             configurable: false
+           })
+
+           case Heap.get_ctor_statics(ctor)["prototype"] do
+             {:obj, proto_ref} ->
+               Heap.put_obj_key(proto_ref, "__proto__", Heap.get_object_prototype())
+
+               Heap.put_prop_desc(proto_ref, "constructor", %{
+                 writable: true,
+                 enumerable: false,
+                 configurable: true
+               })
+
+               for method <- ["register", "unregister"] do
+                 Heap.put_obj_key(proto_ref, method, FinalizationRegistry.proto_property(method))
+
+                 Heap.put_prop_desc(proto_ref, method, %{
+                   writable: true,
+                   enumerable: false,
+                   configurable: true
+                 })
+               end
+
+               sym_to_string_tag = {:symbol, "Symbol.toStringTag"}
+               Heap.put_obj_key(proto_ref, sym_to_string_tag, "FinalizationRegistry")
+
+               Heap.put_prop_desc(proto_ref, sym_to_string_tag, %{
+                 writable: false,
+                 enumerable: false,
+                 configurable: true
+               })
+
+             _ ->
+               :ok
+           end
+
+           ctor
+         end).(),
       "DataView" => register("DataView", fn _, _ -> Runtime.new_object() end),
       "ArrayBuffer" =>
         (

@@ -107,6 +107,10 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("Map"), do: meta("Map", [length: 0, constructable: true], :constructor)
   def named_meta("Set"), do: meta("Set", [length: 0, constructable: true], :constructor)
   def named_meta("WeakRef"), do: meta("WeakRef", [length: 1, constructable: true], :constructor)
+
+  def named_meta("FinalizationRegistry"),
+    do: meta("FinalizationRegistry", [length: 1, constructable: true], :constructor)
+
   def named_meta("assign"), do: meta("assign", [length: 2, constructable: false], :static)
   def named_meta("create"), do: meta("create", [length: 2, constructable: false], :static)
 
@@ -358,6 +362,8 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("delete"), do: meta("delete", [length: 1, constructable: false], :proto)
   def named_meta("clear"), do: meta("clear", [length: 0, constructable: false], :proto)
   def named_meta("deref"), do: meta("deref", [length: 0, constructable: false], :proto)
+  def named_meta("register"), do: meta("register", [length: 2, constructable: false], :proto)
+  def named_meta("unregister"), do: meta("unregister", [length: 1, constructable: false], :proto)
 
   def named_meta("getOrInsert"),
     do: meta("getOrInsert", [length: 2, constructable: false], :proto)
@@ -709,7 +715,7 @@ defmodule QuickBEAM.VM.Builtin do
 
   @doc "Dispatches a VM callable value to its underlying Elixir callback."
   def call({:builtin, name, _cb}, _args, _this)
-      when name in ~w(Map Set WeakMap WeakSet WeakRef) do
+      when name in ~w(Map Set WeakMap WeakSet WeakRef FinalizationRegistry) do
     JSThrow.type_error!("Constructor #{name} requires 'new'")
   end
 
