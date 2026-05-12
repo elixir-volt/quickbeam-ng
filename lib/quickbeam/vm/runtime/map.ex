@@ -61,14 +61,22 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor do
-    fn args, _this ->
-      ref = make_ref()
+    fn args, this ->
+      {ref, instance_proto} =
+        case this do
+          {:obj, this_ref} ->
+            existing = Heap.get_obj(this_ref, %{})
+            {this_ref, Map.get(existing, proto(), Runtime.global_class_proto("Map"))}
+
+          _ ->
+            {make_ref(), Runtime.global_class_proto("Map")}
+        end
 
       Heap.put_obj(ref, %{
         map_data() => %{},
         key_order() => [],
         "size" => 0,
-        proto() => Runtime.global_class_proto("Map")
+        proto() => instance_proto
       })
 
       map = {:obj, ref}
@@ -236,7 +244,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
         Invocation.invoke_with_receiver(adder, [key, value], map)
       catch
         {:js_throw, _} = thrown ->
-          close_iterator(iterator)
+          close_iterator_safely(iterator)
           throw(thrown)
       end
 
@@ -252,6 +260,14 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
       _ ->
         :undefined
+    end
+  end
+
+  defp close_iterator_safely(iterator) do
+    try do
+      close_iterator(iterator)
+    catch
+      {:js_throw, _} -> :undefined
     end
   end
 

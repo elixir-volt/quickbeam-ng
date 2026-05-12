@@ -23,6 +23,10 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     array_ctor = realm_constructor("Array", &Constructors.array/2, array_proto)
     Heap.put_obj_key(elem(array_proto, 1), "constructor", array_ctor)
 
+    map_proto = Heap.wrap(%{"__proto__" => object_proto})
+    map_ctor = realm_constructor("Map", JSMap.constructor(), map_proto)
+    Heap.put_obj_key(elem(map_proto, 1), "constructor", map_ctor)
+
     weak_map_proto = Heap.wrap(%{"__proto__" => object_proto})
     weak_map_ctor = realm_constructor("WeakMap", JSMap.weak_constructor(), weak_map_proto)
     Heap.put_obj_key(elem(weak_map_proto, 1), "constructor", weak_map_ctor)
@@ -38,6 +42,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         object_proto,
         function_proto,
         array_proto,
+        map_proto,
         weak_map_proto,
         weak_set_proto
       )
@@ -47,6 +52,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Object" => object_ctor,
         "Array" => array_ctor,
         "Function" => function_ctor,
+        "Map" => map_ctor,
         "WeakMap" => weak_map_ctor,
         "WeakSet" => weak_set_ctor
       })
@@ -57,6 +63,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   def realm_intrinsic(constructor, intrinsic) do
     case Process.get({:qb_realm_intrinsics, constructor}) do
       %{array_proto: array_proto} when intrinsic == :array -> array_proto
+      %{map_proto: map_proto} when intrinsic == :map -> map_proto
       %{weak_map_proto: weak_map_proto} when intrinsic == :weak_map -> weak_map_proto
       %{weak_set_proto: weak_set_proto} when intrinsic == :weak_set -> weak_set_proto
       %{object_proto: object_proto} when intrinsic == :object -> object_proto
@@ -75,6 +82,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          object_proto,
          function_proto,
          array_proto,
+         map_proto,
          weak_map_proto,
          weak_set_proto
        ) do
@@ -86,6 +94,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       Process.put({:qb_realm_intrinsics, fun}, %{
         object_proto: object_proto,
         array_proto: array_proto,
+        map_proto: map_proto,
         weak_map_proto: weak_map_proto,
         weak_set_proto: weak_set_proto
       })
@@ -99,6 +108,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     Process.put({:qb_realm_intrinsics, ctor}, %{
       object_proto: object_proto,
       array_proto: array_proto,
+      map_proto: map_proto,
       weak_map_proto: weak_map_proto,
       weak_set_proto: weak_set_proto
     })
