@@ -1513,7 +1513,24 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end
   end
 
-  defp array_iterator_list_fn({:obj, ref}), do: fn -> Heap.obj_to_list(ref) end
+  defp array_iterator_list_fn({:obj, ref} = obj) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} ->
+        fn ->
+          count = QuickBEAM.VM.Runtime.TypedArray.element_count(obj)
+
+          if count > 0 do
+            for i <- 0..(count - 1), do: QuickBEAM.VM.Runtime.TypedArray.get_element(obj, i)
+          else
+            []
+          end
+        end
+
+      _ ->
+        fn -> Heap.obj_to_list(ref) end
+    end
+  end
+
   defp array_iterator_list_fn({:qb_arr, arr}), do: fn -> :array.to_list(arr) end
   defp array_iterator_list_fn(list) when is_list(list), do: fn -> list end
 
