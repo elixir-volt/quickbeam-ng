@@ -64,6 +64,23 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   def get(_, _), do: :undefined
 
+  defp array_prototype_shape?(offsets) do
+    Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
+      Map.has_key?(offsets, "pop")
+  end
+
+  defp array_prototype_map?(map) do
+    Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
+  end
+
+  defp array_prototype_length(ref) do
+    case Heap.get_obj_raw(ref) do
+      {:shape, _, offsets, _, _} -> if array_prototype_shape?(offsets), do: 0
+      map when is_map(map) -> if array_prototype_map?(map), do: 0
+      _ -> nil
+    end
+  end
+
   defp function_prototype_has_own?(key) do
     case Heap.get_func_proto() do
       {:obj, ref} ->
@@ -127,19 +144,27 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       {:obj, ref} ->
         case Heap.get_obj_raw(ref) do
           {:shape, _, offsets, vals, _} ->
-            case Map.fetch(offsets, "length") do
-              {:ok, off} -> elem(vals, off)
-              :error -> wrapped_shape_length(offsets, vals)
+            cond do
+              array_prototype_shape?(offsets) ->
+                0
+
+              true ->
+                case Map.fetch(offsets, "length") do
+                  {:ok, off} -> elem(vals, off)
+                  :error -> wrapped_shape_length(offsets, vals)
+                end
             end
 
           {:qb_arr, arr} ->
-            virtual_array_length(ref) || :array.size(arr)
+            array_prototype_length(ref) || virtual_array_length(ref) || :array.size(arr)
 
           list when is_list(list) ->
-            virtual_array_length(ref) || length(list)
+            array_prototype_length(ref) || virtual_array_length(ref) || length(list)
 
           map when is_map(map) ->
-            Map.get(map, "length", wrapped_map_length(map))
+            if array_prototype_map?(map),
+              do: 0,
+              else: Map.get(map, "length", wrapped_map_length(map))
 
           _ ->
             0
@@ -269,9 +294,17 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         if proto, do: proto, else: :undefined
 
       {:shape, _shape_id, offsets, vals, _proto} ->
-        case Map.fetch(offsets, key) do
-          {:ok, offset} -> elem(vals, offset)
-          :error -> wrapped_shape_proto_property(offsets, vals, key)
+        cond do
+          key == "length" and Map.has_key?(offsets, "constructor") and
+            Map.has_key?(offsets, "push") and
+              Map.has_key?(offsets, "pop") ->
+            0
+
+          true ->
+            case Map.fetch(offsets, key) do
+              {:ok, offset} -> elem(vals, offset)
+              :error -> wrapped_shape_proto_property(offsets, vals, key)
+            end
         end
 
       nil ->
@@ -322,6 +355,23 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         case Map.get(map, key) do
           nil -> ArrayBuffer.proto_property(key)
           val -> val
+        end
+
+      map when is_map(map) and key == "length" ->
+        if Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and
+             Map.has_key?(map, "pop") do
+          0
+        else
+          case prototype_object_property(map, key) do
+            :undefined ->
+              case wrapped_proto_property(map, key) do
+                :undefined -> get_map_property(map, key, {:obj, ref})
+                val -> val
+              end
+
+            val ->
+              val
+          end
         end
 
       map when is_map(map) ->
