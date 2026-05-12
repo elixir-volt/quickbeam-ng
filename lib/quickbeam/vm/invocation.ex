@@ -90,6 +90,8 @@ defmodule QuickBEAM.VM.Invocation do
   def dispatch(fun, args, gas, ctx, this) do
     case fun do
       %QuickBEAM.VM.Function{} = bytecode_fun ->
+        reject_class_constructor_call!(bytecode_fun)
+
         Interpreter.invoke_function_fallback(
           bytecode_fun,
           args,
@@ -98,6 +100,8 @@ defmodule QuickBEAM.VM.Invocation do
         )
 
       {:closure, _, %QuickBEAM.VM.Function{} = inner} = closure ->
+        reject_class_constructor_call!(inner)
+
         Interpreter.invoke_closure_fallback(
           closure,
           args,
@@ -646,6 +650,15 @@ defmodule QuickBEAM.VM.Invocation do
   end
 
   defp class_constructor_source?(_), do: false
+
+  defp reject_class_constructor_call!(%QuickBEAM.VM.Function{} = fun) do
+    if class_constructor_source?(fun) do
+      throw(
+        {:js_throw,
+         Heap.make_error("Class constructor cannot be invoked without 'new'", "TypeError")}
+      )
+    end
+  end
 
   def unwrap_constructor_target({:closure, _, %QuickBEAM.VM.Function{} = fun}), do: fun
   def unwrap_constructor_target({:bound, _, inner, _, _}), do: unwrap_constructor_target(inner)
