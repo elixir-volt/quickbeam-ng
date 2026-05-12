@@ -65,15 +65,29 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   @max_array_length 4_294_967_295
   @max_materialized_array_length 100_000
 
-  def array(args, _) do
-    case args do
-      [length] when is_number(length) or length in [:nan, :infinity, :neg_infinity] ->
-        array_with_length(length)
+  def array(args, this) do
+    result =
+      case args do
+        [length] when is_number(length) or length in [:nan, :infinity, :neg_infinity] ->
+          array_with_length(length)
 
-      _ ->
-        Heap.wrap(args)
-    end
+        _ ->
+          Heap.wrap(args)
+      end
+
+    inherit_array_prototype(result, this)
   end
+
+  defp inherit_array_prototype({:obj, ref} = result, {:obj, _} = this) do
+    case QuickBEAM.VM.ObjectModel.Prototype.get(this) do
+      {:obj, _} = proto -> Heap.put_array_prop(ref, "__proto__", proto)
+      _ -> :ok
+    end
+
+    result
+  end
+
+  defp inherit_array_prototype(result, _this), do: result
 
   defp array_with_length(length_value) do
     length = Runtime.to_number(length_value)

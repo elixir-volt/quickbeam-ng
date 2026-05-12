@@ -37,6 +37,8 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
       {:obj, _} = obj -> obj
       %QuickBEAM.VM.Function{} = fun -> fun
       {:closure, _, %QuickBEAM.VM.Function{}} = closure -> closure
+      {:builtin, _, _} = builtin -> builtin
+      {:bound, _, _, _, _} = bound -> bound
       _ -> this_obj
     end
   end

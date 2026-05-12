@@ -330,8 +330,9 @@ defmodule QuickBEAM.VM.Invocation do
 
       ctor_proto =
         if raw_new_target != nil and raw_new_target != raw_ctor do
-          Heap.get_class_proto(raw_new_target) ||
-            normalize_constructor_prototype(Get.get(new_target, "prototype")) ||
+          normalize_constructor_prototype(Get.get(new_target, "prototype")) ||
+            realm_default_prototype(raw_ctor, raw_new_target) ||
+            Heap.get_class_proto(raw_new_target) ||
             Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
         else
           Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
@@ -386,7 +387,13 @@ defmodule QuickBEAM.VM.Invocation do
           construct_runtime(ctx, target, new_target, args)
         else
           result =
-            dispatch(construct_trap, [target, Heap.wrap_arguments(args), new_target], ctx.gas, ctx, handler)
+            dispatch(
+              construct_trap,
+              [target, Heap.wrap_arguments(args), new_target],
+              ctx.gas,
+              ctx,
+              handler
+            )
 
           case result do
             {:obj, _} ->
@@ -641,6 +648,7 @@ defmodule QuickBEAM.VM.Invocation do
 
   defp unwrap_new_target({:closure, _, %QuickBEAM.VM.Function{} = fun}), do: fun
   defp unwrap_new_target(%QuickBEAM.VM.Function{} = fun), do: fun
+  defp unwrap_new_target({:builtin, _, _} = builtin), do: builtin
   defp unwrap_new_target(_), do: nil
 
   defp with_ctx(ctx, fun) do
@@ -653,6 +661,12 @@ defmodule QuickBEAM.VM.Invocation do
       if previous, do: Heap.put_ctx(previous), else: Heap.put_ctx(nil)
     end
   end
+
+  defp realm_default_prototype({:builtin, "Array", _}, new_target),
+    do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :array)
+
+  defp realm_default_prototype(_ctor, new_target),
+    do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :object)
 
   defp normalize_constructor_prototype({:obj, _} = object_proto), do: object_proto
   defp normalize_constructor_prototype(_), do: nil

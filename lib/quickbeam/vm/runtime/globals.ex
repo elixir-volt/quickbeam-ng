@@ -22,6 +22,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     RegExp,
     Reflect,
     Symbol,
+    Test262Host,
     TypedArray
   }
 
@@ -85,6 +86,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
   defp bindings do
     %{
+      "$262" => Test262Host.object(),
       "Array" =>
         (
           ctor = register("Array", &Constructors.array/2, module: QuickBEAM.VM.Runtime.Array)

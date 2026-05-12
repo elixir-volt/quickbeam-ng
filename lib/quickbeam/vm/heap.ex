@@ -107,9 +107,18 @@ defmodule QuickBEAM.VM.Heap do
   @doc "Returns an object's prototype, falling back to the cached Array prototype for array values."
   def get_array_proto(ref) do
     case Store.get_obj_raw(ref) do
-      {:shape, _, _, _, proto} when proto != nil -> proto
-      map when is_map(map) -> Map.get(map, "__proto__")
-      _ -> Caches.get_array_proto()
+      {:shape, _, _, _, proto} when proto != nil ->
+        proto
+
+      map when is_map(map) ->
+        Map.get(map, "__proto__")
+
+      _ ->
+        case Store.get_array_prop(ref, "__proto__") do
+          nil -> Caches.get_array_proto()
+          :undefined -> Caches.get_array_proto()
+          proto -> proto
+        end
     end
   end
 
