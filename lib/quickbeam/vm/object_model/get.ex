@@ -705,6 +705,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
           nil ->
             get_default_object_prototype({:obj, ref}, key)
 
+          :null_proto ->
+            :undefined
+
           _ ->
             get_from_prototype(proto, key)
         end
@@ -756,6 +759,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
               else
                 get_from_prototype(proto, key)
               end
+
+            :null_proto ->
+              :undefined
 
             _ ->
               get_from_prototype(proto, key)
@@ -823,6 +829,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
           Map.has_key?(map, :__internal_proto__) ->
             get(Map.get(map, :__internal_proto__), key)
+
+          Map.get(map, proto()) == :null_proto ->
+            :undefined
 
           Map.has_key?(map, proto()) ->
             get(Map.get(map, proto()), key)

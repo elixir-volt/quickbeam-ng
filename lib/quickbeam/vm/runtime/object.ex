@@ -446,6 +446,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp create_with_properties(proto_value, rest) do
+    proto_value = if proto_value == nil, do: :null_proto, else: proto_value
     obj = Heap.wrap(%{proto() => proto_value})
 
     case rest do

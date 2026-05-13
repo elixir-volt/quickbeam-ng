@@ -59,6 +59,13 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   defp chain_contains?(_, _target_ref, _seen), do: false
 
   defp object_map_prototype(ref, map) do
+    case object_map_prototype_value(ref, map) do
+      :null_proto -> nil
+      proto -> proto
+    end
+  end
+
+  defp object_map_prototype_value(ref, map) do
     cond do
       Map.has_key?(map, :__internal_proto__) -> Map.get(map, :__internal_proto__)
       Heap.get_prop_desc(ref, proto()) -> Heap.get_object_prototype()
