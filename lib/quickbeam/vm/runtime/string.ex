@@ -82,6 +82,16 @@ defmodule QuickBEAM.VM.Runtime.String do
     :string.lowercase(s) |> IO.iodata_to_binary()
   end
 
+  proto "toLocaleLowerCase" do
+    s = coerce_string_this(this)
+    :string.lowercase(s) |> IO.iodata_to_binary()
+  end
+
+  proto "toLocaleUpperCase" do
+    s = coerce_string_this(this)
+    :string.uppercase(s) |> IO.iodata_to_binary()
+  end
+
   proto "repeat" do
     repeat(coerce_string_this(this), args)
   end
