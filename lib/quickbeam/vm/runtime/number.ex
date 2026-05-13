@@ -92,6 +92,10 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   # ── toString(radix) ──
 
+  defp to_string_with_radix(n, [:undefined | _])
+       when is_number(n) or n in [:nan, :infinity, :neg_infinity],
+       do: Runtime.stringify(n)
+
   defp to_string_with_radix(n, [radix | _])
        when is_number(n) or n in [:nan, :infinity, :neg_infinity] do
     r = to_integer_or_throw(radix)
