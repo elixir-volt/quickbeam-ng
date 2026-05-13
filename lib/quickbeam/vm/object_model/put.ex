@@ -213,6 +213,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           key == "__proto__" ->
             Heap.put_obj_raw(ref, {:shape, shape_id, offsets, vals, val})
 
+          wrapped_shape_string_virtual_readonly?(offsets, vals, key) ->
+            :ok
+
           not Map.has_key?(offsets, key) and proto_has_setter_property?(proto, key) ->
             set(proto, key, val, obj)
 
@@ -345,15 +348,19 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   defp put_length({:obj, ref}, val) do
     case Heap.get_obj_raw(ref) do
       {:shape, shape_id, offsets, vals, proto} ->
-        case Map.fetch(offsets, "length") do
-          {:ok, offset} ->
-            new_vals = Heap.Shapes.put_val(vals, offset, val)
-            Heap.put_obj_raw(ref, {:shape, shape_id, offsets, new_vals, proto})
+        if wrapped_shape_string_virtual_readonly?(offsets, vals, "length") do
+          :ok
+        else
+          case Map.fetch(offsets, "length") do
+            {:ok, offset} ->
+              new_vals = Heap.Shapes.put_val(vals, offset, val)
+              Heap.put_obj_raw(ref, {:shape, shape_id, offsets, new_vals, proto})
 
-          :error ->
-            {new_shape_id, new_offsets, offset} = Heap.Shapes.transition(shape_id, "length")
-            new_vals = Heap.Shapes.put_val(vals, offset, val)
-            Heap.put_obj_raw(ref, {:shape, new_shape_id, new_offsets, new_vals, proto})
+            :error ->
+              {new_shape_id, new_offsets, offset} = Heap.Shapes.transition(shape_id, "length")
+              new_vals = Heap.Shapes.put_val(vals, offset, val)
+              Heap.put_obj_raw(ref, {:shape, new_shape_id, new_offsets, new_vals, proto})
+          end
         end
 
       {:qb_arr, _} = array ->
@@ -370,6 +377,24 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
       _ ->
         :ok
+    end
+  end
+
+  defp wrapped_shape_string_virtual_readonly?(offsets, vals, "length") do
+    case Map.fetch(offsets, WrappedPrimitive.slot(:string)) do
+      {:ok, offset} when offset < tuple_size(vals) -> is_binary(elem(vals, offset))
+      _ -> false
+    end
+  end
+
+  defp wrapped_shape_string_virtual_readonly?(offsets, vals, key) do
+    with {:ok, offset} when offset < tuple_size(vals) <-
+           Map.fetch(offsets, WrappedPrimitive.slot(:string)),
+         string when is_binary(string) <- elem(vals, offset),
+         index when is_integer(index) <- Semantics.parse_array_index_key(key) do
+      index >= 0 and index < Get.string_length(string)
+    else
+      _ -> false
     end
   end
 
