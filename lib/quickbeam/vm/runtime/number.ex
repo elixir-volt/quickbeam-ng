@@ -278,6 +278,8 @@ defmodule QuickBEAM.VM.Runtime.Number do
     Runtime.stringify(n)
   end
 
+  defp to_exponential(n, [:undefined | _]) when is_number(n), do: default_exponential(n)
+
   defp to_exponential(n, [digits | _]) when is_number(n) do
     d = to_integer_or_throw(digits)
     if d < 0 or d > 100, do: JSThrow.range_error!("fractionDigits out of range")
@@ -286,7 +288,25 @@ defmodule QuickBEAM.VM.Runtime.Number do
     sign <> (:erlang.float_to_binary(f, [{:scientific, d}]) |> strip_exponent_zeros())
   end
 
+  defp to_exponential(n, _) when is_number(n), do: default_exponential(n)
   defp to_exponential(n, _), do: Runtime.stringify(n)
+
+  defp default_exponential(0), do: "0e+0"
+
+  defp default_exponential(n) do
+    sign = if n < 0, do: "-", else: ""
+    s = Runtime.stringify(abs(n * 1.0))
+
+    if String.contains?(s, "e") do
+      sign <> strip_exponent_zeros(s)
+    else
+      [int, frac] = (String.split(s, ".") ++ [""]) |> Enum.take(2)
+      [head | int_tail] = String.graphemes(int)
+      mantissa_tail = (Enum.join(int_tail) <> frac) |> String.trim_trailing("0")
+      mantissa = head <> if(mantissa_tail == "", do: "", else: "." <> mantissa_tail)
+      sign <> mantissa <> "e+" <> Integer.to_string(String.length(int) - 1)
+    end
+  end
 
   defp strip_exponent_zeros(s) do
     case String.split(s, "e") do
