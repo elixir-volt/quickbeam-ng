@@ -171,8 +171,25 @@ defmodule QuickBEAM.VM.Runtime.Globals do
              ~w(toString toFixed valueOf toExponential toPrecision toLocaleString)
            )
 
+           Heap.put_ctor_prop_desc(ctor, "prototype", %{
+             writable: false,
+             enumerable: false,
+             configurable: false
+           })
+
+           for name <-
+                 ~w(NaN POSITIVE_INFINITY NEGATIVE_INFINITY MAX_SAFE_INTEGER MIN_SAFE_INTEGER EPSILON MAX_VALUE MIN_VALUE) do
+             Heap.put_ctor_prop_desc(ctor, name, %{
+               writable: false,
+               enumerable: false,
+               configurable: false
+             })
+           end
+
            case Heap.get_ctor_statics(ctor)["prototype"] do
              {:obj, proto_ref} ->
+               Heap.put_obj_key(proto_ref, "__proto__", Heap.get_object_prototype())
+               Heap.put_obj_key(proto_ref, "__wrapped_number__", 0)
                QuickBEAM.VM.ObjectModel.Put.put({:obj, proto_ref}, "constructor", ctor)
 
                Heap.put_prop_desc(proto_ref, "constructor", %{

@@ -82,6 +82,15 @@ defmodule QuickBEAM.VM.Runtime.Number do
   static_val("MAX_VALUE", 1.7976931348623157e+308)
   static_val("MIN_VALUE", 5.0e-324)
 
+  def static_property_meta(name)
+      when name in ~w(NaN POSITIVE_INFINITY NEGATIVE_INFINITY MAX_SAFE_INTEGER MIN_SAFE_INTEGER EPSILON MAX_VALUE MIN_VALUE) do
+    QuickBEAM.VM.Builtin.meta(name,
+      writable: false,
+      enumerable: false,
+      configurable: false
+    )
+  end
+
   # ── toString(radix) ──
 
   defp to_string_with_radix(n, [radix | _]) when is_number(n) do
