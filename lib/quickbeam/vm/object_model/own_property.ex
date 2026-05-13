@@ -126,7 +126,28 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     present_array_property?(ref, key)
   end
 
+  defp present?(ref, %{typed_array() => true}, key) do
+    case typed_array_index_key(key) do
+      idx when is_integer(idx) ->
+        not TypedArray.out_of_bounds?({:obj, ref}) and idx < TypedArray.element_count({:obj, ref})
+
+      nil ->
+        present?(Heap.get_obj(ref, %{}), key)
+    end
+  end
+
   defp present?(_ref, data, key), do: present?(data, key)
+
+  defp typed_array_index_key(key) when is_integer(key) and key >= 0, do: key
+
+  defp typed_array_index_key(key) when is_binary(key) do
+    case Integer.parse(key) do
+      {idx, ""} when idx >= 0 -> idx
+      _ -> nil
+    end
+  end
+
+  defp typed_array_index_key(_), do: nil
 
   defp present_array_property?(ref, key) do
     case Integer.parse(to_string(key)) do
