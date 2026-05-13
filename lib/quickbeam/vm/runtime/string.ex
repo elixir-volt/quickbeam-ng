@@ -756,8 +756,11 @@ defmodule QuickBEAM.VM.Runtime.String do
 
       :none ->
         s = coerce_string_this(this)
-        _limit = split_limit(rest)
-        split(s, [separator | rest])
+        limit = split_limit(rest)
+
+        if separator == :undefined and limit == 0,
+          do: [],
+          else: split(s, [separator | rest])
     end
   end
 
