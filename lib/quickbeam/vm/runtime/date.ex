@@ -95,7 +95,7 @@ defmodule QuickBEAM.VM.Runtime.Date do
 
   @doc "Returns Date.prototype method names declared by this module."
   def proto_property_names do
-    ~w(getTime valueOf getFullYear getMonth getDate getHours getMinutes getSeconds getMilliseconds getUTCFullYear getUTCMonth getUTCDate getUTCDay getUTCHours getUTCMinutes getUTCSeconds getUTCMilliseconds getDay getTimezoneOffset setTime setFullYear setMonth setDate setHours setMinutes setSeconds setMilliseconds setUTCHours setUTCMinutes setUTCSeconds setUTCMilliseconds setUTCFullYear setUTCMonth setUTCDate toISOString toJSON toString toDateString toTimeString toUTCString toLocaleTimeString toLocaleDateString toLocaleString)
+    ~w(getTime valueOf getFullYear getMonth getDate getHours getMinutes getSeconds getMilliseconds getUTCFullYear getUTCMonth getUTCDate getUTCDay getUTCHours getUTCMinutes getUTCSeconds getUTCMilliseconds getDay getTimezoneOffset setTime setFullYear setMonth setDate setHours setMinutes setSeconds setMilliseconds setUTCHours setUTCMinutes setUTCSeconds setUTCMilliseconds setUTCFullYear setUTCMonth setUTCDate toISOString toJSON toString toDateString toTimeString toUTCString toLocaleTimeString toLocaleDateString toLocaleString toTemporalInstant)
   end
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
@@ -252,6 +252,7 @@ defmodule QuickBEAM.VM.Runtime.Date do
   proto("toLocaleTimeString", do: fmt_local(this, "%I:%M:%S %p"))
   proto("toLocaleDateString", do: fmt_local(this, "%m/%d/%Y"))
   proto("toLocaleString", do: fmt_local(this, "%m/%d/%Y, %I:%M:%S %p"))
+  proto("toTemporalInstant", do: to_temporal_instant(this))
 
   # ── Internal: ms ↔ DateTime ──
 
@@ -347,6 +348,21 @@ defmodule QuickBEAM.VM.Runtime.Date do
       end
     end
   end
+
+  defp to_temporal_instant({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{date_ms() => ms} when is_number(ms) ->
+        Heap.wrap(%{"epochNanoseconds" => {:bigint, trunc(ms) * 1_000_000}})
+
+      %{date_ms() => _} ->
+        JSThrow.range_error!("Invalid time value")
+
+      _ ->
+        JSThrow.type_error!("this is not a Date object")
+    end
+  end
+
+  defp to_temporal_instant(_this), do: JSThrow.type_error!("this is not a Date object")
 
   defp fmt_dt(this, fun) do
     case ms_to_dt(get_ms(this)) do
