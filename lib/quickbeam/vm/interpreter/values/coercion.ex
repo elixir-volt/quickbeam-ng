@@ -26,7 +26,7 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
 
   def to_number({:obj, _} = obj) do
     prim = to_primitive(obj)
-    if is_object(prim), do: :nan, else: to_number(prim)
+    if object_like?(prim), do: throw_object_to_primitive_error(), else: to_number(prim)
   end
 
   def to_number({:symbol, _}),
@@ -49,7 +49,7 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
 
   def to_number({:obj, _} = obj, hint) do
     prim = to_primitive(obj, hint)
-    if is_object(prim), do: :nan, else: to_number(prim)
+    if object_like?(prim), do: throw_object_to_primitive_error(), else: to_number(prim)
   end
 
   def to_number(val, _hint), do: to_number(val)
@@ -357,6 +357,10 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   defp function_like?(_), do: false
 
   defp object_like?(value), do: is_object(value) or function_like?(value)
+
+  defp throw_object_to_primitive_error do
+    throw({:js_throw, Heap.make_error("Cannot convert object to primitive value", "TypeError")})
+  end
 
   defp get_to_primitive(obj, method) do
     case Get.get(obj, method) do

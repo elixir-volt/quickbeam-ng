@@ -69,6 +69,10 @@ defmodule QuickBEAM.VM.Runtime do
   def to_int(:infinity), do: 0
   def to_int(:neg_infinity), do: 0
 
+  def to_int({:bigint, _}) do
+    throw({:js_throw, Heap.make_error("Cannot convert a BigInt value to a number", "TypeError")})
+  end
+
   def to_int(val) do
     n = to_number(val)
     if is_number(n), do: trunc(n), else: 0
