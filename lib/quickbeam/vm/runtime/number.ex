@@ -255,6 +255,14 @@ defmodule QuickBEAM.VM.Runtime.Number do
   defp to_fixed(:infinity, _), do: "Infinity"
   defp to_fixed(:neg_infinity, _), do: "-Infinity"
 
+  defp to_fixed(n, [digits | _]) when is_number(n) and abs(n) >= 1.0e21 do
+    d = to_integer_or_throw(digits)
+    if d < 0 or d > 100, do: JSThrow.range_error!("fractionDigits out of range")
+    Runtime.stringify(n)
+  end
+
+  defp to_fixed(n, _args) when is_number(n) and abs(n) >= 1.0e21, do: Runtime.stringify(n)
+
   defp to_fixed(n, [digits | _]) when is_number(n) do
     d = to_integer_or_throw(digits)
     if d < 0 or d > 100, do: JSThrow.range_error!("fractionDigits out of range")
