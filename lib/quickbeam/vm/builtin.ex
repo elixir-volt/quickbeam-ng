@@ -760,6 +760,7 @@ defmodule QuickBEAM.VM.Builtin do
 
   # ── Runtime dispatch ──
 
+  import QuickBEAM.VM.Heap.Keys, only: [proxy_target: 0]
   alias QuickBEAM.VM.{Heap, JSThrow}
 
   @doc "Dispatches a VM callable value to its underlying Elixir callback."
@@ -794,7 +795,13 @@ defmodule QuickBEAM.VM.Builtin do
 
   def callable?({:bound, _, _, _, _}), do: true
 
-  def callable?({:obj, _} = obj), do: obj == Heap.get_func_proto()
+  def callable?({:obj, ref} = obj) do
+    obj == Heap.get_func_proto() or
+      case Heap.get_obj(ref, %{}) do
+        %{proxy_target() => target} -> callable?(target)
+        _ -> false
+      end
+  end
 
   def callable?(f) when is_function(f), do: true
 

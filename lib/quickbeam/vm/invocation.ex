@@ -332,14 +332,17 @@ defmodule QuickBEAM.VM.Invocation do
       raw_ctor = unwrap_constructor_target(ctor)
       raw_new_target = unwrap_new_target(new_target)
 
+      new_target_proto = Get.get(new_target, "prototype")
+      reject_revoked_proxy_new_target!(new_target, new_target_proto)
+
       ctor_proto =
         if raw_new_target != nil and raw_new_target != raw_ctor do
-          normalize_constructor_prototype(Get.get(new_target, "prototype")) ||
+          normalize_constructor_prototype(new_target_proto) ||
             realm_default_prototype(raw_ctor, raw_new_target) ||
             Heap.get_class_proto(raw_new_target) ||
             Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
         else
-          normalize_constructor_prototype(Get.get(new_target, "prototype")) ||
+          normalize_constructor_prototype(new_target_proto) ||
             Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
         end
 
@@ -681,6 +684,20 @@ defmodule QuickBEAM.VM.Invocation do
       if previous, do: Heap.put_ctx(previous), else: Heap.put_ctx(nil)
     end
   end
+
+  defp reject_revoked_proxy_new_target!({:obj, ref}, proto) do
+    if normalize_constructor_prototype(proto) == nil do
+      case Heap.get_obj(ref, %{}) do
+        %{"__proxy_revoked__" => true, proxy_target() => _target} ->
+          QuickBEAM.VM.JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
+        _ ->
+          :ok
+      end
+    end
+  end
+
+  defp reject_revoked_proxy_new_target!(_new_target, _proto), do: :ok
 
   defp realm_default_prototype({:builtin, "Array", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :array)

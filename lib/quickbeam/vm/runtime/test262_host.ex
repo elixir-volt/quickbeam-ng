@@ -76,6 +76,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         finalization_registry_proto
       )
 
+    proxy_ctor = realm_proxy_constructor()
     error_bindings = Errors.bindings()
 
     global =
@@ -83,6 +84,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Object" => object_ctor,
         "Array" => array_ctor,
         "Function" => function_ctor,
+        "Proxy" => proxy_ctor,
         "Map" => map_ctor,
         "Set" => set_ctor,
         "WeakMap" => weak_map_ctor,
@@ -117,6 +119,34 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     cb = fn args, this -> callback.(args, this) end
     ctor = {:builtin, name, cb}
     ConstructorRegistry.put_prototype(ctor, proto)
+    ctor
+  end
+
+  defp realm_proxy_constructor do
+    ctor = realm_constructor("Proxy", &Constructors.proxy/2, nil)
+
+    Heap.put_ctor_static(
+      ctor,
+      "revocable",
+      {:builtin, "revocable",
+       fn [target, handler | _], _ ->
+         proxy = Constructors.proxy([target, handler], nil)
+
+         revoke_fn =
+           {:builtin, "revoke",
+            fn _, _ ->
+              case proxy do
+                {:obj, proxy_ref} -> Heap.put_obj_key(proxy_ref, "__proxy_revoked__", true)
+                _ -> :ok
+              end
+
+              :undefined
+            end}
+
+         Heap.wrap(%{"proxy" => proxy, "revoke" => revoke_fn})
+       end}
+    )
+
     ctor
   end
 
