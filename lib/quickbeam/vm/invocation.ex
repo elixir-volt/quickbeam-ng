@@ -367,7 +367,8 @@ defmodule QuickBEAM.VM.Invocation do
             end
 
           {:bound, _, _inner, orig_fun, bound_args} ->
-            construct_runtime(orig_fun, new_target, bound_args ++ args)
+            adjusted_new_target = if new_target == ctor, do: orig_fun, else: new_target
+            construct_runtime(orig_fun, adjusted_new_target, bound_args ++ args)
 
           {:builtin, _name, cb} when is_function(cb, 2) ->
             cb.(args, this_obj)

@@ -81,6 +81,11 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
 
       defp proxy_construct_result(_ctx, _ctor, _new_target, _args), do: :not_proxy_constructor
 
+      defp bound_new_target({:bound, _, _inner, target, _} = ctor, new_target),
+        do: if(new_target == ctor, do: target, else: new_target)
+
+      defp bound_new_target(_ctor, new_target), do: new_target
+
       defp constructor_target({:closure, _, %QuickBEAM.VM.Function{} = f}), do: f
       defp constructor_target(%QuickBEAM.VM.Function{} = f), do: f
       defp constructor_target({:bound, _, inner, _, _}), do: constructor_target(inner)
@@ -179,7 +184,12 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
               fresh_this
           end
 
-        ctor_ctx = Context.mark_dirty(%{ctx | this: this_obj, new_target: new_target})
+        ctor_ctx =
+          Context.mark_dirty(%{
+            ctx
+            | this: this_obj,
+              new_target: bound_new_target(ctor, new_target)
+          })
 
         result =
           case ctor do
