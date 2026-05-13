@@ -43,11 +43,15 @@ defmodule QuickBEAM.VM.Runtime.Number do
   defp unwrap_number({:obj, ref}) do
     case QuickBEAM.VM.Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:number) do
       {:ok, value} -> value
-      :error -> :nan
+      :error -> QuickBEAM.VM.JSThrow.type_error!("Number method called on incompatible receiver")
     end
   end
 
-  defp unwrap_number(value), do: value
+  defp unwrap_number(value) when is_number(value) or value in [:nan, :infinity, :neg_infinity],
+    do: value
+
+  defp unwrap_number(_),
+    do: QuickBEAM.VM.JSThrow.type_error!("Number method called on incompatible receiver")
 
   # ── Number static ──
 
