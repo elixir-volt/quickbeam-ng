@@ -273,7 +273,19 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp wrapped_string_property(string, key) when is_binary(string) do
     case PropertyKey.array_index(key) do
       {:ok, idx} -> JSString.utf16_code_unit_at(string, idx)
-      :error -> JSString.proto_property(key)
+      :error -> string_proto_property(key)
+    end
+  end
+
+  defp string_proto_property(key) do
+    case Runtime.global_class_proto("String") do
+      {:obj, ref} = proto ->
+        if Heap.get_prop_desc(ref, key) == :deleted,
+          do: get_default_object_prototype(proto, key),
+          else: JSString.proto_property(key)
+
+      _ ->
+        JSString.proto_property(key)
     end
   end
 
@@ -858,7 +870,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype(list, key) when is_list(list), do: array_proto_property(key)
 
   defp get_from_prototype(s, key) when is_binary(s),
-    do: primitive_or_class_proto(JSString.proto_property(key), key, "String")
+    do: primitive_or_class_proto(string_proto_property(key), key, "String")
 
   defp get_from_prototype(n, key) when is_number(n),
     do: primitive_or_class_proto(Number.proto_property(key), key, "Number")
