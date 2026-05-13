@@ -168,19 +168,22 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         string_length(string)
 
       %QuickBEAM.VM.Function{} = fun ->
-        fun.defined_arg_count
+        callable_length_of(fun, fun.defined_arg_count)
 
-      {:closure, _, %QuickBEAM.VM.Function{} = fun} ->
-        fun.defined_arg_count
+      {:closure, _, %QuickBEAM.VM.Function{} = fun} = closure ->
+        callable_length_of(closure, callable_length_of(fun, fun.defined_arg_count))
 
-      {:bound, len, _, _, _} ->
-        len
+      {:bound, len, _, _, _} = bound ->
+        callable_length_of(bound, len)
 
-      {:builtin, name, _} ->
-        case QuickBEAM.VM.Builtin.named_meta(name) do
-          %QuickBEAM.VM.Builtin.Meta{length: length} -> length
-          _ -> :undefined
-        end
+      {:builtin, name, _} = builtin ->
+        default_length =
+          case QuickBEAM.VM.Builtin.named_meta(name) do
+            %QuickBEAM.VM.Builtin.Meta{length: length} -> length
+            _ -> :undefined
+          end
+
+        callable_length_of(builtin, default_length)
 
       _ ->
         :undefined
@@ -188,6 +191,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   # ── Own property lookup ──
+
+  defp callable_length_of(callable, default) do
+    if Map.get(Heap.get_ctor_statics(callable), "length") == :deleted, do: 0, else: default
+  end
 
   defp virtual_array_length(ref) do
     case Heap.get_array_prop(ref, "length") do
@@ -837,11 +844,12 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{}} = c, key)
+  defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f} = c, key)
        when key in ["length", "name"] do
-    if Map.get(Heap.get_ctor_statics(c), key) == :deleted,
-      do: fallback_to_function_proto(:undefined, c, key),
-      else: Function.proto_property(c, key)
+    if Map.get(Heap.get_ctor_statics(c), key) == :deleted or
+         Map.get(Heap.get_ctor_statics(f), key) == :deleted,
+       do: fallback_to_function_proto(:undefined, c, key),
+       else: Function.proto_property(c, key)
   end
 
   defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f} = c, key) do
