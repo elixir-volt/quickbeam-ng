@@ -69,6 +69,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec({:regexp, bytecode, source, _ref}, args),
     do: exec({:regexp, bytecode, source}, args)
 
+  defp exec({:regexp, nil, source}, [s | _]) when is_binary(source) and is_binary(s),
+    do: literal_exec(s, source)
+
   defp exec({:regexp, bytecode, _source}, [s | _]) when is_binary(bytecode) and is_binary(s) do
     case nif_exec(bytecode, s, 0) do
       nil ->
@@ -102,6 +105,22 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp exec(_, _), do: nil
+
+  defp literal_exec(s, ""), do: exec_result([""], 0, s)
+
+  defp literal_exec(s, source) do
+    case :binary.match(s, source) do
+      {index, _length} -> exec_result([source], index, s)
+      :nomatch -> nil
+    end
+  end
+
+  defp exec_result(strings, index, input) do
+    ref = make_ref()
+    Heap.put_obj(ref, strings)
+    Heap.put_regexp_result(ref, %{"index" => index, "input" => input, "groups" => :undefined})
+    {:obj, ref}
+  end
 
   defp regexp_match(regexp, [string | _]) do
     exec(regexp, [QuickBEAM.VM.Interpreter.Values.stringify(string)])

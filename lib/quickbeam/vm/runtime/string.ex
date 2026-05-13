@@ -791,9 +791,19 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp replace_all(s, _), do: s
 
+  defp match(s, []), do: literal_match_result(s, "")
+
+  defp match(s, [{:regexp, nil, source, _ref} | _]) when is_binary(s) and is_binary(source) do
+    literal_match_result(s, source)
+  end
+
   defp match(s, [{:regexp, nil, source} | _]) when is_binary(s) and is_binary(source) do
     literal_match_result(s, source)
   end
+
+  defp match(s, [{:regexp, bytecode, source, _ref} | rest])
+       when is_binary(s) and is_binary(bytecode),
+       do: match(s, [{:regexp, bytecode, source} | rest])
 
   defp match(s, [{:regexp, bytecode, _source} = re | _])
        when is_binary(s) and is_binary(bytecode) do
@@ -825,7 +835,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp match(s, [pattern | _]) when is_binary(s) do
-    pattern = stringify_search_string(pattern)
+    pattern = if pattern == :undefined, do: "", else: stringify_search_string(pattern)
 
     literal_match_result(s, pattern)
   end
