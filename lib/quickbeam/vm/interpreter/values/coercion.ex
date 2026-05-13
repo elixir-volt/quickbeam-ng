@@ -62,9 +62,9 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   def parse_numeric("0O" <> rest), do: parse_int_or_nan(rest, 8)
   def parse_numeric("0b" <> rest), do: parse_int_or_nan(rest, 2)
   def parse_numeric("0B" <> rest), do: parse_int_or_nan(rest, 2)
-  def parse_numeric("Infinity" <> _), do: :infinity
-  def parse_numeric("+Infinity" <> _), do: :infinity
-  def parse_numeric("-Infinity" <> _), do: :neg_infinity
+  def parse_numeric("Infinity"), do: :infinity
+  def parse_numeric("+Infinity"), do: :infinity
+  def parse_numeric("-Infinity"), do: :neg_infinity
 
   def parse_numeric(s) do
     case Integer.parse(s) do
@@ -72,11 +72,25 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
         i
 
       _ ->
-        case Float.parse(s) do
-          {f, ""} -> f
-          _ -> :nan
-        end
+        parse_decimal_numeric(s)
     end
+  end
+
+  defp parse_decimal_numeric(s) do
+    if Regex.match?(~r/^[+-]?(?:(?:\d+\.\d*)|(?:\.\d+)|(?:\d+))(?:[eE][+-]?\d+)?$/, s) do
+      case Float.parse(normalize_decimal_numeric(s)) do
+        {f, ""} -> f
+        _ -> :nan
+      end
+    else
+      :nan
+    end
+  end
+
+  defp normalize_decimal_numeric(s) do
+    s
+    |> String.replace(~r/^([+-]?)\./, "\\g{1}0.")
+    |> String.replace(~r/\.(?=[eE])/, ".0")
   end
 
   @doc "Parses an integer in a radix and returns `:nan` on invalid input."
