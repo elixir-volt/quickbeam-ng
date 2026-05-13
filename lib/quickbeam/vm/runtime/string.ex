@@ -266,12 +266,12 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp string_at(s, [idx | _]) when is_binary(s) do
     i = Runtime.to_int(idx)
-    len = String.length(s)
+    len = Get.string_length(s)
     i = if i < 0, do: len + i, else: i
-    if i >= 0 and i < len, do: String.at(s, i) || :undefined, else: :undefined
+    utf16_code_unit_at(s, i)
   end
 
-  defp string_at(s, _) when is_binary(s), do: String.at(s, 0) || :undefined
+  defp string_at(s, _) when is_binary(s), do: utf16_code_unit_at(s, 0)
 
   defp coerce_string_this(nil),
     do: throw({:js_throw, Heap.make_error("Cannot read properties of null", "TypeError")})
