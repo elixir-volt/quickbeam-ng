@@ -237,7 +237,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp wrapped_shape_proto_property(offsets, vals, key) do
     cond do
       Map.has_key?(offsets, WrappedPrimitive.slot(:number)) ->
-        Number.proto_property(key)
+        number_proto_property(key)
 
       Map.has_key?(offsets, WrappedPrimitive.slot(:string)) ->
         offset = Map.fetch!(offsets, WrappedPrimitive.slot(:string))
@@ -248,6 +248,18 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
       true ->
         :undefined
+    end
+  end
+
+  defp number_proto_property(key) do
+    case Runtime.global_class_proto("Number") do
+      {:obj, ref} = proto ->
+        if Heap.get_prop_desc(ref, key) == :deleted,
+          do: get_default_object_prototype(proto, key),
+          else: Number.proto_property(key)
+
+      _ ->
+        Number.proto_property(key)
     end
   end
 
@@ -272,7 +284,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         get(value, key)
 
       :number ->
-        Number.proto_property(key)
+        number_proto_property(key)
 
       :string ->
         {:ok, value} = WrappedPrimitive.value(map, :string)
