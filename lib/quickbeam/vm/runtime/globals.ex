@@ -4,6 +4,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
   import QuickBEAM.VM.Builtin, only: [object: 1]
 
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
   alias QuickBEAM.VM.Runtime
 
   alias QuickBEAM.VM.Runtime.WebAPIs
@@ -141,6 +142,12 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
            case Heap.get_ctor_statics(ctor)["prototype"] do
              {:obj, proto_ref} ->
+               Heap.put_obj(
+                 proto_ref,
+                 Heap.get_obj(proto_ref, %{})
+                 |> Map.put_new(WrappedPrimitive.slot(:string), "")
+               )
+
                QuickBEAM.VM.ObjectModel.Put.put({:obj, proto_ref}, "constructor", ctor)
 
                Heap.put_prop_desc(proto_ref, "constructor", %{
@@ -149,9 +156,59 @@ defmodule QuickBEAM.VM.Runtime.Globals do
                  configurable: true
                })
 
+               case Heap.get_object_prototype() do
+                 {:obj, _} = object_proto ->
+                   Heap.put_obj(
+                     proto_ref,
+                     Map.put(Heap.get_obj(proto_ref, %{}), "__proto__", object_proto)
+                   )
+
+                 _ ->
+                   :ok
+               end
+
+               sym_iterator = {:symbol, "Symbol.iterator"}
+
+               iterator =
+                 case JSString.proto_property(sym_iterator) do
+                   {:builtin, _name, callback} -> {:builtin, "[Symbol.iterator]", callback}
+                   other -> other
+                 end
+
+               Heap.put_obj_key(proto_ref, sym_iterator, iterator)
+
+               Heap.put_prop_desc(proto_ref, sym_iterator, %{
+                 writable: true,
+                 enumerable: false,
+                 configurable: true
+               })
+
+               Heap.put_ctor_static(iterator, "length", 0)
+               Heap.put_ctor_static(iterator, "name", "[Symbol.iterator]")
+
+               Heap.put_ctor_prop_desc(iterator, "length", %{
+                 writable: false,
+                 enumerable: false,
+                 configurable: true
+               })
+
+               Heap.put_ctor_prop_desc(iterator, "name", %{
+                 writable: false,
+                 enumerable: false,
+                 configurable: true
+               })
+
              _ ->
                :ok
            end
+
+           Heap.put_ctor_static(ctor, "length", 1)
+
+           Heap.put_ctor_prop_desc(ctor, "length", %{
+             writable: false,
+             enumerable: false,
+             configurable: true
+           })
 
            Heap.put_prop_desc(ctor, "prototype", %{
              writable: false,

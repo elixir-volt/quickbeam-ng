@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyKey, Semantics}
+  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyKey, Semantics, WrappedPrimitive}
 
   @compile {:inline, has_property: 2, get_element: 2, set_list_at: 3}
 
@@ -360,8 +360,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         resize_array(ref, data, array_length_value!(val))
 
       map when is_map(map) ->
-        # Plain object: store "length" as a regular property
-        Heap.put_obj_key(ref, map, "length", val)
+        case WrappedPrimitive.value(map, :string) do
+          {:ok, string} when is_binary(string) -> :ok
+          _ -> Heap.put_obj_key(ref, map, "length", val)
+        end
 
       _ ->
         :ok

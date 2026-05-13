@@ -36,7 +36,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     raw_key = Semantics.parse_array_index_key(key)
 
     Map.has_key?(map, key) or (raw_key != :error and Map.has_key?(map, raw_key)) or
-      wrapped_string_index_present?(map, key)
+      wrapped_string_length_present?(map, key) or wrapped_string_index_present?(map, key)
   end
 
   def present?(list, key) when is_list(list) do
@@ -226,6 +226,12 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
     Enum.sort_by(indexes, &array_index_value/1) ++ strings ++ symbols
   end
+
+  defp wrapped_string_length_present?(map, "length") when is_map(map) do
+    match?({:ok, string} when is_binary(string), WrappedPrimitive.value(map, :string))
+  end
+
+  defp wrapped_string_length_present?(_map, _key), do: false
 
   defp wrapped_string_index_present?(map, key) when is_map(map) do
     with {:ok, string} when is_binary(string) <- WrappedPrimitive.value(map, :string),
