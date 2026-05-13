@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime.Array
+  alias QuickBEAM.VM.Runtime.Errors
   alias QuickBEAM.VM.Runtime.FinalizationRegistry, as: JSFinalizationRegistry
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
@@ -75,6 +76,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         finalization_registry_proto
       )
 
+    error_bindings = Errors.bindings()
+
     global =
       Heap.wrap(%{
         "Object" => object_ctor,
@@ -85,7 +88,12 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "WeakMap" => weak_map_ctor,
         "WeakSet" => weak_set_ctor,
         "WeakRef" => weak_ref_ctor,
-        "FinalizationRegistry" => finalization_registry_ctor
+        "FinalizationRegistry" => finalization_registry_ctor,
+        "Error" => Map.fetch!(error_bindings, "Error"),
+        "TypeError" => Map.fetch!(error_bindings, "TypeError"),
+        "RangeError" => Map.fetch!(error_bindings, "RangeError"),
+        "SyntaxError" => Map.fetch!(error_bindings, "SyntaxError"),
+        "ReferenceError" => Map.fetch!(error_bindings, "ReferenceError")
       })
 
     Heap.wrap(%{"global" => global})
