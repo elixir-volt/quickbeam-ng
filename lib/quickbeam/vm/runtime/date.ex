@@ -817,7 +817,16 @@ defmodule QuickBEAM.VM.Runtime.Date do
         time_tz = String.trim(Enum.join(rest, " "))
 
         result =
-          if byte_size(a) == 4, do: parse_ymd(a, b, c), else: parse_mdy(a, b, c)
+          cond do
+            byte_size(a) == 4 ->
+              parse_ymd(a, b, c)
+
+            Map.has_key?(@month_names, String.downcase(String.slice(a, 0..2))) ->
+              parse_mdy(a, b, c)
+
+            true ->
+              parse_dmy(a, b, c)
+          end
 
         case result do
           {:ok, year, month, day} ->
@@ -863,6 +872,17 @@ defmodule QuickBEAM.VM.Runtime.Date do
     with month when is_integer(month) <-
            Map.get(@month_names, String.downcase(String.slice(month_str, 0..2))),
          {day, ""} <- Integer.parse(day_str),
+         {year, ""} <- Integer.parse(year_str) do
+      {:ok, year, month, day}
+    else
+      _ -> :miss
+    end
+  end
+
+  defp parse_dmy(day_str, month_str, year_str) do
+    with {day, ""} <- Integer.parse(day_str),
+         month when is_integer(month) <-
+           Map.get(@month_names, String.downcase(String.slice(month_str, 0..2))),
          {year, ""} <- Integer.parse(year_str) do
       {:ok, year, month, day}
     else
