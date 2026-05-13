@@ -65,6 +65,7 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   def parse_numeric("Infinity"), do: :infinity
   def parse_numeric("+Infinity"), do: :infinity
   def parse_numeric("-Infinity"), do: :neg_infinity
+  def parse_numeric("-0"), do: -0.0
 
   def parse_numeric(s) do
     case Integer.parse(s) do
