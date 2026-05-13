@@ -1029,29 +1029,55 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   # ── Predicates ──
 
-  defp find({:obj, ref}, args), do: find(Heap.obj_to_list(ref), args)
+  defp find(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+  defp find(:undefined, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+  defp find(value, args), do: find_array_like(find_receiver(value), args, :value)
 
-  defp find({:qb_arr, arr}, args), do: find(:array.to_list(arr), args)
+  defp find_index(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp find(list, [fun | _]) when is_list(list) do
-    Enum.find_value(Enum.with_index(list), :undefined, fn {val, idx} ->
-      if Runtime.truthy?(Runtime.call_callback(fun, [val, idx, list])), do: val
+  defp find_index(:undefined, _),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp find_index(value, args), do: find_array_like(find_receiver(value), args, :index)
+
+  defp find_receiver(value) when is_boolean(value) or is_number(value) or is_binary(value),
+    do: primitive_object(value)
+
+  defp find_receiver({:qb_arr, arr}), do: :array.to_list(arr)
+  defp find_receiver(value), do: value
+
+  defp find_array_like(this, [fun | rest], result_kind) do
+    len = array_like_length(this)
+
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("predicate must be callable")
+    end
+
+    this_arg = filter_this_arg(rest)
+
+    Enum.find_value(0..max(len - 1, -1), default_find_result(result_kind), fn idx ->
+      value = find_value_at(this, idx)
+
+      if Runtime.truthy?(
+           QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
+         ) do
+        find_result(result_kind, value, idx)
+      end
     end)
   end
 
-  defp find(_, _), do: :undefined
-
-  defp find_index({:obj, ref}, args), do: find_index(Heap.obj_to_list(ref), args)
-
-  defp find_index({:qb_arr, arr}, args), do: find_index(:array.to_list(arr), args)
-
-  defp find_index(list, [fun | _]) when is_list(list) do
-    Enum.find_value(Enum.with_index(list), -1, fn {val, idx} ->
-      if Runtime.truthy?(Runtime.call_callback(fun, [val, idx, list])), do: idx
-    end)
+  defp find_array_like(this, _args, _result_kind) do
+    _len = array_like_length(this)
+    JSThrow.type_error!("predicate must be callable")
   end
 
-  defp find_index(_, _), do: -1
+  defp find_value_at(list, idx) when is_list(list), do: Enum.at(list, idx, :undefined)
+  defp find_value_at(value, idx), do: Get.get(value, Integer.to_string(idx))
+
+  defp default_find_result(:value), do: :undefined
+  defp default_find_result(:index), do: -1
+  defp find_result(:value, value, _idx), do: value
+  defp find_result(:index, _value, idx), do: idx
 
   defp every(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
   defp every(:undefined, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
