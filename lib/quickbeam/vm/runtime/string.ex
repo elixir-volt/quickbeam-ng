@@ -456,8 +456,18 @@ defmodule QuickBEAM.VM.Runtime.String do
         {:js_throw, Heap.make_error("Cannot convert a Symbol value to a string", "TypeError")}
       )
 
-  defp stringify_search_string({:obj, _} = value),
-    do: value |> Coercion.to_primitive("string") |> stringify_search_string()
+  defp stringify_search_string({:obj, ref} = value) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) ->
+        case WrappedPrimitive.value(map, :symbol) do
+          {:ok, symbol} -> stringify_search_string(symbol)
+          _ -> value |> Coercion.to_primitive("string") |> stringify_search_string()
+        end
+
+      _ ->
+        value |> Coercion.to_primitive("string") |> stringify_search_string()
+    end
+  end
 
   defp stringify_search_string(value) when is_binary(value), do: value
   defp stringify_search_string(value), do: Runtime.stringify(value)
