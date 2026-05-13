@@ -10,7 +10,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
   # ── Number statics ──
 
   static "isSafeInteger", length: 1 do
-    val = hd(args)
+    val = arg(args, 0, :undefined)
     is_number(val) and val == trunc(val * 1.0) and abs(val) <= 9_007_199_254_740_991
   end
 
@@ -52,15 +52,16 @@ defmodule QuickBEAM.VM.Runtime.Number do
   # ── Number static ──
 
   static "isNaN" do
-    hd(args) == :nan
+    arg(args, 0, :undefined) == :nan
   end
 
   static "isFinite" do
-    is_number(hd(args))
+    is_number(arg(args, 0, :undefined))
   end
 
   static "isInteger" do
-    is_integer(hd(args)) or (is_float(hd(args)) and hd(args) == Float.floor(hd(args)))
+    val = arg(args, 0, :undefined)
+    is_integer(val) or (is_float(val) and val == Float.floor(val))
   end
 
   static "parseInt" do
