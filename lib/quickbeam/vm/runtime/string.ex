@@ -484,6 +484,41 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp to_integer_or_infinity(:neg_infinity), do: :neg_infinity
   defp to_integer_or_infinity(value), do: Runtime.to_int(value)
 
+  defp slice_index(value, len) do
+    case to_integer_or_infinity(value) do
+      :infinity -> len
+      :neg_infinity -> 0
+      index when index < 0 -> max(len + index, 0)
+      index -> min(index, len)
+    end
+  end
+
+  defp substring_index(value, len) do
+    case to_integer_or_infinity(value) do
+      :infinity -> len
+      :neg_infinity -> 0
+      index -> index |> max(0) |> min(len)
+    end
+  end
+
+  defp substr_start_index(value, len) do
+    case to_integer_or_infinity(value) do
+      :infinity -> len
+      :neg_infinity -> 0
+      index when index < 0 -> max(len + index, 0)
+      index -> min(index, len)
+    end
+  end
+
+  defp utf16_slice(_string, _start, count) when count <= 0, do: ""
+
+  defp utf16_slice(string, start, count) do
+    string
+    |> utf16_code_units()
+    |> Enum.slice(start, count)
+    |> IO.iodata_to_binary()
+  end
+
   defp string_position(:infinity, len), do: len
   defp string_position(:neg_infinity, _len), do: 0
 
@@ -554,33 +589,46 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp slice(s, args) when is_binary(s) do
-    len = String.length(s)
+    len = Get.string_length(s)
 
     {start_idx, end_idx} =
       case args do
-        [st, en] -> {Runtime.normalize_index(st, len), Runtime.normalize_index(en, len)}
-        [st] -> {Runtime.normalize_index(st, len), len}
+        [st, en] -> {slice_index(st, len), slice_index(en, len)}
+        [st] -> {slice_index(st, len), len}
         [] -> {0, len}
       end
 
-    if start_idx < end_idx, do: String.slice(s, start_idx, end_idx - start_idx), else: ""
+    utf16_slice(s, start_idx, end_idx - start_idx)
   end
 
   defp substring(s, [start, end_ | _]) when is_binary(s) do
-    {a, b} = {Runtime.to_int(start), Runtime.to_int(end_)}
-    {s2, e2} = if a > b, do: {b, a}, else: {a, b}
-    String.slice(s, max(s2, 0), max(e2 - s2, 0))
+    len = Get.string_length(s)
+    a = substring_index(start, len)
+    b = substring_index(end_, len)
+    {start_idx, end_idx} = if a > b, do: {b, a}, else: {a, b}
+    utf16_slice(s, start_idx, end_idx - start_idx)
   end
 
-  defp substring(s, [start | _]) when is_binary(s),
-    do: String.slice(s, max(Runtime.to_int(start), 0)..-1//1)
+  defp substring(s, [start | _]) when is_binary(s) do
+    len = Get.string_length(s)
+    start_idx = substring_index(start, len)
+    utf16_slice(s, start_idx, len - start_idx)
+  end
 
   defp substring(s, _), do: s
 
-  defp substr(s, [start, len | _]) when is_binary(s),
-    do: String.slice(s, Runtime.to_int(start), Runtime.to_int(len))
+  defp substr(s, [start, len | _]) when is_binary(s) do
+    string_len = Get.string_length(s)
+    start_idx = substr_start_index(start, string_len)
+    utf16_slice(s, start_idx, max(Runtime.to_int(len), 0))
+  end
 
-  defp substr(s, [start | _]) when is_binary(s), do: String.slice(s, Runtime.to_int(start)..-1//1)
+  defp substr(s, [start | _]) when is_binary(s) do
+    len = Get.string_length(s)
+    start_idx = substr_start_index(start, len)
+    utf16_slice(s, start_idx, len - start_idx)
+  end
+
   defp substr(s, _), do: s
 
   defp split(s, [{:regexp, bytecode, _source} | rest])
