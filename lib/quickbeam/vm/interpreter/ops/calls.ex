@@ -224,7 +224,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
             {:builtin, name, cb} when is_function(cb, 2) ->
               obj = cb.(rev_args, this_obj)
 
-              if name in ~w(Number String Boolean) do
+              if name in ~w(String Boolean) do
                 existing = Heap.get_obj(this_ref, %{})
                 val_fn = {:builtin, "valueOf", fn _, _ -> obj end}
 
