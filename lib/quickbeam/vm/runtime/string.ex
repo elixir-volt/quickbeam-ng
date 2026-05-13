@@ -112,12 +112,14 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   proto "localeCompare" do
     s = coerce_string_this(this)
-    other = arg(args, 0, "")
+    other = arg(args, 0, :undefined)
     other_str = if is_binary(other), do: other, else: Runtime.stringify(other)
+    comparable = locale_compare_key(s)
+    other_comparable = locale_compare_key(other_str)
 
     cond do
-      s < other_str -> -1
-      s > other_str -> 1
+      comparable < other_comparable -> -1
+      comparable > other_comparable -> 1
       true -> 0
     end
   end
@@ -264,6 +266,13 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp unwrap_string(value), do: Runtime.stringify(value)
+
+  defp locale_compare_key(value) when is_binary(value) do
+    case :unicode.characters_to_nfc_binary(value) do
+      normalized when is_binary(normalized) -> normalized
+      _ -> value
+    end
+  end
 
   defp string_at(s, [idx | _]) when is_binary(s) do
     i = Runtime.to_int(idx)
