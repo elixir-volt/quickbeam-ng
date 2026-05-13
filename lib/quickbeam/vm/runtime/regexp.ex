@@ -17,6 +17,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     regexp_to_string(this)
   end
 
+  def proto_property({:symbol, "Symbol.match"}) do
+    {:builtin, "[Symbol.match]", fn args, this -> regexp_match(this, args) end}
+  end
+
   def proto_accessor("source"),
     do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
 
@@ -98,6 +102,12 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp exec(_, _), do: nil
+
+  defp regexp_match(regexp, [string | _]) do
+    exec(regexp, [QuickBEAM.VM.Interpreter.Values.stringify(string)])
+  end
+
+  defp regexp_match(regexp, []), do: exec(regexp, [""])
 
   defp regexp_to_string({:regexp, bytecode, source, _ref}) do
     flags = Get.regexp_flags(bytecode)

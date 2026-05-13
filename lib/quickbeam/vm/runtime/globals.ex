@@ -214,6 +214,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
            ctor = register("RegExp", &Constructors.regexp/2, module: RegExp, auto_proto: true)
            install_prototype_methods(ctor, RegExp, ~w(exec test toString))
            install_regexp_prototype_accessors(ctor)
+           install_regexp_symbol_properties(ctor)
            ctor
          end).(),
       "Date" =>
@@ -632,6 +633,33 @@ defmodule QuickBEAM.VM.Runtime.Globals do
           Heap.put_obj_key(proto_ref, name, RegExp.proto_accessor(name))
           Heap.put_prop_desc(proto_ref, name, %{enumerable: false, configurable: true})
         end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp install_regexp_symbol_properties(ctor) do
+    sym_species = {:symbol, "Symbol.species"}
+    sym_match = {:symbol, "Symbol.match"}
+
+    Heap.put_ctor_static(
+      ctor,
+      sym_species,
+      {:accessor, {:builtin, "get [Symbol.species]", fn _args, this -> this end}, nil}
+    )
+
+    Heap.put_ctor_prop_desc(ctor, sym_species, %{enumerable: false, configurable: true})
+
+    case Heap.get_ctor_statics(ctor)["prototype"] do
+      {:obj, proto_ref} ->
+        Heap.put_obj_key(proto_ref, sym_match, RegExp.proto_property(sym_match))
+
+        Heap.put_prop_desc(proto_ref, sym_match, %{
+          writable: true,
+          enumerable: false,
+          configurable: true
+        })
 
       _ ->
         :ok
