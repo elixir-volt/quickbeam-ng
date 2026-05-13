@@ -10,11 +10,12 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     Get,
     PropertyDescriptor,
     PropertyKey,
+    Semantics,
     WrappedPrimitive
   }
 
-  alias QuickBEAM.VM.Runtime.TypedArray
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
+  alias QuickBEAM.VM.Runtime.TypedArray
 
   def present?({:obj, ref}, key) do
     if key == proto() and Heap.get_prop_desc(ref, key) == nil do
@@ -27,7 +28,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   def present?(%QuickBEAM.VM.Function{} = target, key), do: callable_present?(target, key)
 
   def present?(map, key) when is_map(map) do
-    raw_key = parse_array_index_key(key)
+    raw_key = Semantics.parse_array_index_key(key)
 
     Map.has_key?(map, key) or (raw_key != :error and Map.has_key?(map, raw_key)) or
       wrapped_string_index_present?(map, key)
@@ -223,14 +224,12 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp wrapped_string_index_present?(map, key) when is_map(map) do
     with {:ok, string} when is_binary(string) <- WrappedPrimitive.value(map, :string),
-         idx when is_integer(idx) <- parse_array_index_key(key) do
+         idx when is_integer(idx) <- Semantics.parse_array_index_key(key) do
       idx < Get.string_length(string)
     else
       _ -> false
     end
   end
-
-  defp wrapped_string_index_present?(_map, _key), do: false
 
   defp wrapped_string_index_keys(map) when is_map(map) do
     case WrappedPrimitive.value(map, :string) do
@@ -238,8 +237,6 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
       _ -> []
     end
   end
-
-  defp wrapped_string_index_keys(_map), do: []
 
   defp array_index_key?(key), do: match?({:ok, _}, PropertyKey.array_index(key))
 
@@ -398,7 +395,6 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   defp callable_name(%QuickBEAM.VM.Function{name: n}) when is_binary(n), do: n
   defp callable_name({:closure, _, %QuickBEAM.VM.Function{name: n}}) when is_binary(n), do: n
   defp callable_name({:bound, _, {:builtin, n, _}, _, _}), do: n
-  defp callable_name({:builtin, n, _}) when is_binary(n), do: n
   defp callable_name(_), do: ""
 
   defp callable_prop_desc(target, prop_key) do
@@ -487,8 +483,6 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
       _ -> nil
     end
   end
-
-  defp wrapped_string_index_descriptor(_data, _prop_name), do: nil
 
   defp prototype_method_descriptor(%{"constructor" => {:builtin, "Date", _}}, prop_name) do
     case JSDate.proto_property(prop_name) do
@@ -655,13 +649,4 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     |> Map.keys()
     |> Enum.reject(&(&1 == "length" or descriptor_internal_key?(&1)))
   end
-
-  defp parse_array_index_key(key) when is_binary(key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> idx
-      _ -> :error
-    end
-  end
-
-  defp parse_array_index_key(_), do: :error
 end

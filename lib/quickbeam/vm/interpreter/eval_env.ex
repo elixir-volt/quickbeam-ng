@@ -1,8 +1,8 @@
 defmodule QuickBEAM.VM.Interpreter.EvalEnv do
   @moduledoc "Eval-time environment utilities: local name resolution, class binding seeding, and `this` context helpers."
 
-  alias QuickBEAM.VM.{Names}
   alias QuickBEAM.VM.Interpreter.{Closures, Context, Frame}
+  alias QuickBEAM.VM.Names
 
   require Frame
 

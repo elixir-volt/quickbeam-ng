@@ -1079,11 +1079,7 @@ defmodule QuickBEAM.VM.Compiler.Analysis.Types do
        when is_tuple(instructions),
        do: {:instructions, :erlang.phash2(instructions)}
 
-  defp function_instructions(%QuickBEAM.VM.Function{instructions: instructions})
-       when is_tuple(instructions),
-       do: {:ok, Tuple.to_list(instructions)}
-
-  defp function_instructions(%QuickBEAM.VM.Function{}), do: {:error, :missing_instructions}
+  defp function_instructions(fun), do: QuickBEAM.VM.Compiler.FunctionInfo.instructions(fun)
 
   defp initially_initialized?(fun, idx) when idx < fun.arg_count, do: true
 

@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyKey}
+  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyKey, Semantics}
 
   @compile {:inline, has_property: 2, get_element: 2, set_list_at: 3}
 
@@ -664,9 +664,6 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           :error -> put_array_named_property(obj, ref, k, val)
         end
 
-      k when is_integer(k) and k >= 0 ->
-        put_element({:obj, ref}, k, val)
-
       k when is_symbol(k) ->
         put_array_named_property(obj, ref, k, val)
 
@@ -733,14 +730,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end)
   end
 
-  defp put_property_preserving_order(map, key, value) do
-    if not Map.has_key?(map, key) and (is_binary(key) or is_integer(key)) do
-      order = Map.get(map, key_order(), [])
-      Map.put(Map.put(map, key, value), key_order(), [key | order])
-    else
-      Map.put(map, key, value)
-    end
-  end
+  defp put_property_preserving_order(map, key, value),
+    do: QuickBEAM.VM.Heap.Store.put_property_preserving_order(map, key, value)
 
   defp invoke_setter(fun, val, this_obj) do
     Process.put(:qb_setter_invoked, true)
@@ -1305,16 +1296,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   defp restricted_function_property?(_), do: false
 
   defp reject_failed_write! do
-    if strict_mode?(), do: JSThrow.type_error!("Cannot assign to read only property")
+    if Semantics.strict_mode?(), do: JSThrow.type_error!("Cannot assign to read only property")
     :ok
-  end
-
-  defp strict_mode? do
-    case Heap.get_ctx() do
-      %{current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}} -> true
-      %{current_func: %QuickBEAM.VM.Function{is_strict_mode: true}} -> true
-      _ -> false
-    end
   end
 
   defp validate_proxy_set_invariant({:obj, target_ref} = target, key, val, trap_result) do

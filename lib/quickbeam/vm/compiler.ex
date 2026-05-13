@@ -3,8 +3,9 @@ defmodule QuickBEAM.VM.Compiler do
 
   import QuickBEAM.VM.Heap.Keys, only: [promise_state: 0, promise_value: 0]
 
-  alias QuickBEAM.VM.{Heap, PromiseState}
   alias QuickBEAM.VM.Compiler.{Forms, Lowering, Optimizer, Runner}
+  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.PromiseState
 
   @type compiled_fun :: {module(), atom()}
   @type beam_file :: {:beam_file, module(), list(), list(), list(), list()}
@@ -151,11 +152,7 @@ defmodule QuickBEAM.VM.Compiler do
 
   defp reject_mapped_arguments(_fun), do: :ok
 
-  defp instructions(%QuickBEAM.VM.Function{instructions: instructions})
-       when is_tuple(instructions),
-       do: {:ok, Tuple.to_list(instructions)}
-
-  defp instructions(%QuickBEAM.VM.Function{}), do: {:error, :missing_instructions}
+  defp instructions(fun), do: QuickBEAM.VM.Compiler.FunctionInfo.instructions(fun)
 
   defp module_name(fun, atoms) do
     hash =

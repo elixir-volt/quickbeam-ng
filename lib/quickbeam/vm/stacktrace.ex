@@ -3,9 +3,10 @@ defmodule QuickBEAM.VM.Stacktrace do
 
   import QuickBEAM.VM.Builtin, only: [object: 1]
 
-  alias QuickBEAM.VM.{Heap, SourcePosition}
   alias QuickBEAM.VM.Execution.Trace
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.SourcePosition
 
   @doc "Attaches a JavaScript stack string to an error object."
   def attach_stack({:obj, ref} = error_obj, filter_fun \\ nil) do

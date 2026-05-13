@@ -233,7 +233,6 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp string_at(s, _) when is_binary(s), do: String.at(s, 0) || :undefined
-  defp string_at(_, _), do: :undefined
 
   defp coerce_string_this(nil),
     do: throw({:js_throw, Heap.make_error("Cannot read properties of null", "TypeError")})

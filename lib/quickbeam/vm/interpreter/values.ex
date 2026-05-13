@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Interpreter.Values do
   @moduledoc "JS type coercion, arithmetic, comparison, and equality operations."
 
-  alias QuickBEAM.VM.{Heap}
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values.{Arithmetic, Bitwise, Coercion, Comparison, Equality}
 
   import QuickBEAM.VM.Value, only: [is_object: 1]

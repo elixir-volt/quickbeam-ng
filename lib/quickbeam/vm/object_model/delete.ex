@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, Semantics}
 
   @doc "Deletes a property according to JavaScript delete semantics."
   def delete_property(nil, key) do
@@ -72,20 +72,11 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   defp delete_ordinary_key(map, key) do
-    case parse_array_index_key(key) do
+    case Semantics.parse_array_index_key(key) do
       :error -> Map.delete(map, key)
       index -> map |> Map.delete(key) |> Map.delete(index)
     end
   end
-
-  defp parse_array_index_key(key) when is_binary(key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> idx
-      _ -> :error
-    end
-  end
-
-  defp parse_array_index_key(_key), do: :error
 
   defp remove_key_order_entry(map, key) when is_binary(key) or is_integer(key) do
     case Map.get(map, key_order()) do

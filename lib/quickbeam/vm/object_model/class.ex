@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
-  alias QuickBEAM.VM.{Heap}
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Names
   alias QuickBEAM.VM.ObjectModel.{Functions, Get, Put}

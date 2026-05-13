@@ -433,9 +433,9 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
             else: Enum.map(0..(String.length(string) - 1), &Integer.to_string/1)
 
         side_keys =
-          keys
-          |> Enum.reject(&internal_key?/1)
-          |> Enum.reject(&(&1 in ["length", "toString", "valueOf"]))
+          Enum.reject(keys, fn key ->
+            internal_key?(key) or key in ["length", "toString", "valueOf"]
+          end)
 
         ["length" | string_keys ++ side_keys]
 

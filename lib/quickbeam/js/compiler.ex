@@ -480,16 +480,18 @@ defmodule QuickBEAM.JS.Compiler do
   defp eval_literal_sources(_value), do: []
 
   defp eval_var_names(code) do
-    with {:ok, program} <- QuickBEAM.JS.Parser.parse(code) do
-      Enum.flat_map(program.body, fn
-        %AST.VariableDeclaration{kind: :var, declarations: declarations} ->
-          Enum.flat_map(declarations, &eval_pattern_names(&1.id))
+    case QuickBEAM.JS.Parser.parse(code) do
+      {:ok, program} ->
+        Enum.flat_map(program.body, fn
+          %AST.VariableDeclaration{kind: :var, declarations: declarations} ->
+            Enum.flat_map(declarations, &eval_pattern_names(&1.id))
 
-        _ ->
-          []
-      end)
-    else
-      _ -> []
+          _ ->
+            []
+        end)
+
+      _ ->
+        []
     end
   end
 

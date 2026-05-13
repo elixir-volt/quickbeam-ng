@@ -127,16 +127,13 @@ defmodule QuickBEAM.VM.Runtime.Web.Navigator do
             result
 
           {:resolved, val} ->
-            QuickBEAM.LocksAPI.release_lock([name], caller_pid)
-            PromiseState.resolved(val)
+            release_then(name, caller_pid, PromiseState.resolved(val))
 
           {:rejected, err} ->
-            QuickBEAM.LocksAPI.release_lock([name], caller_pid)
-            PromiseState.rejected(err)
+            release_then(name, caller_pid, PromiseState.rejected(err))
 
           :not_promise ->
-            QuickBEAM.LocksAPI.release_lock([name], caller_pid)
-            PromiseState.resolved(result)
+            release_then(name, caller_pid, PromiseState.resolved(result))
         end
 
       "not_available" ->
@@ -205,6 +202,10 @@ defmodule QuickBEAM.VM.Runtime.Web.Navigator do
       _ ->
         val
     end
+  end
+
+  defp release_then(name, caller_pid, result) do
+    {QuickBEAM.LocksAPI.release_lock([name], caller_pid), result} |> elem(1)
   end
 
   defp wait_for_promise(ref, timeout) do

@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
   alias QuickBEAM.VM.{Heap, Runtime}
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, Semantics}
 
   @doc "Appends values from a spread source into an array-like target and returns the next index."
   def append_spread(arr, idx, obj) do
@@ -202,14 +202,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
         end
 
       {:qb_arr, arr} ->
-        (array_prop_keys(ref) ++
-           (arr
-            |> :array.sparse_to_orddict()
-            |> Enum.map(fn {index, _value} -> Integer.to_string(index) end)
-            |> Enum.reject(fn key ->
-              match?(%{enumerable: false}, Heap.get_prop_desc(ref, key))
-            end)))
-        |> Runtime.sort_numeric_keys()
+        Semantics.enumerable_array_keys(ref, arr, array_prop_keys(ref))
 
       list when is_list(list) ->
         numeric_index_keys(length(list))
@@ -308,8 +301,9 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
       fun
       |> Heap.get_ctor_statics()
       |> Map.keys()
-      |> Enum.filter(&is_binary/1)
-      |> Enum.filter(fn key -> not match?(%{enumerable: false}, Heap.get_prop_desc(fun, key)) end)
+      |> Enum.filter(fn key ->
+        is_binary(key) and not match?(%{enumerable: false}, Heap.get_prop_desc(fun, key))
+      end)
 
     proto_keys =
       case Heap.get_func_proto() do

@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
 
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.ObjectModel.{Class, Delete, Get, Private, Put}
+  alias QuickBEAM.VM.ObjectModel.{Class, Private, Put}
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, name_args) do
@@ -237,8 +237,4 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
        )}
     end
   end
-
-  # Suppress unused alias warning — Delete is referenced via the module attribute path
-  _ = Delete
-  _ = Get
 end

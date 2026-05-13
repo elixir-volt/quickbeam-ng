@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Private do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
-  alias QuickBEAM.VM.{Heap}
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.Functions
 
   @doc "Creates an internal symbol for a JavaScript private name."

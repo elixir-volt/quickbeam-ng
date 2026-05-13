@@ -50,7 +50,7 @@ defmodule QuickBEAM.Context do
   ]
 
   @type t :: %__MODULE__{
-          pool_resource: reference(),
+          pool_resource: QuickBEAM.ContextPool.pool_resource(),
           context_id: pos_integer(),
           pool: GenServer.server() | nil,
           handlers: map(),

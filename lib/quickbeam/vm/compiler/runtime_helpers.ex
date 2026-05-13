@@ -789,58 +789,58 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   defp compile_eval_source(ctx, code) do
-    with {:ok, program} <- QuickBEAM.JS.Compiler.compile(code) do
-      reject_eval_lexical_conflicts!(ctx, program.value)
+    case QuickBEAM.JS.Compiler.compile(code) do
+      {:ok, program} ->
+        reject_eval_lexical_conflicts!(ctx, program.value)
 
-      globals =
-        ctx.globals
-        |> Map.put("arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
+        globals =
+          ctx.globals
+          |> Map.put("arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
 
-      case QuickBEAM.VM.Interpreter.eval(
-             program.value,
-             [],
-             %{
-               gas: ctx.gas,
-               runtime_pid: ctx.runtime_pid,
-               globals: globals,
-               this: ctx.this,
-               arg_buf: ctx.arg_buf,
-               current_func: ctx.current_func,
-               new_target: ctx.new_target
-             },
-             program.atoms
-           ) do
-        {:ok, value} -> value
-        {:error, {:js_throw, value}} -> throw({:js_throw, value})
-        _ -> :undefined
-      end
-    else
+        case QuickBEAM.VM.Interpreter.eval(
+               program.value,
+               [],
+               %{
+                 gas: ctx.gas,
+                 runtime_pid: ctx.runtime_pid,
+                 globals: globals,
+                 this: ctx.this,
+                 arg_buf: ctx.arg_buf,
+                 current_func: ctx.current_func,
+                 new_target: ctx.new_target
+               },
+               program.atoms
+             ) do
+          {:ok, value} -> value
+          {:error, {:js_throw, value}} -> throw({:js_throw, value})
+          _ -> :undefined
+        end
+
       {:error, {:parse_error, errors}} ->
         throw({:js_throw, Heap.make_error(parse_error_message(errors), "SyntaxError")})
 
-      {:error, msg} when is_binary(msg) ->
-        throw({:js_throw, Heap.make_error(msg, "SyntaxError")})
-
-      _ ->
-        :undefined
+      {:error, msg} ->
+        throw({:js_throw, Heap.make_error(inspect(msg), "SyntaxError")})
     end
   end
 
   defp simple_eval_delete_identifier(code, ctx) do
-    with {:ok,
-          %QuickBEAM.JS.Parser.AST.Program{
-            body: [
-              %QuickBEAM.JS.Parser.AST.ExpressionStatement{
-                expression: %QuickBEAM.JS.Parser.AST.UnaryExpression{
-                  operator: "delete",
-                  argument: %QuickBEAM.JS.Parser.AST.Identifier{name: name}
-                }
-              }
-            ]
-          }} <- QuickBEAM.JS.Parser.parse(code) do
-      {:ok, not Map.has_key?(context_globals(ctx), name)}
-    else
-      _ -> :error
+    case QuickBEAM.JS.Parser.parse(code) do
+      {:ok,
+       %QuickBEAM.JS.Parser.AST.Program{
+         body: [
+           %QuickBEAM.JS.Parser.AST.ExpressionStatement{
+             expression: %QuickBEAM.JS.Parser.AST.UnaryExpression{
+               operator: "delete",
+               argument: %QuickBEAM.JS.Parser.AST.Identifier{name: name}
+             }
+           }
+         ]
+       }} ->
+        {:ok, not Map.has_key?(context_globals(ctx), name)}
+
+      _ ->
+        :error
     end
   end
 
@@ -862,23 +862,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     |> MapSet.new()
   end
 
-  defp current_lexical_names(%Context{
-         current_func: {:closure, _, %QuickBEAM.VM.Function{locals: locals}}
-       }),
-       do: lexical_names(locals)
-
-  defp current_lexical_names(%Context{current_func: %QuickBEAM.VM.Function{locals: locals}}),
-    do: lexical_names(locals)
-
-  defp current_lexical_names(_ctx), do: MapSet.new()
-
-  defp lexical_names(locals) do
-    locals
-    |> Enum.filter(& &1.is_lexical)
-    |> Enum.map(&Names.resolve_display_name(&1.name))
-    |> Enum.filter(&is_binary/1)
-    |> MapSet.new()
-  end
+  defp current_lexical_names(ctx), do: QuickBEAM.VM.EvalLexical.current_lexical_names(ctx)
 
   defp current_strict_mode?(%Context{
          current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}

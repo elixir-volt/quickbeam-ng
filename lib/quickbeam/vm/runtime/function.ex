@@ -11,13 +11,13 @@ defmodule QuickBEAM.VM.Runtime.Function do
        fn args, this ->
          obj = Builtin.arg(args, 0, :undefined)
 
-         if not Builtin.callable?(this) do
-           false
-         else
+         if Builtin.callable?(this) do
            case obj do
              {:obj, _} -> Invocation.invoke_callback_or_throw(this, [obj]) |> truthy?()
              _ -> false
            end
+         else
+           false
          end
        end}
 
@@ -258,9 +258,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp integer_or_infinity(n) when is_float(n), do: trunc(n)
 
   defp bound_length(:infinity, _argc), do: :infinity
-  defp bound_length(:neg_infinity, _argc), do: 0
   defp bound_length(n, argc) when is_number(n), do: max(0, n - argc)
-  defp bound_length(_, _argc), do: 0
 
   defp invoke_fun(fun, args, this_arg) do
     this_arg = coerce_function_this(fun, this_arg)

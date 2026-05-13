@@ -17,6 +17,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     PropertyKey,
     Prototype,
     Put,
+    Semantics,
     WrappedPrimitive
   }
 
@@ -930,14 +931,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
     case data do
       {:qb_arr, arr} ->
-        (array_prop_keys(ref) ++
-           (arr
-            |> :array.sparse_to_orddict()
-            |> Enum.map(fn {index, _value} -> Integer.to_string(index) end)
-            |> Enum.reject(fn key ->
-              match?(%{enumerable: false}, Heap.get_prop_desc(ref, key))
-            end)))
-        |> Runtime.sort_numeric_keys()
+        Semantics.enumerable_array_keys(ref, arr, array_prop_keys(ref))
 
       list when is_list(list) ->
         (array_indices(list) ++ array_prop_keys(ref)) |> Runtime.sort_numeric_keys()
@@ -994,7 +988,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp enumerable_object_key?(ref, map, key) do
-    raw_key = if Map.has_key?(map, key), do: key, else: parse_array_index_key(key)
+    raw_key = if Map.has_key?(map, key), do: key, else: Semantics.parse_array_index_key(key)
 
     raw_key = if raw_key != :error and Map.has_key?(map, raw_key), do: raw_key, else: key
 
@@ -1002,17 +996,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
       not match?(%{enumerable: false}, Heap.get_prop_desc(ref, raw_key))
   end
 
-  defp parse_array_index_key(key) when is_binary(key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> idx
-      _ -> :error
-    end
-  end
-
-  defp parse_array_index_key(_key), do: :error
-
   defp enumerable_value(obj, map, key) when is_map(map) do
-    raw_key = parse_array_index_key(key)
+    raw_key = Semantics.parse_array_index_key(key)
 
     cond do
       match?({:accessor, _, _}, Map.get(map, key)) -> Get.get(obj, key)
@@ -1038,48 +1023,12 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp entries([{:obj, _ref} = obj | _]) do
-    pairs =
-      obj
-      |> OwnProperty.descriptor_keys()
-      |> Enum.filter(&is_binary/1)
-      |> Enum.reduce([], fn key, acc ->
-        case OwnProperty.descriptor(obj, key) do
-          :undefined ->
-            acc
-
-          desc ->
-            if Get.get(desc, "enumerable") == true do
-              [Heap.wrap([key, Get.get(obj, key)]) | acc]
-            else
-              acc
-            end
-        end
-      end)
-      |> Enum.reverse()
-
-    Heap.wrap(pairs)
+    keys = obj |> OwnProperty.descriptor_keys() |> Enum.filter(&is_binary/1)
+    Heap.wrap(enumerable_descriptor_pairs(obj, keys))
   end
 
   defp entries([callable | _]) when is_tuple(callable) or is_struct(callable) do
-    pairs =
-      callable
-      |> OwnProperty.descriptor_keys()
-      |> Enum.reduce([], fn key, acc ->
-        case OwnProperty.descriptor(callable, key) do
-          :undefined ->
-            acc
-
-          desc ->
-            if Get.get(desc, "enumerable") == true do
-              [Heap.wrap([key, Get.get(callable, key)]) | acc]
-            else
-              acc
-            end
-        end
-      end)
-      |> Enum.reverse()
-
-    Heap.wrap(pairs)
+    Heap.wrap(enumerable_descriptor_pairs(callable, OwnProperty.descriptor_keys(callable)))
   end
 
   defp entries([map | _]) when is_map(map) do
@@ -1094,6 +1043,24 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp entries(_), do: []
+
+  defp enumerable_descriptor_pairs(target, keys) do
+    keys
+    |> Enum.reduce([], fn key, acc ->
+      case OwnProperty.descriptor(target, key) do
+        :undefined ->
+          acc
+
+        desc ->
+          if Get.get(desc, "enumerable") == true do
+            [Heap.wrap([key, Get.get(target, key)]) | acc]
+          else
+            acc
+          end
+      end
+    end)
+    |> Enum.reverse()
+  end
 
   defp assign([target | _sources]) when target in [nil, :undefined] do
     throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})

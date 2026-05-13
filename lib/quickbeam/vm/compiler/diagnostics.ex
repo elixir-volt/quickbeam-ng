@@ -144,11 +144,7 @@ defmodule QuickBEAM.VM.Compiler.Diagnostics do
     :with_get_ref
   ]
 
-  defp instructions(%QuickBEAM.VM.Function{instructions: instructions})
-       when is_tuple(instructions),
-       do: {:ok, Tuple.to_list(instructions)}
-
-  defp instructions(%QuickBEAM.VM.Function{}), do: {:error, :missing_instructions}
+  defp instructions(fun), do: QuickBEAM.VM.Compiler.FunctionInfo.instructions(fun)
 
   defp known_unsupported?(name), do: name == :invalid or name in @with_scope_opcodes
 end

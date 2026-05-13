@@ -1369,40 +1369,38 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
          callbacks
        )
        when is_binary(code) do
-    cond do
-      simple_eval_strict_self_assignment?(code) ->
-        {:ok,
-         instructions ++
-           [{:get_var, "TypeError"}, {:get_var, "TypeError"}, {:call_constructor, 0}, :throw],
-         constants}
+    if simple_eval_strict_self_assignment?(code) do
+      {:ok,
+       instructions ++
+         [{:get_var, "TypeError"}, {:get_var, "TypeError"}, {:call_constructor, 0}, :throw],
+       constants}
+    else
+      case simple_eval_var_declarations(code) do
+        {:ok, declarations} ->
+          compile_simple_eval_var_declarations(
+            declarations,
+            scope,
+            instructions,
+            constants,
+            callbacks
+          )
 
-      true ->
-        case simple_eval_var_declarations(code) do
-          {:ok, declarations} ->
-            compile_simple_eval_var_declarations(
-              declarations,
-              scope,
-              instructions,
-              constants,
-              callbacks
-            )
+        :error ->
+          case simple_eval_expression(code) do
+            {:ok, expression} ->
+              callbacks.compile_expression.(expression, scope, instructions, constants)
 
-          :error ->
-            case simple_eval_expression(code) do
-              {:ok, expression} ->
-                callbacks.compile_expression.(expression, scope, instructions, constants)
-
-              :error ->
-                compile_direct_eval_call(
-                  callee,
-                  [%AST.Literal{value: code}],
-                  scope,
-                  instructions,
-                  constants,
-                  callbacks
-                )
-            end
-        end
+            :error ->
+              compile_direct_eval_call(
+                callee,
+                [%AST.Literal{value: code}],
+                scope,
+                instructions,
+                constants,
+                callbacks
+              )
+          end
+      end
     end
   end
 

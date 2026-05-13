@@ -79,12 +79,7 @@ defmodule QuickBEAM.VM.ObjectModel.WrappedPrimitive do
 
   def value(_), do: :error
 
-  def value(map, type) when is_map(map) do
-    case Map.fetch(map, slot(type)) do
-      {:ok, value} -> {:ok, value}
-      :error -> :error
-    end
-  end
+  def value(map, type) when is_map(map), do: Map.fetch(map, slot(type))
 
   def value(_, _), do: :error
 

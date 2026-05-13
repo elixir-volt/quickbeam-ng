@@ -4,14 +4,14 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Boolean, as: JSBoolean
+  alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Errors
   alias QuickBEAM.VM.Runtime.FinalizationRegistry, as: JSFinalizationRegistry
+  alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.Globals.Functions
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
-  alias QuickBEAM.VM.Runtime.Globals.Constructors
-  alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
 
   def object do
     Heap.wrap(%{
@@ -169,10 +169,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          revoke_fn =
            {:builtin, "revoke",
             fn _, _ ->
-              case proxy do
-                {:obj, proxy_ref} -> Heap.put_obj_key(proxy_ref, "__proxy_revoked__", true)
-                _ -> :ok
-              end
+              {:obj, proxy_ref} = proxy
+              Heap.put_obj_key(proxy_ref, "__proxy_revoked__", true)
 
               :undefined
             end}
@@ -209,20 +207,23 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       Heap.put_class_proto(fun, object_proto)
       Heap.put_ctor_static(fun, "prototype", :undefined)
 
-      Process.put({:qb_realm_intrinsics, fun}, %{
-        realm_id: realm_id,
-        object_proto: object_proto,
-        array_proto: array_proto,
-        boolean_proto: boolean_proto,
-        number_proto: number_proto,
-        string_proto: string_proto,
-        map_proto: map_proto,
-        set_proto: set_proto,
-        weak_map_proto: weak_map_proto,
-        weak_set_proto: weak_set_proto,
-        weak_ref_proto: weak_ref_proto,
-        finalization_registry_proto: finalization_registry_proto
-      })
+      Process.put(
+        {:qb_realm_intrinsics, fun},
+        realm_intrinsics(
+          realm_id,
+          object_proto,
+          array_proto,
+          boolean_proto,
+          number_proto,
+          string_proto,
+          map_proto,
+          set_proto,
+          weak_map_proto,
+          weak_set_proto,
+          weak_ref_proto,
+          finalization_registry_proto
+        )
+      )
 
       fun
     end
@@ -230,7 +231,42 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     ctor = {:builtin, "Function", cb}
     ConstructorRegistry.put_prototype(ctor, function_proto)
 
-    Process.put({:qb_realm_intrinsics, ctor}, %{
+    Process.put(
+      {:qb_realm_intrinsics, ctor},
+      realm_intrinsics(
+        realm_id,
+        object_proto,
+        array_proto,
+        boolean_proto,
+        number_proto,
+        string_proto,
+        map_proto,
+        set_proto,
+        weak_map_proto,
+        weak_set_proto,
+        weak_ref_proto,
+        finalization_registry_proto
+      )
+    )
+
+    ctor
+  end
+
+  defp realm_intrinsics(
+         realm_id,
+         object_proto,
+         array_proto,
+         boolean_proto,
+         number_proto,
+         string_proto,
+         map_proto,
+         set_proto,
+         weak_map_proto,
+         weak_set_proto,
+         weak_ref_proto,
+         finalization_registry_proto
+       ) do
+    %{
       realm_id: realm_id,
       object_proto: object_proto,
       array_proto: array_proto,
@@ -243,8 +279,6 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       weak_set_proto: weak_set_proto,
       weak_ref_proto: weak_ref_proto,
       finalization_registry_proto: finalization_registry_proto
-    })
-
-    ctor
+    }
   end
 end

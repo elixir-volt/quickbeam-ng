@@ -4,6 +4,7 @@ defmodule QuickBEAM.VM.Invocation do
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0, proxy_handler: 0, proxy_target: 0]
 
   alias QuickBEAM.VM.{Builtin, Compiler, GlobalEnv, Heap, Runtime}
+  alias QuickBEAM.VM.Compiler.FunctionInfo
   alias QuickBEAM.VM.Compiler.Runner
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Interpreter.Context
@@ -505,11 +506,7 @@ defmodule QuickBEAM.VM.Invocation do
     end
   end
 
-  defp function_code_key(%QuickBEAM.VM.Function{id: id}) when is_integer(id), do: {:function, id}
-
-  defp function_code_key(%QuickBEAM.VM.Function{instructions: instructions})
-       when is_tuple(instructions),
-       do: {:instructions, :erlang.phash2(instructions)}
+  defp function_code_key(fun), do: FunctionInfo.code_key(fun)
 
   defp invoke_receiver_target(%QuickBEAM.VM.Function{} = fun, args, gas, this_obj) do
     if compiled_method_callable?(fun, this_obj) do

@@ -315,7 +315,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     if constructable_from?(constructor) do
       target = QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, [length(args)])
 
-      Enum.with_index(args, fn value, index ->
+      Enum.each(Enum.with_index(args), fn {value, index} ->
         create_data_property_or_throw(target, Integer.to_string(index), value)
       end)
 
@@ -611,11 +611,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp concat_result(target, entries) do
-    Enum.with_index(entries, fn
-      {:present, value}, index ->
+    Enum.each(Enum.with_index(entries), fn
+      {{:present, value}, index} ->
         create_data_property_or_throw(target, Integer.to_string(index), value)
 
-      :hole, _index ->
+      {:hole, _index} ->
         :ok
     end)
 
@@ -1076,7 +1076,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     if constructable_from?(constructor) do
       target = QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, construct_args)
 
-      Enum.with_index(list, fn value, index ->
+      Enum.each(Enum.with_index(list), fn {value, index} ->
         create_data_property_or_throw(target, Integer.to_string(index), value)
       end)
 
@@ -1181,8 +1181,6 @@ defmodule QuickBEAM.VM.Runtime.Array do
       QuickBEAM.VM.Builtin.callable?(Get.get(obj, "next")) and
         Get.get(obj, "length") in [nil, :undefined]
 
-  defp iterator_like_source?(_), do: false
-
   defp array_like_to_list(obj) do
     len = max(Runtime.to_int(Get.get(obj, "length")), 0)
 
@@ -1231,18 +1229,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     else
       value = Get.get(result, "value")
 
-      mapped =
-        if map_fn do
-          try do
-            QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
-          catch
-            {:js_throw, _} = thrown ->
-              close_iterator(iterator)
-              throw(thrown)
-          end
-        else
-          value
-        end
+      mapped = map_iterator_value(value, index, map_fn, this_arg, iterator)
 
       try do
         create_data_property_or_throw(target, Integer.to_string(index), mapped)
@@ -1253,6 +1240,18 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end
 
       iterator_to_target(iterator, target, map_fn, this_arg, index + 1)
+    end
+  end
+
+  defp map_iterator_value(value, _index, nil, _this_arg, _iterator), do: value
+
+  defp map_iterator_value(value, index, map_fn, this_arg, iterator) do
+    try do
+      QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
+    catch
+      {:js_throw, _} = thrown ->
+        close_iterator(iterator)
+        throw(thrown)
     end
   end
 
@@ -1282,18 +1281,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     else
       value = Get.get(result, "value")
 
-      mapped =
-        if map_fn do
-          try do
-            QuickBEAM.VM.Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
-          catch
-            {:js_throw, _} = thrown ->
-              close_iterator(iterator)
-              throw(thrown)
-          end
-        else
-          value
-        end
+      mapped = map_iterator_value(value, index, map_fn, this_arg, iterator)
 
       iterator_to_list(iterator, [mapped | acc], map_fn, this_arg, index + 1)
     end

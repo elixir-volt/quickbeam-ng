@@ -180,22 +180,13 @@ defmodule QuickBEAM.VM.Runtime.Set do
             |> Get.get("keys")
             |> iterate_setlike(other)
         end
-
-      _ ->
-        []
     end
   end
 
   defp other_size(other) do
-    case other do
-      {:obj, _} ->
-        case Get.get(other, "size") do
-          {:bigint, _} -> JSThrow.type_error!("set-like object size must be a number")
-          size -> Runtime.to_number(size)
-        end
-
-      _ ->
-        0
+    case Get.get(other, "size") do
+      {:bigint, _} -> JSThrow.type_error!("set-like object size must be a number")
+      size -> Runtime.to_number(size)
     end
   end
 
@@ -531,7 +522,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp weak_add(_, this) do
     require_weak_set_ref!(this)
-    Collections.validate_weak_key!(:undefined, "WeakSet")
+    JSThrow.type_error!("invalid value used as WeakSet key")
   end
 
   defp weak_delete([value | _], this) do

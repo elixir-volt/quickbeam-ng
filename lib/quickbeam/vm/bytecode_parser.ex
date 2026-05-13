@@ -602,11 +602,13 @@ defmodule QuickBEAM.VM.BytecodeParser do
   defp next_pc2line_entry(op_byte, rest, pc, line_num, col_num) do
     op = op_byte - @pc2line_op_first
 
-    with {:ok, diff_col, rest} <- LEB128.read_signed(rest) do
-      {:ok, pc + div(op, @pc2line_range), line_num + rem(op, @pc2line_range) + @pc2line_base,
-       col_num + diff_col, rest}
-    else
-      _ -> :error
+    case LEB128.read_signed(rest) do
+      {:ok, diff_col, rest} ->
+        {:ok, pc + div(op, @pc2line_range), line_num + rem(op, @pc2line_range) + @pc2line_base,
+         col_num + diff_col, rest}
+
+      _ ->
+        :error
     end
   end
 
@@ -635,6 +637,4 @@ defmodule QuickBEAM.VM.BytecodeParser do
         pos
     end
   end
-
-  defp maybe_apply_source_hint(pos, _debug_info), do: pos
 end

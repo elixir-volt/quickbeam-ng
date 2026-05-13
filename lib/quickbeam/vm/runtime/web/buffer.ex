@@ -340,7 +340,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Buffer do
     offset = to_int(offset_arg)
     buf_len = get_buf_len(this)
 
-    _max_len =
+    max_len =
       case max_len_arg do
         n when is_integer(n) -> n
         n when is_float(n) -> trunc(n)
@@ -367,11 +367,13 @@ defmodule QuickBEAM.VM.Runtime.Web.Buffer do
       end
 
     available = max(0, buf_len - offset)
-    actual_write = min(byte_size(write_bytes), available)
+    actual_write = min(byte_size(write_bytes), min(available, max(0, max_len)))
 
-    Enum.each(0..(actual_write - 1), fn i ->
-      Put.put_element(this, offset + i, :binary.at(write_bytes, i))
-    end)
+    if actual_write > 0 do
+      Enum.each(0..(actual_write - 1), fn i ->
+        Put.put_element(this, offset + i, :binary.at(write_bytes, i))
+      end)
+    end
 
     actual_write
   end

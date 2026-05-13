@@ -2,9 +2,10 @@ defmodule QuickBEAM.JS.CompilerAudit do
   @moduledoc false
 
   alias QuickBEAM.JS.Compiler, as: JSCompiler
-  alias QuickBEAM.VM.{Heap, Interpreter}
   alias QuickBEAM.VM.Compiler, as: VMCompiler
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Heap.Arrays
+  alias QuickBEAM.VM.Interpreter
 
   def cases do
     [

@@ -494,77 +494,78 @@ defmodule QuickBEAM.VM.Interpreter do
   end
 
   defp eval_code(code, caller_frame, gas, ctx, var_objs, keep_declared?) do
-    with {:ok, parsed} <- compile_eval_code(ctx.runtime_pid, code) do
-      declared_names = eval_declared_names(parsed.value, parsed.atoms)
-      assigned_names = eval_simple_assigned_names(code)
-      reject_eval_lexical_conflicts!(ctx, declared_names)
-      eval_globals = collect_caller_locals(caller_frame, ctx)
-      captured_globals = collect_captured_globals(ctx.current_func)
+    case compile_eval_code(ctx.runtime_pid, code) do
+      {:ok, parsed} ->
+        declared_names = eval_declared_names(parsed.value, parsed.atoms)
+        assigned_names = eval_simple_assigned_names(code)
+        reject_eval_lexical_conflicts!(ctx, declared_names)
+        eval_globals = collect_caller_locals(caller_frame, ctx)
+        captured_globals = collect_captured_globals(ctx.current_func)
 
-      eval_scope_globals =
-        merge_var_object_globals(Map.merge(eval_globals, captured_globals), var_objs)
+        eval_scope_globals =
+          merge_var_object_globals(Map.merge(eval_globals, captured_globals), var_objs)
 
-      base_globals =
-        if keep_declared?,
-          do: Map.drop(ctx.globals, MapSet.to_list(declared_names)),
-          else: ctx.globals
+        base_globals =
+          if keep_declared?,
+            do: Map.drop(ctx.globals, MapSet.to_list(declared_names)),
+            else: ctx.globals
 
-      scoped_globals =
-        if keep_declared?,
-          do: Map.drop(eval_scope_globals, MapSet.to_list(declared_names)),
-          else: eval_scope_globals
+        scoped_globals =
+          if keep_declared?,
+            do: Map.drop(eval_scope_globals, MapSet.to_list(declared_names)),
+            else: eval_scope_globals
 
-      eval_ctx_globals =
-        base_globals
-        |> Map.merge(scoped_globals)
-        |> Map.put("arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
+        eval_ctx_globals =
+          base_globals
+          |> Map.merge(scoped_globals)
+          |> Map.put("arguments", Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf)))
 
-      visible_declared_names =
-        base_globals
-        |> Map.merge(eval_scope_globals)
-        |> Map.put("arguments", :present)
-        |> Map.keys()
-        |> Enum.filter(&is_binary/1)
-        |> MapSet.new()
-        |> MapSet.intersection(MapSet.union(declared_names, assigned_names))
+        visible_declared_names =
+          base_globals
+          |> Map.merge(eval_scope_globals)
+          |> Map.put("arguments", :present)
+          |> Map.keys()
+          |> Enum.filter(&is_binary/1)
+          |> MapSet.new()
+          |> MapSet.intersection(MapSet.union(declared_names, assigned_names))
 
-      eval_opts = %{
-        gas: gas,
-        runtime_pid: ctx.runtime_pid,
-        globals: eval_ctx_globals,
-        this: ctx.this,
-        arg_buf: ctx.arg_buf,
-        current_func: ctx.current_func,
-        new_target: ctx.new_target
-      }
+        eval_opts = %{
+          gas: gas,
+          runtime_pid: ctx.runtime_pid,
+          globals: eval_ctx_globals,
+          this: ctx.this,
+          arg_buf: ctx.arg_buf,
+          current_func: ctx.current_func,
+          new_target: ctx.new_target
+        }
 
-      pre_eval_globals = Heap.get_persistent_globals() || %{}
+        pre_eval_globals = Heap.get_persistent_globals() || %{}
 
-      case eval_with_ctx(parsed.value, [], eval_opts, parsed.atoms) do
-        {:ok, val, final_ctx} ->
-          post_eval_globals = Heap.get_persistent_globals() || %{}
+        case eval_with_ctx(parsed.value, [], eval_opts, parsed.atoms) do
+          {:ok, val, final_ctx} ->
+            post_eval_globals = Heap.get_persistent_globals() || %{}
 
-          transient_globals =
-            post_eval_globals
-            |> Map.merge(Map.get(final_ctx || %{}, :globals, %{}))
-            |> Map.take(MapSet.to_list(visible_declared_names))
+            transient_globals =
+              post_eval_globals
+              |> Map.merge(Map.get(final_ctx || %{}, :globals, %{}))
+              |> Map.take(MapSet.to_list(visible_declared_names))
 
-          apply_eval_transients(ctx.current_func, var_objs, transient_globals, keep_declared?)
-          write_back_eval_vars(caller_frame, ctx, pre_eval_globals, var_objs, declared_names)
+            apply_eval_transients(ctx.current_func, var_objs, transient_globals, keep_declared?)
+            write_back_eval_vars(caller_frame, ctx, pre_eval_globals, var_objs, declared_names)
 
-          clean_eval_globals(pre_eval_globals)
-          {val, transient_globals}
+            clean_eval_globals(pre_eval_globals)
+            {val, transient_globals}
 
-        {:error, {:js_throw, val}} ->
-          write_back_eval_vars(caller_frame, ctx, pre_eval_globals, var_objs, declared_names)
+          {:error, {:js_throw, val}} ->
+            write_back_eval_vars(caller_frame, ctx, pre_eval_globals, var_objs, declared_names)
 
-          clean_eval_globals(pre_eval_globals)
-          throw({:js_throw, val})
+            clean_eval_globals(pre_eval_globals)
+            throw({:js_throw, val})
 
-        _ ->
-          {:undefined, %{}}
-      end
-    else
+          _ ->
+            {:undefined, %{}}
+        end
+
       {:error, {:parse_error, errors}} ->
         JSThrow.syntax_error!(parse_error_message(errors))
 
@@ -607,9 +608,9 @@ defmodule QuickBEAM.VM.Interpreter do
   defp compile_eval_code(nil, code), do: QuickBEAM.JS.Compiler.compile(code)
 
   defp compile_eval_code(runtime_pid, code) do
-    with {:ok, bc} <- QuickBEAM.Runtime.compile(runtime_pid, code),
-         {:ok, parsed} <- BytecodeParser.decode(bc) do
-      {:ok, parsed}
+    case QuickBEAM.Runtime.compile(runtime_pid, code) do
+      {:ok, bc} -> BytecodeParser.decode(bc)
+      error -> error
     end
   end
 
@@ -836,23 +837,7 @@ defmodule QuickBEAM.VM.Interpreter do
     end
   end
 
-  defp current_lexical_names(%Context{
-         current_func: {:closure, _, %QuickBEAM.VM.Function{locals: locals}}
-       }),
-       do: lexical_names(locals)
-
-  defp current_lexical_names(%Context{current_func: %QuickBEAM.VM.Function{locals: locals}}),
-    do: lexical_names(locals)
-
-  defp current_lexical_names(_ctx), do: MapSet.new()
-
-  defp lexical_names(locals) do
-    locals
-    |> Enum.filter(& &1.is_lexical)
-    |> Enum.map(&Names.resolve_display_name(&1.name))
-    |> Enum.filter(&is_binary/1)
-    |> MapSet.new()
-  end
+  defp current_lexical_names(ctx), do: QuickBEAM.VM.EvalLexical.current_lexical_names(ctx)
 
   defp resolve_declared_atom({:predefined, idx}, _atoms),
     do: PredefinedAtoms.lookup(idx)
@@ -1481,11 +1466,7 @@ defmodule QuickBEAM.VM.Interpreter do
     do_invoke(fun, self, args, var_refs, gas, ctx)
   end
 
-  defp function_instructions(%QuickBEAM.VM.Function{instructions: instructions})
-       when is_tuple(instructions),
-       do: {:ok, Tuple.to_list(instructions)}
-
-  defp function_instructions(%QuickBEAM.VM.Function{}), do: {:error, :missing_instructions}
+  defp function_instructions(fun), do: QuickBEAM.VM.Compiler.FunctionInfo.instructions(fun)
 
   defp do_invoke(%QuickBEAM.VM.Function{} = fun, self_ref, args, var_refs, gas, ctx) do
     Heap.put_ctx(ctx)

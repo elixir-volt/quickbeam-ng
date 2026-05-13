@@ -2,8 +2,9 @@ defmodule QuickBEAM.JS.CompilerTest do
   use ExUnit.Case, async: true
 
   alias QuickBEAM.JS.Compiler, as: JSCompiler
-  alias QuickBEAM.VM.{Heap, Interpreter}
   alias QuickBEAM.VM.Compiler, as: VMCompiler
+  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.Interpreter
 
   describe "compile/1" do
     test "compiles arithmetic expression scripts" do

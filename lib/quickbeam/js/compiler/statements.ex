@@ -1850,31 +1850,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          {:loc, result_loc} <- callbacks.resolve.(scope, "<for_of_index>") do
       # Manual iterator protocol: call iterable[Symbol.iterator](), loop with next()
       # Stack has iterable from caller. Call [Symbol.iterator]() on it.
-      init =
-        [
-          :dup,
-          {:get_var, "Symbol"},
-          {:get_field, "iterator"},
-          :get_array_el2,
-          {:call_method, 0},
-          {:put_loc, iter_loc}
-        ]
-
-      loop_head =
-        [
-          {:label, start_label},
-          {:get_loc, iter_loc},
-          :dup,
-          {:get_field, "next"},
-          {:call_method, 0},
-          {:put_loc, result_loc},
-          {:get_loc, result_loc},
-          {:get_field, "done"},
-          {:jump_if_true, end_label},
-          {:get_loc, result_loc},
-          {:get_field, "value"},
-          {:put_loc, value_loc}
-        ]
+      {init, loop_head} =
+        for_of_iterator_setup(start_label, end_label, value_loc, iter_loc, result_loc)
 
       with {:ok, instructions, constants} <-
              compile(
@@ -1909,31 +1886,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
     with {:loc, iter_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
          {:loc, result_loc} <- callbacks.resolve.(scope, "<for_of_index>") do
-      init =
-        [
-          :dup,
-          {:get_var, "Symbol"},
-          {:get_field, "iterator"},
-          :get_array_el2,
-          {:call_method, 0},
-          {:put_loc, iter_loc}
-        ]
-
-      loop_head =
-        [
-          {:label, start_label},
-          {:get_loc, iter_loc},
-          :dup,
-          {:get_field, "next"},
-          {:call_method, 0},
-          {:put_loc, result_loc},
-          {:get_loc, result_loc},
-          {:get_field, "done"},
-          {:jump_if_true, end_label},
-          {:get_loc, result_loc},
-          {:get_field, "value"},
-          {:put_loc, value_loc}
-        ]
+      {init, loop_head} =
+        for_of_iterator_setup(start_label, end_label, value_loc, iter_loc, result_loc)
 
       with {:ok, instructions, constants} <-
              compile_array_pattern(
@@ -2566,5 +2520,33 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         label -> {:ok, instructions ++ [:nip_catch, {:gosub, label}] ++ ret_ops, constants}
       end
     end
+  end
+
+  defp for_of_iterator_setup(start_label, end_label, value_loc, iter_loc, result_loc) do
+    init = [
+      :dup,
+      {:get_var, "Symbol"},
+      {:get_field, "iterator"},
+      :get_array_el2,
+      {:call_method, 0},
+      {:put_loc, iter_loc}
+    ]
+
+    loop_head = [
+      {:label, start_label},
+      {:get_loc, iter_loc},
+      :dup,
+      {:get_field, "next"},
+      {:call_method, 0},
+      {:put_loc, result_loc},
+      {:get_loc, result_loc},
+      {:get_field, "done"},
+      {:jump_if_true, end_label},
+      {:get_loc, result_loc},
+      {:get_field, "value"},
+      {:put_loc, value_loc}
+    ]
+
+    {init, loop_head}
   end
 end

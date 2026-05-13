@@ -46,9 +46,8 @@ defmodule QuickBEAM.VM.Runtime.Web.EventSourceAPI do
     end)
   end
 
-  defp build_event_source([url | rest], _this) do
+  defp build_event_source([url | _rest], _this) do
     url_str = to_string(url)
-    _opts = Enum.at(rest, 0)
 
     parent_pid = self()
     es_id = make_ref()

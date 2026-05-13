@@ -19,7 +19,6 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     Number,
     Object,
     PromiseBuiltins,
-    RegExp,
     Reflect,
     Symbol,
     Test262Host,
@@ -28,10 +27,11 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
-  alias QuickBEAM.VM.Runtime.String, as: JSString
   alias QuickBEAM.VM.Runtime.Globals.{Constructors, Functions}
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
+  alias QuickBEAM.VM.Runtime.RegExp
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
+  alias QuickBEAM.VM.Runtime.String, as: JSString
 
   @doc "Builds the runtime value represented by this module."
   def build do
@@ -94,19 +94,14 @@ defmodule QuickBEAM.VM.Runtime.Globals do
           ConstructorRegistry.put_prototype(ctor, proto)
           Heap.put_array_proto(proto)
 
-          case proto do
-            {:obj, proto_ref} ->
-              Heap.put_obj_key(proto_ref, "constructor", ctor)
+          {:obj, proto_ref} = proto
+          Heap.put_obj_key(proto_ref, "constructor", ctor)
 
-              Heap.put_prop_desc(proto_ref, "constructor", %{
-                writable: true,
-                enumerable: false,
-                configurable: true
-              })
-
-            _ ->
-              :ok
-          end
+          Heap.put_prop_desc(proto_ref, "constructor", %{
+            writable: true,
+            enumerable: false,
+            configurable: true
+          })
 
           sym_species = {:symbol, "Symbol.species"}
 
@@ -522,10 +517,8 @@ defmodule QuickBEAM.VM.Runtime.Globals do
                 revoke_fn =
                   {:builtin, "revoke",
                    fn _, _ ->
-                     case proxy do
-                       {:obj, proxy_ref} -> Heap.put_obj_key(proxy_ref, "__proxy_revoked__", true)
-                       _ -> :ok
-                     end
+                     {:obj, proxy_ref} = proxy
+                     Heap.put_obj_key(proxy_ref, "__proxy_revoked__", true)
 
                      :undefined
                    end}

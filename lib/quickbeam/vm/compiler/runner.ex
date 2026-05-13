@@ -1,11 +1,14 @@
 defmodule QuickBEAM.VM.Compiler.Runner do
   @moduledoc "Compiled-function invocation: sets up call frames, handles `new`, generators, and tail-call dispatch."
 
-  alias QuickBEAM.VM.{GlobalEnv, Heap, PromiseState}
   alias QuickBEAM.VM.Compiler
+  alias QuickBEAM.VM.Compiler.FunctionInfo
   alias QuickBEAM.VM.Compiler.GeneratorIterator
+  alias QuickBEAM.VM.GlobalEnv
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.ObjectModel.{Class, Functions}
+  alias QuickBEAM.VM.PromiseState
 
   @doc "Invokes the runtime object represented by this module."
   def invoke(%QuickBEAM.VM.Function{} = fun, args), do: invoke(fun, args, nil)
@@ -342,11 +345,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
   defp current_super(nil), do: :undefined
   defp current_super(home_object), do: Class.get_super(home_object)
 
-  defp function_code_key(%QuickBEAM.VM.Function{id: id}) when is_integer(id), do: {:function, id}
-
-  defp function_code_key(%QuickBEAM.VM.Function{instructions: instructions})
-       when is_tuple(instructions),
-       do: {:instructions, :erlang.phash2(instructions)}
+  defp function_code_key(fun), do: FunctionInfo.code_key(fun)
 
   @doc "Normalizes call arguments to the arity expected by compiled code."
   def normalize_args(_args, 0), do: []

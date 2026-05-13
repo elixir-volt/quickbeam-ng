@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   alias QuickBEAM.VM.{Heap, Invocation}
   alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor}
+  alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor, Semantics}
   alias QuickBEAM.VM.Runtime.TypedArray
 
   def property({:obj, ref} = obj, key, desc_obj, raw_desc) do
@@ -169,22 +169,15 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
   defp accessor_pair({:accessor, getter, setter}), do: {getter, setter}
   defp accessor_pair(_), do: {nil, nil}
 
-  defp descriptor_attrs(desc_obj, desc, existing_attrs, default) do
-    PropertyDescriptor.attrs(
-      writable: PropertyDescriptor.attribute(desc_obj, desc, "writable", existing_attrs, default),
-      enumerable:
-        PropertyDescriptor.attribute(desc_obj, desc, "enumerable", existing_attrs, default),
-      configurable:
-        PropertyDescriptor.attribute(desc_obj, desc, "configurable", existing_attrs, default)
-    )
-  end
+  defp descriptor_attrs(desc_obj, desc, existing_attrs, default),
+    do: Semantics.descriptor_attrs(desc_obj, desc, existing_attrs, default)
 
   defp non_extensible_new_property?(ref, existing, prop_name) do
     not Heap.extensible?(ref) and not property_present?(existing, prop_name)
   end
 
   defp property_present?(map, prop_name) when is_map(map) do
-    raw_key = parse_array_index_key(prop_name)
+    raw_key = Semantics.parse_array_index_key(prop_name)
     Map.has_key?(map, prop_name) or (raw_key != :error and Map.has_key?(map, raw_key))
   end
 
@@ -203,15 +196,6 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
   end
 
   defp property_present?(_existing, _prop_name), do: false
-
-  defp parse_array_index_key(key) when is_binary(key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> idx
-      _ -> :error
-    end
-  end
-
-  defp parse_array_index_key(_), do: :error
 
   defp incompatible_existing_descriptor?(ref, existing, prop_name, desc) when is_map(existing) do
     current_desc = Heap.get_prop_desc(ref, prop_name)
@@ -241,7 +225,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
       current_desc.configurable == false and not match?({:accessor, _, _}, current_value) and
         current_desc.writable == false and Map.has_key?(desc, "value") and
-          not same_value?(Map.get(desc, "value"), current_value) ->
+          not Semantics.same_value?(Map.get(desc, "value"), current_value) ->
         true
 
       true ->
@@ -250,13 +234,6 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
   end
 
   defp incompatible_existing_descriptor?(_ref, _existing, _prop_name, _desc), do: false
-
-  defp same_value?(a, b) when is_number(a) and is_number(b) and a == 0 and b == 0,
-    do: Values.neg_zero?(a) == Values.neg_zero?(b)
-
-  defp same_value?(a, b) when is_number(a) and is_number(b), do: a === b
-  defp same_value?(:nan, :nan), do: true
-  defp same_value?(a, b), do: a === b
 
   defp accessor_data_descriptor_conflict?({:accessor, _, _}, desc) do
     Map.has_key?(desc, "value") or Map.has_key?(desc, "writable")

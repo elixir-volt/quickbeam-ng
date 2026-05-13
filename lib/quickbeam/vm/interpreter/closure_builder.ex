@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Interpreter.ClosureBuilder do
   @moduledoc "Closure construction: captures parent locals and var-refs into a `{:closure, captured, fun}` tuple."
 
-  alias QuickBEAM.VM.{Heap}
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Context
 
   @doc "Builds the runtime value represented by this module."

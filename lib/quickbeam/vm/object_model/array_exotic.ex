@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, PropertyKey, Put}
+  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, PropertyKey, Put, Semantics}
 
   def define_own_property(obj, ref, existing, prop_name, desc_obj, desc, fields) do
     cond do
@@ -214,7 +214,10 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
             throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
 
           current.writable == false and Map.has_key?(desc, "value") and
-              not same_value?(Map.get(desc, "value"), current_data_value(ref, prop_name)) ->
+              not Semantics.same_value?(
+                Map.get(desc, "value"),
+                current_data_value(ref, prop_name)
+              ) ->
             throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
 
           true ->
@@ -233,15 +236,8 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
     end
   end
 
-  defp same_value?(a, b) when is_number(a) and is_number(b) and a == 0 and b == 0,
-    do: Values.neg_zero?(a) == Values.neg_zero?(b)
-
-  defp same_value?(a, b) when is_number(a) and is_number(b), do: a === b
-  defp same_value?(:nan, :nan), do: true
-  defp same_value?(a, b), do: a === b
-
   defp sync_arguments_index(ref, idx, value) do
-    if Heap.get_array_prop(ref, "__arguments__") == true and not strict_mode?() and
+    if Heap.get_array_prop(ref, "__arguments__") == true and not Semantics.strict_mode?() and
          not deleted_argument?(ref, idx) do
       case Heap.get_ctx() do
         %{arg_buf: arg_buf} = ctx when idx < tuple_size(arg_buf) ->
@@ -256,14 +252,6 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
   defp deleted_argument?(ref, idx) do
     case Heap.get_array_prop(ref, "__deleted_args__") do
       %MapSet{} = deleted -> MapSet.member?(deleted, idx)
-      _ -> false
-    end
-  end
-
-  defp strict_mode? do
-    case Heap.get_ctx() do
-      %{current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}} -> true
-      %{current_func: %QuickBEAM.VM.Function{is_strict_mode: true}} -> true
       _ -> false
     end
   end
@@ -343,15 +331,8 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
     end
   end
 
-  defp descriptor_attrs(desc_obj, desc, existing_attrs, default) do
-    PropertyDescriptor.attrs(
-      writable: PropertyDescriptor.attribute(desc_obj, desc, "writable", existing_attrs, default),
-      enumerable:
-        PropertyDescriptor.attribute(desc_obj, desc, "enumerable", existing_attrs, default),
-      configurable:
-        PropertyDescriptor.attribute(desc_obj, desc, "configurable", existing_attrs, default)
-    )
-  end
+  defp descriptor_attrs(desc_obj, desc, existing_attrs, default),
+    do: Semantics.descriptor_attrs(desc_obj, desc, existing_attrs, default)
 
   defp accessor_pair({:accessor, getter, setter}), do: {getter, setter}
   defp accessor_pair(_), do: {nil, nil}

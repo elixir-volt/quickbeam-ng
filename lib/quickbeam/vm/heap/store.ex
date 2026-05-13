@@ -54,19 +54,20 @@ defmodule QuickBEAM.VM.Heap.Store do
   end
 
   def put_obj_key(ref, map, key, val) when is_map(map) do
-    new_map =
-      if not Map.has_key?(map, key) and (is_binary(key) or is_integer(key)) do
-        order = Map.get(map, key_order(), [])
-        Map.put(Map.put(map, key, val), key_order(), [key | order])
-      else
-        Map.put(map, key, val)
-      end
-
-    Process.put(ref, new_map)
+    Process.put(ref, put_property_preserving_order(map, key, val))
   end
 
   def put_obj_key(ref, _other, key, val) do
     Process.put(ref, %{key => val})
+  end
+
+  def put_property_preserving_order(map, key, val) do
+    if not Map.has_key?(map, key) and (is_binary(key) or is_integer(key)) do
+      order = Map.get(map, key_order(), [])
+      Map.put(Map.put(map, key, val), key_order(), [key | order])
+    else
+      Map.put(map, key, val)
+    end
   end
 
   @doc "Updates heap object data with a function after reconstructing shaped objects as maps."

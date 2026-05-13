@@ -35,7 +35,9 @@ defmodule QuickBEAM.ContextPool do
   end
 
   @doc false
-  @spec create_context(GenServer.server(), pid(), keyword()) :: {reference(), pos_integer()}
+  @type pool_resource :: reference() | {:beam_worker, GenServer.server(), atom()}
+
+  @spec create_context(GenServer.server(), pid(), keyword()) :: {pool_resource(), pos_integer()}
   def create_context(pool, owner_pid, opts \\ []) do
     GenServer.call(pool, {:create_context, owner_pid, opts}, :infinity)
   end
