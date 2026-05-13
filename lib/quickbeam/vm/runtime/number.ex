@@ -349,6 +349,25 @@ defmodule QuickBEAM.VM.Runtime.Number do
   end
 
   defp format_precision(f, p) do
+    format_precision_with_runtime(f, p) || do_format_precision(f, p)
+  end
+
+  defp format_precision_with_runtime(n, precision) do
+    case QuickBEAM.VM.Heap.get_ctx() do
+      %{runtime_pid: runtime_pid} when runtime_pid != nil ->
+        literal = :erlang.float_to_binary(n * 1.0, [:short])
+
+        case QuickBEAM.Runtime.eval(runtime_pid, "(#{literal}).toPrecision(#{precision})") do
+          {:ok, value} when is_binary(value) -> value
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp do_format_precision(f, p) do
     exp = trunc(:math.floor(:math.log10(abs(f))))
     sign = if f < 0, do: "-", else: ""
     f = js_round_significant(abs(f), p)
