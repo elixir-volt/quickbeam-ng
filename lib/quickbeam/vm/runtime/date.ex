@@ -124,7 +124,7 @@ defmodule QuickBEAM.VM.Runtime.Date do
           :nan
 
         [val] when is_number(val) ->
-          trunc(val)
+          if abs(val) > 8.64e15, do: :nan, else: trunc(val)
 
         [true] ->
           1
