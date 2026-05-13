@@ -265,6 +265,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
+  defp char_at(s, _) when is_binary(s), do: char_at(s, [0])
   defp char_at(_, _), do: ""
 
   defp char_code_at(s, [idx | _]) when is_binary(s) do
@@ -281,6 +282,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
+  defp char_code_at(s, _) when is_binary(s), do: char_code_at(s, [0])
   defp char_code_at(_, _), do: :nan
 
   defp code_point_at(s, [idx | _]) when is_binary(s) do
