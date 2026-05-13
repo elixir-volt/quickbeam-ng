@@ -79,7 +79,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   proto "toLowerCase" do
     s = coerce_string_this(this)
-    :string.lowercase(s) |> IO.iodata_to_binary()
+    locale_lowercase(s)
   end
 
   proto "toLocaleLowerCase" do
@@ -327,7 +327,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp locale_lowercase(s) do
     s
-    |> String.graphemes()
+    |> String.codepoints()
     |> locale_lowercase([], [])
     |> Enum.reverse()
     |> IO.iodata_to_binary()
@@ -366,9 +366,13 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp following_cased?([]), do: false
 
-  defp cased_letter?(char), do: String.upcase(char) != String.downcase(char)
-  defp case_ignorable?("᠎"), do: true
-  defp case_ignorable?(char), do: Regex.match?(~r/^\p{Mn}$/u, char)
+  defp cased_letter?(char) do
+    String.upcase(char) != String.downcase(char) or
+      Regex.match?(~r/^[\p{Lu}\p{Ll}\p{Lt}]$/u, char)
+  end
+
+  defp case_ignorable?("."), do: true
+  defp case_ignorable?(char), do: Regex.match?(~r/^[\p{Mn}\p{Cf}]$/u, char)
 
   defp coerce_string_this(nil),
     do: throw({:js_throw, Heap.make_error("Cannot read properties of null", "TypeError")})
