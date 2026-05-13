@@ -351,6 +351,13 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     prop_key = if is_binary(key), do: key, else: key
 
     case Map.fetch(Heap.get_ctor_statics(target), prop_key) do
+      {:ok, {:accessor, getter, setter}} ->
+        PropertyDescriptor.accessor_object(
+          getter,
+          setter,
+          callable_prop_desc(target, prop_key) || builtin_descriptor_attrs(prop_key)
+        )
+
       {:ok, value} when value != :deleted ->
         PropertyDescriptor.data_object(
           value,
