@@ -530,7 +530,11 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp reject_regexp_search!(_), do: :ok
 
   defp reject_regexp_matcher!(obj, regexp_fallback) do
-    matcher = Get.get(obj, {:symbol, "Symbol.match"})
+    matcher =
+      case Get.get(obj, {:symbol, "Symbol.match"}) do
+        {:accessor, getter, _} when getter != nil -> Get.call_getter(getter, obj)
+        other -> other
+      end
 
     is_regexp =
       if matcher != nil and matcher != :undefined,

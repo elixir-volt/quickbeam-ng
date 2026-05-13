@@ -1233,6 +1233,25 @@ defmodule QuickBEAM.VM.Runtime.Object do
     Define.property(obj, key, desc_obj, desc)
   end
 
+  defp define_property([{:regexp, _, _, ref} = regexp, key, {:obj, desc_ref} | _]) do
+    key = normalize_well_known_symbol(key)
+    desc = Heap.get_obj(desc_ref, %{})
+    getter = Map.get(desc, "get")
+    setter = Map.get(desc, "set")
+
+    value =
+      if getter != nil or setter != nil,
+        do: {:accessor, getter, setter},
+        else: Map.get(desc, "value", Get.get(regexp, key))
+
+    Process.put(
+      {:qb_regexp_props, ref},
+      Map.put(Process.get({:qb_regexp_props, ref}, %{}), key, value)
+    )
+
+    regexp
+  end
+
   defp define_property([{:obj, _} = obj, key, desc_obj | _])
        when is_tuple(desc_obj) or is_struct(desc_obj) do
     if descriptor_object?(desc_obj) do
@@ -1263,6 +1282,9 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp define_property([_target | _]) do
     throw({:js_throw, Heap.make_error("Object.defineProperty called on non-object", "TypeError")})
   end
+
+  defp normalize_well_known_symbol({:symbol, "Symbol." <> _ = name, _ref}), do: {:symbol, name}
+  defp normalize_well_known_symbol(key), do: key
 
   defp descriptor_object?({:builtin, _, _}), do: true
   defp descriptor_object?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
