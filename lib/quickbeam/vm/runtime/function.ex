@@ -123,6 +123,8 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp object_like?({:obj, _}), do: true
   defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
   defp object_like?({:builtin, _, _}), do: true
+  defp object_like?({:regexp, _, _}), do: true
+  defp object_like?({:regexp, _, _, _}), do: true
   defp object_like?({:bound, _, _, _, _}), do: true
   defp object_like?(%QuickBEAM.VM.Function{}), do: true
   defp object_like?(_), do: false

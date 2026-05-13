@@ -522,10 +522,30 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
+  defp get_own({:regexp, bytecode, _source, ref}, "flags") do
+    case Map.get(Process.get({:qb_regexp_props, ref}, %{}), "flags", :undefined) do
+      :undefined -> regexp_flags(bytecode)
+      value -> value
+    end
+  end
+
+  defp get_own({:regexp, _bytecode, source, ref}, "source") when is_binary(source) do
+    case Map.get(Process.get({:qb_regexp_props, ref}, %{}), "source", :undefined) do
+      :undefined -> source
+      value -> value
+    end
+  end
+
+  defp get_own({:regexp, _, _, ref}, "lastIndex") do
+    case Map.get(Process.get({:qb_regexp_props, ref}, %{}), "lastIndex", :undefined) do
+      :undefined -> 0
+      value -> value
+    end
+  end
+
   defp get_own({:regexp, bytecode, _source}, "flags"), do: regexp_flags(bytecode)
-  defp get_own({:regexp, bytecode, _source, _ref}, "flags"), do: regexp_flags(bytecode)
   defp get_own({:regexp, _bytecode, source}, "source") when is_binary(source), do: source
-  defp get_own({:regexp, _bytecode, source, _ref}, "source") when is_binary(source), do: source
+  defp get_own({:regexp, _, _}, "lastIndex"), do: 0
 
   defp get_own({:regexp, _, _, ref}, key) do
     case Map.get(Process.get({:qb_regexp_props, ref}, %{}), key, :undefined) do

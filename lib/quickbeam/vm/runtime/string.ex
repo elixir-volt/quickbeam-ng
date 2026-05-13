@@ -988,7 +988,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp search(_, _), do: -1
 
-  defp match_all(s, []) when is_binary(s), do: match_all_literal({:regexp, nil, ""}, s)
+  defp match_all(s, []) when is_binary(s), do: invoke_created_match_all({:regexp, nil, ""}, s)
 
   defp match_all(s, [{:obj, _} = regexp | _]) when is_binary(s) do
     case get_method(regexp, {:symbol, "Symbol.matchAll"}) do
@@ -1000,8 +1000,18 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
+  defp match_all(s, [{:regexp, bytecode, source, _ref} | _])
+       when is_binary(s) and is_binary(bytecode),
+       do: match_all(s, [{:regexp, bytecode, source}])
+
   defp match_all(s, [{:regexp, bytecode, _source} = re | _])
        when is_binary(s) and is_binary(bytecode) do
+    flags = Get.get(re, "flags")
+
+    if not (is_binary(flags) and String.contains?(flags, "g")) do
+      throw({:js_throw, Heap.make_error("matchAll requires a global RegExp", "TypeError")})
+    end
+
     results = match_all_with_captures(s, re, 0, [])
     wrap_match_all_results(results)
   end
@@ -1009,10 +1019,20 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp match_all(s, [pattern | _]) when is_binary(s) do
     pattern
     |> regexp_create()
-    |> match_all_literal(s)
+    |> invoke_created_match_all(s)
   end
 
   defp match_all(_, _), do: wrap_match_all_results([])
+
+  defp invoke_created_match_all(regexp, s) do
+    case get_method(regexp, {:symbol, "Symbol.matchAll"}) do
+      {:ok, matcher} ->
+        Invocation.invoke_with_receiver(matcher, [s], Runtime.gas_budget(), regexp)
+
+      :none ->
+        match_all_literal(regexp, s)
+    end
+  end
 
   defp match_all_literal({:regexp, nil, source}, s) when is_binary(source) do
     source

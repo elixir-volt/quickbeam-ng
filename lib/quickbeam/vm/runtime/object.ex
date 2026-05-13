@@ -485,6 +485,12 @@ defmodule QuickBEAM.VM.Runtime.Object do
       [{:builtin, _, _} = value | _] ->
         Prototype.get(value)
 
+      [{:regexp, _, _} = value | _] ->
+        Prototype.get(value)
+
+      [{:regexp, _, _, _} = value | _] ->
+        Prototype.get(value)
+
       [{:closure, _, _} = value | _] ->
         Prototype.get(value)
 

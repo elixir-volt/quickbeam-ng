@@ -17,6 +17,8 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   def get({:qb_arr, _}), do: Heap.get_func_proto()
   def get(value) when is_list(value), do: QuickBEAM.VM.Runtime.global_class_proto("Array")
   def get({:builtin, _, _} = callable), do: callable_prototype(callable)
+  def get({:regexp, _, _}), do: QuickBEAM.VM.Runtime.global_class_proto("RegExp")
+  def get({:regexp, _, _, _}), do: QuickBEAM.VM.Runtime.global_class_proto("RegExp")
 
   def get({:closure, _, %QuickBEAM.VM.Function{} = function} = callable),
     do: function_kind_prototype(function, callable)
