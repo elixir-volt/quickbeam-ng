@@ -375,6 +375,16 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
           PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: true)
         )
 
+      _ when prop_key == "prototype" ->
+        if has_prototype?(target) do
+          PropertyDescriptor.data_object(
+            Heap.get_or_create_prototype(target),
+            PropertyDescriptor.attrs(writable: true, enumerable: false, configurable: false)
+          )
+        else
+          :undefined
+        end
+
       _ ->
         :undefined
     end
