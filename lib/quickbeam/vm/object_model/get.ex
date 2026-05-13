@@ -65,8 +65,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   def get(value, {:symbol, "Symbol.hasInstance", _} = sym_key),
     do: get_callable_symbol(value, sym_key)
 
-  def get(value, {:symbol, _} = sym_key), do: get_own(value, sym_key)
-  def get(value, {:symbol, _, _} = sym_key), do: get_own(value, sym_key)
+  def get(value, {:symbol, _} = sym_key), do: get_symbol_own(value, sym_key)
+  def get(value, {:symbol, _, _} = sym_key), do: get_symbol_own(value, sym_key)
 
   def get(_, _), do: :undefined
 
@@ -108,6 +108,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       end
     else
       get_own(value, sym_key)
+    end
+  end
+
+  defp get_symbol_own(value, sym_key) do
+    case get_own(value, sym_key) do
+      {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
+      {:accessor, nil, _} -> :undefined
+      val -> val
     end
   end
 
