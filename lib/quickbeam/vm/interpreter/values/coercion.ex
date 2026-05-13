@@ -81,12 +81,16 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
     if Regex.match?(~r/^[+-]?(?:(?:\d+\.\d*)|(?:\.\d+)|(?:\d+))(?:[eE][+-]?\d+)?$/, s) do
       case Float.parse(normalize_decimal_numeric(s)) do
         {f, ""} -> f
+        :error -> decimal_overflow_value(s)
         _ -> :nan
       end
     else
       :nan
     end
   end
+
+  defp decimal_overflow_value("-" <> _), do: :neg_infinity
+  defp decimal_overflow_value(_), do: :infinity
 
   defp normalize_decimal_numeric(s) do
     s

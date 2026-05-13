@@ -169,6 +169,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
       :undefined ->
         {:ok, State.push(state, Builder.atom(:undefined), :undefined)}
 
+      value when value in [:nan, :infinity, :neg_infinity] ->
+        {:ok, State.push(state, Builder.atom(value), :number)}
+
       {:bigint, value} ->
         {:ok,
          State.push(state, Builder.tuple_expr([Builder.atom(:bigint), Builder.integer(value)]))}

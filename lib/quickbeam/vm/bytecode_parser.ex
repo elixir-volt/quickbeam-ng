@@ -190,6 +190,24 @@ defmodule QuickBEAM.VM.BytecodeParser do
     decode_utf16_le(rest, [c | acc])
   end
 
+  defp decode_float64(bits) do
+    sign = bits >>> 63
+    exponent = bits >>> 52 &&& 0x7FF
+    fraction = bits &&& 0xFFFFFFFFFFFFF
+
+    cond do
+      exponent == 0x7FF and fraction == 0 and sign == 0 -> :infinity
+      exponent == 0x7FF and fraction == 0 -> :neg_infinity
+      exponent == 0x7FF -> :nan
+      true -> decode_finite_float64(bits)
+    end
+  end
+
+  defp decode_finite_float64(bits) do
+    <<value::little-float-64>> = <<bits::little-unsigned-64>>
+    value
+  end
+
   # ── Object deserialization ──
   # Matches JS_ReadObjectRec switch(tag).
 
@@ -204,7 +222,7 @@ defmodule QuickBEAM.VM.BytecodeParser do
 
   defp read_object(<<@tag_float64, rest::binary>>, _atoms) do
     case rest do
-      <<val::little-float-64, rest2::binary>> -> {:ok, val, rest2}
+      <<bits::little-unsigned-64, rest2::binary>> -> {:ok, decode_float64(bits), rest2}
       _ -> {:error, :unexpected_end}
     end
   end
