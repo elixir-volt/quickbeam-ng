@@ -259,6 +259,11 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   # ── toExponential(digits) ──
 
+  defp to_exponential(n, [digits | _]) when n in [:nan, :infinity, :neg_infinity] do
+    to_integer_or_throw(digits)
+    Runtime.stringify(n)
+  end
+
   defp to_exponential(n, [digits | _]) when is_number(n) do
     d = to_integer_or_throw(digits)
     if d < 0 or d > 100, do: JSThrow.range_error!("fractionDigits out of range")
