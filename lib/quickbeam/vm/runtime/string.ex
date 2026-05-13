@@ -748,6 +748,12 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp split(s, [{:regexp, nil, "[a-z]"} | rest]) when is_binary(s),
     do: split(s, [{:regexp, "", "[a-z]"} | rest])
 
+  defp split(s, [{:regexp, nil, "\\d+", _ref} | rest]) when is_binary(s),
+    do: split_digit_runs(s, rest)
+
+  defp split(s, [{:regexp, nil, "\\d+"} | rest]) when is_binary(s),
+    do: split_digit_runs(s, rest)
+
   defp split(s, [{:regexp, nil, source, _ref} | rest]) when is_binary(s) and is_binary(source),
     do: split(s, [source | rest])
 
@@ -755,23 +761,17 @@ defmodule QuickBEAM.VM.Runtime.String do
     do: split(s, [source | rest])
 
   defp split(s, [{:regexp, _bytecode, "[a-z]"} | rest]) when is_binary(s) do
-    limit =
-      case rest do
-        [n | _] when is_integer(n) -> n
-        _ -> :infinity
-      end
-
+    limit = split_limit(rest)
     parts = List.duplicate("", Get.string_length(s) + 1)
     if limit == :infinity, do: parts, else: Enum.take(parts, limit)
   end
 
+  defp split(s, [{:regexp, _bytecode, "\\d+"} | rest]) when is_binary(s),
+    do: split_digit_runs(s, rest)
+
   defp split(s, [{:regexp, bytecode, _source} | rest])
        when is_binary(s) and is_binary(bytecode) do
-    limit =
-      case rest do
-        [n | _] when is_integer(n) -> n
-        _ -> :infinity
-      end
+    limit = split_limit(rest)
 
     cond do
       limit == 0 ->
@@ -786,11 +786,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp split(s, [sep | rest]) when is_binary(s) and is_binary(sep) do
-    limit =
-      case rest do
-        [n | _] when is_integer(n) -> n
-        _ -> :infinity
-      end
+    limit = split_limit(rest)
 
     if limit == 0 do
       []
@@ -808,6 +804,30 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp split(s, []) when is_binary(s), do: [s]
   defp split(_, _), do: []
+
+  defp split_limit([]), do: :infinity
+  defp split_limit([:undefined | _]), do: :infinity
+
+  defp split_limit([value | _]) do
+    case Runtime.to_number(value) do
+      :nan -> 0
+      :infinity -> 4_294_967_295
+      :neg_infinity -> 0
+      number when is_number(number) -> number |> trunc() |> Integer.mod(4_294_967_296)
+      _ -> 0
+    end
+  end
+
+  defp split_digit_runs(s, rest) do
+    limit = split_limit(rest)
+
+    if limit == 0 do
+      []
+    else
+      parts = Regex.split(~r/\d+/, s)
+      if limit == :infinity, do: parts, else: Enum.take(parts, limit)
+    end
+  end
 
   defp nif_regex_split(s, bytecode, offset, last_end, limit, acc) do
     slen = byte_size(s)
