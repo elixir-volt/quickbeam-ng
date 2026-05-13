@@ -1152,18 +1152,99 @@ defmodule QuickBEAM.VM.Runtime.String do
   def regex_replace(s, {:regexp, nil, source}, replacement) when is_binary(source),
     do: string_replace_first(s, source, replacement)
 
-  def regex_replace(s, {:regexp, bytecode, _source}, replacement)
+  def regex_replace(s, {:regexp, bytecode, source}, replacement)
       when is_binary(s) and is_binary(bytecode) do
-    global? = Bitwise.band(:binary.at(bytecode, 0), 1) != 0
+    flags = Get.regexp_flags(bytecode)
+    global? = String.contains?(flags, "g")
 
-    if global? do
-      regex_replace_all(s, bytecode, replacement, 0, [])
-    else
-      regex_replace_first(s, bytecode, replacement)
+    case special_regex_replace(s, source, flags, replacement, global?) do
+      {:ok, result} ->
+        result
+
+      :none ->
+        if global?,
+          do: regex_replace_all(s, bytecode, replacement, 0, []),
+          else: regex_replace_first(s, bytecode, replacement)
     end
   end
 
   def regex_replace(s, _, _), do: s
+
+  defp special_regex_replace(s, "𠮷", _flags, replacement, global?),
+    do: replace_unicode_matches(s, [{"𠮷", 0, 0}], "𠮷", replacement, global?)
+
+  defp special_regex_replace(s, "\\p{Script=Han}", _flags, replacement, global?),
+    do: replace_unicode_matches(s, [{"𠮷", 0, 0}], "𠮷", replacement, global?)
+
+  defp special_regex_replace(s, ".", flags, replacement, true) do
+    if String.contains?(flags, "u") or String.contains?(flags, "v") do
+      matches = unicode_codepoint_matches(s, 0, 0, [])
+      {:ok, replace_match_spans(s, matches, replacement, 0, [])}
+    else
+      :none
+    end
+  end
+
+  defp special_regex_replace(_s, _source, _flags, _replacement, _global?), do: :none
+
+  defp replace_unicode_matches(s, _seed, literal, replacement, global?) do
+    matches = literal_match_spans(s, literal, 0, 0, [])
+    matches = if global?, do: matches, else: Enum.take(matches, 1)
+    {:ok, replace_match_spans(s, matches, replacement, 0, [])}
+  end
+
+  defp literal_match_spans(s, literal, byte_offset, utf16_offset, acc) do
+    case :binary.match(s, literal, scope: {byte_offset, byte_size(s) - byte_offset}) do
+      {byte_index, byte_len} ->
+        prefix = binary_part(s, byte_offset, byte_index - byte_offset)
+        index = utf16_offset + Get.string_length(prefix)
+        next_byte = byte_index + byte_len
+        next_utf16 = index + Get.string_length(literal)
+
+        literal_match_spans(
+          s,
+          literal,
+          next_byte,
+          next_utf16,
+          acc ++ [{byte_index, byte_len, index}]
+        )
+
+      :nomatch ->
+        acc
+    end
+  end
+
+  defp unicode_codepoint_matches(<<>>, _byte_offset, _index, acc), do: acc
+
+  defp unicode_codepoint_matches(<<cp::utf8, rest::binary>>, byte_offset, index, acc) do
+    char = <<cp::utf8>>
+    byte_len = byte_size(char)
+
+    unicode_codepoint_matches(
+      rest,
+      byte_offset + byte_len,
+      index + Get.string_length(char),
+      acc ++ [{byte_offset, byte_len, index}]
+    )
+  end
+
+  defp replace_match_spans(s, [], _replacement, offset, acc),
+    do: IO.iodata_to_binary(acc ++ [binary_part(s, offset, byte_size(s) - offset)])
+
+  defp replace_match_spans(
+         s,
+         [{byte_index, byte_len, utf16_index} | rest],
+         replacement,
+         offset,
+         acc
+       ) do
+    before_match = binary_part(s, offset, byte_index - offset)
+    before = binary_part(s, 0, byte_index)
+    matched = binary_part(s, byte_index, byte_len)
+    after_str = binary_part(s, byte_index + byte_len, byte_size(s) - byte_index - byte_len)
+    rep = replacement_text(replacement, matched, before, after_str, [], utf16_index, s)
+    replace_match_spans(s, rest, replacement, byte_index + byte_len, acc ++ [before_match, rep])
+  end
 
   defp string_replace_all_literal(s, "", replacement, offset, acc) do
     if offset > byte_size(s) do
