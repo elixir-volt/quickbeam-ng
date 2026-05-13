@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
   @doc "Installs the Function creation, call, and constructor opcodes helpers into the caller module."
   defmacro __using__(_opts) do
     quote location: :keep do
-      alias QuickBEAM.VM.{Heap, Names}
+      alias QuickBEAM.VM.{Heap, Invocation, Names}
       alias QuickBEAM.VM.Interpreter.{ClosureBuilder, Context, Frame, Values}
       alias QuickBEAM.VM.JSThrow
       alias QuickBEAM.VM.ObjectModel.{Class, Get}
@@ -214,35 +214,12 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
               )
 
             {:bound, _, _, orig_fun, bound_args} ->
-              all_args = bound_args ++ rev_args
-
-              case orig_fun do
-                %QuickBEAM.VM.Function{} = f ->
-                  do_invoke(
-                    f,
-                    {:closure, %{}, f},
-                    all_args,
-                    ClosureBuilder.ctor_var_refs(f),
-                    gas,
-                    ctor_ctx
-                  )
-
-                {:closure, captured, %QuickBEAM.VM.Function{} = f} ->
-                  do_invoke(
-                    f,
-                    {:closure, captured, f},
-                    all_args,
-                    ClosureBuilder.ctor_var_refs(f, captured),
-                    gas,
-                    ctor_ctx
-                  )
-
-                {:builtin, _, cb} when is_function(cb, 2) ->
-                  cb.(all_args, this_obj)
-
-                _ ->
-                  this_obj
-              end
+              Invocation.construct_runtime(
+                ctx,
+                orig_fun,
+                bound_new_target(ctor, new_target),
+                bound_args ++ rev_args
+              )
 
             {:builtin, name, cb} when is_function(cb, 2) ->
               obj = cb.(rev_args, this_obj)
