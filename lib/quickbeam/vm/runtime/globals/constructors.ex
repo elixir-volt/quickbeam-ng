@@ -139,7 +139,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
             {"", ""}
         end
 
-      code = "(function anonymous(" <> params <> "){" <> body <> "})"
+      code = "(function anonymous(" <> params <> "\n) {\n" <> body <> "\n})"
 
       case QuickBEAM.Runtime.compile(ctx.runtime_pid, code) do
         {:ok, bytecode} ->
