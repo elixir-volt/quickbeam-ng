@@ -585,8 +585,20 @@ defmodule QuickBEAM.VM.Runtime.Globals do
   defp install_date_prototype_methods(ctor) do
     install_prototype_methods(ctor, JSDate, JSDate.proto_property_names())
 
+    Heap.put_ctor_prop_desc(ctor, "prototype", %{
+      writable: false,
+      enumerable: false,
+      configurable: false
+    })
+
     case Heap.get_ctor_statics(ctor)["prototype"] do
       {:obj, proto_ref} ->
+        Heap.put_prop_desc(proto_ref, "constructor", %{
+          writable: true,
+          enumerable: false,
+          configurable: true
+        })
+
         sym_key = {:symbol, "Symbol.toPrimitive"}
 
         to_prim =
