@@ -396,28 +396,81 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp map(list, _), do: list
 
-  defp filter({:obj, ref}, [fun | _]) do
-    list = Heap.obj_to_list(ref)
+  defp filter(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-    result =
-      Enum.filter(Enum.with_index(list), fn {val, idx} ->
-        Runtime.truthy?(Runtime.call_callback(fun, [val, idx, list]))
-      end)
-      |> Enum.map(fn {val, _} -> val end)
+  defp filter(:undefined, _),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-    Heap.wrap(result)
-  end
+  defp filter({:obj, _} = obj, args), do: filter_array_like(obj, args)
+  defp filter({:builtin, _, _} = obj, args), do: filter_array_like(obj, args)
+  defp filter({:regexp, _, _, _} = obj, args), do: filter_array_like(obj, args)
+  defp filter({:regexp, _, _} = obj, args), do: filter_array_like(obj, args)
 
   defp filter({:qb_arr, arr}, args), do: filter(:array.to_list(arr), args)
 
-  defp filter(list, [fun | _]) when is_list(list) do
-    Enum.filter(Enum.with_index(list), fn {val, idx} ->
-      Runtime.truthy?(Runtime.call_callback(fun, [val, idx, list]))
+  defp filter(list, [fun | rest]) when is_list(list) do
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("callbackfn is not a function")
+    end
+
+    this_arg = filter_this_arg(rest)
+
+    list
+    |> Enum.with_index()
+    |> Enum.filter(fn {val, idx} ->
+      Runtime.truthy?(
+        QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [val, idx, list], this_arg)
+      )
     end)
     |> Enum.map(fn {val, _} -> val end)
   end
 
-  defp filter(list, _), do: list
+  defp filter(_, _), do: JSThrow.type_error!("callbackfn is not a function")
+
+  defp filter_array_like(this, [fun | rest]) do
+    len = array_like_length(this)
+
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("callbackfn is not a function")
+    end
+
+    this_arg = filter_this_arg(rest)
+
+    result =
+      if len == 0 do
+        []
+      else
+        0..(len - 1)
+        |> Enum.reduce([], fn idx, acc ->
+          key = Integer.to_string(idx)
+
+          if HasProperty.has_property?(this, key) do
+            value = Get.get(this, key)
+
+            if Runtime.truthy?(
+                 QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
+               ) do
+              [value | acc]
+            else
+              acc
+            end
+          else
+            acc
+          end
+        end)
+        |> Enum.reverse()
+      end
+
+    Heap.wrap(result)
+  end
+
+  defp filter_array_like(this, _args) do
+    _len = array_like_length(this)
+    JSThrow.type_error!("callbackfn is not a function")
+  end
+
+  defp filter_this_arg([value | _]), do: value
+  defp filter_this_arg(_), do: :undefined
 
   defp reduce({:obj, ref}, [fun | rest]) do
     list = Heap.obj_to_list(ref)
