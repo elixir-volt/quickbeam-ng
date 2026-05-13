@@ -531,18 +531,17 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp has_lone_surrogate?(s) do
     s
-    |> :unicode.characters_to_list(:utf8)
-    |> case do
-      chars when is_list(chars) ->
-        Enum.any?(chars, fn
-          cp when cp >= 0xD800 and cp <= 0xDFFF -> true
-          _ -> false
-        end)
-
-      _ ->
-        false
-    end
+    |> utf16_code_unit_values()
+    |> has_lone_surrogate_units?()
   end
+
+  defp has_lone_surrogate_units?([high, low | rest])
+       when high >= 0xD800 and high <= 0xDBFF and low >= 0xDC00 and low <= 0xDFFF,
+       do: has_lone_surrogate_units?(rest)
+
+  defp has_lone_surrogate_units?([unit | _]) when unit >= 0xD800 and unit <= 0xDFFF, do: true
+  defp has_lone_surrogate_units?([_unit | rest]), do: has_lone_surrogate_units?(rest)
+  defp has_lone_surrogate_units?([]), do: false
 
   defp replace_lone_surrogates(s) do
     s
