@@ -830,9 +830,19 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp flat_map(_, _), do: :undefined
 
   defp fill({:obj, ref} = obj, args) do
-    list = Heap.obj_to_list(ref)
-    new_list = fill_list(list, args, array_like_length(obj))
-    Heap.put_obj(ref, new_list)
+    case Heap.get_obj(ref) do
+      list when is_list(list) ->
+        new_list = fill_list(list, args, array_like_length(obj))
+        Heap.put_obj(ref, new_list)
+
+      {:qb_arr, arr} ->
+        new_list = fill_list(:array.to_list(arr), args, array_like_length(obj))
+        Heap.put_obj(ref, new_list)
+
+      _ ->
+        fill_object(obj, args)
+    end
+
     {:obj, ref}
   end
 
@@ -856,6 +866,21 @@ defmodule QuickBEAM.VM.Runtime.Array do
     Enum.with_index(list, fn item, idx ->
       if idx >= start_idx and idx < end_idx, do: val, else: item
     end)
+  end
+
+  defp fill_object(obj, args) do
+    len = array_like_length(obj)
+    val = arg(args, 0, :undefined)
+    start_idx = fill_start(arg(args, 1, :undefined), len)
+    end_idx = fill_end(arg(args, 2, :undefined), len)
+    fill_object_indices(obj, val, start_idx, end_idx)
+  end
+
+  defp fill_object_indices(_obj, _val, idx, end_idx) when idx >= end_idx, do: :ok
+
+  defp fill_object_indices(obj, val, idx, end_idx) do
+    Put.put(obj, Integer.to_string(idx), val)
+    fill_object_indices(obj, val, idx + 1, end_idx)
   end
 
   defp fill_start(:undefined, _len), do: 0
