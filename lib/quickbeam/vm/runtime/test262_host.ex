@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.Boolean, as: JSBoolean
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Errors
+  alias QuickBEAM.VM.Runtime.Date, as: JSDate
   alias QuickBEAM.VM.Runtime.FinalizationRegistry, as: JSFinalizationRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.Globals.Functions
@@ -39,6 +40,10 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     string_proto = Heap.wrap(%{"__proto__" => object_proto})
     string_ctor = realm_constructor("String", &Constructors.string/2, string_proto)
     Heap.put_obj_key(elem(string_proto, 1), "constructor", string_ctor)
+
+    date_proto = Heap.wrap(%{"__proto__" => object_proto})
+    date_ctor = realm_constructor("Date", &JSDate.constructor/2, date_proto)
+    Heap.put_obj_key(elem(date_proto, 1), "constructor", date_ctor)
 
     map_proto = Heap.wrap(%{"__proto__" => object_proto})
     map_ctor = realm_constructor("Map", JSMap.constructor(), map_proto)
@@ -87,6 +92,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         boolean_proto,
         number_proto,
         string_proto,
+        date_proto,
         map_proto,
         set_proto,
         weak_map_proto,
@@ -108,6 +114,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Boolean" => boolean_ctor,
         "Number" => number_ctor,
         "String" => string_ctor,
+        "Date" => date_ctor,
         "Map" => map_ctor,
         "Set" => set_ctor,
         "WeakMap" => weak_map_ctor,
@@ -138,6 +145,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       %{boolean_proto: boolean_proto} when intrinsic == :boolean -> boolean_proto
       %{number_proto: number_proto} when intrinsic == :number -> number_proto
       %{string_proto: string_proto} when intrinsic == :string -> string_proto
+      %{date_proto: date_proto} when intrinsic == :date -> date_proto
       %{map_proto: map_proto} when intrinsic == :map -> map_proto
       %{set_proto: set_proto} when intrinsic == :set -> set_proto
       %{weak_map_proto: weak_map_proto} when intrinsic == :weak_map -> weak_map_proto
@@ -190,6 +198,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          boolean_proto,
          number_proto,
          string_proto,
+         date_proto,
          map_proto,
          set_proto,
          weak_map_proto,
@@ -216,6 +225,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
           boolean_proto,
           number_proto,
           string_proto,
+          date_proto,
           map_proto,
           set_proto,
           weak_map_proto,
@@ -240,6 +250,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         boolean_proto,
         number_proto,
         string_proto,
+        date_proto,
         map_proto,
         set_proto,
         weak_map_proto,
@@ -259,6 +270,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          boolean_proto,
          number_proto,
          string_proto,
+         date_proto,
          map_proto,
          set_proto,
          weak_map_proto,
@@ -273,6 +285,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       boolean_proto: boolean_proto,
       number_proto: number_proto,
       string_proto: string_proto,
+      date_proto: date_proto,
       map_proto: map_proto,
       set_proto: set_proto,
       weak_map_proto: weak_map_proto,

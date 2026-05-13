@@ -108,7 +108,7 @@ defmodule QuickBEAM.VM.Runtime.Date do
     end
   end
 
-  def constructor(args, _this) do
+  def constructor(args, this) do
     ms =
       case args do
         [] ->
@@ -154,6 +154,23 @@ defmodule QuickBEAM.VM.Runtime.Date do
           System.system_time(:millisecond)
       end
 
+    construct_date_object(this, ms)
+  end
+
+  defp construct_date_object({:obj, ref} = object, ms) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) and is_map_key(map, proto()) ->
+        Heap.put_obj(ref, Map.put(map, date_ms(), ms))
+        object
+
+      _ ->
+        new_date_object(ms)
+    end
+  end
+
+  defp construct_date_object(_this, ms), do: new_date_object(ms)
+
+  defp new_date_object(ms) do
     Heap.wrap(%{
       date_ms() => ms,
       proto() => QuickBEAM.VM.Runtime.Constructors.class_proto("Date")

@@ -699,6 +699,9 @@ defmodule QuickBEAM.VM.Invocation do
   defp realm_default_prototype({:builtin, "Array", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :array)
 
+  defp realm_default_prototype({:builtin, "Date", _}, new_target),
+    do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :date)
+
   defp realm_default_prototype({:builtin, "Map", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :map)
 
