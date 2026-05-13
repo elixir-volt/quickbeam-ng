@@ -262,6 +262,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           Heap.frozen?(ref) ->
             :ok
 
+          wrapped_string_virtual_readonly?(map, key) ->
+            :ok
+
           not Map.has_key?(map, key) and proto_has_setter_property?(Map.get(map, proto()), key) ->
             set(Map.get(map, proto()), key, val, obj)
 
@@ -369,6 +372,21 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         :ok
     end
   end
+
+  defp wrapped_string_virtual_readonly?(map, "length") do
+    match?({:ok, string} when is_binary(string), WrappedPrimitive.value(map, :string))
+  end
+
+  defp wrapped_string_virtual_readonly?(map, key) when is_map(map) do
+    with {:ok, string} when is_binary(string) <- WrappedPrimitive.value(map, :string),
+         index when is_integer(index) <- Semantics.parse_array_index_key(key) do
+      index >= 0 and index < Get.string_length(string)
+    else
+      _ -> false
+    end
+  end
+
+  defp wrapped_string_virtual_readonly?(_map, _key), do: false
 
   @doc "Writes a property using an explicit receiver, for Reflect.set semantics."
   def set({:obj, ref}, key, val, receiver) do

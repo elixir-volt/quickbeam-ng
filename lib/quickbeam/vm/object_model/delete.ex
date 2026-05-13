@@ -38,7 +38,8 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
         map when is_map(map) ->
           desc = Heap.get_prop_desc(ref, key)
 
-          if match?(%{configurable: false}, desc) do
+          if wrapped_string_virtual_non_configurable?(map, key) or
+               match?(%{configurable: false}, desc) do
             false
           else
             updated =
@@ -72,6 +73,21 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   def delete_property(_obj, _key), do: true
+
+  defp wrapped_string_virtual_non_configurable?(map, "length") do
+    match?({:ok, string} when is_binary(string), WrappedPrimitive.value(map, :string))
+  end
+
+  defp wrapped_string_virtual_non_configurable?(map, key) when is_map(map) do
+    with {:ok, string} when is_binary(string) <- WrappedPrimitive.value(map, :string),
+         index when is_integer(index) <- Semantics.parse_array_index_key(key) do
+      index >= 0 and index < QuickBEAM.VM.ObjectModel.Get.string_length(string)
+    else
+      _ -> false
+    end
+  end
+
+  defp wrapped_string_virtual_non_configurable?(_map, _key), do: false
 
   defp mark_wrapped_virtual_delete(ref, map, key) when is_binary(key) do
     if WrappedPrimitive.type(map) != nil and
