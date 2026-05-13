@@ -18,10 +18,15 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   alias QuickBEAM.VM.Runtime.TypedArray
 
   def present?({:obj, ref}, key) do
-    if key == proto() and Heap.get_prop_desc(ref, key) == nil do
-      false
-    else
-      present?(ref, Heap.get_obj(ref, %{}), key)
+    cond do
+      key in ["caller", "arguments"] and Heap.get_func_proto() == {:obj, ref} ->
+        true
+
+      key == proto() and Heap.get_prop_desc(ref, key) == nil ->
+        false
+
+      true ->
+        present?(ref, Heap.get_obj(ref, %{}), key)
     end
   end
 
@@ -250,6 +255,21 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     data = Heap.get_obj(ref, %{})
 
     cond do
+      prop_name in ["caller", "arguments"] and Heap.get_func_proto() == {:obj, ref} ->
+        thrower =
+          {:builtin, "ThrowTypeError",
+           fn _args, _this ->
+             QuickBEAM.VM.JSThrow.type_error!(
+               "'caller' and 'arguments' are restricted function properties and cannot be accessed in this context."
+             )
+           end}
+
+        PropertyDescriptor.accessor_object(
+          thrower,
+          thrower,
+          PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: true)
+        )
+
       is_map(data) and Map.has_key?(data, proxy_target()) ->
         proxy_descriptor(data, prop_name)
 
