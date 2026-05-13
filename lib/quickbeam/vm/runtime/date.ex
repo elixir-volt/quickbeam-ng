@@ -319,10 +319,20 @@ defmodule QuickBEAM.VM.Runtime.Date do
       dt ->
         millis = rem(abs(trunc(ms)), 1000)
 
-        Calendar.strftime(dt, "%Y-%m-%dT%H:%M:%S") <>
+        iso_year(dt.year) <>
+          Calendar.strftime(dt, "-%m-%dT%H:%M:%S") <>
           "." <> String.pad_leading(Integer.to_string(millis), 3, "0") <> "Z"
     end
   end
+
+  defp iso_year(year) when year >= 0 and year <= 9999,
+    do: String.pad_leading(Integer.to_string(year), 4, "0")
+
+  defp iso_year(year) when year < 0,
+    do: "-" <> String.pad_leading(Integer.to_string(abs(year)), 6, "0")
+
+  defp iso_year(year),
+    do: "+" <> String.pad_leading(Integer.to_string(year), 6, "0")
 
   defp to_json(this, _args) do
     tv = QuickBEAM.VM.Interpreter.Values.Coercion.to_primitive(this, "number")
@@ -675,15 +685,53 @@ defmodule QuickBEAM.VM.Runtime.Date do
         true -> s
       end
 
-    case safe_rfc3339_parse(with_tz) do
+    case parse_extended_iso_utc(with_tz) do
       {:ok, ms} ->
-        if has_time and not has_explicit_tz,
-          do: ms + tz_offset_minutes() * 60_000,
-          else: ms
+        ms
 
       :error ->
-        :miss
+        case safe_rfc3339_parse(with_tz) do
+          {:ok, ms} ->
+            if has_time and not has_explicit_tz,
+              do: ms + tz_offset_minutes() * 60_000,
+              else: ms
+
+          :error ->
+            :miss
+        end
     end
+  end
+
+  defp parse_extended_iso_utc(s) do
+    pattern =
+      ~r/^([+-]\d{6}|\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?Z$/
+
+    case Regex.run(pattern, s) do
+      [_, year, month, day, hour, minute, second, ms] ->
+        extended_iso_ms(year, month, day, hour, minute, second, ms)
+
+      [_, year, month, day, hour, minute, second] ->
+        extended_iso_ms(year, month, day, hour, minute, second, "0")
+
+      [_, year, month, day, hour, minute] ->
+        extended_iso_ms(year, month, day, hour, minute, "0", "0")
+
+      _ ->
+        :error
+    end
+  end
+
+  defp extended_iso_ms(year, month, day, hour, minute, second, ms) do
+    value =
+      utc_ms(
+        {String.to_integer(year), String.to_integer(month), String.to_integer(day),
+         String.to_integer(hour), String.to_integer(minute), String.to_integer(second),
+         (ms || "0") |> String.pad_trailing(3, "0") |> String.to_integer()}
+      )
+
+    if value == :nan, do: :error, else: {:ok, value}
+  rescue
+    _ -> :error
   end
 
   defp safe_rfc3339_parse(s) do
