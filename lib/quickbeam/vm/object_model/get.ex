@@ -346,10 +346,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         end
 
       %{date_ms() => _} = map ->
-        case Map.get(map, key) do
-          nil -> JSDate.proto_property(key)
-          val -> val
-        end
+        Map.get(map, key, :undefined)
 
       %{typed_array() => true} = map ->
         case key do
@@ -759,10 +756,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp direct_prototype_property(map, key) do
     case Map.get(map, :__internal_proto__, Map.get(map, proto())) do
-      {:obj, proto_ref} ->
+      {:obj, proto_ref} = proto ->
         case Heap.get_obj(proto_ref, %{}) do
           proto_map when is_map(proto_map) -> Map.get(proto_map, key, :undefined)
-          _ -> :undefined
+          _ -> get(proto, key)
         end
 
       _ ->
