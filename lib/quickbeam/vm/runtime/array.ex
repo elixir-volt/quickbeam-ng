@@ -829,29 +829,52 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp flat_map(_, _), do: :undefined
 
-  defp fill({:obj, ref}, args) do
+  defp fill({:obj, ref} = obj, args) do
     list = Heap.obj_to_list(ref)
-    val = arg(args, 0, :undefined)
-    start_idx = arg(args, 1, nil) || 0
-    end_idx = arg(args, 2, nil) || length(list)
-
-    new_list =
-      Enum.with_index(list, fn item, idx ->
-        if idx >= start_idx and idx < end_idx, do: val, else: item
-      end)
-
+    new_list = fill_list(list, args, array_like_length(obj))
     Heap.put_obj(ref, new_list)
     {:obj, ref}
   end
 
   defp fill({:qb_arr, arr}, args), do: fill(:array.to_list(arr), args)
 
-  defp fill(list, args) when is_list(list) do
-    val = arg(args, 0, :undefined)
-    List.duplicate(val, length(list))
+  defp fill(list, args) when is_list(list), do: fill_list(list, args, length(list))
+
+  defp fill(value, args) when is_boolean(value) or is_number(value) or is_binary(value) do
+    value
+    |> primitive_object()
+    |> fill(args)
   end
 
   defp fill(_, _), do: :undefined
+
+  defp fill_list(list, args, len) do
+    val = arg(args, 0, :undefined)
+    start_idx = fill_start(arg(args, 1, :undefined), len)
+    end_idx = fill_end(arg(args, 2, :undefined), len)
+
+    Enum.with_index(list, fn item, idx ->
+      if idx >= start_idx and idx < end_idx, do: val, else: item
+    end)
+  end
+
+  defp fill_start(:undefined, _len), do: 0
+  defp fill_start(:neg_infinity, _len), do: 0
+  defp fill_start(:infinity, len), do: len
+
+  defp fill_start(value, len) do
+    index = to_integer_or_infinity(value)
+    if index < 0, do: max(len + index, 0), else: min(index, len)
+  end
+
+  defp fill_end(:undefined, len), do: len
+  defp fill_end(:infinity, len), do: len
+  defp fill_end(:neg_infinity, _len), do: 0
+
+  defp fill_end(value, len) do
+    index = to_integer_or_infinity(value)
+    if index < 0, do: max(len + index, 0), else: min(index, len)
+  end
 
   # ── Predicates ──
 
@@ -996,6 +1019,16 @@ defmodule QuickBEAM.VM.Runtime.Array do
       :neg_infinity -> 0
       :nan -> 0
       number when is_number(number) -> min(max(trunc(number), 0), @max_safe_integer)
+      _ -> 0
+    end
+  end
+
+  defp to_integer_or_infinity(value) do
+    case Runtime.to_number(value) do
+      :infinity -> :infinity
+      :neg_infinity -> :neg_infinity
+      :nan -> 0
+      number when is_number(number) -> trunc(number)
       _ -> 0
     end
   end
