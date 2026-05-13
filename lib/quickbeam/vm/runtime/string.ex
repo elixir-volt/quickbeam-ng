@@ -157,7 +157,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   proto {:symbol, "Symbol.iterator"} do
     this
-    |> unwrap_string()
+    |> coerce_string_this()
     |> String.codepoints()
     |> iterator_from()
   end
