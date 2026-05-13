@@ -279,6 +279,19 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
   end
 
   def compile(
+        %AST.UnaryExpression{operator: "void", argument: argument},
+        scope,
+        instructions,
+        constants,
+        callbacks
+      ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(argument, scope, instructions, constants) do
+      {:ok, instructions ++ [:drop, :undefined], constants}
+    end
+  end
+
+  def compile(
         %AST.UnaryExpression{operator: "typeof", argument: %AST.Identifier{name: name}},
         scope,
         instructions,
