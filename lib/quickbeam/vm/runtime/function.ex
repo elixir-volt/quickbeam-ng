@@ -322,6 +322,13 @@ defmodule QuickBEAM.VM.Runtime.Function do
       {:closure, _, %QuickBEAM.VM.Function{}} ->
         Invocation.invoke_with_receiver(fun, args, coerce_function_this(fun, this_arg))
 
+      {:builtin, _, _} = builtin ->
+        if Test262Host.realm_global(builtin) do
+          Builtin.call(builtin, args, coerce_function_this(builtin, this_arg))
+        else
+          Builtin.call(builtin, args, this_arg)
+        end
+
       other ->
         Builtin.call(other, args, this_arg)
     end
