@@ -936,27 +936,50 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp flat_item(val), do: [val]
 
-  defp flat_map({:obj, ref}, args), do: flat_map(Heap.obj_to_list(ref), args)
+  defp flat_map(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp flat_map(:undefined, _),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
   defp flat_map({:qb_arr, arr}, args), do: flat_map(:array.to_list(arr), args)
+  defp flat_map(value, args), do: flat_map_array_like(find_receiver(value), args)
 
-  defp flat_map(list, [cb | _]) when is_list(list) do
+  defp flat_map_array_like(this, [fun | rest]) do
+    len = array_like_length(this)
+
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("mapperFunction must be callable")
+    end
+
+    this_arg = filter_this_arg(rest)
+
     result =
-      Enum.flat_map(Enum.with_index(list), fn {item, idx} ->
-        val = Runtime.call_callback(cb, [item, idx, list])
+      if len == 0 do
+        []
+      else
+        0..(len - 1)
+        |> Enum.flat_map(fn idx ->
+          key = Integer.to_string(idx)
 
-        case val do
-          {:obj, r} -> Heap.obj_to_list(r)
-          {:qb_arr, arr2} -> :array.to_list(arr2)
-          l when is_list(l) -> l
-          _ -> [val]
-        end
-      end)
+          if HasProperty.has_property?(this, key) do
+            value = find_value_at(this, idx)
 
-    Heap.wrap(result)
+            fun
+            |> QuickBEAM.VM.Invocation.invoke_with_receiver([value, idx, this], this_arg)
+            |> flat_item()
+          else
+            []
+          end
+        end)
+      end
+
+    wrap_filter_result(this, result)
   end
 
-  defp flat_map(_, _), do: :undefined
+  defp flat_map_array_like(this, _args) do
+    _len = array_like_length(this)
+    JSThrow.type_error!("mapperFunction must be callable")
+  end
 
   defp fill(nil, _args), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
