@@ -902,15 +902,20 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp flat({:obj, ref} = obj, args) do
     depth = flat_depth(args)
 
-    case Heap.get_obj(ref) do
-      {:qb_arr, arr} -> flatten_array(:array.to_list(arr), depth)
-      list when is_list(list) -> flatten_array(list, depth)
-      _ -> flat_array_like(obj, depth)
-    end
+    result =
+      case Heap.get_obj(ref) do
+        {:qb_arr, arr} -> flatten_array(:array.to_list(arr), depth)
+        list when is_list(list) -> flatten_array(list, depth)
+        _ -> flat_array_like(obj, depth)
+      end
+
+    wrap_filter_result(obj, result)
   end
 
-  defp flat({:qb_arr, arr}, args), do: flatten_array(:array.to_list(arr), flat_depth(args))
-  defp flat(list, args) when is_list(list), do: flatten_array(list, flat_depth(args))
+  defp flat({:qb_arr, arr}, args),
+    do: Heap.wrap(flatten_array(:array.to_list(arr), flat_depth(args)))
+
+  defp flat(list, args) when is_list(list), do: Heap.wrap(flatten_array(list, flat_depth(args)))
   defp flat(_, _), do: []
 
   defp flat_depth([]), do: 1
