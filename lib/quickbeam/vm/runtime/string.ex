@@ -699,6 +699,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
     {start_idx, end_idx} =
       case args do
+        [st, :undefined] -> {slice_index(st, len), len}
         [st, en] -> {slice_index(st, len), slice_index(en, len)}
         [st] -> {slice_index(st, len), len}
         [] -> {0, len}
