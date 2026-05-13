@@ -16,11 +16,11 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   # ── Number.prototype ──
 
-  proto "toString" do
+  proto "toString", length: 1 do
     to_string_with_radix(unwrap_number(this), args)
   end
 
-  proto "toFixed" do
+  proto "toFixed", length: 1 do
     to_fixed(unwrap_number(this), args)
   end
 
@@ -28,11 +28,11 @@ defmodule QuickBEAM.VM.Runtime.Number do
     unwrap_number(this)
   end
 
-  proto "toExponential" do
+  proto "toExponential", length: 1 do
     to_exponential(unwrap_number(this), args)
   end
 
-  proto "toPrecision" do
+  proto "toPrecision", length: 1 do
     to_precision(unwrap_number(this), args)
   end
 

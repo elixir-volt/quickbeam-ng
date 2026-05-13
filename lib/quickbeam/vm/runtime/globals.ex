@@ -165,11 +165,9 @@ defmodule QuickBEAM.VM.Runtime.Globals do
         (fn ->
            ctor = register("Number", &Constructors.number/2, module: Number, auto_proto: true)
 
-           install_prototype_methods(
-             ctor,
-             Number,
-             ~w(toString toFixed valueOf toExponential toPrecision toLocaleString)
-           )
+           number_methods = ~w(toString toFixed valueOf toExponential toPrecision toLocaleString)
+           install_prototype_methods(ctor, Number, number_methods)
+           install_number_method_lengths(ctor, number_methods)
 
            Heap.put_ctor_prop_desc(ctor, "prototype", %{
              writable: false,
@@ -639,6 +637,31 @@ defmodule QuickBEAM.VM.Runtime.Globals do
           enumerable: false,
           configurable: true
         })
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp install_number_method_lengths(ctor, names) do
+    case Heap.get_ctor_statics(ctor)["prototype"] do
+      {:obj, proto_ref} ->
+        for name <- names do
+          case Heap.get_obj(proto_ref, %{}) do
+            %{^name => method} ->
+              length = QuickBEAM.VM.Builtin.length(QuickBEAM.VM.Builtin.proto_meta(Number, name))
+              Heap.put_ctor_static(method, "length", length)
+
+              Heap.put_ctor_prop_desc(method, "length", %{
+                writable: false,
+                enumerable: false,
+                configurable: true
+              })
+
+            _ ->
+              :ok
+          end
+        end
 
       _ ->
         :ok
