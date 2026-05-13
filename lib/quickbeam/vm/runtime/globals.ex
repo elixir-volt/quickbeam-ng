@@ -760,6 +760,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     sym_species = {:symbol, "Symbol.species"}
     sym_match = {:symbol, "Symbol.match"}
     sym_match_all = {:symbol, "Symbol.matchAll"}
+    sym_replace = {:symbol, "Symbol.replace"}
 
     Heap.put_ctor_static(
       ctor,
@@ -773,6 +774,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
       {:obj, proto_ref} ->
         Heap.put_obj_key(proto_ref, sym_match, RegExp.proto_property(sym_match))
         Heap.put_obj_key(proto_ref, sym_match_all, RegExp.proto_property(sym_match_all))
+        Heap.put_obj_key(proto_ref, sym_replace, RegExp.proto_property(sym_replace))
 
         Heap.put_prop_desc(proto_ref, sym_match, %{
           writable: true,
@@ -781,6 +783,12 @@ defmodule QuickBEAM.VM.Runtime.Globals do
         })
 
         Heap.put_prop_desc(proto_ref, sym_match_all, %{
+          writable: true,
+          enumerable: false,
+          configurable: true
+        })
+
+        Heap.put_prop_desc(proto_ref, sym_replace, %{
           writable: true,
           enumerable: false,
           configurable: true

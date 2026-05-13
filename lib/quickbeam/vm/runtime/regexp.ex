@@ -26,6 +26,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     {:builtin, "[Symbol.matchAll]", fn args, this -> regexp_match_all(this, args) end}
   end
 
+  def proto_property({:symbol, "Symbol.replace"}) do
+    {:builtin, "[Symbol.replace]", fn args, this -> regexp_replace(this, args) end}
+  end
+
   def proto_accessor("source"),
     do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
 
@@ -316,6 +320,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp regexp_match(regexp, []), do: exec(regexp, [""])
+
+  defp regexp_replace(regexp, [string, replacement | _]) do
+    JSString.regex_replace(QuickBEAM.VM.Interpreter.Values.stringify(string), regexp, replacement)
+  end
+
+  defp regexp_replace(regexp, [string | _]), do: regexp_replace(regexp, [string, :undefined])
+  defp regexp_replace(regexp, []), do: regexp_replace(regexp, ["", :undefined])
 
   defp regexp_match_nif(regexp, string, flags) do
     if String.contains?(flags, "g") do
