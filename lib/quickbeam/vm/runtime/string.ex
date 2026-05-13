@@ -10,6 +10,9 @@ defmodule QuickBEAM.VM.Runtime.String do
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.RegExp
 
+  @trim_leading_pattern ~r/^[\t\n\x{000B}\f\r \x{00A0}\x{1680}\x{2000}\x{2001}\x{2002}\x{2003}\x{2004}\x{2005}\x{2006}\x{2007}\x{2008}\x{2009}\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+/u
+  @trim_trailing_pattern ~r/[\t\n\x{000B}\f\r \x{00A0}\x{1680}\x{2000}\x{2001}\x{2002}\x{2003}\x{2004}\x{2005}\x{2006}\x{2007}\x{2008}\x{2009}\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+$/u
+
   # ── Dispatch ──
 
   proto "charAt" do
@@ -61,15 +64,15 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   proto "trim" do
-    String.trim(coerce_string_this(this))
+    coerce_string_this(this) |> trim_js()
   end
 
   proto "trimStart" do
-    String.trim_leading(coerce_string_this(this))
+    coerce_string_this(this) |> trim_start_js()
   end
 
   proto "trimEnd" do
-    String.trim_trailing(coerce_string_this(this))
+    coerce_string_this(this) |> trim_end_js()
   end
 
   proto "toUpperCase" do
@@ -337,6 +340,10 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp string_at(s, _) when is_binary(s), do: utf16_code_unit_at(s, 0)
 
+  defp trim_js(s), do: s |> trim_start_js() |> trim_end_js()
+  defp trim_start_js(s), do: Regex.replace(@trim_leading_pattern, s, "")
+  defp trim_end_js(s), do: Regex.replace(@trim_trailing_pattern, s, "")
+
   defp locale_lowercase(s) do
     s
     |> String.codepoints()
@@ -408,7 +415,17 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp coerce_string_this({:regexp, _, _} = regexp), do: regexp_to_string_value(regexp)
   defp coerce_string_this({:regexp, _, _, _} = regexp), do: regexp_to_string_value(regexp)
 
-  defp coerce_string_this({:obj, _} = obj) do
+  defp coerce_string_this({:obj, ref}) do
+    if Heap.get_array_prop(ref, "__arguments__") == true do
+      "[object Arguments]"
+    else
+      coerce_object_to_string({:obj, ref})
+    end
+  end
+
+  defp coerce_string_this(val), do: QuickBEAM.VM.Interpreter.Values.stringify(val)
+
+  defp coerce_object_to_string(obj) do
     case Coercion.to_primitive(obj, "string") do
       {:symbol, _} ->
         throw(
@@ -424,8 +441,6 @@ defmodule QuickBEAM.VM.Runtime.String do
         QuickBEAM.VM.Interpreter.Values.stringify(value)
     end
   end
-
-  defp coerce_string_this(val), do: QuickBEAM.VM.Interpreter.Values.stringify(val)
 
   defp char_at(s, [idx | _]) when is_binary(s) do
     i = to_integer_or_infinity(idx)
