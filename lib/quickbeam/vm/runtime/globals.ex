@@ -259,7 +259,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
            ctor
          end).(),
-      "BigInt" => register("BigInt", &Constructors.bigint/2),
+      "BigInt" => register("BigInt", &Constructors.bigint/2, auto_proto: true),
       "Boolean" => register("Boolean", Boolean.constructor(), module: Boolean, auto_proto: true),
       "Function" =>
         (fn ->
