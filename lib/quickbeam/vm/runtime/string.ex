@@ -83,7 +83,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   proto "repeat" do
-    String.duplicate(coerce_string_this(this), Runtime.to_int(hd(args)))
+    repeat(coerce_string_this(this), args)
   end
 
   proto "padStart" do
@@ -797,6 +797,17 @@ defmodule QuickBEAM.VM.Runtime.String do
     result = Enum.reverse([tail | acc])
     if limit != :infinity, do: Enum.take(result, limit), else: result
   end
+
+  defp repeat(s, [count | _]) do
+    case to_integer_or_infinity(count) do
+      :infinity -> throw({:js_throw, Heap.make_error("Invalid count value", "RangeError")})
+      :neg_infinity -> throw({:js_throw, Heap.make_error("Invalid count value", "RangeError")})
+      n when n < 0 -> throw({:js_throw, Heap.make_error("Invalid count value", "RangeError")})
+      n -> String.duplicate(s, n)
+    end
+  end
+
+  defp repeat(_s, []), do: ""
 
   defp pad(s, [len | rest], dir) when is_binary(s) do
     target = Runtime.to_int(len) - Get.string_length(s)
