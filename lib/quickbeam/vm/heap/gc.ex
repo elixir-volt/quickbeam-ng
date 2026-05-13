@@ -59,28 +59,34 @@ defmodule QuickBEAM.VM.Heap.GC do
          [{:closure, captured, %QuickBEAM.VM.Function{} = fun} = closure | rest],
          visited
        ) do
-    related = [
-      Store.get_class_proto(closure),
-      Store.get_class_proto(fun),
-      Store.get_parent_ctor(fun)
-    ]
+    mark_callable({:closure, :erlang.phash2(closure)}, rest, visited, fn ->
+      related = [
+        Store.get_class_proto(closure),
+        Store.get_class_proto(fun),
+        Store.get_parent_ctor(fun)
+      ]
 
-    statics =
-      Map.values(Store.get_ctor_statics(closure)) ++ Map.values(Store.get_ctor_statics(fun))
+      statics =
+        Map.values(Store.get_ctor_statics(closure)) ++ Map.values(Store.get_ctor_statics(fun))
 
-    mark(Map.values(captured) ++ related ++ statics ++ rest, visited)
+      Map.values(captured) ++ related ++ statics
+    end)
   end
 
   defp mark([{:builtin, _, _} = builtin | rest], visited) do
-    related = [Store.get_class_proto(builtin), Store.get_parent_ctor(builtin)]
-    statics = Map.values(Store.get_ctor_statics(builtin))
-    mark(related ++ statics ++ rest, visited)
+    mark_callable({:builtin, :erlang.phash2(builtin)}, rest, visited, fn ->
+      related = [Store.get_class_proto(builtin), Store.get_parent_ctor(builtin)]
+      statics = Map.values(Store.get_ctor_statics(builtin))
+      related ++ statics
+    end)
   end
 
   defp mark([%QuickBEAM.VM.Function{} = fun | rest], visited) do
-    related = [Store.get_class_proto(fun), Store.get_parent_ctor(fun)]
-    statics = Map.values(Store.get_ctor_statics(fun))
-    mark(Map.values(Map.from_struct(fun)) ++ related ++ statics ++ rest, visited)
+    mark_callable({:function, fun.id}, rest, visited, fn ->
+      related = [Store.get_class_proto(fun), Store.get_parent_ctor(fun)]
+      statics = Map.values(Store.get_ctor_statics(fun))
+      Map.values(Map.from_struct(fun)) ++ related ++ statics
+    end)
   end
 
   defp mark([tuple | rest], visited) when is_tuple(tuple),
@@ -93,6 +99,15 @@ defmodule QuickBEAM.VM.Heap.GC do
     do: mark(Map.values(map) ++ rest, visited)
 
   defp mark([_ | rest], visited), do: mark(rest, visited)
+
+  defp mark_callable(key, rest, visited, children_fn) do
+    if MapSet.member?(visited, key) do
+      mark(rest, visited)
+    else
+      visited = MapSet.put(visited, key)
+      mark(children_fn.() ++ rest, visited)
+    end
+  end
 
   defp mark_ref(key, rest, visited, children_fn) do
     if MapSet.member?(visited, key) do
