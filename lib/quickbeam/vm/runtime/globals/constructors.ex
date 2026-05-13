@@ -132,7 +132,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       {params, body} =
         case Enum.reverse(args) do
           [body | param_parts] ->
-            {Enum.join(Enum.reverse(Enum.map(param_parts, &stringify_arg/1)), ","),
+            {Enum.join(Enum.map(Enum.reverse(param_parts), &stringify_arg/1), ","),
              stringify_arg(body)}
 
           [] ->
