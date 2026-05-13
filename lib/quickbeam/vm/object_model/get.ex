@@ -770,6 +770,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
       map when is_map(map) ->
         cond do
+          Map.has_key?(map, proxy_target()) and
+              QuickBEAM.VM.Builtin.callable?(Map.get(map, proxy_target())) ->
+            fallback_to_function_proto(:undefined, Map.get(map, proxy_target()), key)
+
           Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) ->
             JSMap.weak_proto_property(key)
 
