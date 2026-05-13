@@ -278,6 +278,14 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("isSafeInteger"),
     do: meta("isSafeInteger", [length: 1, constructable: false], :static)
 
+  def named_meta("toFixed"), do: meta("toFixed", [length: 1, constructable: false], :proto)
+
+  def named_meta("toExponential"),
+    do: meta("toExponential", [length: 1, constructable: false], :proto)
+
+  def named_meta("toPrecision"),
+    do: meta("toPrecision", [length: 1, constructable: false], :proto)
+
   def named_meta("parseFloat"), do: meta("parseFloat", [length: 1, constructable: false], :static)
   def named_meta("parseInt"), do: meta("parseInt", [length: 2, constructable: false], :static)
 
