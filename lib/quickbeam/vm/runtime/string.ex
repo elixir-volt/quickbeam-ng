@@ -862,14 +862,9 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp replace(s, [pattern, replacement | _]) when is_binary(s) do
     case pattern do
-      {:regexp, _bytecode, _source} = r ->
-        regex_replace(s, r, replacement)
-
-      pat when is_binary(pat) ->
-        :binary.replace(s, pat, Runtime.stringify(replacement))
-
-      _ ->
-        s
+      {:regexp, _, _, _} = r -> regex_replace(s, r, replacement)
+      {:regexp, _, _} = r -> regex_replace(s, r, replacement)
+      pat -> string_replace_first(s, stringify_search_string(pat), replacement)
     end
   end
 
@@ -1012,45 +1007,137 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
+  defp string_replace_first(s, pattern, replacement) do
+    case :binary.match(s, pattern) do
+      {index, length} ->
+        before = binary_part(s, 0, index)
+        matched = binary_part(s, index, length)
+        after_str = binary_part(s, index + length, byte_size(s) - index - length)
+
+        before <>
+          replacement_text(replacement, matched, before, after_str, [], index, s) <> after_str
+
+      :nomatch ->
+        s
+    end
+  end
+
+  defp regex_replace(s, {:regexp, bytecode, source, _ref}, replacement),
+    do: regex_replace(s, {:regexp, bytecode, source}, replacement)
+
+  defp regex_replace(s, {:regexp, nil, source}, replacement) when is_binary(source),
+    do: string_replace_first(s, source, replacement)
+
   defp regex_replace(s, {:regexp, bytecode, _source}, replacement)
        when is_binary(s) and is_binary(bytecode) do
-    rep = Runtime.stringify(replacement)
     global? = Bitwise.band(:binary.at(bytecode, 0), 1) != 0
 
     if global? do
-      regex_replace_all(s, bytecode, rep, 0, [])
+      regex_replace_all(s, bytecode, replacement, 0, [])
     else
-      regex_replace_first(s, bytecode, rep)
+      regex_replace_first(s, bytecode, replacement)
     end
   end
 
   defp regex_replace(s, _, _), do: s
 
-  defp regex_replace_first(s, bytecode, rep) do
+  defp regex_replace_first(s, bytecode, replacement) do
     case RegExp.nif_exec(bytecode, s, 0) do
       nil ->
         s
 
-      [{match_start, match_len} | _captures] ->
+      [{match_start, match_len} | captures] ->
         before = binary_part(s, 0, match_start)
+        matched = binary_part(s, match_start, match_len)
 
         after_str =
           binary_part(s, match_start + match_len, byte_size(s) - match_start - match_len)
 
-        before <> rep <> after_str
+        capture_strings = capture_strings(s, captures)
+
+        before <>
+          replacement_text(
+            replacement,
+            matched,
+            before,
+            after_str,
+            capture_strings,
+            match_start,
+            s
+          ) <> after_str
     end
   end
 
-  defp regex_replace_all(s, bytecode, rep, offset, acc) do
+  defp regex_replace_all(s, bytecode, replacement, offset, acc) do
     case RegExp.nif_exec(bytecode, s, offset) do
       nil ->
         IO.iodata_to_binary(acc ++ [binary_part(s, offset, byte_size(s) - offset)])
 
-      [{match_start, match_len} | _captures] ->
-        before = binary_part(s, offset, match_start - offset)
+      [{match_start, match_len} | captures] ->
+        before_match = binary_part(s, offset, match_start - offset)
+        before = binary_part(s, 0, match_start)
+        matched = binary_part(s, match_start, match_len)
+
+        after_str =
+          binary_part(s, match_start + match_len, byte_size(s) - match_start - match_len)
+
+        capture_strings = capture_strings(s, captures)
+
+        rep =
+          replacement_text(
+            replacement,
+            matched,
+            before,
+            after_str,
+            capture_strings,
+            match_start,
+            s
+          )
+
         next_offset = match_start + max(match_len, 1)
-        regex_replace_all(s, bytecode, rep, next_offset, acc ++ [before, rep])
+        regex_replace_all(s, bytecode, replacement, next_offset, acc ++ [before_match, rep])
     end
+  end
+
+  defp capture_strings(s, captures) do
+    Enum.map(captures, fn
+      {start, len} -> binary_part(s, start, len)
+      nil -> :undefined
+    end)
+  end
+
+  defp replacement_text(replacement, matched, before, after_str, captures, index, input) do
+    if Builtin.callable?(replacement) do
+      replacement
+      |> Invocation.invoke_with_receiver(
+        [matched | captures] ++ [index, input],
+        Runtime.gas_budget(),
+        nil
+      )
+      |> Runtime.stringify()
+    else
+      replacement
+      |> Runtime.stringify()
+      |> substitute_replacement(matched, before, after_str, captures)
+    end
+  end
+
+  defp substitute_replacement(rep, matched, before, after_str, captures) do
+    rep
+    |> String.replace("$$", "\0")
+    |> String.replace("$&", matched)
+    |> String.replace("$`", before)
+    |> String.replace("$'", after_str)
+    |> replace_capture_substitutions(captures)
+    |> String.replace("\0", "$")
+  end
+
+  defp replace_capture_substitutions(rep, captures) do
+    Enum.with_index(captures, 1)
+    |> Enum.reduce(rep, fn {capture, index}, acc ->
+      value = if capture == :undefined, do: "", else: capture
+      String.replace(acc, "$#{index}", value)
+    end)
   end
 
   defp search(s, [{:regexp, bytecode, _source} | _]) when is_binary(s) and is_binary(bytecode) do
