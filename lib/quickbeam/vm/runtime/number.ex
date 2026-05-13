@@ -278,7 +278,12 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   # ── toPrecision(precision) ──
 
-  defp to_precision(n, [:undefined | _]) when is_number(n), do: Runtime.stringify(n)
+  defp to_precision(n, [:undefined | _]) when is_number(n) or n == :nan, do: Runtime.stringify(n)
+
+  defp to_precision(:nan, [prec | _]) do
+    Runtime.to_int(prec)
+    "NaN"
+  end
 
   defp to_precision(n, [prec | _]) when is_number(n) do
     p = Runtime.to_int(prec)
