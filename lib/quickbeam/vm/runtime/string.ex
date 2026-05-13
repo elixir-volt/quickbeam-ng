@@ -1404,9 +1404,13 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp search(s, [{:regexp, nil, source} | _]) when is_binary(s) and is_binary(source),
     do: string_search(s, source)
 
-  defp search(s, [{:regexp, bytecode, _source} | _]) when is_binary(s) and is_binary(bytecode) do
+  defp search(s, [{:regexp, bytecode, source, _ref} | rest])
+       when is_binary(s) and is_binary(bytecode),
+       do: search(s, [{:regexp, bytecode, source} | rest])
+
+  defp search(s, [{:regexp, bytecode, source} | _]) when is_binary(s) and is_binary(bytecode) do
     case RegExp.nif_exec(bytecode, s, 0) do
-      nil -> -1
+      nil -> literal_regexp_search(s, source, Get.regexp_flags(bytecode))
       [{start, _} | _] -> start
     end
   end
@@ -1416,6 +1420,16 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp search(s, []) when is_binary(s), do: string_search(s, "")
   defp search(_, _), do: -1
+
+  defp literal_regexp_search(s, source, flags) do
+    if String.contains?(flags, "i") do
+      string_search(String.downcase(s), String.downcase(source))
+    else
+      string_search(s, source)
+    end
+  end
+
+  defp string_search(_s, ""), do: 0
 
   defp string_search(s, "\\d") do
     case Regex.run(~r/\d/, s, return: :index) do
