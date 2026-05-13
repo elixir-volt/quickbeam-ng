@@ -545,27 +545,41 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end)
   end
 
-  defp for_each({:obj, ref}, [fun | _]) do
-    list = Heap.obj_to_list(ref)
+  defp for_each(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-    Enum.each(Enum.with_index(list), fn {val, idx} ->
-      Runtime.call_callback(fun, [val, idx, list])
-    end)
-
-    :undefined
-  end
+  defp for_each(:undefined, _),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
   defp for_each({:qb_arr, arr}, args), do: for_each(:array.to_list(arr), args)
+  defp for_each(value, args), do: for_each_array_like(find_receiver(value), args)
 
-  defp for_each(list, [fun | _]) when is_list(list) do
-    Enum.each(Enum.with_index(list), fn {val, idx} ->
-      Runtime.call_callback(fun, [val, idx, list])
-    end)
+  defp for_each_array_like(this, [fun | rest]) do
+    len = array_like_length(this)
+
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("callback must be callable")
+    end
+
+    this_arg = filter_this_arg(rest)
+
+    if len > 0 do
+      Enum.each(0..(len - 1), fn idx ->
+        key = Integer.to_string(idx)
+
+        if HasProperty.has_property?(this, key) do
+          value = find_value_at(this, idx)
+          QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
+        end
+      end)
+    end
 
     :undefined
   end
 
-  defp for_each(_, _), do: :undefined
+  defp for_each_array_like(this, _args) do
+    _len = array_like_length(this)
+    JSThrow.type_error!("callback must be callable")
+  end
 
   # ── Search ──
 
