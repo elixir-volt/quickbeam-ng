@@ -92,21 +92,22 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   # ── toString(radix) ──
 
-  defp to_string_with_radix(n, [radix | _]) when is_number(n) do
+  defp to_string_with_radix(n, [radix | _])
+       when is_number(n) or n in [:nan, :infinity, :neg_infinity] do
     r = to_integer_or_throw(radix)
 
     cond do
-      r == 10 ->
+      r < 2 or r > 36 ->
+        JSThrow.range_error!("radix out of range")
+
+      n in [:nan, :infinity, :neg_infinity] or r == 10 ->
         Runtime.stringify(n)
 
-      r >= 2 and r <= 36 and n == trunc(n) ->
+      n == trunc(n) ->
         Integer.to_string(trunc(n), r) |> String.downcase()
 
-      r >= 2 and r <= 36 ->
-        format_float_with_runtime(n * 1.0, r) || float_to_radix(n * 1.0, r)
-
       true ->
-        Runtime.stringify(n)
+        format_float_with_runtime(n * 1.0, r) || float_to_radix(n * 1.0, r)
     end
   end
 
