@@ -656,9 +656,22 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own(_, _), do: :undefined
 
   defp regexp_prototype_property(key) do
-    case get(Runtime.global_class_proto("RegExp"), key) do
-      :undefined -> RegExp.proto_property(key)
-      value -> value
+    case Runtime.global_class_proto("RegExp") do
+      {:obj, ref} = proto ->
+        if Heap.get_prop_desc(ref, key) == :deleted do
+          :undefined
+        else
+          case get(proto, key) do
+            :undefined -> RegExp.proto_property(key)
+            value -> value
+          end
+        end
+
+      proto ->
+        case get(proto, key) do
+          :undefined -> RegExp.proto_property(key)
+          value -> value
+        end
     end
   end
 

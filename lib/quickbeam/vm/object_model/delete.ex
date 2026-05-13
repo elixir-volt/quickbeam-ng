@@ -49,6 +49,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
 
             Heap.put_obj(ref, updated)
             mark_wrapped_virtual_delete(ref, map, key)
+            mark_regexp_prototype_delete(ref, key)
             true
           end
 
@@ -97,6 +98,13 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   defp mark_wrapped_virtual_delete(_ref, _map, _key), do: :ok
+
+  defp mark_regexp_prototype_delete(ref, key) do
+    if QuickBEAM.VM.Runtime.global_class_proto("RegExp") == {:obj, ref} and
+         key in [{:symbol, "Symbol.match"}, {:symbol, "Symbol.matchAll"}] do
+      Heap.put_prop_desc(ref, key, :deleted)
+    end
+  end
 
   defp delete_ordinary_key(map, key) when is_integer(key) and key >= 0 do
     map |> Map.delete(key) |> Map.delete(Integer.to_string(key))

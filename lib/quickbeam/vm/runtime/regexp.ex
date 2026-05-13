@@ -21,6 +21,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     {:builtin, "[Symbol.match]", fn args, this -> regexp_match(this, args) end}
   end
 
+  def proto_property({:symbol, "Symbol.matchAll"}) do
+    {:builtin, "[Symbol.matchAll]", fn args, this -> regexp_match_all(this, args) end}
+  end
+
   def proto_accessor("source"),
     do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
 
@@ -120,6 +124,76 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     Heap.put_obj(ref, strings)
     Heap.put_regexp_result(ref, %{"index" => index, "input" => input, "groups" => :undefined})
     {:obj, ref}
+  end
+
+  defp regexp_match_all(regexp, [string | _]) do
+    string = QuickBEAM.VM.Interpreter.Values.stringify(string)
+    Heap.wrap_iterator(regexp_match_all_results(regexp, string, 0, []))
+  end
+
+  defp regexp_match_all(regexp, []), do: regexp_match_all(regexp, [""])
+
+  defp regexp_match_all_results({:regexp, nil, source}, string, offset, acc)
+       when is_binary(source) do
+    case literal_exec_from(string, source, offset) do
+      nil ->
+        Enum.reverse(acc)
+
+      {result, next_offset} ->
+        regexp_match_all_results({:regexp, nil, source}, string, next_offset, [result | acc])
+    end
+  end
+
+  defp regexp_match_all_results({:regexp, bytecode, source, _ref}, string, offset, acc),
+    do: regexp_match_all_results({:regexp, bytecode, source}, string, offset, acc)
+
+  defp regexp_match_all_results({:regexp, bytecode, _source} = regexp, string, offset, acc)
+       when is_binary(bytecode) do
+    case nif_exec(bytecode, string, offset) do
+      nil ->
+        Enum.reverse(acc)
+
+      captures ->
+        strings =
+          Enum.map(captures, fn
+            {start, len} -> binary_part(string, start, len)
+            nil -> :undefined
+          end)
+
+        {start, len} = hd(captures)
+        result = exec_result(strings, start, string)
+        regexp_match_all_results(regexp, string, start + max(len, 1), [result | acc])
+    end
+  end
+
+  defp regexp_match_all_results(_regexp, _string, _offset, acc), do: Enum.reverse(acc)
+
+  defp literal_exec_from(string, "", offset) when offset <= byte_size(string),
+    do: {exec_result([""], offset, string), offset + 1}
+
+  defp literal_exec_from(string, "\\d", offset) do
+    with true <- offset <= byte_size(string),
+         [{index, length}] <-
+           Regex.run(~r/\d/, binary_part(string, offset, byte_size(string) - offset),
+             return: :index
+           ) do
+      absolute = offset + index
+
+      {exec_result([binary_part(string, absolute, length)], absolute, string),
+       absolute + max(length, 1)}
+    else
+      _ -> nil
+    end
+  end
+
+  defp literal_exec_from(string, source, offset) do
+    with true <- offset <= byte_size(string),
+         {index, length} <-
+           :binary.match(string, source, scope: {offset, byte_size(string) - offset}) do
+      {exec_result([binary_part(string, index, length)], index, string), index + max(length, 1)}
+    else
+      _ -> nil
+    end
   end
 
   defp regexp_match(regexp, [string | _]) do
