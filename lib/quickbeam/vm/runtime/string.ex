@@ -337,7 +337,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp code_point_at(_, _), do: :undefined
 
   defp index_of(s, [sub | rest]) when is_binary(s) do
-    sub = if is_binary(sub), do: sub, else: Runtime.stringify(sub)
+    sub = stringify_search_string(sub)
 
     from =
       case rest do
@@ -385,7 +385,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp index_of(_, _), do: -1
 
   defp last_index_of(s, [sub | rest]) when is_binary(s) do
-    sub = if is_binary(sub), do: sub, else: Runtime.stringify(sub)
+    sub = stringify_search_string(sub)
 
     from =
       case rest do
@@ -422,7 +422,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp includes(s, [sub | rest]) when is_binary(s) do
     reject_regexp_search!(sub)
-    sub_str = if is_binary(sub), do: sub, else: Runtime.stringify(sub)
+    sub_str = stringify_search_string(sub)
     pos = if rest != [], do: string_position(hd(rest), String.length(s)), else: 0
     String.contains?(String.slice(s, pos..-1//1), sub_str)
   end
@@ -431,7 +431,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp starts_with(s, [sub | rest]) when is_binary(s) do
     reject_regexp_search!(sub)
-    sub = if is_binary(sub), do: sub, else: Runtime.stringify(sub)
+    sub = stringify_search_string(sub)
 
     pos =
       case rest do
@@ -446,7 +446,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp ends_with(s, [sub | rest]) when is_binary(s) do
     reject_regexp_search!(sub)
-    sub_str = if is_binary(sub), do: sub, else: Runtime.stringify(sub)
+    sub_str = stringify_search_string(sub)
 
     target =
       if rest != [] do
@@ -460,6 +460,21 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp ends_with(_, _), do: false
+
+  defp stringify_search_string({:symbol, _}),
+    do:
+      throw(
+        {:js_throw, Heap.make_error("Cannot convert a Symbol value to a string", "TypeError")}
+      )
+
+  defp stringify_search_string({:symbol, _, _}),
+    do:
+      throw(
+        {:js_throw, Heap.make_error("Cannot convert a Symbol value to a string", "TypeError")}
+      )
+
+  defp stringify_search_string(value) when is_binary(value), do: value
+  defp stringify_search_string(value), do: Runtime.stringify(value)
 
   defp to_integer_or_infinity(:infinity), do: :infinity
   defp to_integer_or_infinity(:neg_infinity), do: :neg_infinity
