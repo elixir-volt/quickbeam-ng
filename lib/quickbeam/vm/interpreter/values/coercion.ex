@@ -1,7 +1,6 @@
 defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   @moduledoc "JS type coercion: to_number, to_int32, to_uint32, to_primitive, to_string_val, and numeric parsing."
 
-  import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
   alias QuickBEAM.VM.{Heap, Invocation, Runtime}
@@ -271,14 +270,8 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
               result
             end
           else
-            call_to_primitive(data, obj, "valueOf") ||
-              if(not has_own_method?(data, "valueOf"),
-                do: proto_to_primitive(data, obj, "valueOf")
-              ) ||
-              call_to_primitive(data, obj, "toString") ||
-              if(not has_own_method?(data, "toString"),
-                do: proto_to_primitive(data, obj, "toString") || get_to_primitive(obj, "toString")
-              ) ||
+            get_to_primitive(obj, "valueOf") ||
+              get_to_primitive(obj, "toString") ||
               throw(
                 {:js_throw,
                  Heap.make_error("Cannot convert object to primitive value", "TypeError")}
@@ -349,49 +342,10 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   defp function_like?({:builtin, _, _}), do: true
   defp function_like?(_), do: false
 
-  defp has_own_method?(data, method) when is_map(data) do
-    case Map.fetch(data, method) do
-      {:ok, :undefined} -> false
-      {:ok, _} -> true
-      :error -> false
-    end
-  end
-
-  @dialyzer {:nowarn_function, has_own_method?: 2}
-  defp has_own_method?(_, _), do: false
-
   defp get_to_primitive(obj, method) do
     case Get.get(obj, method) do
       fun when fun != nil and fun != :undefined ->
         unwrap_primitive(Invocation.invoke_with_receiver(fun, [], Runtime.gas_budget(), obj))
-
-      _ ->
-        nil
-    end
-  end
-
-  defp call_to_primitive(map, obj, method) do
-    case Map.get(map, method) do
-      {:builtin, _, cb} ->
-        unwrap_primitive(cb.([], obj))
-
-      fun when fun != nil and fun != :undefined ->
-        if callable?(fun) do
-          unwrap_primitive(Invocation.invoke_with_receiver(fun, [], Runtime.gas_budget(), obj))
-        else
-          nil
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  defp proto_to_primitive(map, obj, method) do
-    case Map.get(map, proto()) do
-      {:obj, pref} ->
-        pmap = Heap.get_obj(pref, %{})
-        if is_map(pmap), do: call_to_primitive(pmap, obj, method)
 
       _ ->
         nil
