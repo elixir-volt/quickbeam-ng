@@ -17,9 +17,12 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   def get({:qb_arr, _}), do: Heap.get_func_proto()
   def get(value) when is_list(value), do: QuickBEAM.VM.Runtime.global_class_proto("Array")
   def get({:builtin, _, _} = callable), do: callable_prototype(callable)
-  def get({:closure, _, _} = callable), do: callable_prototype(callable)
+
+  def get({:closure, _, %QuickBEAM.VM.Function{} = function} = callable),
+    do: function_kind_prototype(function, callable)
+
   def get({:bound, _, _, _, _} = callable), do: callable_prototype(callable)
-  def get(%QuickBEAM.VM.Function{}), do: Heap.get_func_proto()
+  def get(%QuickBEAM.VM.Function{} = function), do: function_kind_prototype(function, function)
   def get(value) when is_function(value), do: Heap.get_func_proto()
 
   def get(value) when is_integer(value) or is_float(value),
@@ -62,6 +65,34 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
       true -> Map.get(map, proto(), nil)
     end
   end
+
+  defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 1}, _callable) do
+    Heap.wrap(%{
+      "constructor" =>
+        {:builtin, "GeneratorFunction",
+         &QuickBEAM.VM.Runtime.Globals.Constructors.generator_function/2},
+      proto() => Heap.get_func_proto()
+    })
+  end
+
+  defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 2}, _callable) do
+    Heap.wrap(%{
+      "constructor" =>
+        {:builtin, "AsyncFunction", &QuickBEAM.VM.Runtime.Globals.Constructors.async_function/2},
+      proto() => Heap.get_func_proto()
+    })
+  end
+
+  defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 3}, _callable) do
+    Heap.wrap(%{
+      "constructor" =>
+        {:builtin, "AsyncGeneratorFunction",
+         &QuickBEAM.VM.Runtime.Globals.Constructors.async_generator_function/2},
+      proto() => Heap.get_func_proto()
+    })
+  end
+
+  defp function_kind_prototype(_function, callable), do: callable_prototype(callable)
 
   defp callable_prototype(callable) do
     case Map.get(Heap.get_ctor_statics(callable), "__proto__") do
