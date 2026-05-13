@@ -1007,6 +1007,10 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
+  defp string_replace_first(s, "", replacement) do
+    replacement_text(replacement, "", "", s, [], 0, s) <> s
+  end
+
   defp string_replace_first(s, pattern, replacement) do
     case :binary.match(s, pattern) do
       {index, length} ->
@@ -1019,6 +1023,15 @@ defmodule QuickBEAM.VM.Runtime.String do
 
       :nomatch ->
         s
+    end
+  end
+
+  defp regex_replace(s, {:regexp, nil, source, _ref} = regexp, replacement)
+       when is_binary(source) do
+    if String.contains?(Runtime.stringify(Get.get(regexp, "flags")), "g") do
+      string_replace_all_literal(s, source, replacement, 0, [])
+    else
+      string_replace_first(s, source, replacement)
     end
   end
 
@@ -1040,6 +1053,45 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp regex_replace(s, _, _), do: s
+
+  defp string_replace_all_literal(s, "", replacement, offset, acc) do
+    if offset > byte_size(s) do
+      IO.iodata_to_binary(acc)
+    else
+      before = binary_part(s, 0, offset)
+      after_str = binary_part(s, offset, byte_size(s) - offset)
+      rep = replacement_text(replacement, "", before, after_str, [], offset, s)
+
+      if offset == byte_size(s) do
+        IO.iodata_to_binary(acc ++ [rep])
+      else
+        char = binary_part(s, offset, 1)
+        string_replace_all_literal(s, "", replacement, offset + 1, acc ++ [rep, char])
+      end
+    end
+  end
+
+  defp string_replace_all_literal(s, pattern, replacement, offset, acc) do
+    case :binary.match(s, pattern, scope: {offset, byte_size(s) - offset}) do
+      {index, length} ->
+        before_match = binary_part(s, offset, index - offset)
+        before = binary_part(s, 0, index)
+        matched = binary_part(s, index, length)
+        after_str = binary_part(s, index + length, byte_size(s) - index - length)
+        rep = replacement_text(replacement, matched, before, after_str, [], index, s)
+
+        string_replace_all_literal(
+          s,
+          pattern,
+          replacement,
+          index + max(length, 1),
+          acc ++ [before_match, rep]
+        )
+
+      :nomatch ->
+        IO.iodata_to_binary(acc ++ [binary_part(s, offset, byte_size(s) - offset)])
+    end
+  end
 
   defp regex_replace_first(s, bytecode, replacement) do
     case RegExp.nif_exec(bytecode, s, 0) do
@@ -1112,7 +1164,7 @@ defmodule QuickBEAM.VM.Runtime.String do
       |> Invocation.invoke_with_receiver(
         [matched | captures] ++ [index, input],
         Runtime.gas_budget(),
-        nil
+        :undefined
       )
       |> Runtime.stringify()
     else

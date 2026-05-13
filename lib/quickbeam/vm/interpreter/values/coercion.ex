@@ -362,6 +362,8 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   defp function_like?({:builtin, _, _}), do: true
   defp function_like?(_), do: false
 
+  defp object_like?({:regexp, _, _}), do: true
+  defp object_like?({:regexp, _, _, _}), do: true
   defp object_like?(value), do: is_object(value) or function_like?(value)
 
   defp throw_object_to_primitive_error do
