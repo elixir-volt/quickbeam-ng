@@ -92,6 +92,11 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
       defp constructor_target({:builtin, _, _} = builtin), do: builtin
       defp constructor_target(_), do: nil
 
+      defp realm_default_prototype({:builtin, "Number", _}, new_target),
+        do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :number)
+
+      defp realm_default_prototype(_ctor, _new_target), do: nil
+
       defp constructor_prototype(new_target) do
         case Get.get(new_target, "prototype") do
           {:obj, _} = proto -> proto
@@ -164,8 +169,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
 
         proto =
           if raw_new_target != nil and raw_new_target != raw_ctor do
-            constructor_prototype(new_target) || Heap.get_class_proto(raw_new_target) ||
-              Heap.get_class_proto(raw_ctor) || Heap.get_or_create_prototype(ctor)
+            constructor_prototype(new_target) || realm_default_prototype(raw_ctor, raw_new_target) ||
+              Heap.get_class_proto(raw_new_target) || Heap.get_class_proto(raw_ctor) ||
+              Heap.get_or_create_prototype(ctor)
           else
             constructor_prototype(new_target) || Heap.get_class_proto(raw_ctor) ||
               Heap.get_or_create_prototype(ctor)
