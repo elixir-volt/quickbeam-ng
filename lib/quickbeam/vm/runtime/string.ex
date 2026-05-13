@@ -894,7 +894,7 @@ defmodule QuickBEAM.VM.Runtime.String do
       {:ok, replacer} ->
         Invocation.invoke_with_receiver(
           replacer,
-          [coerce_string_this(this), replacement],
+          [this, replacement],
           Runtime.gas_budget(),
           pattern
         )
@@ -953,7 +953,7 @@ defmodule QuickBEAM.VM.Runtime.String do
           {:ok, replacer} ->
             Invocation.invoke_with_receiver(
               replacer,
-              [coerce_string_this(this), replacement],
+              [this, replacement],
               Runtime.gas_budget(),
               pattern
             )
@@ -974,7 +974,7 @@ defmodule QuickBEAM.VM.Runtime.String do
       {:ok, replacer} ->
         Invocation.invoke_with_receiver(
           replacer,
-          [coerce_string_this(this), replacement],
+          [this, replacement],
           Runtime.gas_budget(),
           pattern
         )
@@ -989,19 +989,19 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp replace_all_regexp(this, regexp, replacement) do
     validate_replace_all_regexp!(regexp)
-    replacement_arg = replace_all_replacement_arg(replacement)
-    s = coerce_string_this(this)
 
     case replace_method(regexp) do
       {:ok, replacer} ->
         Invocation.invoke_with_receiver(
           replacer,
-          [s, replacement_arg],
+          [this, replacement],
           Runtime.gas_budget(),
           regexp
         )
 
       :none ->
+        s = coerce_string_this(this)
+        replacement_arg = replace_all_replacement_arg(replacement)
         string_replace_all_literal(s, stringify_search_string(regexp), replacement_arg, 0, [])
     end
   end
