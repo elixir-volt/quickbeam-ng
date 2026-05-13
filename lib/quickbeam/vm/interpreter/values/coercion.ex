@@ -293,7 +293,9 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
           end
       end
     else
-      obj
+      get_to_primitive(obj, "valueOf") ||
+        get_to_primitive(obj, "toString") ||
+        obj
     end
   end
 
