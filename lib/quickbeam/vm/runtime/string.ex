@@ -1388,6 +1388,22 @@ defmodule QuickBEAM.VM.Runtime.String do
     end)
   end
 
+  defp search(s, [{:obj, _} = pattern | _]) when is_binary(s) do
+    case get_method(pattern, {:symbol, "Symbol.search"}) do
+      {:ok, searcher} ->
+        Invocation.invoke_with_receiver(searcher, [s], Runtime.gas_budget(), pattern)
+
+      :none ->
+        string_search(s, stringify_search_string(pattern))
+    end
+  end
+
+  defp search(s, [{:regexp, nil, source, _ref} | _]) when is_binary(s) and is_binary(source),
+    do: string_search(s, source)
+
+  defp search(s, [{:regexp, nil, source} | _]) when is_binary(s) and is_binary(source),
+    do: string_search(s, source)
+
   defp search(s, [{:regexp, bytecode, _source} | _]) when is_binary(s) and is_binary(bytecode) do
     case RegExp.nif_exec(bytecode, s, 0) do
       nil -> -1
@@ -1395,14 +1411,25 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp search(s, [pattern | _]) when is_binary(s) and is_binary(pattern) do
+  defp search(s, [pattern | _]) when is_binary(s),
+    do: string_search(s, stringify_search_string(pattern))
+
+  defp search(s, []) when is_binary(s), do: string_search(s, "")
+  defp search(_, _), do: -1
+
+  defp string_search(s, "\\d") do
+    case Regex.run(~r/\d/, s, return: :index) do
+      [{pos, _len}] -> pos
+      _ -> -1
+    end
+  end
+
+  defp string_search(s, pattern) do
     case :binary.match(s, pattern) do
       {pos, _len} -> pos
       :nomatch -> -1
     end
   end
-
-  defp search(_, _), do: -1
 
   defp match_all(s, []) when is_binary(s), do: invoke_created_match_all({:regexp, nil, ""}, s)
 
