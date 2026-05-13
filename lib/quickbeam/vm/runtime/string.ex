@@ -861,29 +861,41 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp utf16_values_to_binary([], acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
 
   defp replace(s, [pattern, replacement | _]) when is_binary(s) do
-    case pattern do
-      {:regexp, _, _, _} = r -> regex_replace(s, r, replacement)
-      {:regexp, _, _} = r -> regex_replace(s, r, replacement)
-      pat -> string_replace_first(s, stringify_search_string(pat), replacement)
+    case replace_method(pattern) do
+      {:ok, replacer} ->
+        Invocation.invoke_with_receiver(replacer, [s, replacement], Runtime.gas_budget(), pattern)
+
+      :none ->
+        case pattern do
+          {:regexp, _, _, _} = r -> regex_replace(s, r, replacement)
+          {:regexp, _, _} = r -> regex_replace(s, r, replacement)
+          pat -> string_replace_first(s, stringify_search_string(pat), replacement)
+        end
     end
   end
 
   defp replace(s, _), do: s
 
   defp replace_all(s, [pattern, replacement | _]) when is_binary(s) do
-    case pattern do
-      {:regexp, _bytecode, _source} = r ->
-        regex_replace(s, r, replacement)
+    case replace_method(pattern) do
+      {:ok, replacer} ->
+        Invocation.invoke_with_receiver(replacer, [s, replacement], Runtime.gas_budget(), pattern)
 
-      pat when is_binary(pat) ->
-        :binary.replace(s, pat, Runtime.stringify(replacement), [:global])
-
-      _ ->
-        s
+      :none ->
+        case pattern do
+          {:regexp, _, _, _} = r -> regex_replace_all_regexp(s, r, replacement)
+          {:regexp, _, _} = r -> regex_replace_all_regexp(s, r, replacement)
+          pat -> string_replace_all_literal(s, stringify_search_string(pat), replacement, 0, [])
+        end
     end
   end
 
   defp replace_all(s, _), do: s
+
+  defp replace_method(nil), do: :none
+  defp replace_method(:undefined), do: :none
+
+  defp replace_method(value), do: get_method(value, {:symbol, "Symbol.replace"})
 
   defp match(s, []), do: literal_match_result(s, "")
 
@@ -1053,6 +1065,16 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp regex_replace(s, _, _), do: s
+
+  defp regex_replace_all_regexp(s, regexp, replacement) do
+    flags = Runtime.stringify(Get.get(regexp, "flags"))
+
+    if String.contains?(flags, "g") do
+      regex_replace(s, regexp, replacement)
+    else
+      throw({:js_throw, Heap.make_error("replaceAll requires a global RegExp", "TypeError")})
+    end
+  end
 
   defp string_replace_all_literal(s, "", replacement, offset, acc) do
     if offset > byte_size(s) do

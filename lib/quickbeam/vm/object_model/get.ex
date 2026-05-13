@@ -113,6 +113,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_symbol_own(value, sym_key) do
     case get_own(value, sym_key) do
+      :undefined -> get_from_prototype(value, sym_key)
       {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
       {:accessor, nil, _} -> :undefined
       val -> val
