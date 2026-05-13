@@ -882,10 +882,20 @@ defmodule QuickBEAM.VM.Runtime.String do
         Invocation.invoke_with_receiver(replacer, [s, replacement], Runtime.gas_budget(), pattern)
 
       :none ->
+        replacement_arg =
+          if Builtin.callable?(replacement),
+            do: replacement,
+            else: stringify_search_string(replacement)
+
         case pattern do
-          {:regexp, _, _, _} = r -> regex_replace_all_regexp(s, r, replacement)
-          {:regexp, _, _} = r -> regex_replace_all_regexp(s, r, replacement)
-          pat -> string_replace_all_literal(s, stringify_search_string(pat), replacement, 0, [])
+          {:regexp, _, _, _} = r ->
+            regex_replace_all_regexp(s, r, replacement_arg)
+
+          {:regexp, _, _} = r ->
+            regex_replace_all_regexp(s, r, replacement_arg)
+
+          pat ->
+            string_replace_all_literal(s, stringify_search_string(pat), replacement_arg, 0, [])
         end
     end
   end
@@ -1191,7 +1201,7 @@ defmodule QuickBEAM.VM.Runtime.String do
       |> Runtime.stringify()
     else
       replacement
-      |> Runtime.stringify()
+      |> stringify_search_string()
       |> substitute_replacement(matched, before, after_str, captures)
     end
   end
