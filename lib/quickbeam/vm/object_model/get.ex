@@ -755,6 +755,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
+  defp explicit_undefined_own?(value, key) when is_tuple(value) or is_struct(value),
+    do: Heap.get_ctor_prop_desc(value, key) != nil
+
   defp explicit_undefined_own?(_value, _key), do: false
 
   defp get_from_prototype({:obj, ref}, key) do
