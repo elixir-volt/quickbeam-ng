@@ -687,7 +687,9 @@ defmodule QuickBEAM.VM.Runtime.Date do
 
     case parse_extended_iso_utc(with_tz) do
       {:ok, ms} ->
-        ms
+        if ms != :nan and has_time and not has_explicit_tz,
+          do: ms + tz_offset_minutes() * 60_000,
+          else: ms
 
       :error ->
         case safe_rfc3339_parse(with_tz) do
@@ -701,6 +703,8 @@ defmodule QuickBEAM.VM.Runtime.Date do
         end
     end
   end
+
+  defp parse_extended_iso_utc("-000000-" <> _), do: {:ok, :nan}
 
   defp parse_extended_iso_utc(s) do
     pattern =
