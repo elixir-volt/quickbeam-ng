@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   use QuickBEAM.VM.Builtin
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Interpreter.Values.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, WrappedPrimitive}
@@ -480,6 +480,20 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp stringify_search_string(value) when is_binary(value), do: value
   defp stringify_search_string(value), do: Runtime.stringify(value)
 
+  defp get_method(value, key) do
+    case Get.get(value, key) do
+      method when method in [nil, :undefined] ->
+        :none
+
+      method ->
+        if Builtin.callable?(method) do
+          {:ok, method}
+        else
+          throw({:js_throw, Heap.make_error("not a function", "TypeError")})
+        end
+    end
+  end
+
   defp to_integer_or_infinity({:bigint, _}) do
     throw({:js_throw, Heap.make_error("Cannot convert a BigInt value to a number", "TypeError")})
   end
@@ -793,6 +807,16 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp match(s, []), do: literal_match_result(s, "")
 
+  defp match(s, [{:obj, _} = regexp | _]) when is_binary(s) do
+    case get_method(regexp, {:symbol, "Symbol.match"}) do
+      {:ok, matcher} ->
+        Invocation.invoke_with_receiver(matcher, [s], Runtime.gas_budget(), regexp)
+
+      :none ->
+        regexp |> regexp_create() |> literal_regexp_match_result(s)
+    end
+  end
+
   defp match(s, [{:regexp, nil, source, _ref} | _]) when is_binary(s) and is_binary(source) do
     literal_match_result(s, source)
   end
@@ -842,7 +866,20 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp match(_, _), do: nil
 
+  defp regexp_create(:undefined), do: {:regexp, nil, ""}
+  defp regexp_create(value), do: {:regexp, nil, stringify_search_string(value)}
+
+  defp literal_regexp_match_result({:regexp, nil, source}, s), do: literal_match_result(s, source)
+  defp literal_regexp_match_result(_regexp, _s), do: nil
+
   defp literal_match_result(s, ""), do: match_result([""], 0, s)
+
+  defp literal_match_result(s, "\\d") do
+    case Regex.run(~r/\d/, s, return: :index) do
+      [{index, length}] -> match_result([binary_part(s, index, length)], index, s)
+      _ -> nil
+    end
+  end
 
   defp literal_match_result(s, pattern) do
     case :binary.match(s, pattern) do
@@ -951,17 +988,65 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp search(_, _), do: -1
 
+  defp match_all(s, []) when is_binary(s), do: match_all_literal({:regexp, nil, ""}, s)
+
+  defp match_all(s, [{:obj, _} = regexp | _]) when is_binary(s) do
+    case get_method(regexp, {:symbol, "Symbol.matchAll"}) do
+      {:ok, matcher} ->
+        Invocation.invoke_with_receiver(matcher, [s], Runtime.gas_budget(), regexp)
+
+      :none ->
+        wrap_match_all_results([])
+    end
+  end
+
   defp match_all(s, [{:regexp, bytecode, _source} = re | _])
        when is_binary(s) and is_binary(bytecode) do
     results = match_all_with_captures(s, re, 0, [])
-    ref = make_ref()
-    Heap.put_obj(ref, results)
-    {:obj, ref}
+    wrap_match_all_results(results)
   end
 
-  defp match_all(_, _) do
+  defp match_all(s, [pattern | _]) when is_binary(s) do
+    pattern
+    |> regexp_create()
+    |> match_all_literal(s)
+  end
+
+  defp match_all(_, _), do: wrap_match_all_results([])
+
+  defp match_all_literal({:regexp, nil, source}, s) when is_binary(source) do
+    source
+    |> literal_match_results(s)
+    |> wrap_match_all_results()
+  end
+
+  defp match_all_literal(_regexp, _s), do: wrap_match_all_results([])
+
+  defp literal_match_results("", s), do: [match_result([""], 0, s)]
+
+  defp literal_match_results(source, s) do
+    do_literal_match_results(source, s, 0, [])
+  end
+
+  defp do_literal_match_results(source, s, offset, acc) do
+    if offset > byte_size(s) do
+      Enum.reverse(acc)
+    else
+      case :binary.match(s, source, scope: {offset, byte_size(s) - offset}) do
+        {index, length} ->
+          next_offset = index + max(length, 1)
+          result = match_result([binary_part(s, index, length)], index, s)
+          do_literal_match_results(source, s, next_offset, [result | acc])
+
+        :nomatch ->
+          Enum.reverse(acc)
+      end
+    end
+  end
+
+  defp wrap_match_all_results(results) do
     ref = make_ref()
-    Heap.put_obj(ref, [])
+    Heap.put_obj(ref, results)
     {:obj, ref}
   end
 

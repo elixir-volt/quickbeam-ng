@@ -26,6 +26,7 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
   static_val("isConcatSpreadable", {:symbol, "Symbol.isConcatSpreadable"})
   static_val("species", {:symbol, "Symbol.species"})
   static_val("match", {:symbol, "Symbol.match"})
+  static_val("matchAll", {:symbol, "Symbol.matchAll"})
   static_val("replace", {:symbol, "Symbol.replace"})
   static_val("search", {:symbol, "Symbol.search"})
   static_val("split", {:symbol, "Symbol.split"})
