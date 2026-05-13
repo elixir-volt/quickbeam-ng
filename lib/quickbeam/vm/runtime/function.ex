@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Runtime.Function do
   @moduledoc "JS `Function` prototype: `call`, `apply`, `bind`, and property access for name/length/fileName."
   alias QuickBEAM.VM.{Builtin, Heap, Invocation}
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, WrappedPrimitive}
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
   def prototype do
@@ -262,6 +262,8 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp bound_length(_, _argc), do: 0
 
   defp invoke_fun(fun, args, this_arg) do
+    this_arg = coerce_function_this(fun, this_arg)
+
     case fun do
       %QuickBEAM.VM.Function{} ->
         Invocation.invoke_with_receiver(fun, args, this_arg)
@@ -271,6 +273,29 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
       other ->
         Builtin.call(other, args, this_arg)
+    end
+  end
+
+  defp coerce_function_this(fun, this_arg) do
+    if strict_function?(fun) do
+      this_arg
+    else
+      case this_arg do
+        value when is_binary(value) or is_number(value) or is_boolean(value) ->
+          WrappedPrimitive.wrap(value)
+
+        {:bigint, _} = value ->
+          WrappedPrimitive.wrap(value)
+
+        {:symbol, _} = value ->
+          WrappedPrimitive.wrap(value)
+
+        {:symbol, _, _} = value ->
+          WrappedPrimitive.wrap(value)
+
+        _ ->
+          this_arg
+      end
     end
   end
 end
