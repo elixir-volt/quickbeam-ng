@@ -792,11 +792,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp replace_all(s, _), do: s
 
   defp match(s, [{:regexp, nil, source} | _]) when is_binary(s) and is_binary(source) do
-    cond do
-      source == "" -> [""]
-      :binary.match(s, source) != :nomatch -> [source]
-      true -> nil
-    end
+    literal_match_result(s, source)
   end
 
   defp match(s, [{:regexp, bytecode, _source} = re | _])
@@ -811,10 +807,19 @@ defmodule QuickBEAM.VM.Runtime.String do
           nil
 
         captures ->
-          Enum.map(captures, fn
-            {start, len} -> binary_part(s, start, len)
-            nil -> :undefined
-          end)
+          strings =
+            Enum.map(captures, fn
+              {start, len} -> binary_part(s, start, len)
+              nil -> :undefined
+            end)
+
+          match_start =
+            case hd(captures) do
+              {start, _} -> start
+              _ -> 0
+            end
+
+          match_result(strings, match_start, s)
       end
     end
   end
@@ -822,14 +827,26 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp match(s, [pattern | _]) when is_binary(s) do
     pattern = stringify_search_string(pattern)
 
-    cond do
-      pattern == "" -> [""]
-      :binary.match(s, pattern) != :nomatch -> [pattern]
-      true -> nil
-    end
+    literal_match_result(s, pattern)
   end
 
   defp match(_, _), do: nil
+
+  defp literal_match_result(s, ""), do: match_result([""], 0, s)
+
+  defp literal_match_result(s, pattern) do
+    case :binary.match(s, pattern) do
+      {index, _length} -> match_result([pattern], index, s)
+      :nomatch -> nil
+    end
+  end
+
+  defp match_result(strings, index, input) do
+    ref = make_ref()
+    Heap.put_obj(ref, strings)
+    Heap.put_regexp_result(ref, %{"index" => index, "input" => input, "groups" => :undefined})
+    {:obj, ref}
+  end
 
   defp match_all_strings(s, {:regexp, bytecode, _} = re, offset, acc) do
     case RegExp.nif_exec(bytecode, s, offset) do
