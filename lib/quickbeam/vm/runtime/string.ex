@@ -891,15 +891,32 @@ defmodule QuickBEAM.VM.Runtime.String do
       :none ->
         s = coerce_string_this(this)
 
-        replacement_arg =
-          if Builtin.callable?(replacement),
-            do: replacement,
-            else: stringify_search_string(replacement)
-
         case pattern do
-          {:regexp, _, _, _} = r -> regex_replace(s, r, replacement_arg)
-          {:regexp, _, _} = r -> regex_replace(s, r, replacement_arg)
-          pat -> string_replace_first(s, stringify_search_string(pat), replacement_arg)
+          {:regexp, _, _, _} = r ->
+            replacement_arg =
+              if Builtin.callable?(replacement),
+                do: replacement,
+                else: stringify_search_string(replacement)
+
+            regex_replace(s, r, replacement_arg)
+
+          {:regexp, _, _} = r ->
+            replacement_arg =
+              if Builtin.callable?(replacement),
+                do: replacement,
+                else: stringify_search_string(replacement)
+
+            regex_replace(s, r, replacement_arg)
+
+          pat ->
+            search_string = stringify_search_string(pat)
+
+            replacement_arg =
+              if Builtin.callable?(replacement),
+                do: replacement,
+                else: stringify_search_string(replacement)
+
+            string_replace_first(s, search_string, replacement_arg)
         end
     end
   end
