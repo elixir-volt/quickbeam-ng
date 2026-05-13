@@ -218,7 +218,7 @@ defmodule QuickBEAM.VM.Runtime.Date do
     do:
       (
         get_ms(this)
-        put_ms(this, QuickBEAM.VM.Runtime.to_number(hd(args)))
+        put_ms(this, QuickBEAM.VM.Runtime.to_number(arg(args, 0, :undefined)))
       )
   )
 
