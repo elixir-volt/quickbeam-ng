@@ -909,14 +909,10 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp replace_all(this, [pattern, replacement | _]) do
     case pattern do
       {:regexp, _, _, _} = regexp ->
-        validate_replace_all_regexp!(regexp)
-        replacement_arg = replace_all_replacement_arg(replacement)
-        regex_replace(coerce_string_this(this), regexp, replacement_arg)
+        replace_all_regexp(this, regexp, replacement)
 
       {:regexp, _, _} = regexp ->
-        validate_replace_all_regexp!(regexp)
-        replacement_arg = replace_all_replacement_arg(replacement)
-        regex_replace(coerce_string_this(this), regexp, replacement_arg)
+        replace_all_regexp(this, regexp, replacement)
 
       _ ->
         if regexp_like?(pattern), do: validate_replace_all_regexp!(pattern)
@@ -945,6 +941,25 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp replace_all(this, _), do: coerce_string_this(this)
+
+  defp replace_all_regexp(this, regexp, replacement) do
+    validate_replace_all_regexp!(regexp)
+    replacement_arg = replace_all_replacement_arg(replacement)
+    s = coerce_string_this(this)
+
+    case replace_method(regexp) do
+      {:ok, replacer} ->
+        Invocation.invoke_with_receiver(
+          replacer,
+          [s, replacement_arg],
+          Runtime.gas_budget(),
+          regexp
+        )
+
+      :none ->
+        string_replace_all_literal(s, stringify_search_string(regexp), replacement_arg, 0, [])
+    end
+  end
 
   defp replace_all_replacement_arg(replacement),
     do:
