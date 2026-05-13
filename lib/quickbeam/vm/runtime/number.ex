@@ -245,6 +245,12 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   # ── toFixed(digits) ──
 
+  defp to_fixed(n, [digits | _]) when n in [:nan, :infinity, :neg_infinity] do
+    d = to_integer_or_throw(digits)
+    if d < 0 or d > 100, do: JSThrow.range_error!("fractionDigits out of range")
+    Runtime.stringify(n)
+  end
+
   defp to_fixed(:nan, _), do: "NaN"
   defp to_fixed(:infinity, _), do: "Infinity"
   defp to_fixed(:neg_infinity, _), do: "-Infinity"
@@ -343,6 +349,9 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   defp to_integer_or_throw({:bigint, _}),
     do: JSThrow.type_error!("Cannot convert BigInt to number")
+
+  defp to_integer_or_throw(:infinity), do: 101
+  defp to_integer_or_throw(:neg_infinity), do: -1
 
   defp to_integer_or_throw(value), do: Runtime.to_int(value)
 
