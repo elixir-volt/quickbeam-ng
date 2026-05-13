@@ -372,9 +372,8 @@ defmodule QuickBEAM.VM.Runtime.String do
 
     from =
       case rest do
-        [:neg_infinity | _] -> 0
-        [f | _] -> max(0, min(Runtime.to_int(f), String.length(s)))
-        _ -> String.length(s)
+        [f | _] -> last_index_position(f, Get.string_length(s))
+        _ -> Get.string_length(s)
       end
 
     cond do
@@ -519,6 +518,20 @@ defmodule QuickBEAM.VM.Runtime.String do
     |> utf16_code_units()
     |> Enum.slice(start, count)
     |> IO.iodata_to_binary()
+  end
+
+  defp last_index_position({:bigint, _}, _len) do
+    throw({:js_throw, Heap.make_error("Cannot convert a BigInt value to a number", "TypeError")})
+  end
+
+  defp last_index_position(value, len) do
+    case Runtime.to_number(value) do
+      :infinity -> len
+      :neg_infinity -> 0
+      :nan -> len
+      number when is_number(number) -> number |> trunc() |> max(0) |> min(len)
+      _ -> len
+    end
   end
 
   defp string_position(:infinity, len), do: len
