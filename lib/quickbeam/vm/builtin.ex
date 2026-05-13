@@ -791,7 +791,8 @@ defmodule QuickBEAM.VM.Builtin do
 
   def callable?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
 
-  def callable?({:builtin, _, _}), do: true
+  def callable?({:builtin, _, callback}) when is_function(callback), do: true
+  def callable?({:builtin, _, _}), do: false
 
   def callable?({:bound, _, _, _, _}), do: true
 

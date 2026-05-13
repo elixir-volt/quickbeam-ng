@@ -424,6 +424,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_own({:builtin, name, _}, "name"), do: name
 
+  defp get_own({:builtin, _name, props}, key) when is_map(props) do
+    Map.get(props, key, :undefined)
+  end
+
   defp get_own({:builtin, name, _} = builtin, "length") do
     case Heap.get_ctor_statics(builtin) do
       %{"length" => :deleted} ->
@@ -871,8 +875,12 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype({:builtin, "String", _} = fun, key),
     do: fallback_to_function_proto(JSString.static_property(key), fun, key)
 
-  defp get_from_prototype({:builtin, name, _} = fun, key) when is_binary(name),
-    do: fallback_to_function_proto(Function.proto_property(fun, key), fun, key)
+  defp get_from_prototype({:builtin, name, callback} = fun, key)
+       when is_binary(name) and is_function(callback),
+       do: fallback_to_function_proto(Function.proto_property(fun, key), fun, key)
+
+  defp get_from_prototype({:builtin, name, props}, key) when is_binary(name) and is_map(props),
+    do: get_own(Heap.get_object_prototype(), key)
 
   defp get_from_prototype(_, _), do: :undefined
 
