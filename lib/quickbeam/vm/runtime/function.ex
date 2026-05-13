@@ -195,31 +195,39 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp fn_call(fun, [], _this), do: invoke_fun(fun, [], :undefined)
 
   defp fn_apply(fun, [this_arg | rest], _this) do
-    args_array = List.first(rest)
-
-    args =
-      case args_array do
-        {:obj, ref} ->
-          case Heap.get_obj(ref, []) do
-            {:qb_arr, arr} -> :array.to_list(arr)
-            list when is_list(list) -> list
-            _ -> []
-          end
-
-        {:qb_arr, arr} ->
-          :array.to_list(arr)
-
-        list when is_list(list) ->
-          list
-
-        _ ->
-          []
-      end
-
-    invoke_fun(fun, args, this_arg)
+    invoke_fun(fun, apply_args(List.first(rest)), this_arg)
   end
 
   defp fn_apply(fun, [], _this), do: invoke_fun(fun, [], :undefined)
+
+  defp apply_args(value) when value in [nil, :undefined], do: []
+
+  defp apply_args({:obj, ref} = obj) do
+    case Heap.get_obj(ref, []) do
+      {:qb_arr, arr} -> :array.to_list(arr)
+      list when is_list(list) -> list
+      _ -> array_like_args(obj)
+    end
+  end
+
+  defp apply_args({:qb_arr, arr}), do: :array.to_list(arr)
+  defp apply_args(list) when is_list(list), do: list
+  defp apply_args(%QuickBEAM.VM.Function{} = value), do: array_like_args(value)
+  defp apply_args({:closure, _, %QuickBEAM.VM.Function{}} = value), do: array_like_args(value)
+  defp apply_args({:bound, _, _, _, _} = value), do: array_like_args(value)
+  defp apply_args({:builtin, _, _} = value), do: array_like_args(value)
+
+  defp apply_args(_value),
+    do: QuickBEAM.VM.JSThrow.type_error!("CreateListFromArrayLike called on non-object")
+
+  defp array_like_args(value) do
+    length = value |> Get.get("length") |> QuickBEAM.VM.Runtime.to_number()
+    length = if is_number(length) and length > 0, do: trunc(length), else: 0
+
+    for index <- 0..(length - 1)//1 do
+      Get.get(value, Integer.to_string(index))
+    end
+  end
 
   defp fn_bind(fun, [this_arg | bound_args], _this) do
     orig_len = bind_target_length(fun)
