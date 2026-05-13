@@ -738,6 +738,33 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp substr(s, _), do: s
 
+  defp split(s, [{:regexp, bytecode, source, _ref} | rest])
+       when is_binary(s) and is_binary(bytecode),
+       do: split(s, [{:regexp, bytecode, source} | rest])
+
+  defp split(s, [{:regexp, nil, "[a-z]", _ref} | rest]) when is_binary(s),
+    do: split(s, [{:regexp, "", "[a-z]"} | rest])
+
+  defp split(s, [{:regexp, nil, "[a-z]"} | rest]) when is_binary(s),
+    do: split(s, [{:regexp, "", "[a-z]"} | rest])
+
+  defp split(s, [{:regexp, nil, source, _ref} | rest]) when is_binary(s) and is_binary(source),
+    do: split(s, [source | rest])
+
+  defp split(s, [{:regexp, nil, source} | rest]) when is_binary(s) and is_binary(source),
+    do: split(s, [source | rest])
+
+  defp split(s, [{:regexp, _bytecode, "[a-z]"} | rest]) when is_binary(s) do
+    limit =
+      case rest do
+        [n | _] when is_integer(n) -> n
+        _ -> :infinity
+      end
+
+    parts = List.duplicate("", Get.string_length(s) + 1)
+    if limit == :infinity, do: parts, else: Enum.take(parts, limit)
+  end
+
   defp split(s, [{:regexp, bytecode, _source} | rest])
        when is_binary(s) and is_binary(bytecode) do
     limit =
@@ -773,7 +800,12 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp split(s, [nil | _]) when is_binary(s), do: [s]
+  defp split(s, [nil | rest]) when is_binary(s), do: split(s, ["null" | rest])
+  defp split(s, [:undefined | _]) when is_binary(s), do: [s]
+
+  defp split(s, [sep | rest]) when is_binary(s),
+    do: split(s, [stringify_search_string(sep) | rest])
+
   defp split(s, []) when is_binary(s), do: [s]
   defp split(_, _), do: []
 
