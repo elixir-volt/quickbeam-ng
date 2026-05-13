@@ -926,10 +926,14 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp replace_all(this, [pattern, replacement | _]) do
     case pattern do
       {:regexp, _, _, _} = regexp ->
-        replace_all_regexp(this, regexp, replacement)
+        if regexp_like?(regexp),
+          do: replace_all_regexp(this, regexp, replacement),
+          else: replace_all_non_regexp(this, regexp, replacement)
 
       {:regexp, _, _} = regexp ->
-        replace_all_regexp(this, regexp, replacement)
+        if regexp_like?(regexp),
+          do: replace_all_regexp(this, regexp, replacement),
+          else: replace_all_non_regexp(this, regexp, replacement)
 
       _ ->
         if regexp_like?(pattern), do: validate_replace_all_regexp!(pattern)
@@ -953,6 +957,24 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp replace_all(this, _), do: coerce_string_this(this)
+
+  defp replace_all_non_regexp(this, pattern, replacement) do
+    case replace_method(pattern) do
+      {:ok, replacer} ->
+        Invocation.invoke_with_receiver(
+          replacer,
+          [coerce_string_this(this), replacement],
+          Runtime.gas_budget(),
+          pattern
+        )
+
+      :none ->
+        s = coerce_string_this(this)
+        search_string = stringify_search_string(pattern)
+        replacement_arg = replace_all_replacement_arg(replacement)
+        string_replace_all_literal(s, search_string, replacement_arg, 0, [])
+    end
+  end
 
   defp replace_all_regexp(this, regexp, replacement) do
     validate_replace_all_regexp!(regexp)
@@ -980,8 +1002,13 @@ defmodule QuickBEAM.VM.Runtime.String do
         else: stringify_search_string(replacement)
       )
 
-  defp regexp_like?({:obj, _} = value), do: Get.get(value, {:symbol, "Symbol.match"}) == true
+  defp regexp_like?({:regexp, _, _} = value), do: regexp_match_truthy?(value)
+  defp regexp_like?({:regexp, _, _, _} = value), do: regexp_match_truthy?(value)
+  defp regexp_like?({:obj, _} = value), do: regexp_match_truthy?(value)
   defp regexp_like?(_), do: false
+
+  defp regexp_match_truthy?(value),
+    do: Get.get(value, {:symbol, "Symbol.match"}) not in [false, nil, :undefined]
 
   defp validate_replace_all_regexp!(regexp) do
     flags = Get.get(regexp, "flags")
