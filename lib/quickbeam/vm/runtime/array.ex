@@ -912,6 +912,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
         new_list = fill_list(:array.to_list(arr), args, array_like_length(obj))
         Heap.put_obj(ref, new_list)
 
+      %{typed_array() => true} ->
+        fill_typed_array(obj, args)
+
       _ ->
         fill_object(obj, args)
     end
@@ -948,6 +951,23 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end_idx = fill_end(arg(args, 2, :undefined), len)
     fill_object_indices(obj, val, start_idx, end_idx)
   end
+
+  defp fill_typed_array(obj, args) do
+    len = array_like_length(obj)
+    val = typed_array_fill_value(arg(args, 0, :undefined))
+    start_idx = fill_start(arg(args, 1, :undefined), len)
+    end_idx = fill_end(arg(args, 2, :undefined), len)
+
+    if start_idx < end_idx do
+      Enum.each(start_idx..(end_idx - 1), fn idx ->
+        QuickBEAM.VM.Runtime.TypedArray.set_element(obj, idx, val)
+      end)
+    end
+  end
+
+  defp typed_array_fill_value({:bigint, _} = value), do: value
+  defp typed_array_fill_value(value) when is_number(value), do: value
+  defp typed_array_fill_value(value), do: Runtime.to_number(value)
 
   defp fill_object_indices(_obj, _val, idx, end_idx) when idx >= end_idx, do: :ok
 

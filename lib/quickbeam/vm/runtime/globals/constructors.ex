@@ -201,6 +201,14 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
     end
   end
 
+  def bigint([value | _], _) do
+    case Runtime.to_number(value) do
+      n when is_integer(n) -> {:bigint, n}
+      n when is_float(n) and n == trunc(n) -> {:bigint, trunc(n)}
+      _ -> JSThrow.type_error!("Cannot convert to BigInt")
+    end
+  end
+
   def bigint(_, _) do
     JSThrow.type_error!("Cannot convert to BigInt")
   end
