@@ -302,6 +302,17 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
+  defp get_wrapped_or_map_property(map, key, receiver) do
+    if WrappedPrimitive.type(map) == :string and Map.has_key?(map, key) do
+      get_map_property(map, key, receiver)
+    else
+      case wrapped_proto_property(map, key) do
+        :undefined -> get_map_property(map, key, receiver)
+        val -> val
+      end
+    end
+  end
+
   defp get_map_property(map, key, receiver) do
     case Map.fetch(map, key) do
       {:ok, {:accessor, getter, _setter}} when getter != nil -> call_getter(getter, receiver)
@@ -379,14 +390,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
           0
         else
           case prototype_object_property(map, key) do
-            :undefined ->
-              case wrapped_proto_property(map, key) do
-                :undefined -> get_map_property(map, key, {:obj, ref})
-                val -> val
-              end
-
-            val ->
-              val
+            :undefined -> get_wrapped_or_map_property(map, key, {:obj, ref})
+            val -> val
           end
         end
 
@@ -395,14 +400,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
           :undefined
         else
           case prototype_object_property(map, key) do
-            :undefined ->
-              case wrapped_proto_property(map, key) do
-                :undefined -> get_map_property(map, key, {:obj, ref})
-                val -> val
-              end
-
-            val ->
-              val
+            :undefined -> get_wrapped_or_map_property(map, key, {:obj, ref})
+            val -> val
           end
         end
     end
