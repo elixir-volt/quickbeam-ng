@@ -3,8 +3,8 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   use QuickBEAM.VM.Builtin
 
+  alias QuickBEAM.VM.{JSThrow, Runtime}
   alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
-  alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.GlobalNumeric
 
   # ── Number statics ──
@@ -250,7 +250,9 @@ defmodule QuickBEAM.VM.Runtime.Number do
   defp to_fixed(:neg_infinity, _), do: "-Infinity"
 
   defp to_fixed(n, [digits | _]) when is_number(n) do
-    :erlang.float_to_binary(n * 1.0, decimals: max(0, Runtime.to_int(digits)))
+    d = Runtime.to_int(digits)
+    if d < 0 or d > 100, do: JSThrow.range_error!("fractionDigits out of range")
+    :erlang.float_to_binary(n * 1.0, decimals: d)
   end
 
   defp to_fixed(n, _), do: Runtime.stringify(n)
@@ -259,6 +261,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   defp to_exponential(n, [digits | _]) when is_number(n) do
     d = Runtime.to_int(digits)
+    if d < 0 or d > 100, do: JSThrow.range_error!("fractionDigits out of range")
     f = js_round_significant(abs(n * 1.0), d + 1)
     sign = if n < 0, do: "-", else: ""
     sign <> (:erlang.float_to_binary(f, [{:scientific, d}]) |> strip_exponent_zeros())
@@ -278,7 +281,8 @@ defmodule QuickBEAM.VM.Runtime.Number do
   defp to_precision(n, [:undefined | _]) when is_number(n), do: Runtime.stringify(n)
 
   defp to_precision(n, [prec | _]) when is_number(n) do
-    p = max(1, Runtime.to_int(prec))
+    p = Runtime.to_int(prec)
+    if p < 1 or p > 100, do: JSThrow.range_error!("precision out of range")
     f = n * 1.0
 
     if f == 0.0 do
