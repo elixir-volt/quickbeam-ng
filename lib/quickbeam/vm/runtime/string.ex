@@ -762,18 +762,36 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp pad(s, [len | rest], dir) when is_binary(s) do
     fill =
       case rest do
-        [f | _] when is_binary(f) -> String.slice(f, 0, 1)
-        _ -> " "
+        [] -> " "
+        [:undefined | _] -> " "
+        [f | _] -> stringify_search_string(f)
       end
 
-    target = Runtime.to_int(len) - String.length(s)
-    if target <= 0, do: s, else: pad_str(s, target, fill, dir)
+    target = Runtime.to_int(len) - Get.string_length(s)
+
+    cond do
+      target <= 0 -> s
+      fill == "" -> s
+      true -> pad_str(s, target, fill, dir)
+    end
   end
 
   defp pad(s, _, _), do: s
 
-  defp pad_str(s, n, fill, :start), do: String.duplicate(fill, n) <> s
-  defp pad_str(s, n, fill, :end), do: s <> String.duplicate(fill, n)
+  defp pad_str(s, n, fill, :start), do: repeat_to_utf16_length(fill, n) <> s
+  defp pad_str(s, n, fill, :end), do: s <> repeat_to_utf16_length(fill, n)
+
+  defp repeat_to_utf16_length(fill, target) do
+    fill_units = utf16_code_units(fill)
+    unit_count = length(fill_units)
+    repeats = div(target + unit_count - 1, unit_count)
+
+    fill_units
+    |> List.duplicate(repeats)
+    |> List.flatten()
+    |> Enum.take(target)
+    |> IO.iodata_to_binary()
+  end
 
   defp replace(s, [pattern, replacement | _]) when is_binary(s) do
     case pattern do
