@@ -882,31 +882,45 @@ defmodule QuickBEAM.VM.Runtime.Array do
         Runtime.stringify(a) < Runtime.stringify(b)
       end)
 
-  defp flat({:obj, ref}, args), do: flat(Heap.obj_to_list(ref), args)
+  defp flat({:obj, _} = obj, _args), do: flat_array_like(obj)
 
   defp flat({:qb_arr, arr}, args), do: flat(:array.to_list(arr), args)
 
-  defp flat(list, _) when is_list(list) do
-    Enum.flat_map(list, fn
-      {:qb_arr, arr} ->
-        :array.to_list(arr)
-
-      a when is_list(a) ->
-        a
-
-      {:obj, ref} = obj ->
-        case Heap.get_obj(ref) do
-          {:qb_arr, arr} -> :array.to_list(arr)
-          a when is_list(a) -> a
-          _ -> [obj]
-        end
-
-      val ->
-        [val]
-    end)
-  end
+  defp flat(list, _) when is_list(list), do: Enum.flat_map(list, &flat_item/1)
 
   defp flat(_, _), do: []
+
+  defp flat_array_like(obj) do
+    len = array_like_length(obj)
+
+    if len == 0 do
+      []
+    else
+      0..(len - 1)
+      |> Enum.flat_map(fn idx ->
+        key = Integer.to_string(idx)
+
+        if HasProperty.has_property?(obj, key) do
+          obj |> Get.get(key) |> flat_item()
+        else
+          []
+        end
+      end)
+    end
+  end
+
+  defp flat_item({:qb_arr, arr}), do: :array.to_list(arr)
+  defp flat_item(a) when is_list(a), do: a
+
+  defp flat_item({:obj, ref} = obj) do
+    case Heap.get_obj(ref) do
+      {:qb_arr, arr} -> :array.to_list(arr)
+      a when is_list(a) -> a
+      _ -> [obj]
+    end
+  end
+
+  defp flat_item(val), do: [val]
 
   defp flat_map({:obj, ref}, args), do: flat_map(Heap.obj_to_list(ref), args)
 
