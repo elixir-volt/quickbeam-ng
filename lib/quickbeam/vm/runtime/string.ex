@@ -84,7 +84,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   proto "toLocaleLowerCase" do
     s = coerce_string_this(this)
-    :string.lowercase(s) |> IO.iodata_to_binary()
+    locale_lowercase(s)
   end
 
   proto "toLocaleUpperCase" do
@@ -324,6 +324,51 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp string_at(s, _) when is_binary(s), do: utf16_code_unit_at(s, 0)
+
+  defp locale_lowercase(s) do
+    s
+    |> String.graphemes()
+    |> locale_lowercase([], [])
+    |> Enum.reverse()
+    |> IO.iodata_to_binary()
+  end
+
+  defp locale_lowercase(["Σ" | rest], previous, acc) do
+    sigma = if final_sigma_context?(previous, rest), do: "ς", else: "σ"
+    locale_lowercase(rest, ["Σ" | previous], [sigma | acc])
+  end
+
+  defp locale_lowercase([char | rest], previous, acc),
+    do: locale_lowercase(rest, [char | previous], [:string.lowercase(char) | acc])
+
+  defp locale_lowercase([], _previous, acc), do: acc
+
+  defp final_sigma_context?(previous, rest),
+    do: previous_cased?(previous) and not following_cased?(rest)
+
+  defp previous_cased?([char | rest]) do
+    cond do
+      case_ignorable?(char) -> previous_cased?(rest)
+      cased_letter?(char) -> true
+      true -> false
+    end
+  end
+
+  defp previous_cased?([]), do: false
+
+  defp following_cased?([char | rest]) do
+    cond do
+      case_ignorable?(char) -> following_cased?(rest)
+      cased_letter?(char) -> true
+      true -> false
+    end
+  end
+
+  defp following_cased?([]), do: false
+
+  defp cased_letter?(char), do: String.upcase(char) != String.downcase(char)
+  defp case_ignorable?("᠎"), do: true
+  defp case_ignorable?(char), do: Regex.match?(~r/^\p{Mn}$/u, char)
 
   defp coerce_string_this(nil),
     do: throw({:js_throw, Heap.make_error("Cannot read properties of null", "TypeError")})
