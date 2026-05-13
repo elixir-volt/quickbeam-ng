@@ -164,6 +164,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         map when is_map(map) ->
           cond do
             obj == Heap.get_func_proto() -> "Function"
+            array_prototype_map?(map) -> "Array"
             (tag = WrappedPrimitive.tag(map)) != nil -> tag
             Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) -> "WeakMap"
             Map.has_key?(map, map_data()) -> "Map"
@@ -182,6 +183,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp object_to_string(_value), do: "[object Object]"
+
+  defp array_prototype_map?(map) do
+    Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
+  end
 
   static "keys", length: 1 do
     keys(args)

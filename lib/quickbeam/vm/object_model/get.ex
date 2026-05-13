@@ -81,11 +81,37 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp array_prototype_length(ref) do
     case Heap.get_obj_raw(ref) do
-      {:shape, _, offsets, _, _} -> if array_prototype_shape?(offsets), do: 0
-      map when is_map(map) -> if array_prototype_map?(map), do: 0
+      {:shape, _, offsets, _, _} ->
+        if array_prototype_shape?(offsets), do: array_prototype_index_length(Map.keys(offsets))
+
+      map when is_map(map) ->
+        if array_prototype_map?(map), do: array_prototype_index_length(Map.keys(map))
+
+      _ ->
+        nil
+    end
+  end
+
+  defp array_prototype_index_length(keys) do
+    keys
+    |> Enum.reduce(0, fn key, length ->
+      case array_index_key(key) do
+        index when is_integer(index) -> max(length, index + 1)
+        nil -> length
+      end
+    end)
+  end
+
+  defp array_index_key(key) when is_integer(key) and key >= 0, do: key
+
+  defp array_index_key(key) when is_binary(key) do
+    case Integer.parse(key) do
+      {index, ""} when index >= 0 -> index
       _ -> nil
     end
   end
+
+  defp array_index_key(_), do: nil
 
   defp function_prototype_has_own?(key) do
     case Heap.get_func_proto() do
@@ -170,7 +196,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         case Heap.get_obj_raw(ref) do
           {:shape, _, offsets, vals, _} ->
             if array_prototype_shape?(offsets) do
-              0
+              array_prototype_index_length(Map.keys(offsets))
             else
               case Map.fetch(offsets, "length") do
                 {:ok, off} -> elem(vals, off)
@@ -186,7 +212,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
           map when is_map(map) ->
             if array_prototype_map?(map),
-              do: 0,
+              do: array_prototype_index_length(Map.keys(map)),
               else: Map.get(map, "length", wrapped_map_length(map))
 
           _ ->
