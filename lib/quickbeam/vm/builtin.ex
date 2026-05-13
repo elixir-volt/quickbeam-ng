@@ -347,6 +347,9 @@ defmodule QuickBEAM.VM.Builtin do
 
   def named_meta("raw"), do: meta("raw", [length: 1, constructable: false], :static)
 
+  def named_meta("[Symbol.iterator]"),
+    do: meta("[Symbol.iterator]", [length: 0, constructable: false], :proto)
+
   def named_meta("exec"), do: meta("exec", [length: 1, constructable: false], :proto)
   def named_meta("test"), do: meta("test", [length: 1, constructable: false], :proto)
 
