@@ -199,8 +199,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
               array_prototype_index_length(Map.keys(offsets))
             else
               case Map.fetch(offsets, "length") do
-                {:ok, off} -> elem(vals, off)
-                :error -> wrapped_shape_length(offsets, vals)
+                {:ok, off} ->
+                  shape_value(elem(vals, off), {:obj, ref})
+
+                :error ->
+                  inherited_or_wrapped_length({:obj, ref}, wrapped_shape_length(offsets, vals))
               end
             end
 
@@ -211,9 +214,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
             array_prototype_length(ref) || virtual_array_length(ref) || length(list)
 
           map when is_map(map) ->
-            if array_prototype_map?(map),
-              do: array_prototype_index_length(Map.keys(map)),
-              else: Map.get(map, "length", wrapped_map_length(map))
+            if array_prototype_map?(map) do
+              array_prototype_index_length(Map.keys(map))
+            else
+              case Map.fetch(map, "length") do
+                {:ok, _} -> get_map_property(map, "length", {:obj, ref})
+                :error -> inherited_or_wrapped_length({:obj, ref}, wrapped_map_length(map))
+              end
+            end
 
           _ ->
             0
@@ -357,6 +365,19 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         :undefined
     end
   end
+
+  defp inherited_or_wrapped_length(obj, fallback) do
+    case get(obj, "length") do
+      :undefined -> fallback
+      value -> value
+    end
+  end
+
+  defp shape_value({:accessor, getter, _setter}, receiver) when getter != nil,
+    do: call_getter(getter, receiver)
+
+  defp shape_value({:accessor, nil, _setter}, _receiver), do: :undefined
+  defp shape_value(value, _receiver), do: value
 
   defp get_wrapped_or_map_property(map, key, receiver) do
     if WrappedPrimitive.type(map) in [:string, :boolean] and Map.has_key?(map, key) do
