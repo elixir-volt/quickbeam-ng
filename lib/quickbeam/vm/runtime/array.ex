@@ -601,6 +601,23 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp index_of({:qb_arr, arr}, args), do: index_of(:array.to_list(arr), args)
   defp index_of(value, args), do: index_of_array_like(find_receiver(value), args)
 
+  defp index_of_array_like(list, [search_element | rest]) when is_list(list) do
+    len = length(list)
+
+    case search_start(rest, len) do
+      :past_end ->
+        -1
+
+      start ->
+        list
+        |> Enum.with_index()
+        |> Enum.drop(start)
+        |> Enum.find_value(-1, fn {value, idx} ->
+          if strict_equal_for_index?(value, search_element), do: idx
+        end)
+    end
+  end
+
   defp index_of_array_like(this, [search_element | rest]) do
     len = array_like_length(this)
 
@@ -613,12 +630,18 @@ defmodule QuickBEAM.VM.Runtime.Array do
           key = Integer.to_string(idx)
 
           HasProperty.has_property?(this, key) and
-            Runtime.strict_equal?(find_value_at(this, idx), search_element)
+            strict_equal_for_index?(find_value_at(this, idx), search_element)
         end)
     end
   end
 
   defp index_of_array_like(_this, _args), do: -1
+
+  defp strict_equal_for_index?(left, right) do
+    not (nan_number?(left) or nan_number?(right)) and
+      (Runtime.strict_equal?(left, right) or
+         (is_number(left) and is_number(right) and left == right))
+  end
 
   defp find_index_in_range(start, len, predicate) when start < len do
     Enum.find_value(start..(len - 1), -1, fn idx ->
