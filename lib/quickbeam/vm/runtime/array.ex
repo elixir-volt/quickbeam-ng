@@ -120,7 +120,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   proto "reduceRight" do
-    this |> Heap.to_list() |> Enum.reverse() |> reduce(args)
+    reduce_right(this, args)
   end
 
   proto "forEach" do
@@ -596,29 +596,72 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp ensure_object_result(_),
     do: JSThrow.type_error!("Species constructor did not return an object")
 
-  defp reduce({:obj, ref}, [fun | rest]) do
-    list = Heap.obj_to_list(ref)
-    reduce_impl(list, fun, rest)
-  end
+  defp reduce(nil, _args), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp reduce({:qb_arr, arr}, args), do: reduce(:array.to_list(arr), args)
+  defp reduce(:undefined, _args),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp reduce(list, [fun | rest]) when is_list(list),
-    do: reduce_impl(list, fun, rest)
+  defp reduce(value, args), do: reduce_array_like(find_receiver(value), args, :forward)
 
-  defp reduce([], [_, init | _]), do: init
-  defp reduce([val], _), do: val
+  defp reduce_right(nil, _args),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp reduce_impl(list, fun, rest) do
-    {acc, items} =
+  defp reduce_right(:undefined, _args),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp reduce_right(value, args), do: reduce_array_like(find_receiver(value), args, :reverse)
+
+  defp reduce_array_like(this, [fun | rest], direction) do
+    len = array_like_length(this)
+
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("callbackfn is not a function")
+    end
+
+    indexes = reduce_indexes(len, direction)
+
+    {acc, remaining_indexes} =
       case rest do
-        [init] -> {init, list}
-        _ -> {hd(list), tl(list)}
+        [initial | _] ->
+          {initial, indexes}
+
+        _ ->
+          find_initial_accumulator(this, indexes)
       end
 
-    Enum.reduce(Enum.with_index(items), acc, fn {val, idx}, a ->
-      Runtime.call_callback(fun, [a, val, idx, list])
+    Enum.reduce(remaining_indexes, acc, fn idx, current_acc ->
+      key = Integer.to_string(idx)
+
+      if HasProperty.has_property?(this, key) do
+        value = find_value_at(this, idx)
+
+        QuickBEAM.VM.Invocation.invoke_with_receiver(
+          fun,
+          [current_acc, value, idx, this],
+          :undefined
+        )
+      else
+        current_acc
+      end
     end)
+  end
+
+  defp reduce_array_like(this, _args, _direction) do
+    _len = array_like_length(this)
+    JSThrow.type_error!("callbackfn is not a function")
+  end
+
+  defp reduce_indexes(0, _direction), do: []
+  defp reduce_indexes(len, :forward), do: Enum.to_list(0..(len - 1))
+  defp reduce_indexes(len, :reverse), do: Enum.to_list((len - 1)..0//-1)
+
+  defp find_initial_accumulator(this, indexes) do
+    case Enum.split_while(indexes, fn idx ->
+           not HasProperty.has_property?(this, Integer.to_string(idx))
+         end) do
+      {_skipped, [idx | rest]} -> {find_value_at(this, idx), rest}
+      {_skipped, []} -> JSThrow.type_error!("Reduce of empty array with no initial value")
+    end
   end
 
   defp for_each(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
