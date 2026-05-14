@@ -1,6 +1,7 @@
 defmodule QuickBEAM.VM.Heap.GC do
   @moduledoc "Mark-and-sweep garbage collector for the JS object heap."
 
+  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap.{Context, Registry, Store}
 
   @gc_initial_threshold 5_000
@@ -81,6 +82,15 @@ defmodule QuickBEAM.VM.Heap.GC do
     end)
   end
 
+  defp mark([{:regexp, _bytecode, _source, ref} = regexp | rest], visited) do
+    mark_ref(RegexpState.key(ref), regexp_tuple_children(regexp) ++ rest, visited, fn props ->
+      case props do
+        map when is_map(map) -> Map.values(map) ++ Map.keys(map)
+        _ -> []
+      end
+    end)
+  end
+
   defp mark([%QuickBEAM.VM.Function{} = fun | rest], visited) do
     mark_callable({:function, fun.id}, rest, visited, fn ->
       related = [Store.get_class_proto(fun), Store.get_parent_ctor(fun)]
@@ -109,6 +119,8 @@ defmodule QuickBEAM.VM.Heap.GC do
     end
   end
 
+  defp regexp_tuple_children({:regexp, bytecode, source, _ref}), do: [bytecode, source]
+
   defp mark_ref(key, rest, visited, children_fn) do
     if MapSet.member?(visited, key) do
       mark(rest, visited)
@@ -122,7 +134,7 @@ defmodule QuickBEAM.VM.Heap.GC do
   # ── Sweep phase ──
 
   defp sweep_heap(marked) do
-    for key <- Process.get_keys(), heap_key?(key), not MapSet.member?(marked, key) do
+    for key <- Process.get_keys(), sweepable_heap_key?(key), not MapSet.member?(marked, key) do
       Process.delete(key)
     end
   end
@@ -130,9 +142,17 @@ defmodule QuickBEAM.VM.Heap.GC do
   defp sweep_all(marked) do
     for key <- Process.get_keys() do
       cond do
-        heap_key?(key) -> unless marked && MapSet.member?(marked, key), do: Process.delete(key)
-        ephemeral_key?(key) -> Process.delete(key)
-        true -> :ok
+        heap_key?(key) ->
+          unless marked && MapSet.member?(marked, key), do: Process.delete(key)
+
+        regexp_state_key?(key) ->
+          unless marked && MapSet.member?(marked, key), do: Process.delete(key)
+
+        ephemeral_key?(key) ->
+          Process.delete(key)
+
+        true ->
+          :ok
       end
     end
   end
@@ -140,6 +160,10 @@ defmodule QuickBEAM.VM.Heap.GC do
   defp heap_key?(key) when is_integer(key) and key > 0, do: true
   defp heap_key?({:qb_cell, _}), do: true
   defp heap_key?(_), do: false
+
+  defp sweepable_heap_key?(key), do: heap_key?(key) or regexp_state_key?(key)
+
+  defp regexp_state_key?(key), do: RegexpState.key?(key)
 
   defp ephemeral_key?({:qb_prop_desc, _, _}), do: true
   defp ephemeral_key?({:qb_frozen, _}), do: true

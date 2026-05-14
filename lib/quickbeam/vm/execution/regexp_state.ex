@@ -12,5 +12,10 @@ defmodule QuickBEAM.VM.Execution.RegexpState do
 
   def has_property?(ref, property), do: Map.has_key?(get(ref), property)
 
-  defp key(ref), do: {:qb_regexp_props, ref}
+  @doc "Returns the process dictionary key for a RegExp property side table."
+  def key(ref), do: {:qb_regexp_props, ref}
+
+  @doc "Returns true when a process dictionary key belongs to RegExp property state."
+  def key?({:qb_regexp_props, _ref}), do: true
+  def key?(_key), do: false
 end

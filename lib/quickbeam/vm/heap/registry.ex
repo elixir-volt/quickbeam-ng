@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Heap.Registry do
   ## Heap objects
   - `integer_id` (positive integer) — JS object/array data (map, list, shape, `{:qb_arr, …}`)
   - `{:qb_cell, ref}` — closure variable cell
+  - `{:qb_regexp_props, ref}` — mutable own-property side table for RegExp tuple values
 
   ## Object metadata (ephemeral — cleared by GC)
   - `{:qb_prop_desc, ref, key}` — property descriptor override
