@@ -1580,10 +1580,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end
   end
 
-  defp from_result(list, {:builtin, "Array", _}, _construct_args), do: Heap.wrap(list)
+  defp from_result(list, {:builtin, "Array", _}, _construct_args), do: wrap_array_result(list)
 
   defp from_result(list, constructor, _construct_args) when constructor in [nil, :undefined],
-    do: Heap.wrap(list)
+    do: wrap_array_result(list)
 
   defp from_result(list, constructor, construct_args) do
     if constructable_from?(constructor) do
@@ -1598,6 +1598,28 @@ defmodule QuickBEAM.VM.Runtime.Array do
     else
       Heap.wrap(list)
     end
+  end
+
+  defp wrap_array_result(list) do
+    {:obj, ref} = array = Heap.wrap(list)
+
+    list
+    |> Enum.with_index()
+    |> Enum.each(fn
+      {:undefined, index} -> mark_array_result_present(ref, index)
+      {value, index} when value == :undefined -> mark_array_result_present(ref, index)
+      _ -> :ok
+    end)
+
+    array
+  end
+
+  defp mark_array_result_present(ref, index) do
+    Heap.put_prop_desc(ref, Integer.to_string(index), %{
+      writable: true,
+      enumerable: true,
+      configurable: true
+    })
   end
 
   defp create_data_property_or_throw(target, key, value) do
