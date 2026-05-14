@@ -1497,7 +1497,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp compare_custom_sort(_left, :undefined, _left_index, _right_index, _compare_fn), do: -1
 
   defp compare_custom_sort(left, right, left_index, right_index, compare_fn) do
-    case Runtime.call_callback(compare_fn, [left, right]) do
+    case QuickBEAM.VM.Invocation.invoke_with_receiver(compare_fn, [left, right], :undefined) do
       value when is_number(value) and value < 0 -> -1
       value when is_number(value) and value > 0 -> 1
       _ -> left_index - right_index
