@@ -1373,54 +1373,100 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp sort(:undefined, _args),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp sort({:obj, ref}, [_compare_fn | _] = args) do
-    list = Heap.obj_to_list(ref)
-    # Comparator fn returns negative (a<b), 0 (a==b), or positive (a>b)
-    # Fall back to string sort if comparator can't be invoked
-    sorted =
-      try do
-        compare_fn = hd(args)
+  defp sort(value, args) do
+    compare_fn = sort_compare_fn(args)
+    receiver = find_receiver(value)
+    len = array_like_length(receiver)
 
-        Enum.sort(list, fn a, b ->
-          result = Runtime.call_callback(compare_fn, [a, b])
+    values =
+      if len == 0 do
+        []
+      else
+        0..(len - 1)
+        |> Enum.reduce([], fn index, acc ->
+          key = Integer.to_string(index)
 
-          case result do
-            n when is_number(n) -> n < 0
-            _ -> Runtime.stringify(a) < Runtime.stringify(b)
+          if HasProperty.has_property?(receiver, key) do
+            [{find_value_at(receiver, index), index} | acc]
+          else
+            acc
           end
         end)
-      catch
-        _ -> Enum.sort(list, fn a, b -> Runtime.stringify(a) < Runtime.stringify(b) end)
+        |> Enum.reverse()
       end
 
-    Heap.put_obj(ref, sorted)
-    {:obj, ref}
+    sorted = sort_values(values, compare_fn)
+
+    sorted
+    |> Enum.with_index()
+    |> Enum.each(fn {{value, _original_index}, index} ->
+      Put.put(receiver, Integer.to_string(index), value)
+    end)
+
+    sorted_count = length(sorted)
+
+    if sorted_count < len do
+      sorted_count..(len - 1)
+      |> Enum.each(fn index -> delete_or_throw(receiver, Integer.to_string(index)) end)
+    end
+
+    receiver
   end
 
-  defp sort({:obj, ref}, []) do
-    list = Heap.obj_to_list(ref)
+  defp sort_compare_fn([]), do: :default
+  defp sort_compare_fn([:undefined | _]), do: :default
 
-    Heap.put_obj(
-      ref,
-      Enum.sort(list, fn a, b ->
-        Runtime.stringify(a) < Runtime.stringify(b)
-      end)
-    )
-
-    {:obj, ref}
+  defp sort_compare_fn([fun | _]) do
+    if QuickBEAM.VM.Builtin.callable?(fun) do
+      fun
+    else
+      JSThrow.type_error!("The comparison function must be either a function or undefined")
+    end
   end
 
-  defp sort({:qb_arr, arr}, args), do: sort(:array.to_list(arr), args)
+  defp sort_values(values, :default), do: Enum.sort(values, &default_sort_before?/2)
 
-  defp sort(list, [_ | _]) when is_list(list) do
-    Enum.sort(list, fn a, b -> Runtime.stringify(a) < Runtime.stringify(b) end)
+  defp sort_values(values, compare_fn),
+    do: Enum.sort(values, &custom_sort_before?(&1, &2, compare_fn))
+
+  defp default_sort_before?({left, left_index}, {right, right_index}) do
+    compare_default_sort(left, right, left_index, right_index) < 0
   end
 
-  defp sort(list, []) when is_list(list),
-    do:
-      Enum.sort(list, fn a, b ->
-        Runtime.stringify(a) < Runtime.stringify(b)
-      end)
+  defp custom_sort_before?({left, left_index}, {right, right_index}, compare_fn) do
+    compare_custom_sort(left, right, left_index, right_index, compare_fn) < 0
+  end
+
+  defp compare_default_sort(:undefined, :undefined, left_index, right_index),
+    do: left_index - right_index
+
+  defp compare_default_sort(:undefined, _right, _left_index, _right_index), do: 1
+  defp compare_default_sort(_left, :undefined, _left_index, _right_index), do: -1
+
+  defp compare_default_sort(left, right, left_index, right_index) do
+    left_string = Runtime.stringify(left)
+    right_string = Runtime.stringify(right)
+
+    cond do
+      left_string < right_string -> -1
+      left_string > right_string -> 1
+      true -> left_index - right_index
+    end
+  end
+
+  defp compare_custom_sort(:undefined, :undefined, left_index, right_index, _compare_fn),
+    do: left_index - right_index
+
+  defp compare_custom_sort(:undefined, _right, _left_index, _right_index, _compare_fn), do: 1
+  defp compare_custom_sort(_left, :undefined, _left_index, _right_index, _compare_fn), do: -1
+
+  defp compare_custom_sort(left, right, left_index, right_index, compare_fn) do
+    case Runtime.call_callback(compare_fn, [left, right]) do
+      value when is_number(value) and value < 0 -> -1
+      value when is_number(value) and value > 0 -> 1
+      _ -> left_index - right_index
+    end
+  end
 
   defp flat(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
   defp flat(:undefined, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
