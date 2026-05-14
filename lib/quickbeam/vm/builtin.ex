@@ -366,6 +366,10 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("map"), do: meta("map", [length: 1, constructable: false], :proto)
   def named_meta("filter"), do: meta("filter", [length: 1, constructable: false], :proto)
   def named_meta("reduce"), do: meta("reduce", [length: 1, constructable: false], :proto)
+
+  def named_meta("reduceRight"),
+    do: meta("reduceRight", [length: 1, constructable: false], :proto)
+
   def named_meta("forEach"), do: meta("forEach", [length: 1, constructable: false], :proto)
   def named_meta("some"), do: meta("some", [length: 1, constructable: false], :proto)
   def named_meta("every"), do: meta("every", [length: 1, constructable: false], :proto)
