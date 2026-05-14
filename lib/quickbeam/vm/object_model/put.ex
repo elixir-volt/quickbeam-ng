@@ -7,7 +7,16 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyKey, Semantics, WrappedPrimitive}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    Define,
+    Get,
+    HasProperty,
+    OwnProperty,
+    PropertyKey,
+    Semantics,
+    WrappedPrimitive
+  }
 
   @compile {:inline, has_property: 2, get_element: 2, set_list_at: 3}
 
@@ -543,6 +552,12 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   defp write_receiver({:obj, ref} = receiver, key, val) do
     case Heap.get_obj_raw(ref) do
+      %{proxy_target() => _target, proxy_handler() => _handler} ->
+        _current = OwnProperty.descriptor(receiver, key)
+        desc = %{"value" => val, "writable" => true, "enumerable" => true, "configurable" => true}
+        Define.property(receiver, key, Heap.wrap(desc), desc)
+        true
+
       {:shape, _shape_id, offsets, vals, _proto} ->
         case Map.fetch(offsets, key) do
           {:ok, offset} ->

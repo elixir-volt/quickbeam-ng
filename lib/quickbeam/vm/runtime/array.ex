@@ -1615,8 +1615,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp reverse_put({:obj, ref} = receiver, index, _key, value) do
     case Heap.get_obj(ref, %{}) do
-      %{typed_array() => true} -> Put.put_element(receiver, index, value)
-      _ -> Put.put(receiver, Integer.to_string(index), value)
+      %{typed_array() => true} ->
+        Put.put_element(receiver, index, value)
+
+      %{proxy_target() => _target, proxy_handler() => _handler} ->
+        Put.set(receiver, Integer.to_string(index), value, receiver)
+
+      _ ->
+        Put.put(receiver, Integer.to_string(index), value)
     end
   end
 
