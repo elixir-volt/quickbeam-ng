@@ -635,6 +635,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end
   end
 
+  defp index_of_array_like(this, []), do: index_of_array_like(this, [:undefined])
   defp index_of_array_like(_this, _args), do: -1
 
   defp strict_equal_for_index?(left, right) do
