@@ -1267,20 +1267,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
               QuickBEAM.VM.ObjectModel.WrappedPrimitive.tag(map) != nil ->
                 QuickBEAM.VM.ObjectModel.WrappedPrimitive.tag(map)
 
-              Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) ->
-                "WeakMap"
-
-              Map.has_key?(map, map_data()) ->
-                "Map"
-
-              Map.has_key?(map, set_data()) and Map.has_key?(map, :weak) ->
-                "WeakSet"
-
-              Map.has_key?(map, set_data()) ->
-                "Set"
-
               Map.has_key?(map, date_ms()) ->
                 "Date"
+
+              Map.has_key?(map, "__error_name__") ->
+                "Error"
 
               true ->
                 "Object"
@@ -1299,8 +1290,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp array_object_tag_string(value) when is_binary(value), do: "[object String]"
   defp array_object_tag_string({:symbol, _}), do: "[object Symbol]"
   defp array_object_tag_string({:symbol, _, _}), do: "[object Symbol]"
-  defp array_object_tag_string({:regexp, _, _}), do: "[object RegExp]"
-  defp array_object_tag_string({:regexp, _, _, _}), do: "[object RegExp]"
+
+  defp array_object_tag_string({:regexp, _, _} = regexp),
+    do: tagged_object_string(regexp, "RegExp")
+
+  defp array_object_tag_string({:regexp, _, _, _} = regexp),
+    do: tagged_object_string(regexp, "RegExp")
+
   defp array_object_tag_string(%QuickBEAM.VM.Function{}), do: "[object Function]"
 
   defp array_object_tag_string({tag, _, %QuickBEAM.VM.Function{}})
@@ -1316,6 +1312,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp array_object_tag_string({:builtin, _, _}), do: "[object Function]"
   defp array_object_tag_string(_), do: "[object Object]"
+
+  defp tagged_object_string(obj, fallback_tag) do
+    custom_tag = Get.get(obj, {:symbol, "Symbol.toStringTag"})
+    "[object #{if is_binary(custom_tag), do: custom_tag, else: fallback_tag}]"
+  end
 
   defp to_locale_string(nil),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")

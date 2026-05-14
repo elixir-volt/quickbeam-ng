@@ -226,7 +226,7 @@ defmodule QuickBEAM.VM.Heap do
         ctor -> get_class_proto(ctor)
       end
 
-    base = %{"message" => message, "name" => name, "stack" => ""}
+    base = %{"message" => message, "name" => name, "stack" => "", "__error_name__" => name}
     error = if proto, do: wrap(Map.put(base, "__proto__", proto)), else: wrap(base)
 
     with {:obj, ref} <- error do

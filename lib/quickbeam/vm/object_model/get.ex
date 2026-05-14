@@ -417,10 +417,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       nil ->
         :undefined
 
-      %{
-        proxy_target() => target,
-        proxy_handler() => handler
-      } ->
+      %{proxy_target() => target, proxy_handler() => handler} = proxy ->
+        if Map.get(proxy, "__proxy_revoked__") == true do
+          JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+        end
+
         get_trap = get_own(handler, "get")
 
         if get_trap != :undefined do
@@ -920,10 +921,18 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype({:obj, ref}, key) do
     case Heap.get_obj(ref) do
       {:qb_arr, _} ->
-        array_proto_property(key)
+        if Heap.get_array_prop(ref, "__arguments__") == true do
+          get_default_object_prototype({:obj, ref}, key)
+        else
+          array_proto_property(key)
+        end
 
       list when is_list(list) ->
-        array_proto_property(key)
+        if Heap.get_array_prop(ref, "__arguments__") == true do
+          get_default_object_prototype({:obj, ref}, key)
+        else
+          array_proto_property(key)
+        end
 
       map when is_map(map) ->
         cond do
