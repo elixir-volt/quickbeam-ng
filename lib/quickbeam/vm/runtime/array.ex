@@ -998,7 +998,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp slice_end(args, len) do
-    args |> Enum.at(1, len) |> to_integer_or_infinity() |> slice_relative_index(len)
+    case Enum.fetch(args, 1) do
+      {:ok, value} when value not in [nil, :undefined] ->
+        value |> to_integer_or_infinity() |> slice_relative_index(len)
+
+      _ ->
+        len
+    end
   end
 
   defp slice_relative_index(:neg_infinity, _len), do: 0
