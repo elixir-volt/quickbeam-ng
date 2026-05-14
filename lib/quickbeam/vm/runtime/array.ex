@@ -654,7 +654,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       JSThrow.type_error!("callbackfn is not a function")
     end
 
-    indexes = reduce_indexes(len, direction)
+    indexes = reduce_indexes(this, len, direction)
 
     {acc, remaining_indexes} =
       case rest do
@@ -687,9 +687,33 @@ defmodule QuickBEAM.VM.Runtime.Array do
     JSThrow.type_error!("callbackfn is not a function")
   end
 
-  defp reduce_indexes(0, _direction), do: []
-  defp reduce_indexes(len, :forward), do: Enum.to_list(0..(len - 1))
-  defp reduce_indexes(len, :reverse), do: Enum.to_list((len - 1)..0//-1)
+  defp reduce_indexes(_this, 0, _direction), do: []
+
+  defp reduce_indexes(this, len, direction) when len > 100_000 do
+    this
+    |> OwnProperty.descriptor_keys()
+    |> Enum.flat_map(&array_property_index/1)
+    |> Enum.filter(&(&1 >= 0 and &1 < len))
+    |> Enum.uniq()
+    |> sort_reduce_indexes(direction)
+  end
+
+  defp reduce_indexes(_this, len, :forward), do: Enum.to_list(0..(len - 1))
+  defp reduce_indexes(_this, len, :reverse), do: Enum.to_list((len - 1)..0//-1)
+
+  defp sort_reduce_indexes(indexes, :forward), do: Enum.sort(indexes)
+  defp sort_reduce_indexes(indexes, :reverse), do: Enum.sort(indexes, :desc)
+
+  defp array_property_index(key) when is_integer(key) and key >= 0, do: [key]
+
+  defp array_property_index(key) when is_binary(key) do
+    case Integer.parse(key) do
+      {idx, ""} when idx >= 0 -> [idx]
+      _ -> []
+    end
+  end
+
+  defp array_property_index(_key), do: []
 
   defp find_initial_accumulator(this, indexes) do
     case Enum.split_while(indexes, fn idx ->
