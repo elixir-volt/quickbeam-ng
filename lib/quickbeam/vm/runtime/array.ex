@@ -377,24 +377,56 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   # ── Higher-order ──
 
-  defp map({:obj, ref}, [fun | _]) do
-    list = Heap.obj_to_list(ref)
+  defp map(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+  defp map(:undefined, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+  defp map({:qb_arr, arr}, args), do: map(:array.to_list(arr), args)
+  defp map(value, args), do: map_array_like(find_receiver(value), args)
 
-    result =
-      Enum.map(Enum.with_index(list), fn {val, idx} ->
-        Runtime.call_callback(fun, [val, idx, list])
+  defp map_array_like(this, [fun | rest]) do
+    len = array_like_length(this)
+
+    unless QuickBEAM.VM.Builtin.callable?(fun) do
+      JSThrow.type_error!("callbackfn is not a function")
+    end
+
+    this_arg = filter_this_arg(rest)
+    target = map_target(this, len)
+
+    if len > 0 do
+      Enum.each(0..(len - 1), fn idx ->
+        key = Integer.to_string(idx)
+
+        if HasProperty.has_property?(this, key) do
+          value = find_value_at(this, idx)
+
+          mapped =
+            QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
+
+          create_data_property_or_throw(target, key, mapped)
+        end
       end)
+    end
 
-    Heap.wrap(result)
+    Put.put(target, "length", len)
+    target
   end
 
-  defp map([_ | _] = list, [fun | _]) do
-    Enum.map(Enum.with_index(list), fn {val, idx} ->
-      Runtime.call_callback(fun, [val, idx, list])
-    end)
+  defp map_array_like(this, _args) do
+    _len = array_like_length(this)
+    JSThrow.type_error!("callbackfn is not a function")
   end
 
-  defp map(list, _), do: list
+  defp map_target(receiver, len) do
+    case concat_species_constructor(receiver) do
+      :array ->
+        Heap.wrap(List.duplicate(:undefined, min(len, 100_000)))
+
+      constructor ->
+        ensure_object_result(
+          QuickBEAM.VM.Invocation.construct_runtime(constructor, constructor, [len])
+        )
+    end
+  end
 
   defp filter(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
