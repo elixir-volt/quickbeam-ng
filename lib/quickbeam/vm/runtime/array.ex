@@ -2565,24 +2565,68 @@ defmodule QuickBEAM.VM.Runtime.Array do
           if current_len != len and target >= current_len do
             copy_within_sparse_tail(obj, ref, target, start_idx, current_len)
           else
-            slice = Enum.slice(list, start_idx, max(end_idx - start_idx, 0))
+            if copy_within_source_has_holes?(obj, start_idx, end_idx, len, target) do
+              copy_within_present_properties(obj, len, target, start_idx, end_idx)
+            else
+              slice = Enum.slice(list, start_idx, max(end_idx - start_idx, 0))
 
-            new_list =
-              list
-              |> Enum.with_index()
-              |> Enum.map(fn {item, i} ->
-                offset = i - target
-                if i >= target and offset < length(slice), do: Enum.at(slice, offset), else: item
-              end)
+              new_list =
+                list
+                |> Enum.with_index()
+                |> Enum.map(fn {item, i} ->
+                  offset = i - target
 
-            Heap.put_obj(ref, new_list)
-            {:obj, ref}
+                  if i >= target and offset < length(slice),
+                    do: Enum.at(slice, offset),
+                    else: item
+                end)
+
+              Heap.put_obj(ref, new_list)
+              {:obj, ref}
+            end
           end
         end
     end
   end
 
   defp copy_within(_, _), do: :undefined
+
+  defp copy_within_source_has_holes?(obj, start_idx, end_idx, len, target) do
+    count = max(min(max(end_idx - start_idx, 0), len - target), 0)
+
+    count > 0 and
+      Enum.any?(0..(count - 1)//1, fn offset ->
+        not HasProperty.has_property?(obj, Integer.to_string(start_idx + offset))
+      end)
+  end
+
+  defp copy_within_present_properties(obj, len, target, start_idx, end_idx) do
+    count = max(min(max(end_idx - start_idx, 0), len - target), 0)
+
+    {from, to, step} =
+      if start_idx < target and target < start_idx + count do
+        {start_idx + count - 1, target + count - 1, -1}
+      else
+        {start_idx, target, 1}
+      end
+
+    Enum.reduce(0..max(count - 1, 0)//1, {from, to}, fn _offset, {from_idx, to_idx} ->
+      from_key = Integer.to_string(from_idx)
+      to_key = Integer.to_string(to_idx)
+
+      if HasProperty.has_property?(obj, from_key) do
+        Put.put(obj, to_key, Get.get(obj, from_key))
+      else
+        unless Delete.delete_property(obj, to_key) do
+          JSThrow.type_error!("Cannot delete property")
+        end
+      end
+
+      {from_idx + step, to_idx + step}
+    end)
+
+    obj
+  end
 
   defp copy_within_from_sparse_source(obj, ref, len, current_len, target, start_idx) do
     count = max(min(len - start_idx, len - target), 0)
