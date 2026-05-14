@@ -906,6 +906,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     case Heap.get_obj_raw(ref) do
       {:shape, _shape_id, offsets, _vals, _proto} -> Map.has_key?(offsets, key)
       map when is_map(map) -> not Map.has_key?(map, proxy_target()) and Map.has_key?(map, key)
+      data when is_list(data) -> Heap.get_prop_desc(ref, key) != nil
+      {:qb_arr, _} -> Heap.get_prop_desc(ref, key) != nil
       _ -> false
     end
   end

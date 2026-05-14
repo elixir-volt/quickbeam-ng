@@ -695,6 +695,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           true ->
             Heap.put_array_prop(ref, key, val)
+            mark_undefined_array_write(ref, key, val)
         end
     end
   end

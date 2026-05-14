@@ -1257,6 +1257,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
           map when is_map(map) ->
             cond do
+              Map.has_key?(map, proxy_target()) and is_array(Map.get(map, proxy_target())) ->
+                "Array"
+
+              Map.has_key?(map, proxy_target()) and
+                  QuickBEAM.VM.Builtin.callable?(Map.get(map, proxy_target())) ->
+                "Function"
+
               QuickBEAM.VM.ObjectModel.WrappedPrimitive.tag(map) != nil ->
                 QuickBEAM.VM.ObjectModel.WrappedPrimitive.tag(map)
 
