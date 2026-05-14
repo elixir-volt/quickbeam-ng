@@ -178,7 +178,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   defp lower_fclosure(state, constants, arg_count, const_idx) do
     case Enum.at(constants, const_idx) do
       %QuickBEAM.VM.Function{closure_vars: []} = fun ->
-        {:ok, State.push(state, Builder.literal(fun), AnalysisTypes.function_type(fun))}
+        closure =
+          Builder.tuple_expr([
+            Builder.atom(:closure),
+            Builder.map_expr([]),
+            Builder.literal(fun)
+          ])
+
+        {:ok, State.push(state, closure, AnalysisTypes.function_type(fun))}
 
       %QuickBEAM.VM.Function{} = fun ->
         with {:ok, state, entries} <-
