@@ -578,15 +578,7 @@ defmodule QuickBEAM.VM.Runtime.Date do
 
   defp put_ms_nan, do: :nan
 
-  defp tz_offset_minutes do
-    {utc, local} = {:calendar.universal_time(), :calendar.local_time()}
-
-    div(
-      :calendar.datetime_to_gregorian_seconds(utc) -
-        :calendar.datetime_to_gregorian_seconds(local),
-      60
-    )
-  end
+  defp tz_offset_minutes, do: 0
 
   # ── Date component → ms ──
 
