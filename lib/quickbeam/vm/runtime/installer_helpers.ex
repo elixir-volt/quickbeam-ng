@@ -70,6 +70,14 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
     Heap.put_prop_desc(proto_ref, sym_iter, PropertyDescriptor.method())
   end
 
+  @doc "Installs accessors using a custom accessor lookup function."
+  def install_accessors_with(proto_ref, names, lookup_fun) when is_function(lookup_fun, 1) do
+    for name <- names do
+      Heap.put_obj_key(proto_ref, name, lookup_fun.(name))
+      Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.accessor())
+    end
+  end
+
   @doc "Installs a builtin accessor on a prototype object."
   def install_accessor(proto_ref, name, builtin_name, getter) when is_function(getter, 1) do
     Heap.put_obj_key(
@@ -79,6 +87,12 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
     )
 
     Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.accessor())
+  end
+
+  @doc "Installs a hidden readonly constructor/function static."
+  def install_hidden_static(ctor, name, value) do
+    Heap.put_ctor_static(ctor, name, value)
+    Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.hidden_readonly())
   end
 
   defp install_zero_length(method, true) do

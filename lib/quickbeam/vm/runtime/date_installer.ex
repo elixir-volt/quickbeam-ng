@@ -5,6 +5,7 @@ defmodule QuickBEAM.VM.Runtime.DateInstaller do
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
 
   @doc "Returns the global Date constructor binding."
   def constructor do
@@ -21,11 +22,8 @@ defmodule QuickBEAM.VM.Runtime.DateInstaller do
   end
 
   defp install_prototype_methods(ctor) do
-    with_prototype(ctor, fn proto_ref ->
-      for name <- JSDate.proto_property_names() do
-        Heap.put_obj_key(proto_ref, name, JSDate.proto_property(name))
-        Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
-      end
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_methods(proto_ref, JSDate, JSDate.proto_property_names())
     end)
   end
 
@@ -34,7 +32,7 @@ defmodule QuickBEAM.VM.Runtime.DateInstaller do
   end
 
   defp install_symbol_to_primitive(ctor) do
-    with_prototype(ctor, fn proto_ref ->
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
 
       sym_key = {:symbol, "Symbol.toPrimitive"}
@@ -45,17 +43,9 @@ defmodule QuickBEAM.VM.Runtime.DateInstaller do
            JSDate.symbol_to_primitive(this, args)
          end}
 
-      Heap.put_ctor_static(to_prim, "length", 1)
-      Heap.put_ctor_prop_desc(to_prim, "length", PropertyDescriptor.hidden_readonly())
+      InstallerHelpers.install_hidden_static(to_prim, "length", 1)
       Heap.put_obj_key(proto_ref, sym_key, to_prim)
       Heap.put_prop_desc(proto_ref, sym_key, PropertyDescriptor.hidden_readonly())
     end)
-  end
-
-  defp with_prototype(ctor, fun) do
-    case Heap.get_ctor_statics(ctor)["prototype"] do
-      {:obj, proto_ref} -> fun.(proto_ref)
-      _ -> :ok
-    end
   end
 end
