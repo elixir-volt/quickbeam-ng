@@ -2,11 +2,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
   @moduledoc "VM-instruction-to-Erlang lowering pipeline: analyses control flow and types, then emits abstract-form block functions."
 
   alias QuickBEAM.VM.Compiler.Analysis.{CFG, Stack, Types}
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, ObjectLiteralFastPath}
+  alias QuickBEAM.VM.Compiler.Lowering.{BlockClauses, Builder, ObjectLiteralFastPath}
   alias QuickBEAM.VM.Compiler.{Lowering.Ops, Lowering.State}
   alias QuickBEAM.VM.Heap
 
-  @guardable_types [:integer, :number, :boolean, :string, :undefined, :null]
   @large_frame_slot_threshold 200
   @line 1
 
@@ -82,9 +81,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
        ) do
     next_entry = CFG.next_entry(entries, start)
 
-    args = block_args(slot_count, stack_depth, frame_mode)
+    args = BlockClauses.args(slot_count, stack_depth, frame_mode)
 
-    fast_guards = block_clause_guards(slot_count, stack_depth, entry_type_state, frame_mode)
+    fast_guards = BlockClauses.guards(slot_count, stack_depth, entry_type_state, frame_mode)
 
     with {:ok, fast_body} <-
            lower_block(
@@ -191,55 +190,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
 
     State.new(slot_count, stack_depth, state_opts)
   end
-
-  defp block_args(_slot_count, stack_depth, :tuple) do
-    [Builder.ctx_var(), Builder.var("Slots"), Builder.var("Captures")] ++
-      Builder.stack_vars(stack_depth)
-  end
-
-  defp block_args(slot_count, stack_depth, _frame_mode) do
-    [Builder.ctx_var() | Builder.slot_vars(slot_count)] ++
-      Builder.stack_vars(stack_depth) ++ Builder.capture_vars(slot_count)
-  end
-
-  defp block_clause_guards(_slot_count, _stack_depth, nil, _frame_mode), do: []
-
-  defp block_clause_guards(_slot_count, stack_depth, entry_type_state, :tuple),
-    do: stack_guards(stack_depth, entry_type_state)
-
-  defp block_clause_guards(slot_count, stack_depth, entry_type_state, _frame_mode) do
-    slot_guards =
-      if slot_count == 0 do
-        []
-      else
-        for idx <- 0..(slot_count - 1),
-            guard =
-              type_guard(
-                Builder.slot_var(idx),
-                Map.get(entry_type_state.slot_types, idx, :unknown)
-              ),
-            guard != nil,
-            do: guard
-      end
-
-    slot_guards ++ stack_guards(stack_depth, entry_type_state)
-  end
-
-  defp stack_guards(stack_depth, entry_type_state) do
-    for {type, idx} <- Enum.with_index(entry_type_state.stack_types || []),
-        idx < stack_depth,
-        guard = type_guard(Builder.stack_var(idx), type),
-        guard != nil,
-        do: guard
-  end
-
-  defp type_guard(_expr, type) when type not in @guardable_types, do: nil
-  defp type_guard(expr, :integer), do: {:call, @line, {:atom, @line, :is_integer}, [expr]}
-  defp type_guard(expr, :number), do: {:call, @line, {:atom, @line, :is_number}, [expr]}
-  defp type_guard(expr, :boolean), do: {:call, @line, {:atom, @line, :is_boolean}, [expr]}
-  defp type_guard(expr, :string), do: {:call, @line, {:atom, @line, :is_binary}, [expr]}
-  defp type_guard(expr, :undefined), do: {:op, @line, :==, expr, {:atom, @line, :undefined}}
-  defp type_guard(expr, :null), do: {:op, @line, :==, expr, {:atom, @line, nil}}
 
   defp lower_block(
          _instructions,
