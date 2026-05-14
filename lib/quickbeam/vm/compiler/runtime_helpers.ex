@@ -1199,8 +1199,11 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
           QuickBEAM.VM.ObjectModel.WrappedPrimitive.value(Heap.get_obj(ref, %{}), :bigint)
         )
 
-      "Date" ->
-        Map.has_key?(Heap.get_obj(ref, %{}), date_ms())
+      name when is_binary(name) ->
+        data = Heap.get_obj(ref, %{})
+
+        typed_array_instance?(data, name) or
+          (name == "Date" and Map.has_key?(data, date_ms()))
 
       "Object" ->
         true
@@ -1211,6 +1214,26 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   defp special_builtin_instance?(_, _), do: false
+
+  defp typed_array_instance?(%{"__typed_array__" => true, "__type__" => type}, constructor_name) do
+    typed_array_constructor_type(constructor_name) == type
+  end
+
+  defp typed_array_instance?(_, _), do: false
+
+  defp typed_array_constructor_type("Uint8Array"), do: :uint8
+  defp typed_array_constructor_type("Int8Array"), do: :int8
+  defp typed_array_constructor_type("Uint16Array"), do: :uint16
+  defp typed_array_constructor_type("Int16Array"), do: :int16
+  defp typed_array_constructor_type("Uint32Array"), do: :uint32
+  defp typed_array_constructor_type("Int32Array"), do: :int32
+  defp typed_array_constructor_type("Float16Array"), do: :float16
+  defp typed_array_constructor_type("Float32Array"), do: :float32
+  defp typed_array_constructor_type("Float64Array"), do: :float64
+  defp typed_array_constructor_type("Uint8ClampedArray"), do: :uint8_clamped
+  defp typed_array_constructor_type("BigUint64Array"), do: :biguint64
+  defp typed_array_constructor_type("BigInt64Array"), do: :bigint64
+  defp typed_array_constructor_type(_), do: nil
 
   defp make_error_with_ctx(ctx, message, name, stack_override \\ nil) do
     previous_ctx = Heap.get_ctx()

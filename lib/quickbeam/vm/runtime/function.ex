@@ -84,6 +84,9 @@ defmodule QuickBEAM.VM.Runtime.Function do
       not object_like?(obj) ->
         false
 
+      typed_array_builtin_instance?(obj, callable) ->
+        true
+
       true ->
         prototype = Get.get(callable, "prototype")
 
@@ -128,6 +131,33 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp object_like?({:bound, _, _, _, _}), do: true
   defp object_like?(%QuickBEAM.VM.Function{}), do: true
   defp object_like?(_), do: false
+
+  defp typed_array_builtin_instance?({:obj, ref}, {:builtin, constructor_name, _})
+       when is_binary(constructor_name) do
+    case Heap.get_obj(ref, %{}) do
+      %{"__typed_array__" => true, "__type__" => type} ->
+        typed_array_constructor_type(constructor_name) == type
+
+      _ ->
+        false
+    end
+  end
+
+  defp typed_array_builtin_instance?(_, _), do: false
+
+  defp typed_array_constructor_type("Uint8Array"), do: :uint8
+  defp typed_array_constructor_type("Int8Array"), do: :int8
+  defp typed_array_constructor_type("Uint16Array"), do: :uint16
+  defp typed_array_constructor_type("Int16Array"), do: :int16
+  defp typed_array_constructor_type("Uint32Array"), do: :uint32
+  defp typed_array_constructor_type("Int32Array"), do: :int32
+  defp typed_array_constructor_type("Float16Array"), do: :float16
+  defp typed_array_constructor_type("Float32Array"), do: :float32
+  defp typed_array_constructor_type("Float64Array"), do: :float64
+  defp typed_array_constructor_type("Uint8ClampedArray"), do: :uint8_clamped
+  defp typed_array_constructor_type("BigUint64Array"), do: :biguint64
+  defp typed_array_constructor_type("BigInt64Array"), do: :bigint64
+  defp typed_array_constructor_type(_), do: nil
 
   # ── Function prototype ──
 
