@@ -972,19 +972,19 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype(list, key) when is_list(list), do: array_proto_property(key)
 
   defp get_from_prototype(s, key) when is_binary(s),
-    do: primitive_or_class_proto(string_proto_property(key), key, "String")
+    do: primitive_or_class_proto(string_proto_property(key), key, "String", s)
 
   defp get_from_prototype(n, key) when is_number(n),
-    do: primitive_or_class_proto(Number.proto_property(key), key, "Number")
+    do: primitive_or_class_proto(Number.proto_property(key), key, "Number", n)
 
   defp get_from_prototype(n, key) when n in [:nan, :infinity, :neg_infinity],
-    do: primitive_or_class_proto(Number.proto_property(key), key, "Number")
+    do: primitive_or_class_proto(Number.proto_property(key), key, "Number", n)
 
   defp get_from_prototype(true, key),
-    do: primitive_or_class_proto(Boolean.proto_property(key), key, "Boolean")
+    do: primitive_or_class_proto(Boolean.proto_property(key), key, "Boolean", true)
 
   defp get_from_prototype(false, key),
-    do: primitive_or_class_proto(Boolean.proto_property(key), key, "Boolean")
+    do: primitive_or_class_proto(Boolean.proto_property(key), key, "Boolean", false)
 
   defp get_from_prototype({:symbol, _, _}, key), do: primitive_class_proto(key, "Symbol")
   defp get_from_prototype({:symbol, _}, key), do: primitive_class_proto(key, "Symbol")
@@ -1056,10 +1056,48 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_from_prototype(_, _), do: :undefined
 
-  defp primitive_or_class_proto(:undefined, key, class_name),
-    do: primitive_class_proto(key, class_name)
+  defp primitive_or_class_proto(default_value, key, class_name, receiver) do
+    case Runtime.global_class_proto(class_name) do
+      {:obj, proto_ref} ->
+        case raw_proto_property(proto_ref, key) do
+          {:accessor, getter, _} when getter != nil ->
+            call_getter(getter, receiver)
 
-  defp primitive_or_class_proto(value, _key, _class_name), do: value
+          {:accessor, nil, _} ->
+            :undefined
+
+          :undefined ->
+            if(default_value == :undefined,
+              do: get_own(Heap.get_object_prototype(), key),
+              else: default_value
+            )
+
+          value ->
+            value
+        end
+
+      _ ->
+        if default_value == :undefined,
+          do: get_own(Heap.get_object_prototype(), key),
+          else: default_value
+    end
+  end
+
+  defp raw_proto_property(ref, key) do
+    case Heap.get_obj_raw(ref) do
+      {:shape, _shape_id, offsets, vals, _proto} ->
+        case Map.fetch(offsets, key) do
+          {:ok, offset} -> elem(vals, offset)
+          :error -> :undefined
+        end
+
+      map when is_map(map) ->
+        Map.get(map, key, :undefined)
+
+      _ ->
+        :undefined
+    end
+  end
 
   defp primitive_class_proto(key, class_name) do
     case Runtime.global_class_proto(class_name) do

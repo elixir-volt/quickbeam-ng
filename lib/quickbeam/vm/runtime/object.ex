@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
 
@@ -36,7 +37,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         end
 
         method "toLocaleString" do
-          object_to_string(this)
+          object_to_locale_string(this)
         end
 
         method "valueOf" do
@@ -183,6 +184,18 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp object_to_string(_value), do: "[object Object]"
+
+  defp object_to_locale_string(this) do
+    to_string_fn = Get.get(this, "toString")
+
+    unless QuickBEAM.VM.Builtin.callable?(to_string_fn) do
+      JSThrow.type_error!("toString is not callable")
+    end
+
+    this
+    |> then(&QuickBEAM.VM.Invocation.invoke_with_receiver(to_string_fn, [], &1))
+    |> Runtime.stringify()
+  end
 
   defp array_prototype_map?(map) do
     Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
