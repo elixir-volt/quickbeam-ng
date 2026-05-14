@@ -1281,9 +1281,21 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
               i = if is_integer(idx), do: idx, else: Runtime.to_int(idx)
               Heap.array_set(ref, i, val)
 
+              Heap.put_prop_desc(ref, Integer.to_string(i), %{
+                writable: true,
+                enumerable: true,
+                configurable: true
+              })
+
             is_list(stored) ->
               i = if is_integer(idx), do: idx, else: Runtime.to_int(idx)
               Heap.put_obj(ref, set_list_at(stored, i, val))
+
+              Heap.put_prop_desc(ref, Integer.to_string(i), %{
+                writable: true,
+                enumerable: true,
+                configurable: true
+              })
 
             is_map(stored) ->
               key = PropertyKey.normalize(idx)

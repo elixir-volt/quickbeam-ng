@@ -153,7 +153,19 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       defp run({@op_array_from, [argc]}, pc, frame, stack, gas, ctx) do
         {elems, rest} = Enum.split(stack, argc)
         ref = make_ref()
-        Heap.put_obj(ref, Enum.reverse(elems))
+        values = Enum.reverse(elems)
+        Heap.put_obj(ref, values)
+
+        values
+        |> Enum.with_index()
+        |> Enum.each(fn {_value, index} ->
+          Heap.put_prop_desc(ref, Integer.to_string(index), %{
+            writable: true,
+            enumerable: true,
+            configurable: true
+          })
+        end)
+
         run(pc + 1, frame, [{:obj, ref} | rest], gas, ctx)
       end
 

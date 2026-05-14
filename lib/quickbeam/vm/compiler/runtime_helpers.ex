@@ -596,7 +596,21 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   def regexp_literal(_ctx \\ nil, pattern, flags), do: {:regexp, pattern, flags, make_ref()}
 
   @doc "Converts an iterable or array-like value to a JavaScript array object."
-  def array_from(_ctx \\ nil, list), do: Heap.wrap(list)
+  def array_from(_ctx \\ nil, list) do
+    {:obj, ref} = obj = Heap.wrap(list)
+
+    list
+    |> Enum.with_index()
+    |> Enum.each(fn {_value, index} ->
+      Heap.put_prop_desc(ref, Integer.to_string(index), %{
+        writable: true,
+        enumerable: true,
+        configurable: true
+      })
+    end)
+
+    obj
+  end
 
   def delete_property(ctx \\ nil, obj, key)
 
