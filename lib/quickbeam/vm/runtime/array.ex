@@ -364,7 +364,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       Put.put(receiver, Integer.to_string(index), item)
     end)
 
-    Put.put(receiver, "length", new_len)
+    put_length_or_throw(receiver, new_len)
     new_len
   end
 
@@ -381,23 +381,31 @@ defmodule QuickBEAM.VM.Runtime.Array do
     len = array_like_length(receiver)
 
     if len == 0 do
-      Put.put(receiver, "length", 0)
+      put_length_or_throw(receiver, 0)
       :undefined
     else
       index = len - 1
       key = Integer.to_string(index)
 
-      element =
-        if HasProperty.has_property?(receiver, key), do: Get.get(receiver, key), else: :undefined
+      element = Get.get(receiver, key)
 
       unless Delete.delete_property(receiver, key) do
         JSThrow.type_error!("Cannot delete property")
       end
 
-      Put.put(receiver, "length", index)
+      put_length_or_throw(receiver, index)
       element
     end
   end
+
+  defp put_length_or_throw({:obj, ref} = receiver, length) do
+    case Heap.get_prop_desc(ref, "length") do
+      %{writable: false} -> JSThrow.type_error!("Cannot assign to read only property")
+      _ -> Put.put(receiver, "length", length)
+    end
+  end
+
+  defp put_length_or_throw(receiver, length), do: Put.put(receiver, "length", length)
 
   defp shift(nil, _args), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
