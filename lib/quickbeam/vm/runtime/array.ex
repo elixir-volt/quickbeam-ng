@@ -10,6 +10,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
   alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
+  @max_array_length 4_294_967_295
+  @max_safe_integer 9_007_199_254_740_991
+
   @doc "Builds the JavaScript prototype object for this runtime builtin."
   def prototype do
     mod = __MODULE__
@@ -414,6 +417,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp map_array_like(this, _args) do
     _len = array_like_length(this)
     JSThrow.type_error!("callbackfn is not a function")
+  end
+
+  defp map_target(_receiver, len) when len > @max_array_length do
+    JSThrow.range_error!("Invalid array length")
   end
 
   defp map_target(receiver, len) do
@@ -866,8 +873,6 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp array_element_to_string(:undefined), do: ""
   defp array_element_to_string(nil), do: ""
   defp array_element_to_string(val), do: Runtime.stringify(val)
-
-  @max_safe_integer 9_007_199_254_740_991
 
   defp concat(nil, _args), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
