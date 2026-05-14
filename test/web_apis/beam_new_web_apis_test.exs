@@ -132,6 +132,23 @@ defmodule QuickBEAM.WebAPIs.BeamNewWebAPIsTest do
                !blocked.defaultPrevented && cancelable.defaultPrevented;
                """)
     end
+
+    test "remove then re-add during dispatch does not fire stale entry", %{rt: rt} do
+      assert {:ok, 1} =
+               QuickBEAM.eval(rt, """
+               const target = new EventTarget();
+               let count = 0;
+               const handler = () => { count++; };
+               target.addEventListener('test', () => {
+                 count++;
+                 target.removeEventListener('test', handler);
+                 target.addEventListener('test', handler);
+               });
+               target.addEventListener('test', handler);
+               target.dispatchEvent(new Event('test'));
+               count;
+               """)
+    end
   end
 
   # ── DOMException ─────────────────────────────────────────
@@ -313,6 +330,14 @@ defmodule QuickBEAM.WebAPIs.BeamNewWebAPIsTest do
                  result = value + ':' + name + ':' + (headers === h) + ':' + (this === receiver);
                }, receiver);
                result;
+               """)
+    end
+
+    test "forEach propagates callback errors", %{rt: rt} do
+      assert {:error, _} =
+               QuickBEAM.eval(rt, """
+               const h = new Headers([['x', 'v']]);
+               h.forEach(() => { throw new Error('boom'); });
                """)
     end
 

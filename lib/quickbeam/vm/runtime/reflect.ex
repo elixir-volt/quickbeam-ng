@@ -411,6 +411,10 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     end
   end
 
+  defp own_keys_for(target) when is_tuple(target) or is_struct(target) do
+    OwnProperty.descriptor_keys(target)
+  end
+
   defp wrapped_string_keys(map, keys) do
     case WrappedPrimitive.value(map, :string) do
       {:ok, string} when is_binary(string) ->

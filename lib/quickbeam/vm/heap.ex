@@ -153,12 +153,19 @@ defmodule QuickBEAM.VM.Heap do
     })
   end
 
+  @doc "Fast-wraps an object-literal value tuple with the ordinary Object prototype."
+  def wrap_keyed_object_literal(keys, vals) when is_tuple(keys) and is_tuple(vals),
+    do: wrap_keyed(keys, vals, get_object_prototype())
+
   @doc "Fast-wraps a value tuple with a compile-time key tuple, using a cached shape when possible."
-  def wrap_keyed(keys, vals) when is_tuple(keys) and is_tuple(vals) do
+  def wrap_keyed(keys, vals) when is_tuple(keys) and is_tuple(vals),
+    do: wrap_keyed(keys, vals, nil)
+
+  defp wrap_keyed(keys, vals, proto) when is_tuple(keys) and is_tuple(vals) do
     case Caches.get_wrap_cache(keys) do
       {shape_id, offsets} ->
         id = Store.next_id()
-        Store.put_obj_raw(id, {:shape, shape_id, offsets, vals, nil})
+        Store.put_obj_raw(id, {:shape, shape_id, offsets, vals, proto})
         {:obj, id}
 
       nil ->
@@ -175,7 +182,7 @@ defmodule QuickBEAM.VM.Heap do
 
           Caches.put_wrap_cache(keys, {shape_id, offsets})
           id = Store.next_id()
-          Store.put_obj_raw(id, {:shape, shape_id, offsets, vals, nil})
+          Store.put_obj_raw(id, {:shape, shape_id, offsets, vals, proto})
           {:obj, id}
         else
           wrap(map)

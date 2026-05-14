@@ -232,6 +232,15 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, 7} = Compiler.invoke(fun, [Heap.wrap(%{"x" => 7})])
     end
 
+    test "compiles catch handlers in tuple frame mode", %{rt: rt} do
+      declarations = Enum.map_join(0..210, ";", &"let v#{&1}=#{&1}")
+
+      root =
+        compile_and_decode(rt, declarations <> "; try { throw 7 } catch (e) { e + v210 }").value
+
+      assert {:ok, 217} = Compiler.invoke(root, [])
+    end
+
     test "installs global and core prototype metadata", %{rt: rt} do
       global_this = compile_and_decode(rt, "globalThis.globalThis === globalThis").value
 
@@ -250,6 +259,21 @@ defmodule QuickBEAM.VM.CompilerTest do
           "Object.hasOwn(Math, 'floor') && Object.getOwnPropertyNames(Math).includes('floor')"
         ).value
 
+      object_static_keys =
+        compile_and_decode(
+          rt,
+          "Object.getOwnPropertyNames(Object).includes('assign') && Reflect.ownKeys(Object).includes('assign')"
+        ).value
+
+      array_proto =
+        compile_and_decode(rt, "Object.getPrototypeOf({a:1}) === Object.prototype").value
+
+      date_proto =
+        compile_and_decode(rt, "Object.getPrototypeOf(Date.prototype) === Object.prototype").value
+
+      reflect_callable =
+        compile_and_decode(rt, "Reflect.ownKeys(Array).includes('prototype')").value
+
       desc_presence =
         compile_and_decode(
           rt,
@@ -260,6 +284,10 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, "function:function"} = Compiler.invoke(boolean_methods, [])
       assert {:ok, true} = Compiler.invoke(boolean_parent, [])
       assert {:ok, true} = Compiler.invoke(math_keys, [])
+      assert {:ok, true} = Compiler.invoke(object_static_keys, [])
+      assert {:ok, true} = Compiler.invoke(array_proto, [])
+      assert {:ok, true} = Compiler.invoke(date_proto, [])
+      assert {:ok, true} = Compiler.invoke(reflect_callable, [])
       assert {:ok, true} = Compiler.invoke(desc_presence, [])
     end
 
@@ -277,13 +305,36 @@ defmodule QuickBEAM.VM.CompilerTest do
       block = beam_function_instructions(beam_file, :block_0)
 
       assert Enum.any?(block, fn
-               {:call_ext, 1, {:extfunc, QuickBEAM.VM.Heap, :wrap, 1}} -> true
-               {:call_ext_last, 1, {:extfunc, QuickBEAM.VM.Heap, :wrap, 1}, _} -> true
-               {:call_ext_only, 1, {:extfunc, QuickBEAM.VM.Heap, :wrap, 1}} -> true
-               {:call_ext, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed, 2}} -> true
-               {:call_ext_last, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed, 2}, _} -> true
-               {:call_ext_only, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed, 2}} -> true
-               _ -> false
+               {:call_ext, 1, {:extfunc, QuickBEAM.VM.Heap, :wrap, 1}} ->
+                 true
+
+               {:call_ext_last, 1, {:extfunc, QuickBEAM.VM.Heap, :wrap, 1}, _} ->
+                 true
+
+               {:call_ext_only, 1, {:extfunc, QuickBEAM.VM.Heap, :wrap, 1}} ->
+                 true
+
+               {:call_ext, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed, 2}} ->
+                 true
+
+               {:call_ext_last, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed, 2}, _} ->
+                 true
+
+               {:call_ext_only, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed, 2}} ->
+                 true
+
+               {:call_ext, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed_object_literal, 2}} ->
+                 true
+
+               {:call_ext_last, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed_object_literal, 2},
+                _} ->
+                 true
+
+               {:call_ext_only, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed_object_literal, 2}} ->
+                 true
+
+               _ ->
+                 false
              end)
 
       assert {:ok, {:obj, ref}} = Compiler.invoke(fun, [5])

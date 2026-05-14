@@ -31,7 +31,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
              State.ctx_expr(state),
              State.current_slots(state),
              [Builder.var("Caught#{idx}") | saved_stack],
-             State.current_capture_cells(state)
+             State.current_capture_cells(state),
+             state.frame_mode
            ),
          {:ok, try_body} <-
            callbacks.lower_block.(

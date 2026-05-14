@@ -475,6 +475,7 @@ defmodule QuickBEAM.VM.Builtin do
 
       Module.register_attribute(__MODULE__, :__has_proto, accumulate: false)
       Module.register_attribute(__MODULE__, :__has_static, accumulate: false)
+      Module.register_attribute(__MODULE__, :__static_names, accumulate: true)
       @before_compile QuickBEAM.VM.Builtin
     end
   end
@@ -483,6 +484,9 @@ defmodule QuickBEAM.VM.Builtin do
   defmacro __before_compile__(env) do
     has_proto = Module.get_attribute(env.module, :__has_proto)
     has_static = Module.get_attribute(env.module, :__has_static)
+
+    static_names =
+      Module.get_attribute(env.module, :__static_names) |> Enum.reverse() |> Enum.uniq()
 
     proto_fallback =
       if has_proto do
@@ -500,7 +504,14 @@ defmodule QuickBEAM.VM.Builtin do
         end
       end
 
-    [proto_fallback, static_fallback]
+    static_names_fun =
+      if has_static do
+        quote do
+          def static_property_names, do: unquote(Macro.escape(static_names))
+        end
+      end
+
+    [proto_fallback, static_fallback, static_names_fun]
     |> Enum.reject(&is_nil/1)
     |> case do
       [] -> nil
@@ -529,6 +540,7 @@ defmodule QuickBEAM.VM.Builtin do
   defmacro static(name, opts \\ [], do: body) do
     quote do
       @__has_static true
+      @__static_names unquote(name)
 
       def static_property(unquote(name)) do
         unquote(build_builtin(name, body))
@@ -544,6 +556,7 @@ defmodule QuickBEAM.VM.Builtin do
   defmacro static_val(name, value) do
     quote do
       @__has_static true
+      @__static_names unquote(name)
       def static_property(unquote(name)), do: unquote(value)
     end
   end

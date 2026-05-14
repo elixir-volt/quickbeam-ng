@@ -10,7 +10,13 @@ defmodule QuickBEAM.VM.Runtime.Web.EventListeners do
   @doc "Adds a listener entry for an event type."
   def add(listeners_ref, type, callback, opts \\ nil) do
     type = to_string(type)
-    entry = %{"callback" => callback, "capture" => capture?(opts), "once" => once?(opts)}
+
+    entry = %{
+      "callback" => callback,
+      "capture" => capture?(opts),
+      "id" => make_ref(),
+      "once" => once?(opts)
+    }
 
     StateRef.update(listeners_ref, %{}, fn listeners ->
       entries = Map.get(listeners, type, [])
@@ -74,14 +80,14 @@ defmodule QuickBEAM.VM.Runtime.Web.EventListeners do
     listeners_ref
     |> StateRef.get(%{})
     |> Map.get(type, [])
-    |> Enum.any?(&same_listener?(&1, entry))
+    |> Enum.any?(&same_entry?(&1, entry))
   end
 
   defp remove_entry(listeners_ref, type, entry) do
     StateRef.update(listeners_ref, %{}, fn listeners ->
       listeners
       |> Map.get(type, [])
-      |> Enum.reject(&same_listener?(&1, entry))
+      |> Enum.reject(&same_entry?(&1, entry))
       |> then(&Map.put(listeners, type, &1))
     end)
   end
@@ -90,6 +96,8 @@ defmodule QuickBEAM.VM.Runtime.Web.EventListeners do
     Map.get(left, "callback") == Map.get(right, "callback") and
       Map.get(left, "capture") == Map.get(right, "capture")
   end
+
+  defp same_entry?(left, right), do: Map.get(left, "id") == Map.get(right, "id")
 
   defp once?({:obj, _} = opts), do: Get.get(opts, "once") == true
   defp once?(_), do: false

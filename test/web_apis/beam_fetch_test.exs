@@ -224,6 +224,25 @@ defmodule QuickBEAM.WebAPIs.BeamFetchTest do
       assert result["body"] == "from request"
     end
 
+    test "fetch consumes Request body state", %{rt: rt, base: base} do
+      {:ok, "Body has already been consumed"} =
+        QuickBEAM.eval(rt, """
+          const req = new Request("#{base}/echo", { method: "POST", body: "from request" });
+          await req.text();
+          try { await fetch(req); "no error" } catch (e) { e.message }
+        """)
+    end
+
+    test "Request.clone uses independent headers", %{rt: rt} do
+      {:ok, true} =
+        QuickBEAM.eval(rt, """
+          const req = new Request("http://example.com", { headers: { x: "a" } });
+          const clone = req.clone();
+          clone.headers.set('x', 'b');
+          req.headers.get('x') === 'a' && clone.headers.get('x') === 'b';
+        """)
+    end
+
     test "Request.clone()", %{rt: rt} do
       {:ok, "POST"} =
         QuickBEAM.eval(rt, """
@@ -278,6 +297,16 @@ defmodule QuickBEAM.WebAPIs.BeamFetchTest do
           const r = Response.json({ a: 1 });
           const r2 = r.clone();
           (await r.text()) === (await r2.text())
+        """)
+    end
+
+    test "Response.clone uses independent headers", %{rt: rt} do
+      {:ok, true} =
+        QuickBEAM.eval(rt, """
+          const r = new Response("x", { headers: { x: "a" } });
+          const clone = r.clone();
+          clone.headers.set('x', 'b');
+          r.headers.get('x') === 'a' && clone.headers.get('x') === 'b';
         """)
     end
 

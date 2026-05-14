@@ -24,7 +24,11 @@ defmodule QuickBEAM.VM.Runtime.Constructors do
     case Keyword.get(opts, :prototype) do
       nil ->
         if Keyword.get(opts, :auto_proto, false) do
-          register_proto(ctor, %{}, nil)
+          register_proto(
+            ctor,
+            %{},
+            Keyword.get(opts, :prototype_parent, Heap.get_object_prototype())
+          )
         end
 
       proto ->

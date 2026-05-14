@@ -132,7 +132,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
           u = req_obj |> Get.get("url") |> to_string()
           m = req_obj |> Get.get("method") |> coerce_string("GET")
           h = Get.get(req_obj, "headers")
-          b = Get.get(req_obj, "body")
+          b = clone_request_body(req_obj)
           {u, m, h, b}
 
         _ ->
@@ -161,7 +161,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
         _ -> Headers.build_from_map(%{})
       end
 
-    body_ref = Body.new(body_val)
+    body_ref = if is_reference(body_val), do: body_val, else: Body.new(body_val)
 
     request_ctor = get_request_ctor()
 
@@ -169,7 +169,8 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       prop("url", url_str)
       prop("method", method)
       prop("headers", headers)
-      prop("body", body_val)
+      prop("body", Body.data(body_ref))
+      prop("__body_ref__", body_ref)
       prop("bodyUsed", false)
 
       method "text" do
@@ -196,7 +197,9 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
   end
 
   defp clone_request(url, method, headers, body_ref, request_ctor) do
-    Heap.wrap(build_request_map(url, method, headers, Body.clone(body_ref), request_ctor))
+    Heap.wrap(
+      build_request_map(url, method, clone_headers(headers), Body.clone(body_ref), request_ctor)
+    )
   end
 
   defp build_request_map(url, method, headers, body_ref, request_ctor) do
@@ -205,6 +208,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       prop("method", method)
       prop("headers", headers)
       prop("body", Body.data(body_ref))
+      prop("__body_ref__", body_ref)
       prop("bodyUsed", false)
       prop("constructor", request_ctor)
 
@@ -290,7 +294,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
           Body.data(Body.clone(body_ref)),
           status,
           status_text,
-          headers,
+          clone_headers(headers),
           response_ctor
         )
       end
@@ -299,6 +303,26 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
 
   defp get_request_ctor, do: Runtime.global_constructor("Request")
   defp get_response_ctor, do: Runtime.global_constructor("Response")
+
+  defp clone_headers(headers) do
+    headers
+    |> Headers.to_map(skip_internal_values: true)
+    |> Headers.build_from_map()
+  end
+
+  defp clone_request_body(req_obj) do
+    case Get.get(req_obj, "__body_ref__") do
+      ref when is_reference(ref) -> Body.clone(ref)
+      _ -> Get.get(req_obj, "body")
+    end
+  end
+
+  defp consume_request_body(req_obj) do
+    case Get.get(req_obj, "__body_ref__") do
+      ref when is_reference(ref) -> Body.consume_payload!(ref)
+      _ -> Get.get(req_obj, "body")
+    end
+  end
 
   defp coerce_string(:undefined, default), do: default
   defp coerce_string(nil, default), do: default
@@ -317,7 +341,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
         u = req_obj |> Get.get("url") |> to_string()
         m = req_obj |> Get.get("method") |> coerce_string("GET")
         h_obj = Get.get(req_obj, "headers")
-        b = Get.get(req_obj, "body")
+        b = consume_request_body(req_obj)
         sig = get_signal_from_opts(opts_val)
         {u, m, Headers.to_map(h_obj, skip_internal_values: true), coerce_body(b), sig}
 
@@ -467,8 +491,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
        ) do
     headers_map =
       resp_headers
-      |> Enum.map(fn [k, v] -> {Headers.header_name(k), to_string(v)} end)
-      |> Map.new()
+      |> Enum.reduce(%{}, fn [k, v], acc -> Headers.append_to_map(acc, k, v) end)
 
     headers = Headers.build_from_map(headers_map)
     status = if is_integer(status), do: status, else: 200

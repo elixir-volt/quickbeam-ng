@@ -228,7 +228,11 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
     static_keys = statics |> Map.keys() |> Enum.filter(&callable_descriptor_key?/1)
     inline_keys = if is_map(inline_map), do: Map.keys(inline_map), else: []
-    explicit_keys = Enum.filter(static_keys ++ inline_keys, &callable_descriptor_key?/1)
+    module_keys = module_static_keys(Map.get(statics, :__module__))
+
+    explicit_keys =
+      Enum.filter(static_keys ++ inline_keys ++ module_keys, &callable_descriptor_key?/1)
+
     builtin_order = ["length", "name", "prototype"]
 
     (builtin_order ++ (explicit_keys -- builtin_order))
@@ -239,7 +243,16 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   defp callable_descriptor_key?(key) when is_binary(key),
     do: not (String.starts_with?(key, "__") and String.ends_with?(key, "__"))
 
+  defp callable_descriptor_key?({:symbol, _}), do: true
   defp callable_descriptor_key?(_key), do: false
+
+  defp module_static_keys(module) when is_atom(module) do
+    if function_exported?(module, :static_property_names, 0),
+      do: module.static_property_names(),
+      else: []
+  end
+
+  defp module_static_keys(_module), do: []
 
   defp ordered_map_keys(map) do
     insertion_order =

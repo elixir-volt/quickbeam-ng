@@ -89,6 +89,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
               p -> Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, p)})
             end
 
+          frame = sync_setter_globals_to_frame(frame, ctx)
           run(pc + 1, frame, rest, gas, ctx)
         catch
           {:js_throw, error} ->

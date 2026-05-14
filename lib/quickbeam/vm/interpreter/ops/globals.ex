@@ -266,6 +266,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
         else
           try do
             Put.put(obj, key, val)
+            frame = sync_setter_globals_to_frame(frame, ctx)
             run(pc + 1, frame, rest, gas, ctx)
           catch
             {:js_throw, error} ->
@@ -359,6 +360,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
         if with_has_property?(obj, key) do
           Put.put(obj, key, val)
+          frame = sync_setter_globals_to_frame(frame, ctx)
           run(target, frame, rest, gas, ctx)
         else
           run(pc + 1, frame, [val | rest], gas, ctx)

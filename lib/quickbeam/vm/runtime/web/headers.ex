@@ -57,7 +57,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
         this_arg = arg(args, 1, :undefined)
 
         Enum.each(sorted_headers(store_ref), fn {name, value} ->
-          Callback.safe_invoke(callback, [value, name, this], this_arg)
+          Callback.invoke(callback, [value, name, this], this_arg)
         end)
 
         :undefined
@@ -166,13 +166,21 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
 
   defp extract_pair(_), do: nil
 
+  @doc "Appends a normalized header pair to a map using Headers append semantics."
+  def append_to_map(map, name, value) do
+    Map.update(
+      map,
+      header_name(name),
+      to_string(value),
+      &append_header_value(&1, to_string(value))
+    )
+  end
+
   defp pairs_to_map(pairs) do
     pairs
     |> Enum.map(&extract_pair/1)
     |> Enum.reject(&is_nil/1)
-    |> Enum.reduce(%{}, fn {name, value}, acc ->
-      Map.update(acc, name, value, &append_header_value(&1, value))
-    end)
+    |> Enum.reduce(%{}, fn {name, value}, acc -> append_to_map(acc, name, value) end)
   end
 
   defp internal_header_value?(value, true), do: is_atom(value) or is_tuple(value)

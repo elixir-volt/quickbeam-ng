@@ -28,6 +28,21 @@ defmodule QuickBEAM.VM.Runtime.Web.Body do
     end
   end
 
+  @doc "Consumes a body once and returns its payload or raises for unusable state."
+  def consume_payload!(body_ref) do
+    case Heap.get_obj(body_ref, %{}) do
+      %{consumed: true} ->
+        JSThrow.type_error!("Body has already been consumed")
+
+      %{consumed: false, data: data} ->
+        Heap.put_obj(body_ref, %{consumed: true, data: data})
+        data
+
+      _ ->
+        nil
+    end
+  end
+
   @doc "Consumes a body once, marks the owner as bodyUsed, and invokes the callback with payload data."
   def consume(body_ref, owner, fun) when is_function(fun, 1) do
     case Heap.get_obj(body_ref, %{}) do
@@ -36,8 +51,8 @@ defmodule QuickBEAM.VM.Runtime.Web.Body do
         |> Heap.make_error("TypeError")
         |> PromiseState.rejected()
 
-      %{consumed: false, data: data} ->
-        Heap.put_obj(body_ref, %{consumed: true, data: data})
+      %{consumed: false} ->
+        data = consume_payload!(body_ref)
         Put.put(owner, "bodyUsed", true)
         fun.(data)
 

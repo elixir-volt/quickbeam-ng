@@ -926,7 +926,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp get_own_property_names([target | _])
        when is_tuple(target) or is_struct(target) do
-    Heap.wrap(OwnProperty.descriptor_keys(target))
+    target
+    |> OwnProperty.descriptor_keys()
+    |> Enum.filter(&is_binary/1)
+    |> Heap.wrap()
   end
 
   defp get_own_property_names(_) do
