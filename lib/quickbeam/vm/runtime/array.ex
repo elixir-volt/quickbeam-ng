@@ -412,20 +412,38 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp shift(:undefined, _args),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp shift({:obj, ref}, _) do
-    list = Heap.obj_to_list(ref)
+  defp shift(value, _args) when is_binary(value),
+    do: JSThrow.type_error!("Cannot assign to read only property")
 
-    case list do
-      [first | rest] ->
-        Heap.put_obj(ref, rest)
-        first
+  defp shift(value, _args) do
+    receiver = find_receiver(value)
+    len = array_like_length(receiver)
 
-      _ ->
-        :undefined
+    if len == 0 do
+      put_length_or_throw(receiver, 0)
+      :undefined
+    else
+      first = Get.get(receiver, "0")
+
+      if len > 1 do
+        1..(len - 1)
+        |> Enum.each(fn from ->
+          from_key = Integer.to_string(from)
+          to_key = Integer.to_string(from - 1)
+
+          if HasProperty.has_property?(receiver, from_key) do
+            Put.put(receiver, to_key, Get.get(receiver, from_key))
+          else
+            delete_or_throw(receiver, to_key)
+          end
+        end)
+      end
+
+      delete_or_throw(receiver, Integer.to_string(len - 1))
+      put_length_or_throw(receiver, len - 1)
+      first
     end
   end
-
-  defp shift(_, _), do: :undefined
 
   defp unshift(nil, _args), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
