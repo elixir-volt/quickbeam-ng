@@ -79,10 +79,34 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
           array_with_length(length)
 
         _ ->
-          Heap.wrap(args)
+          wrap_array_arguments(args)
       end
 
     inherit_array_prototype(result, this)
+  end
+
+  defp wrap_array_arguments(args) do
+    {:obj, ref} = array = Heap.wrap(args)
+
+    args
+    |> Enum.with_index()
+    |> Enum.each(fn
+      {:undefined, index} -> mark_array_argument_present(ref, index)
+      {:undefined, _, index} -> mark_array_argument_present(ref, index)
+      {:undefined, _, _, index} -> mark_array_argument_present(ref, index)
+      {value, index} when value == :undefined -> mark_array_argument_present(ref, index)
+      _ -> :ok
+    end)
+
+    array
+  end
+
+  defp mark_array_argument_present(ref, index) do
+    Heap.put_prop_desc(ref, Integer.to_string(index), %{
+      writable: true,
+      enumerable: true,
+      configurable: true
+    })
   end
 
   defp inherit_array_prototype({:obj, ref} = result, {:obj, _} = this) do
