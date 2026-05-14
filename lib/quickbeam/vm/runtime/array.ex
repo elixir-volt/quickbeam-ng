@@ -136,11 +136,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   proto "toString" do
-    if this in [nil, :undefined] do
-      JSThrow.type_error!("Cannot convert undefined or null to object")
-    else
-      join(this, [","])
-    end
+    array_to_string(this)
   end
 
   proto "toLocaleString" do
@@ -1201,6 +1197,91 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end)
     end
   end
+
+  defp array_to_string(nil), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp array_to_string(:undefined),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp array_to_string(value) do
+    receiver = find_receiver(value)
+    join_fn = Get.get(receiver, "join")
+
+    if QuickBEAM.VM.Builtin.callable?(join_fn) do
+      QuickBEAM.VM.Invocation.invoke_with_receiver(join_fn, [], receiver)
+    else
+      array_object_tag_string(receiver)
+    end
+  end
+
+  defp array_object_tag_string({:obj, ref} = obj) do
+    custom_tag = Get.get(obj, {:symbol, "Symbol.toStringTag"})
+
+    tag =
+      if is_binary(custom_tag) do
+        custom_tag
+      else
+        case Heap.get_obj(ref, %{}) do
+          list when is_list(list) ->
+            if Heap.get_array_prop(ref, "__arguments__") == true, do: "Arguments", else: "Array"
+
+          {:qb_arr, _} ->
+            if Heap.get_array_prop(ref, "__arguments__") == true, do: "Arguments", else: "Array"
+
+          map when is_map(map) ->
+            cond do
+              QuickBEAM.VM.ObjectModel.WrappedPrimitive.tag(map) != nil ->
+                QuickBEAM.VM.ObjectModel.WrappedPrimitive.tag(map)
+
+              Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) ->
+                "WeakMap"
+
+              Map.has_key?(map, map_data()) ->
+                "Map"
+
+              Map.has_key?(map, set_data()) and Map.has_key?(map, :weak) ->
+                "WeakSet"
+
+              Map.has_key?(map, set_data()) ->
+                "Set"
+
+              Map.has_key?(map, date_ms()) ->
+                "Date"
+
+              true ->
+                "Object"
+            end
+
+          _ ->
+            "Object"
+        end
+      end
+
+    "[object #{tag}]"
+  end
+
+  defp array_object_tag_string(value) when is_boolean(value), do: "[object Boolean]"
+  defp array_object_tag_string(value) when is_number(value), do: "[object Number]"
+  defp array_object_tag_string(value) when is_binary(value), do: "[object String]"
+  defp array_object_tag_string({:symbol, _}), do: "[object Symbol]"
+  defp array_object_tag_string({:symbol, _, _}), do: "[object Symbol]"
+  defp array_object_tag_string({:regexp, _, _}), do: "[object RegExp]"
+  defp array_object_tag_string({:regexp, _, _, _}), do: "[object RegExp]"
+  defp array_object_tag_string(%QuickBEAM.VM.Function{}), do: "[object Function]"
+
+  defp array_object_tag_string({tag, _, %QuickBEAM.VM.Function{}})
+       when tag in [:closure, :bound],
+       do: "[object Function]"
+
+  defp array_object_tag_string({:bound, _, _, _, _}), do: "[object Function]"
+
+  defp array_object_tag_string({:builtin, name, map} = obj) when is_map(map) do
+    custom_tag = Get.get(obj, {:symbol, "Symbol.toStringTag"})
+    "[object #{if is_binary(custom_tag), do: custom_tag, else: name}]"
+  end
+
+  defp array_object_tag_string({:builtin, _, _}), do: "[object Function]"
+  defp array_object_tag_string(_), do: "[object Object]"
 
   defp to_locale_string(nil),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
