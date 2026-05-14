@@ -275,14 +275,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp wrapped_shape_length(offsets, vals) do
     case Map.fetch(offsets, WrappedPrimitive.slot(:string)) do
       {:ok, off} -> string_length(elem(vals, off))
-      :error -> map_size(offsets)
+      :error -> :undefined
     end
   end
 
   defp wrapped_map_length(map) do
     case WrappedPrimitive.value(map, :string) do
       {:ok, value} -> string_length(value)
-      :error -> map_size(map)
+      :error -> :undefined
     end
   end
 
