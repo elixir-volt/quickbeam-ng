@@ -1134,16 +1134,55 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp reverse(:undefined, _args),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp reverse({:obj, ref}, _) do
-    list = Heap.obj_to_list(ref)
-    Heap.put_obj(ref, Enum.reverse(list))
-    {:obj, ref}
+  defp reverse(value, _args) when is_binary(value),
+    do: JSThrow.type_error!("Cannot assign to read only property")
+
+  defp reverse(value, _args) do
+    receiver = find_receiver(value)
+    len = array_like_length(receiver)
+
+    if len > 1 do
+      reverse_pairs(receiver, 0, len - 1)
+    end
+
+    receiver
   end
 
-  defp reverse({:qb_arr, arr}, args), do: reverse(:array.to_list(arr), args)
+  defp reverse_pairs(_receiver, lower, upper) when lower >= upper, do: :ok
 
-  defp reverse(list, _) when is_list(list), do: Enum.reverse(list)
-  defp reverse(_, _), do: []
+  defp reverse_pairs(receiver, lower, upper) do
+    lower_key = Integer.to_string(lower)
+    upper_key = Integer.to_string(upper)
+    lower_exists = HasProperty.has_property?(receiver, lower_key)
+    upper_exists = HasProperty.has_property?(receiver, upper_key)
+    lower_value = if lower_exists, do: Get.get(receiver, lower_key), else: :undefined
+    upper_value = if upper_exists, do: Get.get(receiver, upper_key), else: :undefined
+
+    cond do
+      lower_exists and upper_exists ->
+        Put.put(receiver, lower_key, upper_value)
+        Put.put(receiver, upper_key, lower_value)
+
+      upper_exists ->
+        Put.put(receiver, lower_key, upper_value)
+        delete_or_throw(receiver, upper_key)
+
+      lower_exists ->
+        delete_or_throw(receiver, lower_key)
+        Put.put(receiver, upper_key, lower_value)
+
+      true ->
+        :ok
+    end
+
+    reverse_pairs(receiver, lower + 1, upper - 1)
+  end
+
+  defp delete_or_throw(receiver, key) do
+    unless Delete.delete_property(receiver, key) do
+      JSThrow.type_error!("Cannot delete property")
+    end
+  end
 
   defp sort(nil, _args), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
