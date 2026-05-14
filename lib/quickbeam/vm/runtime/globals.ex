@@ -2,7 +2,6 @@ defmodule QuickBEAM.VM.Runtime.Globals do
   @moduledoc "JS global scope: constructors, global functions, and the binding map."
 
   alias QuickBEAM.VM.Heap
-
   alias QuickBEAM.VM.Runtime.WebAPIs
 
   alias QuickBEAM.VM.Runtime.{
@@ -19,7 +18,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     JSON,
     Math,
     NumberInstaller,
-    Object,
+    ObjectInstaller,
     ProxyInstaller,
     Reflect,
     RegExpInstaller,
@@ -28,23 +27,12 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     TypedArrayInstaller
   }
 
-  alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
-  alias QuickBEAM.VM.Runtime.Globals.Constructors
-
   @doc "Builds the runtime value represented by this module."
   def build do
-    obj_proto = ensure_object_prototype()
-    obj_ctor = register("Object", &Constructors.object/2, module: Object, prototype: obj_proto)
-
-    # Set constructor on Object.prototype
-    {:obj, proto_ref} = obj_proto
-    proto_data = Heap.get_obj(proto_ref, %{})
-
-    if is_map(proto_data),
-      do: Heap.put_obj(proto_ref, Map.put(proto_data, "constructor", obj_ctor))
+    {object_name, object_ctor} = ObjectInstaller.binding()
 
     bindings()
-    |> Map.put("Object", obj_ctor)
+    |> Map.put(object_name, object_ctor)
     |> Map.merge(TypedArrayInstaller.bindings())
     |> Map.merge(CollectionInstaller.bindings())
     |> Map.merge(CoreConstructorInstaller.bindings())
@@ -75,18 +63,5 @@ defmodule QuickBEAM.VM.Runtime.Globals do
     }
     |> Map.merge(GlobalFunctionInstaller.bindings())
     |> Map.merge(QuickBEAM.VM.Builtin.Discovery.bindings())
-  end
-
-  # ── Registration helpers ──
-
-  defp register(name, constructor, opts) do
-    ConstructorRegistry.register(name, constructor, opts)
-  end
-
-  defp ensure_object_prototype do
-    case Heap.get_object_prototype() do
-      nil -> Object.build_prototype()
-      existing -> existing
-    end
   end
 end
