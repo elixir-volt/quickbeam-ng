@@ -701,7 +701,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp float64_special(bits)
        when Bitwise.band(bits, 0x7FF0000000000000) == 0x7FF0000000000000 and
-              Bitwise.band(bits, 0x000FFFFFFFFFFFFF) != 0, do: :nan
+              Bitwise.band(bits, 0x000FFFFFFFFFFFFF) != 0,
+       do: :nan
 
   defp float64_special(_), do: nil
 

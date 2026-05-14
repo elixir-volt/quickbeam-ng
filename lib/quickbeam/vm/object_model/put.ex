@@ -1252,7 +1252,12 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           i >= :array.size(arr) and huge_length_growth?(:array.size(arr), i + 1) ->
             Heap.put_array_prop(ref, key, val)
-            Heap.put_array_prop(ref, "length", i + 1)
+
+            Heap.put_array_prop(
+              ref,
+              "length",
+              max(virtual_array_length(ref) || :array.size(arr), i + 1)
+            )
 
           true ->
             Heap.array_set(ref, i, val)

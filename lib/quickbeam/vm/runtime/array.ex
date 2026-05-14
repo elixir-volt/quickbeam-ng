@@ -983,7 +983,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
         -1
 
       start ->
-        Enum.find_value(start..0//-1, -1, fn idx ->
+        this
+        |> last_index_of_indexes(len, start)
+        |> Enum.find_value(-1, fn idx ->
           key = Integer.to_string(idx)
 
           if HasProperty.has_property?(this, key) and
@@ -996,6 +998,17 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp last_index_of_array_like(this, []), do: last_index_of_array_like(this, [:undefined])
   defp last_index_of_array_like(_this, _args), do: -1
+
+  defp last_index_of_indexes(this, len, start) when len > 100_000 do
+    this
+    |> OwnProperty.descriptor_keys()
+    |> Enum.flat_map(&array_property_index/1)
+    |> Enum.filter(&(&1 >= 0 and &1 <= start and &1 < len))
+    |> Enum.uniq()
+    |> Enum.sort(:desc)
+  end
+
+  defp last_index_of_indexes(_this, _len, start), do: start..0//-1
 
   defp last_search_start(_rest, 0), do: :before_start
 
