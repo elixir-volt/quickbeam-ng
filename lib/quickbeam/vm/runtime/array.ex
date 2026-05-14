@@ -387,7 +387,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       index = len - 1
       key = Integer.to_string(index)
 
-      element = Get.get(receiver, key)
+      element = get_array_hole_aware(receiver, key)
 
       unless Delete.delete_property(receiver, key) do
         JSThrow.type_error!("Cannot delete property")
@@ -395,6 +395,56 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
       put_length_or_throw(receiver, index)
       element
+    end
+  end
+
+  defp get_array_hole_aware({:obj, ref} = receiver, key) do
+    case Heap.get_obj(ref) do
+      data when is_list(data) ->
+        if array_own_value_present?(ref, key) do
+          Get.get(receiver, key)
+        else
+          get_array_inherited_value(ref, key)
+        end
+
+      {:qb_arr, _} ->
+        if array_own_value_present?(ref, key) do
+          Get.get(receiver, key)
+        else
+          get_array_inherited_value(ref, key)
+        end
+
+      _ ->
+        Get.get(receiver, key)
+    end
+  end
+
+  defp get_array_hole_aware(receiver, key), do: Get.get(receiver, key)
+
+  defp array_own_value_present?(ref, key) do
+    case Integer.parse(key) do
+      {idx, ""} when idx >= 0 ->
+        Heap.array_get(ref, idx) != :undefined or Heap.get_prop_desc(ref, key) != nil or
+          Heap.get_array_prop(ref, key) != :undefined
+
+      _ ->
+        Heap.get_prop_desc(ref, key) != nil or Heap.get_array_prop(ref, key) != :undefined
+    end
+  end
+
+  defp get_array_inherited_value(ref, key) do
+    array_proto = Heap.get_array_proto(ref)
+    object_proto = Heap.get_object_prototype()
+
+    cond do
+      match?({:obj, _}, array_proto) and HasProperty.has_property?(array_proto, key) ->
+        Get.get(array_proto, key)
+
+      match?({:obj, _}, object_proto) and HasProperty.has_property?(object_proto, key) ->
+        Get.get(object_proto, key)
+
+      true ->
+        :undefined
     end
   end
 
@@ -456,7 +506,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       put_length_or_throw(receiver, 0)
       :undefined
     else
-      first = Get.get(receiver, "0")
+      first = get_array_hole_aware(receiver, "0")
 
       if len > 1 do
         1..(len - 1)
