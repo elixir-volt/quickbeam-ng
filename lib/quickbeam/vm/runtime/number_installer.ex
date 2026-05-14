@@ -3,9 +3,10 @@ defmodule QuickBEAM.VM.Runtime.NumberInstaller do
 
   alias QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, Put}
+  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.Number
 
   @methods ~w(toString toFixed valueOf toExponential toPrecision toLocaleString)
@@ -28,16 +29,13 @@ defmodule QuickBEAM.VM.Runtime.NumberInstaller do
   end
 
   defp install_prototype_methods(ctor) do
-    with_prototype(ctor, fn proto_ref ->
-      for name <- @methods do
-        Heap.put_obj_key(proto_ref, name, Number.proto_property(name))
-        Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
-      end
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_methods(proto_ref, Number, @methods)
     end)
   end
 
   defp install_method_lengths(ctor) do
-    with_prototype(ctor, fn proto_ref ->
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       for name <- @methods do
         case Heap.get_obj(proto_ref, %{}) do
           %{^name => method} ->
@@ -61,18 +59,10 @@ defmodule QuickBEAM.VM.Runtime.NumberInstaller do
   end
 
   defp install_prototype_metadata(ctor) do
-    with_prototype(ctor, fn proto_ref ->
-      Heap.put_obj_key(proto_ref, "__proto__", Heap.get_object_prototype())
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_object_parent(proto_ref)
       Heap.put_obj_key(proto_ref, "__wrapped_number__", 0)
-      Put.put({:obj, proto_ref}, "constructor", ctor)
-      Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
     end)
-  end
-
-  defp with_prototype(ctor, fun) do
-    case Heap.get_ctor_statics(ctor)["prototype"] do
-      {:obj, proto_ref} -> fun.(proto_ref)
-      _ -> :ok
-    end
   end
 end

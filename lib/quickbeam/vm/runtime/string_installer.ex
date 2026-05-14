@@ -2,9 +2,10 @@ defmodule QuickBEAM.VM.Runtime.StringInstaller do
   @moduledoc "Installs the String constructor, prototype methods, wrapper slot, and iterator metadata."
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, Put, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
   @methods ~w(charAt charCodeAt codePointAt indexOf lastIndexOf includes startsWith endsWith slice substring substr split trim trimStart trimEnd toUpperCase toLowerCase toLocaleUpperCase toLocaleLowerCase repeat padStart padEnd replace replaceAll match matchAll localeCompare search normalize concat toString valueOf at isWellFormed toWellFormed)
@@ -25,24 +26,20 @@ defmodule QuickBEAM.VM.Runtime.StringInstaller do
   end
 
   defp install_prototype_methods(ctor) do
-    with_prototype(ctor, fn proto_ref ->
-      for name <- @methods do
-        Heap.put_obj_key(proto_ref, name, JSString.proto_property(name))
-        Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
-      end
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_methods(proto_ref, JSString, @methods)
     end)
   end
 
   defp install_prototype_metadata(ctor) do
-    with_prototype(ctor, fn proto_ref ->
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       proto_ref
       |> Heap.get_obj(%{})
       |> Map.put_new(WrappedPrimitive.slot(:string), "")
       |> maybe_put_object_prototype()
       |> then(&Heap.put_obj(proto_ref, &1))
 
-      Put.put({:obj, proto_ref}, "constructor", ctor)
-      Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
       install_iterator(proto_ref)
     end)
   end
@@ -75,12 +72,5 @@ defmodule QuickBEAM.VM.Runtime.StringInstaller do
     Heap.put_ctor_static(ctor, "length", 1)
     Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
-  end
-
-  defp with_prototype(ctor, fun) do
-    case Heap.get_ctor_statics(ctor)["prototype"] do
-      {:obj, proto_ref} -> fun.(proto_ref)
-      _ -> :ok
-    end
   end
 end

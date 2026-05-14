@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayInstaller do
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
 
   @doc "Returns the global Array constructor binding."
   def constructor do
@@ -15,7 +16,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayInstaller do
     ConstructorRegistry.put_prototype(ctor, proto)
     Heap.put_array_proto(proto)
     install_constructor_link(proto, ctor)
-    install_species(ctor)
+    InstallerHelpers.install_species(ctor)
     install_static_descriptors(ctor)
 
     ctor
@@ -24,18 +25,6 @@ defmodule QuickBEAM.VM.Runtime.ArrayInstaller do
   defp install_constructor_link({:obj, proto_ref}, ctor) do
     Heap.put_obj_key(proto_ref, "constructor", ctor)
     Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
-  end
-
-  defp install_species(ctor) do
-    sym_species = {:symbol, "Symbol.species"}
-
-    Heap.put_ctor_static(
-      ctor,
-      sym_species,
-      {:accessor, {:builtin, "get [Symbol.species]", fn _args, this -> this end}, nil}
-    )
-
-    Heap.put_ctor_prop_desc(ctor, sym_species, PropertyDescriptor.accessor())
   end
 
   defp install_static_descriptors(ctor) do
