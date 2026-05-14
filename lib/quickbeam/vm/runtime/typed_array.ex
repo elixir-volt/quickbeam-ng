@@ -650,13 +650,29 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp read_element(buf, pos, :float32) when pos * 4 + 3 < byte_size(buf) do
-    <<f::little-float-32>> = :binary.part(buf, pos * 4, 4)
-    f
+    bits = :binary.decode_unsigned(:binary.part(buf, pos * 4, 4), :little)
+
+    case float32_special(bits) do
+      nil ->
+        <<f::little-float-32>> = :binary.part(buf, pos * 4, 4)
+        f
+
+      value ->
+        value
+    end
   end
 
   defp read_element(buf, pos, :float64) when pos * 8 + 7 < byte_size(buf) do
-    <<f::little-float-64>> = :binary.part(buf, pos * 8, 8)
-    f
+    bits = :binary.decode_unsigned(:binary.part(buf, pos * 8, 8), :little)
+
+    case float64_special(bits) do
+      nil ->
+        <<f::little-float-64>> = :binary.part(buf, pos * 8, 8)
+        f
+
+      value ->
+        value
+    end
   end
 
   defp read_element(buf, pos, :bigint64) when pos * 8 + 7 < byte_size(buf) do
@@ -670,6 +686,24 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp read_element(_, _, _), do: :undefined
+
+  defp float32_special(0x7F800000), do: :infinity
+  defp float32_special(0xFF800000), do: :neg_infinity
+
+  defp float32_special(bits)
+       when Bitwise.band(bits, 0x7F800000) == 0x7F800000 and Bitwise.band(bits, 0x007FFFFF) != 0,
+       do: :nan
+
+  defp float32_special(_), do: nil
+
+  defp float64_special(0x7FF0000000000000), do: :infinity
+  defp float64_special(0xFFF0000000000000), do: :neg_infinity
+
+  defp float64_special(bits)
+       when Bitwise.band(bits, 0x7FF0000000000000) == 0x7FF0000000000000 and
+              Bitwise.band(bits, 0x000FFFFFFFFFFFFF) != 0, do: :nan
+
+  defp float64_special(_), do: nil
 
   defp write_element(buf, pos, val, :uint8_clamped) when pos < byte_size(buf) do
     v = max(0, min(255, bankers_round(val || 0)))
@@ -694,6 +728,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     <<pre::binary, trunc(val || 0)::little-signed-32, rest::binary>>
   end
 
+  defp write_element(buf, pos, val, :float64)
+       when val in [:nan, :NaN, :infinity, :neg_infinity] and pos * 8 + 7 < byte_size(buf) do
+    bp = pos * 8
+    <<pre::binary-size(bp), _::64, rest::binary>> = buf
+    <<pre::binary, float64_bits(val)::little-64, rest::binary>>
+  end
+
   defp write_element(buf, pos, val, :float64) when pos * 8 + 7 < byte_size(buf) do
     bp = pos * 8
     <<pre::binary-size(bp), _::64, rest::binary>> = buf
@@ -704,6 +745,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     half = encode_float16(val || 0)
     <<pre::binary-size(pos * 2), _::16, rest::binary>> = buf
     <<pre::binary, half::16-little, rest::binary>>
+  end
+
+  defp write_element(buf, pos, val, :float32)
+       when val in [:nan, :NaN, :infinity, :neg_infinity] and pos * 4 + 3 < byte_size(buf) do
+    bp = pos * 4
+    <<pre::binary-size(bp), _::32, rest::binary>> = buf
+    <<pre::binary, float32_bits(val)::little-32, rest::binary>>
   end
 
   defp write_element(buf, pos, val, :float32) when pos * 4 + 3 < byte_size(buf) do
@@ -735,6 +783,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       buf
     end
   end
+
+  defp float32_bits(n) when n in [:nan, :NaN], do: 0x7FC00000
+  defp float32_bits(:infinity), do: 0x7F800000
+  defp float32_bits(:neg_infinity), do: 0xFF800000
+
+  defp float64_bits(n) when n in [:nan, :NaN], do: 0x7FF8000000000000
+  defp float64_bits(:infinity), do: 0x7FF0000000000000
+  defp float64_bits(:neg_infinity), do: 0xFFF0000000000000
 
   defp bigint_value({:bigint, n}), do: n
   defp bigint_value(n) when is_integer(n), do: n
