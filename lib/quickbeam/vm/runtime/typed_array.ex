@@ -145,7 +145,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             true
 
           m when is_map(m) ->
-            byte_len = byte_size(Map.get(m, buffer(), <<>>))
+            byte_len = byte_size(Map.get(m, buffer(), Map.get(s, buffer(), <<>>)))
             offset = Map.get(s, "byteOffset", 0)
 
             if Map.get(s, "__length_tracking__") do
@@ -223,7 +223,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             if Map.get(m, "__detached__") do
               nil
             else
-              ab_buf = Map.get(m, buffer(), <<>>)
+              ab_buf = Map.get(m, buffer(), Map.get(s, buffer(), <<>>))
               offset = Map.get(s, "byteOffset", 0)
               byte_len = current_view_byte_length(s, ab_buf, offset)
 

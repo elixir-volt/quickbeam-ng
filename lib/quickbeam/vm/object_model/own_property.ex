@@ -133,7 +133,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   defp present?(ref, %{typed_array() => true}, key) do
     case typed_array_index_key(key) do
       idx when is_integer(idx) ->
-        not TypedArray.out_of_bounds?({:obj, ref}) and idx < TypedArray.element_count({:obj, ref})
+        not TypedArray.out_of_bounds?({:obj, ref}) and idx < typed_array_index_count(ref)
 
       nil ->
         present?(Heap.get_obj(ref, %{}), key)
@@ -141,6 +141,26 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   end
 
   defp present?(_ref, data, key), do: present?(data, key)
+
+  defp typed_array_index_count(ref) do
+    state = Heap.get_obj(ref, %{})
+
+    if Map.get(state, "__length_tracking__") do
+      case Map.get(state, "buffer") do
+        {:obj, buffer_ref} ->
+          buffer = Heap.get_obj(buffer_ref, %{})
+          byte_length = byte_size(Map.get(buffer, buffer(), Map.get(state, buffer(), <<>>)))
+          byte_offset = Map.get(state, "byteOffset", 0)
+          element_size = TypedArray.elem_size(Map.get(state, type_key(), :uint8))
+          div(max(byte_length - byte_offset, 0), element_size)
+
+        _ ->
+          TypedArray.element_count({:obj, ref})
+      end
+    else
+      Map.get(state, "__fixed_length__", TypedArray.element_count({:obj, ref}))
+    end
+  end
 
   defp typed_array_index_key(key) when is_integer(key) and key >= 0, do: key
 
