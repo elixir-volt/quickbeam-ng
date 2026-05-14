@@ -356,6 +356,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
     len = array_like_length(receiver)
     new_len = len + length(args)
 
+    if new_len > @max_safe_integer do
+      JSThrow.type_error!("Invalid array length")
+    end
+
     Enum.each(Enum.with_index(args, len), fn {item, index} ->
       Put.put(receiver, Integer.to_string(index), item)
     end)
