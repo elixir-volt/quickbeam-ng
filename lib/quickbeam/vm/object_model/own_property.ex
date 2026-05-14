@@ -155,7 +155,10 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   defp present_array_property?(ref, key) do
     case Integer.parse(to_string(key)) do
       {idx, ""} when idx >= 0 ->
-        Heap.array_get(ref, idx) != :undefined or Heap.get_prop_desc(ref, to_string(key)) != nil
+        prop_key = to_string(key)
+
+        Heap.array_get(ref, idx) != :undefined or Heap.get_array_prop(ref, prop_key) != :undefined or
+          Heap.get_prop_desc(ref, prop_key) != nil
 
       _ ->
         key == "length" or Heap.get_array_prop(ref, to_string(key)) != :undefined or
