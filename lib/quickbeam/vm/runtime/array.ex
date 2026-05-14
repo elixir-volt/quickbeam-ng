@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Define, Delete, Get, HasProperty, Prototype, Put}
+  alias QuickBEAM.VM.ObjectModel.{Define, Delete, Get, HasProperty, OwnProperty, Prototype, Put}
   alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
@@ -1495,6 +1495,21 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp find_value_at(list, idx) when is_list(list), do: Enum.at(list, idx, :undefined)
+
+  defp find_value_at({:obj, _} = value, idx) do
+    key = Integer.to_string(idx)
+    current = Get.get(value, key)
+
+    if current == :undefined and not OwnProperty.present?(value, key) do
+      case Prototype.get(value) do
+        {:obj, _} = proto -> Get.get(proto, key)
+        _ -> current
+      end
+    else
+      current
+    end
+  end
+
   defp find_value_at(value, idx), do: Get.get(value, Integer.to_string(idx))
 
   defp find_indexes(0, _result_kind), do: []
@@ -1612,7 +1627,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
           to_length(Get.length_of({:obj, ref}))
 
         _ ->
-          to_length(Get.get({:obj, ref}, "length"))
+          array_like_object_length({:obj, ref})
       end
     end
   end
@@ -1620,6 +1635,19 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp array_like_length({:qb_arr, arr}), do: :array.size(arr)
   defp array_like_length(list) when is_list(list), do: length(list)
   defp array_like_length(value), do: to_length(Get.get(value, "length"))
+
+  defp array_like_object_length(obj) do
+    length = to_length(Get.get(obj, "length"))
+
+    if length == 0 and not OwnProperty.present?(obj, "length") do
+      case Prototype.get(obj) do
+        {:obj, _} = proto -> max(length, to_length(Get.get(proto, "length")))
+        _ -> length
+      end
+    else
+      length
+    end
+  end
 
   defp to_length(value) do
     case Runtime.to_number(value) do
