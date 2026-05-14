@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Branches do
   @moduledoc "Lowers conditional branches, including inlineable branch target bodies."
 
   alias QuickBEAM.VM.Compiler.Analysis.CFG
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Driver, State}
 
   @doc "Lowers a branch instruction, inlining target bodies when either edge is inlineable."
   def lower(
@@ -115,12 +115,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Branches do
          inline_targets,
          target,
          sense,
-         %{lower_non_branch_instruction: lower_non_branch_instruction}
+         driver
        ) do
     opcode =
       if(sense, do: QuickBEAM.VM.Opcodes.num(:if_true), else: QuickBEAM.VM.Opcodes.num(:if_false))
 
-    lower_non_branch_instruction.(
+    Driver.lower_non_branch_instruction(driver, [
       {opcode, [target]},
       instructions,
       size,
@@ -132,7 +132,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Branches do
       constants,
       entries,
       inline_targets
-    )
+    ])
   end
 
   defp target_body(
@@ -159,10 +159,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Branches do
          constants,
          entries,
          inline_targets,
-         %{lower_block: lower_block}
+         driver
        ) do
     if MapSet.member?(inline_targets, target) do
-      lower_block.(
+      Driver.lower_block(driver, [
         instructions,
         size,
         target,
@@ -173,7 +173,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Branches do
         constants,
         entries,
         inline_targets
-      )
+      ])
     else
       with {:ok, call} <- State.block_jump_call(state, target, stack_depths) do
         {:ok, [call]}

@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
   @moduledoc "Lowers catch regions and finally/gosub control-flow fragments."
 
   alias QuickBEAM.VM.Compiler.Analysis.CFG
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Ops, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Driver, Ops, State}
   alias QuickBEAM.VM.OpcodeFamily
 
   require OpcodeFamily
@@ -35,7 +35,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
              state.frame_mode
            ),
          {:ok, try_body} <-
-           callbacks.lower_block.(
+           Driver.lower_block(callbacks, [
              instructions,
              size,
              idx + 1,
@@ -51,7 +51,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
              constants,
              entries,
              inline_targets
-           ) do
+           ]) do
       {:ok,
        Enum.reverse([
          Builder.try_catch_expr(try_body, Builder.var("Caught#{idx}"), [handler_call])
@@ -366,7 +366,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
          callbacks
        ) do
     with {:ok, _return_addr, state} <- State.pop(state) do
-      callbacks.lower_block.(
+      Driver.lower_block(callbacks, [
         instructions,
         size,
         idx,
@@ -377,7 +377,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
         constants,
         entries,
         inline_targets
-      )
+      ])
     end
   end
 

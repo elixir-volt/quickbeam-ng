@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
     BlockClauses,
     Branches,
     Builder,
+    Driver,
     ExceptionRegions,
     ObjectLiteralFastPath
   }
@@ -280,7 +281,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
               entries,
               inline_targets,
               target,
-              exception_callbacks()
+              lowering_driver()
             )
 
           {:ok, :gosub} ->
@@ -296,7 +297,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
               entries,
               inline_targets,
               target,
-              exception_callbacks()
+              lowering_driver()
             )
 
           _ ->
@@ -410,7 +411,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
           inline_targets,
           target,
           false,
-          branch_callbacks()
+          lowering_driver()
         )
 
       {:ok, name} when OpcodeFamily.is_true_branch(name) ->
@@ -427,7 +428,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
           inline_targets,
           target,
           true,
-          branch_callbacks()
+          lowering_driver()
         )
 
       _ ->
@@ -542,14 +543,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
     end
   end
 
-  defp branch_callbacks do
-    %{
+  defp lowering_driver do
+    Driver.new(
       lower_block: &lower_block/10,
       lower_non_branch_instruction: &lower_non_branch_instruction/11
-    }
-  end
-
-  defp exception_callbacks do
-    %{lower_block: &lower_block/10}
+    )
   end
 end
