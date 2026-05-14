@@ -1030,7 +1030,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     insert_count = length(insert)
     new_len = len - actual_delete_count + insert_count
 
-    if new_len > @max_array_length do
+    if new_len > @max_safe_integer do
       JSThrow.type_error!("Invalid array length")
     end
 
