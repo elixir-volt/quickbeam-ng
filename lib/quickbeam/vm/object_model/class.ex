@@ -50,6 +50,21 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
   def raw_function(%QuickBEAM.VM.Function{} = fun), do: fun
   def raw_function(other), do: other
 
+  def default_derived_constructor?(%QuickBEAM.VM.Function{
+        is_derived_class_constructor: true,
+        arg_count: 0,
+        var_count: 1,
+        instructions: instructions
+      }) do
+    match?(
+      {{96, [0]}, {44, []}, {99, [0]}, {100, [0]}, {17, []}, {234, _}, {97, [0]}, {27, []},
+       {36, [0]}, {14, []}, {97, [0]}, {40, []}},
+      instructions
+    )
+  end
+
+  def default_derived_constructor?(_), do: false
+
   def define_class(ctor_closure, parent_ctor, class_name \\ nil) do
     ctor_closure =
       if is_binary(class_name) and class_name != "" do

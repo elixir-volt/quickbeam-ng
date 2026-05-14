@@ -241,7 +241,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
   def regexp([], this), do: regexp(["" | []], this)
 
-  def regexp([pattern | rest], _) do
+  def regexp([pattern | rest], this) do
     source =
       case pattern do
         {:regexp, _bytecode, value} -> value
@@ -260,6 +260,18 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
     ref = make_ref()
     RegexpState.put(ref, "flags", flags)
     RegexpState.put(ref, "lastIndex", 0)
+
+    case this do
+      {:obj, this_ref} ->
+        case Heap.get_obj(this_ref, %{}) do
+          %{proto() => instance_proto} -> RegexpState.put(ref, proto(), instance_proto)
+          _ -> :ok
+        end
+
+      _ ->
+        :ok
+    end
+
     {:regexp, nil, source, ref}
   end
 

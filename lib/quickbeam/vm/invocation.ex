@@ -374,18 +374,30 @@ defmodule QuickBEAM.VM.Invocation do
             construct_proxy_runtime(ctx, obj, new_target, args)
 
           %QuickBEAM.VM.Function{} = fun ->
-            case Runner.invoke_constructor(fun, args, this_obj, new_target, ctx) do
-              {:ok, value} -> value
-              :error -> invoke_constructor(fun, args, ctx.gas, this_obj, new_target)
+            if Class.default_derived_constructor?(fun) do
+              fun
+              |> Class.get_super()
+              |> construct_runtime(new_target, args)
+            else
+              case Runner.invoke_constructor(fun, args, this_obj, new_target, ctx) do
+                {:ok, value} -> value
+                :error -> invoke_constructor(fun, args, ctx.gas, this_obj, new_target)
+              end
             end
 
-          {:closure, _, %QuickBEAM.VM.Function{}} = closure ->
-            case Runner.invoke_constructor(closure, args, this_obj, new_target, ctx) do
-              {:ok, value} ->
-                value
+          {:closure, _, %QuickBEAM.VM.Function{} = fun} = closure ->
+            if Class.default_derived_constructor?(fun) do
+              closure
+              |> Class.get_super()
+              |> construct_runtime(new_target, args)
+            else
+              case Runner.invoke_constructor(closure, args, this_obj, new_target, ctx) do
+                {:ok, value} ->
+                  value
 
-              :error ->
-                invoke_constructor(closure, args, ctx.gas, this_obj, new_target)
+                :error ->
+                  invoke_constructor(closure, args, ctx.gas, this_obj, new_target)
+              end
             end
 
           {:bound, _, _inner, orig_fun, bound_args} ->

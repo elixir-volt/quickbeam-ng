@@ -203,24 +203,36 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
         result =
           case ctor do
             %QuickBEAM.VM.Function{} = f ->
-              do_invoke(
-                f,
-                {:closure, %{}, f},
-                rev_args,
-                ClosureBuilder.ctor_var_refs(f),
-                gas,
-                ctor_ctx
-              )
+              if Class.default_derived_constructor?(f) do
+                f
+                |> Class.get_super()
+                |> Invocation.construct_runtime(bound_new_target(ctor, new_target), rev_args)
+              else
+                do_invoke(
+                  f,
+                  {:closure, %{}, f},
+                  rev_args,
+                  ClosureBuilder.ctor_var_refs(f),
+                  gas,
+                  ctor_ctx
+                )
+              end
 
             {:closure, captured, %QuickBEAM.VM.Function{} = f} ->
-              do_invoke(
-                f,
-                {:closure, captured, f},
-                rev_args,
-                ClosureBuilder.ctor_var_refs(f, captured),
-                gas,
-                ctor_ctx
-              )
+              if Class.default_derived_constructor?(f) do
+                ctor
+                |> Class.get_super()
+                |> Invocation.construct_runtime(bound_new_target(ctor, new_target), rev_args)
+              else
+                do_invoke(
+                  f,
+                  {:closure, captured, f},
+                  rev_args,
+                  ClosureBuilder.ctor_var_refs(f, captured),
+                  gas,
+                  ctor_ctx
+                )
+              end
 
             {:bound, _, _, orig_fun, bound_args} ->
               Invocation.construct_runtime(

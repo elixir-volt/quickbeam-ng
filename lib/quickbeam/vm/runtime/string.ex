@@ -1417,10 +1417,22 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   def regex_replace(s, {:regexp, nil, source, _ref} = regexp, replacement)
       when is_binary(source) do
-    if String.contains?(Runtime.stringify(Get.get(regexp, "flags")), "g") do
-      string_replace_all_literal(s, source, replacement, 0, [])
-    else
-      string_replace_first(s, source, replacement)
+    flags = Runtime.stringify(Get.get(regexp, "flags"))
+
+    case compile_elixir_regex(source, flags) do
+      {:ok, regex} ->
+        if String.contains?(flags, "g") do
+          regex_replace_all_elixir(s, regex, replacement, flags, 0, [])
+        else
+          regex_replace_first_elixir(s, regex, replacement, flags)
+        end
+
+      :error ->
+        if String.contains?(flags, "g") do
+          string_replace_all_literal(s, source, replacement, 0, [])
+        else
+          string_replace_first(s, source, replacement)
+        end
     end
   end
 
@@ -1563,6 +1575,113 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
+  defp compile_elixir_regex(source, flags) do
+    opts = if String.contains?(flags, "i"), do: "i", else: ""
+
+    case Regex.compile(source, opts) do
+      {:ok, regex} -> {:ok, regex}
+      {:error, _} -> :error
+    end
+  end
+
+  defp regex_replace_first_elixir(s, regex, replacement, flags) do
+    case Regex.run(regex, s, return: :index) do
+      nil ->
+        s
+
+      [{match_start, match_len} | captures] ->
+        if match_start != 0 and String.contains?(flags, "y") do
+          s
+        else
+          replace_elixir_match(s, regex, match_start, match_len, captures, replacement, 0, [])
+        end
+    end
+  end
+
+  defp regex_replace_all_elixir(s, _regex, _replacement, _flags, offset, acc)
+       when offset > byte_size(s) do
+    IO.iodata_to_binary(acc)
+  end
+
+  defp regex_replace_all_elixir(s, regex, replacement, flags, offset, acc) do
+    case Regex.run(regex, s, return: :index, offset: offset) do
+      nil ->
+        IO.iodata_to_binary(acc ++ [binary_part(s, offset, byte_size(s) - offset)])
+
+      [{match_start, match_len} | captures] ->
+        if match_start != offset and String.contains?(flags, "y") do
+          IO.iodata_to_binary(acc ++ [binary_part(s, offset, byte_size(s) - offset)])
+        else
+          before_match = binary_part(s, offset, match_start - offset)
+
+          replaced =
+            replace_elixir_match(
+              s,
+              regex,
+              match_start,
+              match_len,
+              captures,
+              replacement,
+              offset,
+              acc ++ [before_match]
+            )
+
+          next_offset = match_start + max(match_len, 1)
+
+          case replaced do
+            {:parts, parts} ->
+              regex_replace_all_elixir(s, regex, replacement, flags, next_offset, parts)
+
+            binary when is_binary(binary) ->
+              binary
+          end
+        end
+    end
+  end
+
+  defp replace_elixir_match(s, regex, match_start, match_len, captures, replacement, offset, acc) do
+    before = binary_part(s, 0, match_start)
+    matched = binary_part(s, match_start, match_len)
+    after_str = binary_part(s, match_start + match_len, byte_size(s) - match_start - match_len)
+    capture_strings = capture_strings(s, captures)
+    named_captures = named_capture_values(regex, s)
+
+    rep =
+      replacement_text(
+        replacement,
+        matched,
+        before,
+        after_str,
+        capture_strings,
+        match_start,
+        s,
+        named_captures
+      )
+
+    parts = acc ++ [rep]
+
+    if offset == 0 and acc == [] do
+      before <> rep <> after_str
+    else
+      {:parts, parts}
+    end
+  end
+
+  defp named_capture_values(regex, s) do
+    case Regex.names(regex) do
+      [] ->
+        %{}
+
+      _names ->
+        regex
+        |> Regex.named_captures(s)
+        |> case do
+          nil -> %{}
+          captures -> Map.new(captures, fn {name, value} -> {name, value || ""} end)
+        end
+    end
+  end
+
   defp regex_replace_first(s, bytecode, replacement) do
     case RegExp.nif_exec(bytecode, s, 0) do
       nil ->
@@ -1628,7 +1747,19 @@ defmodule QuickBEAM.VM.Runtime.String do
     end)
   end
 
-  defp replacement_text(replacement, matched, before, after_str, captures, index, input) do
+  defp replacement_text(replacement, matched, before, after_str, captures, index, input),
+    do: replacement_text(replacement, matched, before, after_str, captures, index, input, %{})
+
+  defp replacement_text(
+         replacement,
+         matched,
+         before,
+         after_str,
+         captures,
+         index,
+         input,
+         named_captures
+       ) do
     if Builtin.callable?(replacement) do
       replacement
       |> Invocation.invoke_with_receiver(
@@ -1640,18 +1771,25 @@ defmodule QuickBEAM.VM.Runtime.String do
     else
       replacement
       |> stringify_search_string()
-      |> substitute_replacement(matched, before, after_str, captures)
+      |> substitute_replacement(matched, before, after_str, captures, named_captures)
     end
   end
 
-  defp substitute_replacement(rep, matched, before, after_str, captures) do
+  defp substitute_replacement(rep, matched, before, after_str, captures, named_captures) do
     rep
     |> String.replace("$$", "\0")
     |> String.replace("$&", matched)
     |> String.replace("$`", before)
     |> String.replace("$'", after_str)
+    |> replace_named_capture_substitutions(named_captures)
     |> replace_capture_substitutions(captures)
     |> String.replace("\0", "$")
+  end
+
+  defp replace_named_capture_substitutions(rep, named_captures) do
+    Regex.replace(~r/\$<([^>]+)>/, rep, fn _match, name ->
+      Map.get(named_captures, name, "")
+    end)
   end
 
   defp replace_capture_substitutions(rep, captures) do
