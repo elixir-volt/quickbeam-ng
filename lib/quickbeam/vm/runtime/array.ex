@@ -19,7 +19,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     methods = ~w(push pop shift unshift map filter reduce reduceRight forEach indexOf
       lastIndexOf toString toLocaleString includes slice splice join concat reverse sort
       flat find findIndex findLast findLastIndex some every fill copyWithin entries keys values
-      at flatMap toReversed toSorted toSpliced)
+      at flatMap toReversed toSorted toSpliced with)
 
     proto_map =
       Enum.reduce(methods, %{}, fn name, acc ->
@@ -74,7 +74,8 @@ defmodule QuickBEAM.VM.Runtime.Array do
       "findLastIndex" => true,
       "toReversed" => true,
       "toSorted" => true,
-      "toSpliced" => true
+      "toSpliced" => true,
+      "with" => true
     }
 
     sym_unscopables = {:symbol, "Symbol.unscopables"}
@@ -230,6 +231,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   proto "toSpliced" do
     to_spliced(this, args)
+  end
+
+  proto "with" do
+    array_with(this, args)
   end
 
   proto "values" do
@@ -2648,6 +2653,42 @@ defmodule QuickBEAM.VM.Runtime.Array do
     Put.put(target, "length", new_len)
     target
   end
+
+  defp array_with(nil, _args),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp array_with(:undefined, _args),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp array_with(value, args) do
+    receiver = find_receiver(value)
+    len = array_like_length(receiver)
+    relative_index = args |> Enum.at(0, :undefined) |> to_integer_or_infinity()
+    actual_index = with_actual_index(relative_index, len)
+
+    if actual_index < 0 or actual_index >= len do
+      JSThrow.range_error!("Invalid index")
+    end
+
+    replacement = Enum.at(args, 1, :undefined)
+    target = copy_array_target(len)
+
+    if len > 0 do
+      0..(len - 1)
+      |> Enum.each(fn index ->
+        value = if index == actual_index, do: replacement, else: find_value_at(receiver, index)
+        create_data_property_or_throw(target, Integer.to_string(index), value)
+      end)
+    end
+
+    Put.put(target, "length", len)
+    target
+  end
+
+  defp with_actual_index(:neg_infinity, len), do: -len - 1
+  defp with_actual_index(:infinity, len), do: len
+  defp with_actual_index(index, len) when index < 0, do: len + index
+  defp with_actual_index(index, _len), do: index
 
   defp copy_array_target(len) do
     if len > @max_array_length do

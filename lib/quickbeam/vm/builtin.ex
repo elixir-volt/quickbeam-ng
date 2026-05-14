@@ -246,6 +246,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("toReversed"), do: meta("toReversed", [length: 0, constructable: false], :proto)
   def named_meta("toSorted"), do: meta("toSorted", [length: 1, constructable: false], :proto)
   def named_meta("toSpliced"), do: meta("toSpliced", [length: 2, constructable: false], :proto)
+  def named_meta("with"), do: meta("with", [length: 2, constructable: false], :proto)
 
   def named_meta("toISOString"),
     do: meta("toISOString", [length: 0, constructable: false], :proto)
