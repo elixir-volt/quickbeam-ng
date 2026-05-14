@@ -5,6 +5,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
   alias QuickBEAM.VM.Compiler.Lowering.{BlockClauses, Builder, ObjectLiteralFastPath}
   alias QuickBEAM.VM.Compiler.{Lowering.Ops, Lowering.State}
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.OpcodeFamily
+
+  require OpcodeFamily
 
   @large_frame_slot_threshold 200
   @line 1
@@ -383,7 +386,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
          inline_targets
        ) do
     case CFG.opcode_name(op) do
-      {:ok, :if_false} ->
+      {:ok, name} when OpcodeFamily.is_false_branch(name) ->
         lower_branch_instruction(
           instructions,
           size,
@@ -399,39 +402,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
           false
         )
 
-      {:ok, :if_false8} ->
-        lower_branch_instruction(
-          instructions,
-          size,
-          idx,
-          next_entry,
-          arg_count,
-          state,
-          stack_depths,
-          constants,
-          entries,
-          inline_targets,
-          target,
-          false
-        )
-
-      {:ok, :if_true} ->
-        lower_branch_instruction(
-          instructions,
-          size,
-          idx,
-          next_entry,
-          arg_count,
-          state,
-          stack_depths,
-          constants,
-          entries,
-          inline_targets,
-          target,
-          true
-        )
-
-      {:ok, :if_true8} ->
+      {:ok, name} when OpcodeFamily.is_true_branch(name) ->
         lower_branch_instruction(
           instructions,
           size,
@@ -804,7 +775,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
               continuation
             )
 
-          {:ok, name} when name in [:catch, :gosub, :goto, :goto8, :goto16] ->
+          {:ok, name} when OpcodeFamily.is_finally_control(name) ->
             {:error, {:unsupported_finally_opcode, name, idx}}
 
           _ ->
@@ -856,7 +827,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
               hd(elem(instruction, 1))
             )
 
-          {:ok, name} when name in [:goto, :goto8, :goto16] ->
+          {:ok, name} when OpcodeFamily.is_goto(name) ->
             target = hd(elem(instruction, 1))
 
             if finally_internal_target?(instructions, size, finally_entry, target) do
