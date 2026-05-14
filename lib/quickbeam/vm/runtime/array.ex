@@ -984,6 +984,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp slice_target(receiver, count) do
     case concat_species_constructor(receiver) do
       :array ->
+        if count > @max_array_length do
+          JSThrow.range_error!("Invalid array length")
+        end
+
         Heap.wrap([])
 
       constructor ->
