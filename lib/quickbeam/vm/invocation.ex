@@ -122,7 +122,9 @@ defmodule QuickBEAM.VM.Invocation do
   end
 
   @doc "Invokes a callback and propagates JavaScript throws to the caller."
-  def invoke_callback_or_throw(fun, args, this_obj \\ nil) do
+  def call_callback!(fun, args, this_obj \\ nil)
+
+  def call_callback!(fun, args, this_obj) do
     ctx = active_ctx()
 
     case fun do
@@ -149,10 +151,15 @@ defmodule QuickBEAM.VM.Invocation do
     end
   end
 
-  @doc "Invokes a callback, converting JavaScript throws to `:undefined`."
-  def call_callback(fun, args), do: call_callback(active_ctx(), fun, args)
+  @doc "Compatibility wrapper for call_callback!/3."
+  def invoke_callback_or_throw(fun, args, this_obj \\ nil),
+    do: call_callback!(fun, args, this_obj)
 
-  def call_callback(ctx, fun, args) do
+  @doc "Invokes a callback, converting JavaScript throws to `:undefined`."
+  def call_callback_or_undefined(fun, args),
+    do: call_callback_or_undefined(active_ctx(), fun, args)
+
+  def call_callback_or_undefined(ctx, fun, args) do
     case fun do
       %QuickBEAM.VM.Function{} = bytecode_fun ->
         callback_invoke(bytecode_fun, args, ctx)
@@ -169,10 +176,16 @@ defmodule QuickBEAM.VM.Invocation do
     end
   end
 
-  @doc "Helper for unified js function invocation: dispatches to compiled modules, interpreter fallback, builtins, and native callbacks."
-  def invoke_callback(fun, args), do: invoke_callback(active_ctx(), fun, args)
+  @doc "Compatibility wrapper for call_callback_or_undefined/2."
+  def call_callback(fun, args), do: call_callback_or_undefined(fun, args)
 
-  def invoke_callback(ctx, fun, args) do
+  def call_callback(ctx, fun, args), do: call_callback_or_undefined(ctx, fun, args)
+
+  @doc "Invokes a callback, returning the first callback argument when JavaScript throws."
+  def call_callback_or_first_arg(fun, args),
+    do: call_callback_or_first_arg(active_ctx(), fun, args)
+
+  def call_callback_or_first_arg(ctx, fun, args) do
     case fun do
       %QuickBEAM.VM.Function{} = bytecode_fun ->
         callback_invoke(bytecode_fun, args, ctx, fn -> Builtin.arg(args, 0, :undefined) end)
@@ -188,6 +201,11 @@ defmodule QuickBEAM.VM.Invocation do
         end
     end
   end
+
+  @doc "Compatibility wrapper for call_callback_or_first_arg/2."
+  def invoke_callback(fun, args), do: call_callback_or_first_arg(fun, args)
+
+  def invoke_callback(ctx, fun, args), do: call_callback_or_first_arg(ctx, fun, args)
 
   @doc "Invokes a callable from compiler-generated runtime helper code."
   def invoke_runtime(fun, args), do: invoke_runtime(active_ctx(), fun, args)

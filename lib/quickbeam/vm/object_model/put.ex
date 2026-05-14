@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
+  alias QuickBEAM.VM.Execution.{RegexpState, SetterState}
   alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
@@ -13,6 +14,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     Get,
     HasProperty,
     OwnProperty,
+    PropertyDescriptor,
     PropertyKey,
     Semantics,
     WrappedPrimitive
@@ -330,12 +332,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   def put({:regexp, _, _, ref}, key, val) do
     key = normalize_key(key)
 
-    Process.put(
-      {:qb_regexp_props, ref},
-      Map.put(Process.get({:qb_regexp_props, ref}, %{}), key, val)
-    )
-
-    :ok
+    RegexpState.put(ref, key, val)
   end
 
   def put(_, _, _), do: :ok
@@ -643,8 +640,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       {:shape, shape_id, offsets, vals, proto} ->
         if not Heap.frozen?(ref) do
           shape_put(ref, shape_id, offsets, vals, proto, key, val)
-
-          Heap.put_prop_desc(ref, key, %{writable: true, enumerable: false, configurable: true})
+          Heap.put_prop_desc(ref, key, PropertyDescriptor.method())
         end
 
         :ok
@@ -652,7 +648,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       map when is_map(map) ->
         if not Heap.frozen?(ref) do
           Heap.put_obj(ref, Map.put(map, key, val))
-          Heap.put_prop_desc(ref, key, %{writable: true, enumerable: false, configurable: true})
+          Heap.put_prop_desc(ref, key, PropertyDescriptor.method())
         end
 
         :ok
@@ -834,7 +830,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     do: QuickBEAM.VM.Heap.Store.put_property_preserving_order(map, key, value)
 
   defp invoke_setter(fun, val, this_obj) do
-    Process.put(:qb_setter_invoked, true)
+    SetterState.mark_invoked()
     Invocation.invoke_with_receiver(fun, [val], this_obj)
   end
 
@@ -1291,7 +1287,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   end
 
   defp mark_undefined_array_write(ref, key, :undefined),
-    do: Heap.put_prop_desc(ref, key, %{writable: true, enumerable: true, configurable: true})
+    do: Heap.put_prop_desc(ref, key, PropertyDescriptor.enumerable_data())
 
   defp mark_undefined_array_write(_ref, _key, _val), do: :ok
 
@@ -1342,22 +1338,12 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
             match?({:qb_arr, _}, stored) ->
               i = if is_integer(idx), do: idx, else: Runtime.to_int(idx)
               Heap.array_set(ref, i, val)
-
-              Heap.put_prop_desc(ref, Integer.to_string(i), %{
-                writable: true,
-                enumerable: true,
-                configurable: true
-              })
+              Heap.put_prop_desc(ref, Integer.to_string(i), PropertyDescriptor.enumerable_data())
 
             is_list(stored) ->
               i = if is_integer(idx), do: idx, else: Runtime.to_int(idx)
               Heap.put_obj(ref, set_list_at(stored, i, val))
-
-              Heap.put_prop_desc(ref, Integer.to_string(i), %{
-                writable: true,
-                enumerable: true,
-                configurable: true
-              })
+              Heap.put_prop_desc(ref, Integer.to_string(i), PropertyDescriptor.enumerable_data())
 
             is_map(stored) ->
               key = PropertyKey.normalize(idx)
@@ -1371,8 +1357,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
                 end
 
               Heap.put_obj_key(ref, stored, key, val)
-
-              Heap.put_prop_desc(ref, key, %{writable: true, enumerable: true, configurable: true})
+              Heap.put_prop_desc(ref, key, PropertyDescriptor.enumerable_data())
 
             true ->
               :ok

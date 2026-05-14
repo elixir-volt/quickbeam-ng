@@ -31,8 +31,11 @@ defmodule QuickBEAM.VM.Runtime do
 
   # ── Callback dispatch (used by higher-order array methods) ──
 
-  @doc "Calls a JavaScript callback using the active invocation context."
-  def call_callback(fun, args), do: Invocation.call_callback(fun, args)
+  @doc "Calls a JavaScript callback, converting JavaScript throws to `:undefined`."
+  def call_callback_or_undefined(fun, args), do: Invocation.call_callback_or_undefined(fun, args)
+
+  @doc false
+  def call_callback(fun, args), do: call_callback_or_undefined(fun, args)
 
   @doc "Returns the active interpreter gas budget or the default budget outside evaluation."
   def gas_budget do

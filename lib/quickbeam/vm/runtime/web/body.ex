@@ -1,0 +1,73 @@
+defmodule QuickBEAM.VM.Runtime.Web.Body do
+  @moduledoc "Shared Fetch/Request/Response/Blob body conversion and consumption helpers."
+
+  alias QuickBEAM.VM.{Heap, JSThrow, PromiseState}
+  alias QuickBEAM.VM.ObjectModel.Put
+  alias QuickBEAM.VM.Runtime.Web.BinaryData
+
+  @doc "Creates a heap-backed body state record."
+  def new(data, opts \\ []) do
+    body_ref = make_ref()
+    Heap.put_obj(body_ref, %{consumed: Keyword.get(opts, :consumed, false), data: data})
+    body_ref
+  end
+
+  @doc "Returns the underlying body payload without consuming it."
+  def data(body_ref) do
+    body_ref
+    |> Heap.get_obj(%{})
+    |> body_data()
+  end
+
+  @doc "Creates a fresh unconsumed body state with the same payload."
+  def clone(body_ref), do: new(data(body_ref))
+
+  @doc "Consumes a body once, marks the owner as bodyUsed, and invokes the callback with payload data."
+  def consume(body_ref, owner, fun) when is_function(fun, 1) do
+    case Heap.get_obj(body_ref, %{}) do
+      %{consumed: true} ->
+        JSThrow.type_error!("Body has already been consumed")
+
+      %{consumed: false, data: data} ->
+        Heap.put_obj(body_ref, %{consumed: true, data: data})
+        Put.put(owner, "bodyUsed", true)
+        fun.(data)
+
+      _ ->
+        fun.(nil)
+    end
+  end
+
+  @doc "Converts a body payload to text."
+  def text(nil), do: ""
+  def text(:undefined), do: ""
+  def text({:bytes, data}) when is_binary(data), do: data
+  def text(data) when is_binary(data), do: data
+  def text(data), do: to_string(data)
+
+  @doc "Resolves a body payload as text."
+  def text_response(data), do: PromiseState.resolved(text(data))
+
+  @doc "Converts a body payload to an ArrayBuffer."
+  def array_buffer(data), do: data |> text() |> BinaryData.array_buffer()
+
+  @doc "Resolves a body payload as an ArrayBuffer."
+  def array_buffer_response(data), do: data |> array_buffer() |> PromiseState.resolved()
+
+  @doc "Converts a body payload to a Uint8Array-style byte list object."
+  def bytes(data) do
+    data
+    |> text()
+    |> :binary.bin_to_list()
+    |> Heap.wrap()
+  end
+
+  @doc "Resolves a body payload as bytes."
+  def bytes_response(data), do: data |> bytes() |> PromiseState.resolved()
+
+  @doc "Converts a body payload to a Uint8Array object."
+  def uint8_array(data), do: data |> text() |> BinaryData.uint8_array()
+
+  defp body_data(%{data: data}), do: data
+  defp body_data(_), do: nil
+end

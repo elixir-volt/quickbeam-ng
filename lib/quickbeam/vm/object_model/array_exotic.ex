@@ -293,8 +293,7 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
   defp normalize_accessor(value), do: value
 
   defp length_attrs(ref) do
-    Heap.get_prop_desc(ref, "length") ||
-      %{writable: true, enumerable: false, configurable: false}
+    Heap.get_prop_desc(ref, "length") || PropertyDescriptor.fixed_data()
   end
 
   defp put_length_attrs(ref, writable) do

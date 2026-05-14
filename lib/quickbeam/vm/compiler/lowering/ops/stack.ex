@@ -2,8 +2,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   @moduledoc "Stack manipulation opcodes: push constants, dup, drop, swap, rot, perm, insert, nip, nop."
 
   alias QuickBEAM.VM.Compiler.Analysis.Types, as: AnalysisTypes
+  import QuickBEAM.VM.OpcodeFamily, only: [is_small_int_push: 1]
+
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.OpcodeFamily
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, constants, arg_count, name_args) do
@@ -17,32 +20,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
       {{:ok, :push_i8}, [value]} ->
         {:ok, State.push(state, Builder.integer(value))}
 
-      {{:ok, :push_minus1}, [_]} ->
-        {:ok, State.push(state, Builder.integer(-1))}
-
-      {{:ok, :push_0}, [_]} ->
-        {:ok, State.push(state, Builder.integer(0))}
-
-      {{:ok, :push_1}, [_]} ->
-        {:ok, State.push(state, Builder.integer(1))}
-
-      {{:ok, :push_2}, [_]} ->
-        {:ok, State.push(state, Builder.integer(2))}
-
-      {{:ok, :push_3}, [_]} ->
-        {:ok, State.push(state, Builder.integer(3))}
-
-      {{:ok, :push_4}, [_]} ->
-        {:ok, State.push(state, Builder.integer(4))}
-
-      {{:ok, :push_5}, [_]} ->
-        {:ok, State.push(state, Builder.integer(5))}
-
-      {{:ok, :push_6}, [_]} ->
-        {:ok, State.push(state, Builder.integer(6))}
-
-      {{:ok, :push_7}, [_]} ->
-        {:ok, State.push(state, Builder.integer(7))}
+      {{:ok, name}, [_]} when is_small_int_push(name) ->
+        {:ok, value} = OpcodeFamily.small_int_push(name)
+        {:ok, State.push(state, Builder.integer(value))}
 
       {{:ok, :push_true}, []} ->
         {:ok, State.push(state, Builder.atom(true))}

@@ -3,8 +3,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   use QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
   proto "test" do

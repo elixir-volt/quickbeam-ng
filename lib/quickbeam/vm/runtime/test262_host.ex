@@ -5,8 +5,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Boolean, as: JSBoolean
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
-  alias QuickBEAM.VM.Runtime.Errors
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
+  alias QuickBEAM.VM.Runtime.Errors
   alias QuickBEAM.VM.Runtime.FinalizationRegistry, as: JSFinalizationRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.Globals.Functions

@@ -5,10 +5,10 @@ defmodule QuickBEAM.VM.Runtime.Web.Blob do
 
   import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, object: 1]
 
-  alias QuickBEAM.VM.{Heap, PromiseState, Runtime}
+  alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.ObjectModel.Get
-  alias QuickBEAM.VM.Runtime.Web.BinaryData
+  alias QuickBEAM.VM.Runtime.Web.Body
   alias QuickBEAM.VM.Runtime.WebAPIs
 
   @doc "Returns the JavaScript global bindings provided by this module."
@@ -107,19 +107,21 @@ defmodule QuickBEAM.VM.Runtime.Web.Blob do
       prop("__proto__", blob_proto)
 
       method "text" do
-        raw = Heap.get_obj(content_ref, "")
-        PromiseState.resolved(raw)
+        content_ref
+        |> Heap.get_obj("")
+        |> Body.text_response()
       end
 
       method "arrayBuffer" do
-        raw = Heap.get_obj(content_ref, "")
-        buf = make_array_buffer(raw)
-        PromiseState.resolved(buf)
+        content_ref
+        |> Heap.get_obj("")
+        |> Body.array_buffer_response()
       end
 
       method "bytes" do
-        raw = Heap.get_obj(content_ref, "")
-        make_uint8_from_binary(raw)
+        content_ref
+        |> Heap.get_obj("")
+        |> Body.uint8_array()
       end
 
       method "slice" do
@@ -226,8 +228,4 @@ defmodule QuickBEAM.VM.Runtime.Web.Blob do
       end
     end
   end
-
-  defp make_array_buffer(data) when is_binary(data), do: BinaryData.array_buffer(data)
-
-  defp make_uint8_from_binary(data) when is_binary(data), do: BinaryData.uint8_array(data)
 end

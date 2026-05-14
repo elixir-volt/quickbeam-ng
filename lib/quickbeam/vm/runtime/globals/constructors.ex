@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   import QuickBEAM.VM.Value, only: [is_builtin: 1, is_closure: 1]
 
   alias QuickBEAM.VM.{BytecodeParser, Heap}
+  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
@@ -257,7 +258,8 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       end
 
     ref = make_ref()
-    Process.put({:qb_regexp_props, ref}, %{"flags" => flags, "lastIndex" => 0})
+    RegexpState.put(ref, "flags", flags)
+    RegexpState.put(ref, "lastIndex", 0)
     {:regexp, nil, source, ref}
   end
 

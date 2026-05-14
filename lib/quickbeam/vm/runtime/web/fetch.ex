@@ -6,9 +6,9 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
   import QuickBEAM.VM.Builtin,
     only: [arg: 3, argv: 2, constructor: 3, object: 1, object: 2]
 
-  alias QuickBEAM.VM.{Heap, JSThrow, PromiseState, Runtime}
-  alias QuickBEAM.VM.ObjectModel.{Get, Put}
-  alias QuickBEAM.VM.Runtime.Web.BinaryData
+  alias QuickBEAM.VM.{Heap, PromiseState, Runtime}
+  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.Runtime.Web.Body
   alias QuickBEAM.VM.Runtime.Web.Fetch.JSON
   alias QuickBEAM.VM.Runtime.Web.Headers
   alias QuickBEAM.VM.Runtime.WebAPIs
@@ -157,12 +157,11 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
 
     headers =
       case headers_val do
-        {:obj, _} = h -> Headers.build_from_map(extract_headers_map(h))
+        {:obj, _} = h -> Headers.build_from_map(Headers.to_map(h, skip_internal_values: true))
         _ -> Headers.build_from_map(%{})
       end
 
-    body_ref = make_ref()
-    Heap.put_obj(body_ref, %{consumed: false, data: body_val})
+    body_ref = Body.new(body_val)
 
     request_ctor = get_request_ctor()
 
@@ -173,25 +172,20 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       prop("bodyUsed", false)
 
       method "text" do
-        consume_body(body_ref, this, &resolve_body_text/1)
+        Body.consume(body_ref, this, &Body.text_response/1)
       end
 
       method "json" do
-        consume_body(body_ref, this, fn data ->
+        Body.consume(body_ref, this, fn data ->
           data
-          |> body_text()
+          |> Body.text()
           |> JSON.parse()
           |> PromiseState.resolved()
         end)
       end
 
       method "arrayBuffer" do
-        consume_body(body_ref, this, fn data ->
-          data
-          |> body_text()
-          |> make_array_buffer()
-          |> PromiseState.resolved()
-        end)
+        Body.consume(body_ref, this, &Body.array_buffer_response/1)
       end
 
       method "clone" do
@@ -201,10 +195,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
   end
 
   defp clone_request(url, method, headers, body_ref, request_ctor) do
-    body_data = (Heap.get_obj(body_ref, %{}) || %{}) |> Map.get(:data)
-    new_body_ref = make_ref()
-    Heap.put_obj(new_body_ref, %{consumed: false, data: body_data})
-    Heap.wrap(build_request_map(url, method, headers, new_body_ref, request_ctor))
+    Heap.wrap(build_request_map(url, method, headers, Body.clone(body_ref), request_ctor))
   end
 
   defp build_request_map(url, method, headers, body_ref, request_ctor) do
@@ -216,19 +207,17 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       prop("constructor", request_ctor)
 
       method "text" do
-        consume_body(body_ref, this, &resolve_body_text/1)
+        Body.consume(body_ref, this, &Body.text_response/1)
       end
 
       method "json" do
-        consume_body(body_ref, this, fn data ->
-          PromiseState.resolved(JSON.parse(body_text(data)))
+        Body.consume(body_ref, this, fn data ->
+          PromiseState.resolved(JSON.parse(Body.text(data)))
         end)
       end
 
       method "arrayBuffer" do
-        consume_body(body_ref, this, fn data ->
-          PromiseState.resolved(make_array_buffer(body_text(data)))
-        end)
+        Body.consume(body_ref, this, &Body.array_buffer_response/1)
       end
 
       method "clone" do
@@ -255,7 +244,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
 
     headers =
       case headers_init do
-        {:obj, _} = h -> Headers.build_from_map(extract_headers_map(h))
+        {:obj, _} = h -> Headers.build_from_map(Headers.to_map(h, skip_internal_values: true))
         _ -> Headers.build_from_map(%{})
       end
 
@@ -264,8 +253,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
   end
 
   defp build_response_obj(body, status, status_text, headers, response_ctor) do
-    body_ref = make_ref()
-    Heap.put_obj(body_ref, %{consumed: false, data: body})
+    body_ref = Body.new(body)
 
     object do
       prop("status", status)
@@ -278,136 +266,31 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       prop("constructor", response_ctor)
 
       method "text" do
-        consume_body(body_ref, this, &resolve_body_text/1)
+        Body.consume(body_ref, this, &Body.text_response/1)
       end
 
       method "json" do
-        consume_body(body_ref, this, fn data ->
-          PromiseState.resolved(JSON.parse(body_text(data)))
+        Body.consume(body_ref, this, fn data ->
+          PromiseState.resolved(JSON.parse(Body.text(data)))
         end)
       end
 
       method "arrayBuffer" do
-        consume_body(body_ref, this, fn data ->
-          PromiseState.resolved(make_array_buffer(body_text(data)))
-        end)
+        Body.consume(body_ref, this, &Body.array_buffer_response/1)
       end
 
       method "bytes" do
-        consume_body(body_ref, this, fn data ->
-          data
-          |> body_text()
-          |> :binary.bin_to_list()
-          |> Heap.wrap()
-          |> PromiseState.resolved()
-        end)
+        Body.consume(body_ref, this, &Body.bytes_response/1)
       end
 
       method "clone" do
-        body_data = (Heap.get_obj(body_ref, %{}) || %{}) |> Map.get(:data)
-        new_body_ref = make_ref()
-        Heap.put_obj(new_body_ref, %{consumed: false, data: body_data})
-        build_response_obj(body_data, status, status_text, headers, response_ctor)
+        build_response_obj(Body.data(body_ref), status, status_text, headers, response_ctor)
       end
     end
   end
 
-  defp resolve_body_text(data), do: PromiseState.resolved(body_text(data))
-
-  defp body_text(nil), do: ""
-  defp body_text(:undefined), do: ""
-  defp body_text({:bytes, data}) when is_binary(data), do: data
-  defp body_text(data) when is_binary(data), do: data
-  defp body_text(data), do: to_string(data)
-
-  defp consume_body(body_ref, this, fun) do
-    case Heap.get_obj(body_ref, %{}) do
-      %{consumed: true} ->
-        JSThrow.type_error!("Body has already been consumed")
-
-      %{consumed: false, data: data} ->
-        Heap.put_obj(body_ref, %{consumed: true, data: data})
-        Put.put(this, "bodyUsed", true)
-        fun.(data)
-
-      _ ->
-        fun.(nil)
-    end
-  end
-
-  defp extract_headers_map({:obj, ref}) do
-    raw = Heap.get_obj(ref, %{})
-
-    cond do
-      is_list(raw) ->
-        raw
-        |> Enum.flat_map(fn item ->
-          case item do
-            {:obj, iref} ->
-              case Heap.get_obj(iref, []) do
-                [k, v | _] -> [{Headers.header_name(k), to_string(v)}]
-                _ -> []
-              end
-
-            [k, v | _] ->
-              [{Headers.header_name(k), to_string(v)}]
-
-            _ ->
-              []
-          end
-        end)
-        |> Map.new()
-
-      match?({:qb_arr, _}, raw) ->
-        Heap.obj_to_list(ref)
-        |> Enum.flat_map(fn item ->
-          case item do
-            {:obj, iref} ->
-              case Heap.get_obj(iref, []) do
-                [k, v | _] -> [{Headers.header_name(k), to_string(v)}]
-                _ -> []
-              end
-
-            _ ->
-              []
-          end
-        end)
-        |> Map.new()
-
-      is_map(raw) ->
-        case Map.get(raw, "__store__") do
-          {:obj, store_ref} ->
-            case Heap.get_obj(store_ref, %{}) do
-              m when is_map(m) -> m
-              _ -> %{}
-            end
-
-          _ ->
-            raw
-            |> Enum.reject(fn {k, _} -> not is_binary(k) or String.starts_with?(k, "__") end)
-            |> Enum.map(fn {k, v} ->
-              cond do
-                is_binary(v) -> {Headers.header_name(k), v}
-                is_atom(v) -> nil
-                is_tuple(v) -> nil
-                true -> {Headers.header_name(k), to_string(v)}
-              end
-            end)
-            |> Enum.reject(&is_nil/1)
-            |> Map.new()
-        end
-
-      true ->
-        %{}
-    end
-  end
-
-  defp extract_headers_map(_), do: %{}
-
   defp get_request_ctor, do: Runtime.global_constructor("Request")
   defp get_response_ctor, do: Runtime.global_constructor("Response")
-
-  defp make_array_buffer(data) when is_binary(data), do: BinaryData.array_buffer(data)
 
   defp coerce_string(:undefined, default), do: default
   defp coerce_string(nil, default), do: default
@@ -428,7 +311,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
         h_obj = Get.get(req_obj, "headers")
         b = Get.get(req_obj, "body")
         sig = get_signal_from_opts(opts_val)
-        {u, m, extract_headers_map(h_obj), coerce_body(b), sig}
+        {u, m, Headers.to_map(h_obj, skip_internal_values: true), coerce_body(b), sig}
 
       url_val ->
         u = to_string(url_val)
@@ -446,7 +329,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
               {"GET", nil, nil, nil}
           end
 
-        h_map = if h_obj, do: extract_headers_map(h_obj), else: %{}
+        h_map = if h_obj, do: Headers.to_map(h_obj, skip_internal_values: true), else: %{}
         {u, m, h_map, coerce_body(b), sig}
     end
   end

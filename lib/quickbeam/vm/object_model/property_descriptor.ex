@@ -9,6 +9,27 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty}
 
+  @doc "Descriptor attributes for a normal ECMAScript method property."
+  def method, do: attrs(writable: true, enumerable: false, configurable: true)
+
+  @doc "Descriptor attributes for non-enumerable writable constructor links."
+  def constructor, do: method()
+
+  @doc "Descriptor attributes for constructor `.prototype` properties."
+  def prototype, do: attrs(writable: false, enumerable: false, configurable: false)
+
+  @doc "Descriptor attributes for non-enumerable readonly builtin metadata."
+  def hidden_readonly, do: attrs(writable: false, enumerable: false, configurable: true)
+
+  @doc "Descriptor attributes for ordinary enumerable data properties."
+  def enumerable_data, do: attrs(writable: true, enumerable: true, configurable: true)
+
+  @doc "Descriptor attributes for non-enumerable configurable accessor properties."
+  def accessor, do: %{enumerable: false, configurable: true}
+
+  @doc "Descriptor attributes for non-enumerable non-configurable writable data properties."
+  def fixed_data, do: attrs(writable: true, enumerable: false, configurable: false)
+
   def attrs(opts) do
     %{
       writable: Keyword.fetch!(opts, :writable),

@@ -1,6 +1,8 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
   @moduledoc "Call, apply, eval, return, and closure opcodes."
 
+  import QuickBEAM.VM.OpcodeFamily, only: [is_call: 1]
+
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
 
   @doc "Lowers a VM instruction or function into compiler IR."
@@ -9,19 +11,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
       {{:ok, :call_constructor}, [argc]} ->
         State.invoke_constructor_call(state, argc, idx)
 
-      {{:ok, :call}, [argc]} ->
-        State.invoke_call(state, argc)
-
-      {{:ok, :call0}, [argc]} ->
-        State.invoke_call(state, argc)
-
-      {{:ok, :call1}, [argc]} ->
-        State.invoke_call(state, argc)
-
-      {{:ok, :call2}, [argc]} ->
-        State.invoke_call(state, argc)
-
-      {{:ok, :call3}, [argc]} ->
+      {{:ok, name}, [argc]} when is_call(name) ->
         State.invoke_call(state, argc)
 
       {{:ok, :tail_call}, [argc]} ->

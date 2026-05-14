@@ -1,8 +1,9 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.State do
   @moduledoc "Lowering accumulator: tracks the operand stack, slot bindings, and emitted body forms during a block compilation."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Types}
+  alias QuickBEAM.VM.Compiler.Lowering.{Atoms, Builder, Captures, Literals, Types}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.Operands.CopyDataProperties
 
   @line 1
 
@@ -230,7 +231,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   @doc "Lowers property read and applies shaped-object fast paths when possible."
   def get_field_call(state, key_expr) do
     with {:ok, obj, type, state} <- pop_typed(state) do
-      key_str = extract_literal_string(key_expr)
+      key_str = Literals.string(key_expr)
 
       case {type, key_str} do
         {{:shaped_object, _offsets, value_map}, key}
@@ -384,7 +385,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def define_field_name_call(state, key_expr) do
     with {:ok, val, _val_type, state} <- pop_typed(state),
          {:ok, obj, obj_type, state} <- pop_typed(state) do
-      key_str = extract_literal_string(key_expr)
+      key_str = Literals.string(key_expr)
       {obj, state} = bind(state, Builder.temp_name(state.temp), obj)
 
       if key_str == "__proto__" do
@@ -532,27 +533,20 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     with {:ok, obj, _obj_type, state} <- pop_typed(state),
          {:ok, idx, _idx_type, state} <- pop_typed(state),
          {:ok, arr, _arr_type, state} <- pop_typed(state) do
-      {pair, state} =
-        bind(
-          state,
-          Builder.temp_name(state.temp),
-          compiler_call(state, :append_spread, [arr, idx, obj])
-        )
-
       {:ok,
-       %{
-         state
-         | stack: [Builder.tuple_element(pair, 1), Builder.tuple_element(pair, 2) | state.stack],
-           stack_types: [:number, :object | state.stack_types]
-       }}
+       bind_pair(
+         state,
+         Builder.temp_name(state.temp),
+         compiler_call(state, :append_spread, [arr, idx, obj]),
+         [:number, :object]
+       )}
     end
   end
 
   @doc "Lowers object spread property copying."
   def copy_data_properties_call(state, mask) do
-    target_idx = Bitwise.band(mask, 3)
-    source_idx = Bitwise.band(Bitwise.bsr(mask, 2), 7)
-    exclude_idx = Bitwise.band(Bitwise.bsr(mask, 5), 7)
+    %{target_idx: target_idx, source_idx: source_idx, exclude_idx: exclude_idx} =
+      CopyDataProperties.decode(mask)
 
     with {:ok, state, target} <- bind_stack_entry(state, target_idx),
          {:ok, state, source} <- bind_stack_entry(state, source_idx),
@@ -586,6 +580,17 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   def push(state, expr, type),
     do: %{state | stack: [expr | state.stack], stack_types: [type | state.stack_types]}
+
+  @doc "Pushes several expressions onto the lowering operand stack in stack order."
+  def push_many(state, exprs, types) when length(exprs) == length(types),
+    do: %{state | stack: exprs ++ state.stack, stack_types: types ++ state.stack_types}
+
+  @doc "Binds a runtime call that returns a tuple and pushes selected tuple elements."
+  def bind_pair(state, name, call, types) do
+    {pair, state} = bind(state, name, call)
+    elements = Enum.map(1..length(types), &Builder.tuple_element(pair, &1))
+    push_many(state, elements, types)
+  end
 
   def pop_typed(%{stack: [expr | rest], stack_types: [type | type_rest]} = state),
     do: {:ok, expr, type, %{state | stack: rest, stack_types: type_rest}}
@@ -1057,26 +1062,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   # ── Private helpers ──
 
-  defp extract_literal_string({:string, _, chars}) when is_list(chars),
-    do: List.to_string(chars)
-
-  defp extract_literal_string({:bin, _, elements}) when is_list(elements) do
-    result =
-      Enum.map(elements, fn
-        {:bin_element, _, {:integer, _, c}, _, _} -> c
-        {:bin_element, _, {:string, _, chars}, _, _} -> chars
-        _ -> nil
-      end)
-
-    if Enum.any?(result, &is_nil/1) do
-      nil
-    else
-      result |> List.flatten() |> List.to_string()
-    end
-  end
-
-  defp extract_literal_string(_), do: nil
-
   defp initial_slot_inits(0, _arg_count, _locals), do: %{}
 
   defp initial_slot_inits(slot_count, arg_count, locals) do
@@ -1111,12 +1096,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   end
 
   defp class_binding_slot(%{locals: locals, atoms: atoms}, atom_idx) do
-    class_name = resolve_atom_name(atom_idx, atoms)
+    class_name = Atoms.resolve(atom_idx, atoms)
 
     locals
     |> Enum.with_index()
     |> Enum.filter(fn {%{name: name, scope_level: scope_level, is_lexical: is_lexical}, _idx} ->
-      is_lexical and scope_level > 1 and resolve_local_name(name, atoms) == class_name
+      is_lexical and scope_level > 1 and Atoms.resolve(name, atoms) == class_name
     end)
     |> Enum.max_by(fn {%{scope_level: scope_level}, _idx} -> scope_level end, fn -> nil end)
     |> case do
@@ -1124,19 +1109,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       {_local, idx} -> idx
     end
   end
-
-  defp resolve_local_name(name, _atoms) when is_binary(name), do: name
-
-  defp resolve_local_name({:predefined, idx}, _atoms),
-    do: QuickBEAM.VM.PredefinedAtoms.lookup(idx)
-
-  defp resolve_local_name(idx, atoms)
-       when is_integer(idx) and is_tuple(atoms) and idx < tuple_size(atoms),
-       do: elem(atoms, idx)
-
-  defp resolve_local_name(_name, _atoms), do: nil
-
-  defp resolve_atom_name(atom_idx, atoms), do: resolve_local_name(atom_idx, atoms)
 
   defp ordered_values(values) do
     values

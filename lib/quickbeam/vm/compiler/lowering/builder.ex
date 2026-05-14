@@ -1,8 +1,8 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Builder do
   @moduledoc "Erlang abstract-format helpers: variable, literal, call, and case-clause constructors for the lowering pass."
 
+  alias QuickBEAM.VM.Compiler.Lowering.Atoms
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.PredefinedAtoms
 
   @line 1
 
@@ -88,18 +88,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Builder do
   @doc "Builds a boolean case expression with false and true branches."
   def branch_case(expr, false_body, true_body), do: case_expr(expr, false_body, true_body)
 
-  def atom_name(%{atoms: atoms}, atom_idx), do: resolve_atom_name(atom_idx, atoms)
-
-  defp resolve_local_name(name, _atoms) when is_binary(name), do: name
-  defp resolve_local_name({:tagged_int, value}, _atoms), do: value
-  defp resolve_local_name({:predefined, idx}, _atoms), do: PredefinedAtoms.lookup(idx)
-
-  defp resolve_local_name(idx, atoms)
-       when is_integer(idx) and is_tuple(atoms) and idx >= 0 and idx < tuple_size(atoms),
-       do: elem(atoms, idx)
-
-  defp resolve_local_name(_name, _atoms), do: nil
-  defp resolve_atom_name(atom_idx, atoms), do: resolve_local_name(atom_idx, atoms)
+  def atom_name(%{atoms: atoms}, atom_idx), do: Atoms.resolve(atom_idx, atoms)
 
   defp comparison_branch_condition(fun, left, right, fallback_expr) do
     id = System.unique_integer([:positive])

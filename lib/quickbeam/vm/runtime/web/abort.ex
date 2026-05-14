@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Abort do
 
   alias QuickBEAM.VM.{Heap, JSThrow}
   alias QuickBEAM.VM.ObjectModel.{Get, Put}
-  alias QuickBEAM.VM.Runtime.Web.{Callback, StateRef}
+  alias QuickBEAM.VM.Runtime.Web.EventListeners
   alias QuickBEAM.VM.Runtime.WebAPIs
 
   @doc "Returns the JavaScript global bindings provided by this module."
@@ -106,7 +106,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Abort do
 
   @doc "Builds an AbortSignal object backed by VM heap state."
   def build_signal do
-    listeners_ref = StateRef.new(%{list: []})
+    listeners_ref = EventListeners.new()
 
     object do
       prop("aborted", false)
@@ -116,7 +116,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Abort do
         [type, callback] = argv(args, [nil, nil])
 
         if to_string(type) == "abort" do
-          store_listeners(listeners_ref, load_listeners(listeners_ref) ++ [callback])
+          EventListeners.add(listeners_ref, type, callback)
         end
 
         :undefined
@@ -126,8 +126,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Abort do
         [type, callback] = argv(args, [nil, nil])
 
         if to_string(type) == "abort" do
-          listeners = Enum.reject(load_listeners(listeners_ref), &(&1 == callback))
-          store_listeners(listeners_ref, listeners)
+          EventListeners.remove(listeners_ref, type, callback)
         end
 
         :undefined
@@ -164,9 +163,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Abort do
 
           case Get.get(signal, "__listeners_ref__") do
             {:obj, lref} ->
-              listeners = load_listeners(lref)
-
-              Enum.each(listeners, &Callback.safe_invoke(&1, []))
+              EventListeners.dispatch_type(lref, "abort")
 
             _ ->
               :ok
@@ -190,23 +187,11 @@ defmodule QuickBEAM.VM.Runtime.Web.Abort do
 
     case Get.get(signal, "__listeners_ref__") do
       {:obj, lref} ->
-        existing = load_listeners(lref)
-        store_listeners(lref, existing ++ [cb])
+        EventListeners.add(lref, "abort", cb)
 
       _ ->
         :ok
     end
-  end
-
-  defp load_listeners(ref) do
-    case StateRef.get(ref, %{}) do
-      %{list: list} when is_list(list) -> list
-      _ -> []
-    end
-  end
-
-  defp store_listeners(ref, listeners) do
-    StateRef.put(ref, %{list: listeners})
   end
 
   @doc "Creates the standard abort error value."

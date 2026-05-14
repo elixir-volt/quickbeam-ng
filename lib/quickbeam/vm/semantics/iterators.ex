@@ -1,0 +1,190 @@
+defmodule QuickBEAM.VM.Semantics.Iterators do
+  @moduledoc "Shared ECMAScript iterator semantics for interpreter and compiled runtime adapters."
+
+  import QuickBEAM.VM.Value, only: [is_object: 1]
+
+  alias QuickBEAM.VM.{Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.Interpreter.Context
+  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.ObjectModel.{Copy, Get, HasProperty}
+  alias QuickBEAM.VM.Runtime.Collections
+
+  @doc "Creates iterator state for a JavaScript `for...of` loop."
+  def for_of_start(%Context{} = ctx, obj), do: start_for_of(ctx, obj)
+  def for_of_start(obj), do: start_for_of(nil, obj)
+
+  @doc "Advances JavaScript `for...of` iterator state."
+  def for_of_next(_ctx, next_fn, iter), do: for_of_next(next_fn, iter)
+
+  def for_of_next(_next_fn, :undefined), do: {true, :undefined, :undefined}
+
+  def for_of_next(_next_fn, {:list_iter, [head | tail]}),
+    do: {false, head, {:list_iter, tail}}
+
+  def for_of_next(_next_fn, {:list_iter, []}), do: {true, :undefined, :undefined}
+
+  def for_of_next(next_fn, iter_obj) do
+    result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
+    done = Get.get(result, "done")
+    value = Get.get(result, "value")
+
+    if done == true do
+      {true, :undefined, :undefined}
+    else
+      {false, value, iter_obj}
+    end
+  end
+
+  def iterator_next_result(ctx \\ nil, next_fn, iter_obj, val)
+
+  def iterator_next_result(_ctx, _next_fn, :undefined, _val),
+    do: {Heap.wrap(%{"done" => true, "value" => :undefined}), :undefined}
+
+  def iterator_next_result(_ctx, _next_fn, {:list_iter, [head | tail]}, _val),
+    do: {Heap.wrap(%{"done" => false, "value" => head}), {:list_iter, tail}}
+
+  def iterator_next_result(_ctx, _next_fn, {:list_iter, []}, _val),
+    do: {Heap.wrap(%{"done" => true, "value" => :undefined}), :undefined}
+
+  def iterator_next_result(_ctx, next_fn, iter_obj, val) do
+    result = Runtime.call_callback(next_fn, [val])
+    next_iter = if Get.get(result, "done") == true, do: :undefined, else: iter_obj
+    {result, next_iter}
+  end
+
+  @doc "Creates key iteration state for a JavaScript `for...in` loop."
+  def for_in_start(_ctx \\ nil, obj), do: {:for_in_iterator, Copy.enumerable_keys(obj), obj}
+
+  def for_in_next(ctx \\ nil, iter)
+
+  def for_in_next(ctx, {:for_in_iterator, [key | rest_keys], obj}) do
+    if HasProperty.has_property?(obj, key) do
+      {false, key, {:for_in_iterator, rest_keys, obj}}
+    else
+      for_in_next(ctx, {:for_in_iterator, rest_keys, obj})
+    end
+  end
+
+  def for_in_next(_ctx, {:for_in_iterator, []} = iter), do: {true, :undefined, iter}
+  def for_in_next(_ctx, {:for_in_iterator, [], _obj} = iter), do: {true, :undefined, iter}
+  def for_in_next(_ctx, iter), do: {true, :undefined, iter}
+
+  @doc "Closes an iterator by calling its `return` method when present."
+  def iterator_close(%Context{} = ctx, iter_obj), do: close_iterator(ctx, iter_obj)
+  def iterator_close(iter_obj), do: close_iterator(nil, iter_obj)
+
+  @doc "Collects remaining values from an iterator into a list object."
+  def collect_iterator(%Context{} = ctx, iter, next_fn), do: do_collect(ctx, iter, next_fn, [])
+  def collect_iterator(iter, next_fn), do: do_collect(nil, iter, next_fn, [])
+
+  defp start_for_of(_ctx, list) when is_list(list), do: {{:list_iter, list}, :undefined}
+
+  defp start_for_of(ctx, {:obj, ref} = obj_ref) do
+    case Heap.get_obj(ref) do
+      {:qb_arr, arr} ->
+        array_like_for_of(ctx, obj_ref, :array.to_list(arr))
+
+      list when is_list(list) ->
+        array_like_for_of(ctx, obj_ref, list)
+
+      map when is_map(map) ->
+        object_for_of(ctx, obj_ref, map)
+
+      _ ->
+        {{:list_iter, []}, :undefined}
+    end
+  end
+
+  defp start_for_of(_ctx, value) when is_binary(value),
+    do: {{:list_iter, String.codepoints(value)}, :undefined}
+
+  defp start_for_of(_ctx, nil) do
+    throw(
+      {:js_throw,
+       Heap.make_error(
+         "Cannot read properties of null (reading 'Symbol(Symbol.iterator)')",
+         "TypeError"
+       )}
+    )
+  end
+
+  defp start_for_of(_ctx, :undefined) do
+    throw(
+      {:js_throw,
+       Heap.make_error(
+         "Cannot read properties of undefined (reading 'Symbol(Symbol.iterator)')",
+         "TypeError"
+       )}
+    )
+  end
+
+  defp start_for_of(_ctx, other) do
+    throw({:js_throw, Heap.make_error("#{Values.stringify(other)} is not iterable", "TypeError")})
+  end
+
+  defp array_like_for_of(ctx, obj_ref, values) do
+    case Collections.array_proto_iterator_status() do
+      :default ->
+        {{:list_iter, values}, :undefined}
+
+      :deleted ->
+        throw({:js_throw, Heap.make_error("[Symbol.iterator] is not a function", "TypeError")})
+
+      custom_fn ->
+        invoke_custom_iter(ctx, custom_fn, obj_ref)
+    end
+  end
+
+  defp object_for_of(ctx, obj_ref, map) do
+    sym_iter = {:symbol, "Symbol.iterator"}
+
+    cond do
+      Map.has_key?(map, sym_iter) -> invoke_custom_iter(ctx, Map.get(map, sym_iter), obj_ref)
+      Map.has_key?(map, "next") -> {obj_ref, Get.get(obj_ref, "next")}
+      true -> {{:list_iter, []}, :undefined}
+    end
+  end
+
+  defp close_iterator(_ctx, :undefined), do: :ok
+  defp close_iterator(_ctx, {:list_iter, _}), do: :ok
+
+  defp close_iterator(%Context{} = ctx, iter_obj) do
+    return_fn = Get.get(iter_obj, "return")
+
+    if return_fn != :undefined and return_fn != nil do
+      Invocation.invoke_method_runtime(ctx, return_fn, iter_obj, [])
+    end
+
+    :ok
+  end
+
+  defp close_iterator(_ctx, iter_obj) do
+    return_fn = Get.get(iter_obj, "return")
+
+    if return_fn != :undefined and return_fn != nil do
+      Invocation.invoke_method_runtime(return_fn, iter_obj, [])
+    end
+
+    :ok
+  end
+
+  defp do_collect(ctx, iter, next_fn, acc) do
+    case for_of_next(ctx, next_fn, iter) do
+      {true, _, _} -> Heap.wrap(Enum.reverse(acc))
+      {false, val, new_iter} -> do_collect(ctx, new_iter, next_fn, [val | acc])
+    end
+  end
+
+  defp invoke_custom_iter(_ctx, iter_fn, obj) do
+    iter_obj = Invocation.invoke_with_receiver(iter_fn, [], Runtime.gas_budget(), obj)
+
+    unless is_object(iter_obj) do
+      throw(
+        {:js_throw,
+         Heap.make_error("Result of the Symbol.iterator method is not an object", "TypeError")}
+      )
+    end
+
+    {iter_obj, Get.get(iter_obj, "next")}
+  end
+end

@@ -5,10 +5,11 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
+  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
+  alias QuickBEAM.VM.JSThrow
 
   alias QuickBEAM.VM.ObjectModel.{
     Define,
@@ -1269,11 +1270,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         do: {:accessor, getter, setter},
         else: Map.get(desc, "value", Get.get(regexp, key))
 
-    Process.put(
-      {:qb_regexp_props, ref},
-      Map.put(Process.get({:qb_regexp_props, ref}, %{}), key, value)
-    )
-
+    RegexpState.put(ref, key, value)
     regexp
   end
 

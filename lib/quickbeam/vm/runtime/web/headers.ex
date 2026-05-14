@@ -97,14 +97,18 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
   defp build_headers(args, _this) do
     args
     |> List.first()
-    |> extract_headers_map()
+    |> to_map()
     |> build_from_map()
   end
 
-  defp extract_headers_map(nil), do: %{}
-  defp extract_headers_map(:undefined), do: %{}
+  @doc "Converts a HeadersInit value or Headers object into a normalized header map."
+  def to_map(value, opts \\ [])
 
-  defp extract_headers_map({:obj, ref}) do
+  def to_map(nil, _opts), do: %{}
+  def to_map(:undefined, _opts), do: %{}
+
+  def to_map({:obj, ref}, opts) do
+    skip_internal_values? = Keyword.get(opts, :skip_internal_values, false)
     raw = Heap.get_obj(ref, %{})
 
     cond do
@@ -123,8 +127,9 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
 
           _ ->
             raw
-            |> Enum.reject(fn {key, _value} ->
-              not is_binary(key) or String.starts_with?(key, "__")
+            |> Enum.reject(fn {key, value} ->
+              not is_binary(key) or String.starts_with?(key, "__") or
+                internal_header_value?(value, skip_internal_values?)
             end)
             |> Enum.map(fn {key, value} -> {header_name(key), to_string(value)} end)
             |> Map.new()
@@ -135,7 +140,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
     end
   end
 
-  defp extract_headers_map(_), do: %{}
+  def to_map(_value, _opts), do: %{}
 
   defp extract_pair({:obj, ref}) do
     list =
@@ -166,6 +171,9 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
     |> Enum.reject(&is_nil/1)
     |> Map.new()
   end
+
+  defp internal_header_value?(value, true), do: is_atom(value) or is_tuple(value)
+  defp internal_header_value?(_value, _skip_internal_values?), do: false
 
   defp sorted_headers(store_ref) do
     store_ref

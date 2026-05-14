@@ -6,7 +6,18 @@ defmodule QuickBEAM.VM.Runtime.Array do
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Define, Delete, Get, HasProperty, OwnProperty, Prototype, Put}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    Define,
+    Delete,
+    Get,
+    HasProperty,
+    OwnProperty,
+    PropertyDescriptor,
+    Prototype,
+    Put
+  }
+
   alias QuickBEAM.VM.PromiseState
   alias QuickBEAM.VM.Runtime
 
@@ -42,21 +53,17 @@ defmodule QuickBEAM.VM.Runtime.Array do
       method = Map.fetch!(proto_map, name)
       Heap.put_ctor_static(method, "length", 0)
 
-      Heap.put_ctor_prop_desc(method, "length", %{
-        writable: false,
-        enumerable: false,
-        configurable: true
-      })
+      Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
     end
 
     proto = Heap.wrap(proto_map)
     {:obj, ref} = proto
 
     for name <- methods do
-      Heap.put_prop_desc(ref, name, %{writable: true, enumerable: false, configurable: true})
+      Heap.put_prop_desc(ref, name, PropertyDescriptor.method())
     end
 
-    Heap.put_prop_desc(ref, sym_iter, %{writable: true, enumerable: false, configurable: true})
+    Heap.put_prop_desc(ref, sym_iter, PropertyDescriptor.method())
 
     unscopables_map = %{
       "copyWithin" => true,
@@ -1064,7 +1071,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
       (nan_number?(left) and nan_number?(right))
   end
 
-  defp nan_number?(value) when is_float(value), do: value != value
+  defp nan_number?(value) when is_float(value) do
+    <<bits::64>> = <<value::float-64>>
+    exponent = Bitwise.band(Bitwise.bsr(bits, 52), 0x7FF)
+    mantissa = Bitwise.band(bits, 0xFFFFFFFFFFFFF)
+    exponent == 0x7FF and mantissa != 0
+  end
+
   defp nan_number?(:nan), do: true
   defp nan_number?(_), do: false
 
@@ -2662,20 +2675,21 @@ defmodule QuickBEAM.VM.Runtime.Array do
         {start_idx, target, 1}
       end
 
-    Enum.reduce(0..max(count - 1, 0)//1, {from, to}, fn _offset, {from_idx, to_idx} ->
-      from_key = Integer.to_string(from_idx)
-      to_key = Integer.to_string(to_idx)
+    _final_position =
+      Enum.reduce(0..max(count - 1, 0)//1, {from, to}, fn _offset, {from_idx, to_idx} ->
+        from_key = Integer.to_string(from_idx)
+        to_key = Integer.to_string(to_idx)
 
-      if HasProperty.has_property?(obj, from_key) do
-        Put.put(obj, to_key, Get.get(obj, from_key))
-      else
-        unless Delete.delete_property(obj, to_key) do
-          JSThrow.type_error!("Cannot delete property")
+        if HasProperty.has_property?(obj, from_key) do
+          Put.put(obj, to_key, Get.get(obj, from_key))
+        else
+          unless Delete.delete_property(obj, to_key) do
+            JSThrow.type_error!("Cannot delete property")
+          end
         end
-      end
 
-      {from_idx + step, to_idx + step}
-    end)
+        {from_idx + step, to_idx + step}
+      end)
 
     obj
   end

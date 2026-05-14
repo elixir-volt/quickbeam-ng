@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Runtime.Function do
   @moduledoc "JS `Function` prototype: `call`, `apply`, `bind`, and property access for name/length/fileName."
   alias QuickBEAM.VM.{Builtin, Heap, Invocation}
-  alias QuickBEAM.VM.ObjectModel.{Get, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.Test262Host
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
@@ -47,18 +47,14 @@ defmodule QuickBEAM.VM.Runtime.Function do
     {:obj, ref} = proto
 
     for name <- ~w(call apply bind toString) do
-      Heap.put_prop_desc(ref, name, %{writable: true, enumerable: false, configurable: true})
+      Heap.put_prop_desc(ref, name, PropertyDescriptor.method())
     end
 
     for name <- ~w(length name) do
-      Heap.put_prop_desc(ref, name, %{writable: false, enumerable: false, configurable: true})
+      Heap.put_prop_desc(ref, name, PropertyDescriptor.hidden_readonly())
     end
 
-    Heap.put_prop_desc(ref, {:symbol, "Symbol.hasInstance"}, %{
-      writable: false,
-      enumerable: false,
-      configurable: false
-    })
+    Heap.put_prop_desc(ref, {:symbol, "Symbol.hasInstance"}, PropertyDescriptor.prototype())
 
     case Heap.get_object_prototype() do
       {:obj, _} = obj_proto ->

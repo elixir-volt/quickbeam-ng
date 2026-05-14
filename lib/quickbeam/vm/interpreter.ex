@@ -1,10 +1,9 @@
 defmodule QuickBEAM.VM.Interpreter do
-  import Bitwise, only: [&&&: 2]
   import QuickBEAM.VM.Builtin, only: [object: 1]
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Value, only: [is_object: 1, is_closure: 1]
 
-  alias QuickBEAM.VM.Execution.Trace
+  alias QuickBEAM.VM.Execution.{SetterState, Trace}
 
   alias QuickBEAM.VM.{
     Builtin,
@@ -202,7 +201,7 @@ defmodule QuickBEAM.VM.Interpreter do
   # ── Helpers ──
 
   defp sync_setter_globals_to_frame(frame, ctx) do
-    if Process.delete(:qb_setter_invoked) do
+    if SetterState.consume_invoked?() do
       sync_global_writes_to_frame(frame, ctx)
     else
       frame

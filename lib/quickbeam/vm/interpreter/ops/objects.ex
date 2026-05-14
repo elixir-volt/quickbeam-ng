@@ -4,10 +4,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
   @doc "Installs the Object creation, field access, array element access, and misc object stubs helpers into the caller module."
   defmacro __using__(_opts) do
     quote location: :keep do
-      import Bitwise, only: [&&&: 2, bsr: 2]
       alias QuickBEAM.VM.{Builtin, Heap, Invocation, Names, Runtime}
       alias QuickBEAM.VM.Interpreter.{Context, Values}
       alias QuickBEAM.VM.ObjectModel.{Class, Copy, Delete, Functions, Get, Private, Put}
+      alias QuickBEAM.VM.Operands.CopyDataProperties
 
       # ── Objects ──
 
@@ -724,9 +724,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       # ── Object spread (copy_data_properties with mask) ──
 
       defp run({@op_copy_data_properties, [mask]}, pc, frame, stack, gas, ctx) do
-        target_idx = mask &&& 3
-        source_idx = bsr(mask, 2) &&& 7
-        exclude_idx = bsr(mask, 5) &&& 7
+        %{target_idx: target_idx, source_idx: source_idx, exclude_idx: exclude_idx} =
+          CopyDataProperties.decode(mask)
+
         target = Enum.at(stack, target_idx)
         source = Enum.at(stack, source_idx)
         exclude = Enum.at(stack, exclude_idx)

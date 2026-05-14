@@ -15,6 +15,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     Get,
     HasProperty,
     OwnProperty,
+    PropertyDescriptor,
     Prototype,
     Put,
     WrappedPrimitive
@@ -43,23 +44,14 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     Enum.each(@method_lengths, fn {name, length} ->
       method = Map.get(map, name)
       Heap.put_ctor_static(reflect, name, method)
-      Heap.put_prop_desc(reflect, name, %{writable: true, enumerable: false, configurable: true})
-
-      Heap.put_ctor_prop_desc(reflect, name, %{
-        writable: true,
-        enumerable: false,
-        configurable: true
-      })
+      Heap.put_prop_desc(reflect, name, PropertyDescriptor.method())
+      Heap.put_ctor_prop_desc(reflect, name, PropertyDescriptor.method())
 
       case method do
         {:builtin, _, _} = method ->
           Heap.put_ctor_static(method, "length", length)
 
-          Heap.put_ctor_prop_desc(method, "length", %{
-            writable: false,
-            enumerable: false,
-            configurable: true
-          })
+          Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
 
         _ ->
           :ok
@@ -68,13 +60,8 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
     tag = {:symbol, "Symbol.toStringTag"}
     Heap.put_ctor_static(reflect, tag, "Reflect")
-    Heap.put_prop_desc(reflect, tag, %{writable: false, enumerable: false, configurable: true})
-
-    Heap.put_ctor_prop_desc(reflect, tag, %{
-      writable: false,
-      enumerable: false,
-      configurable: true
-    })
+    Heap.put_prop_desc(reflect, tag, PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(reflect, tag, PropertyDescriptor.hidden_readonly())
 
     case Heap.get_object_prototype() do
       {:obj, _} = object_proto -> Heap.put_ctor_static(reflect, proto(), object_proto)
