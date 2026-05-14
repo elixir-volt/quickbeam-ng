@@ -2719,6 +2719,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
     actual_delete_count = splice_delete_count(args, len, actual_start)
     insert = Enum.drop(args, 2)
     new_len = len - actual_delete_count + length(insert)
+
+    if new_len > @max_safe_integer do
+      JSThrow.type_error!("Invalid array length")
+    end
+
     target = copy_array_target(new_len)
 
     copy_prefix(receiver, target, actual_start)
