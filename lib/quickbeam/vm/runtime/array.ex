@@ -1677,7 +1677,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         |> Enum.reduce([], fn index, acc ->
           key = Integer.to_string(index)
 
-          if HasProperty.has_property?(receiver, key) do
+          if index < array_like_length(receiver) and HasProperty.has_property?(receiver, key) do
             [{find_value_at(receiver, index), index} | acc]
           else
             acc

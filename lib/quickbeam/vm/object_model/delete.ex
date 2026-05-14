@@ -186,6 +186,20 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
 
   defp proxy_delete_invariant_violation?(_target, _key), do: false
 
+  defp visible_array_length(ref) do
+    case Heap.get_array_prop(ref, "length") do
+      len when is_integer(len) ->
+        len
+
+      _ ->
+        case Heap.get_obj_raw(ref) do
+          {:qb_arr, arr} -> :array.size(arr)
+          list when is_list(list) -> length(list)
+          _ -> 0
+        end
+    end
+  end
+
   defp delete_array_property(_ref, "length"), do: false
 
   defp delete_array_property(ref, key) do
@@ -202,7 +216,10 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
             Heap.put_array_prop(ref, "__deleted_args__", MapSet.put(deleted, idx))
           end
 
-          Heap.array_set(ref, idx, :undefined)
+          unless idx >= visible_array_length(ref) do
+            Heap.array_set(ref, idx, :undefined)
+          end
+
           Heap.delete_prop_desc(ref, key)
           Heap.delete_array_prop(ref, key)
           true
