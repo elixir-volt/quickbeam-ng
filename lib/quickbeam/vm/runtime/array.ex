@@ -356,10 +356,6 @@ defmodule QuickBEAM.VM.Runtime.Array do
     len = array_like_length(receiver)
     new_len = len + length(args)
 
-    if new_len > @max_array_length do
-      JSThrow.type_error!("Invalid array length")
-    end
-
     Enum.each(Enum.with_index(args, len), fn {item, index} ->
       Put.put(receiver, Integer.to_string(index), item)
     end)
@@ -1597,11 +1593,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
       to_length(Get.get({:obj, ref}, "length"))
     else
       case Heap.get_obj(ref) do
-        {:qb_arr, arr} ->
-          :array.size(arr)
+        {:qb_arr, _arr} ->
+          to_length(Get.length_of({:obj, ref}))
 
         list when is_list(list) ->
-          length(list)
+          to_length(Get.length_of({:obj, ref}))
 
         _ ->
           to_length(Get.get({:obj, ref}, "length"))
