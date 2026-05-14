@@ -1630,6 +1630,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
           case replaced do
             {:parts, parts} ->
+              parts = append_zero_length_advance(s, parts, match_start, match_len)
               regex_replace_all_elixir(s, regex, replacement, flags, next_offset, parts)
 
             binary when is_binary(binary) ->
@@ -1638,6 +1639,11 @@ defmodule QuickBEAM.VM.Runtime.String do
         end
     end
   end
+
+  defp append_zero_length_advance(s, parts, match_start, 0) when match_start < byte_size(s),
+    do: parts ++ [binary_part(s, match_start, 1)]
+
+  defp append_zero_length_advance(_s, parts, _match_start, _match_len), do: parts
 
   defp replace_elixir_match(s, regex, match_start, match_len, captures, replacement, offset, acc) do
     before = binary_part(s, 0, match_start)
