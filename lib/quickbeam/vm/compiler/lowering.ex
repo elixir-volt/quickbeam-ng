@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
   @moduledoc "VM-instruction-to-Erlang lowering pipeline: analyses control flow and types, then emits abstract-form block functions."
 
   alias QuickBEAM.VM.Compiler.Analysis.{CFG, Stack, Types}
-  alias QuickBEAM.VM.Compiler.Lowering.{BlockClauses, Builder, ObjectLiteralFastPath}
+  alias QuickBEAM.VM.Compiler.Lowering.{BlockClauses, Branches, Builder, ObjectLiteralFastPath}
   alias QuickBEAM.VM.Compiler.{Lowering.Ops, Lowering.State}
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.OpcodeFamily
@@ -387,7 +387,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
        ) do
     case CFG.opcode_name(op) do
       {:ok, name} when OpcodeFamily.is_false_branch(name) ->
-        lower_branch_instruction(
+        Branches.lower(
           instructions,
           size,
           idx,
@@ -399,11 +399,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
           entries,
           inline_targets,
           target,
-          false
+          false,
+          branch_callbacks()
         )
 
       {:ok, name} when OpcodeFamily.is_true_branch(name) ->
-        lower_branch_instruction(
+        Branches.lower(
           instructions,
           size,
           idx,
@@ -415,7 +416,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
           entries,
           inline_targets,
           target,
-          true
+          true,
+          branch_callbacks()
         )
 
       _ ->
@@ -530,113 +532,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
     end
   end
 
-  defp lower_branch_instruction(
-         instructions,
-         size,
-         idx,
-         next_entry,
-         arg_count,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         target,
-         sense
-       ) do
-    if MapSet.member?(inline_targets, target) or MapSet.member?(inline_targets, next_entry) do
-      with {:ok, cond_expr, cond_type, state} <- State.pop_typed(state),
-           {:ok, target_body} <-
-             lower_branch_target_body(
-               instructions,
-               size,
-               target,
-               arg_count,
-               state,
-               stack_depths,
-               constants,
-               entries,
-               inline_targets
-             ),
-           {:ok, next_body} <-
-             lower_branch_target_body(
-               instructions,
-               size,
-               next_entry,
-               arg_count,
-               state,
-               stack_depths,
-               constants,
-               entries,
-               inline_targets
-             ) do
-        truthy = Builder.branch_condition(cond_expr, cond_type)
-        false_body = if(sense, do: next_body, else: target_body)
-        true_body = if(sense, do: target_body, else: next_body)
-        {:ok, Enum.reverse([Builder.branch_case(truthy, false_body, true_body) | state.body])}
-      end
-    else
-      lower_non_branch_instruction(
-        {if(sense,
-           do: QuickBEAM.VM.Opcodes.num(:if_true),
-           else: QuickBEAM.VM.Opcodes.num(:if_false)
-         ), [target]},
-        instructions,
-        size,
-        idx,
-        next_entry,
-        arg_count,
-        state,
-        stack_depths,
-        constants,
-        entries,
-        inline_targets
-      )
-    end
-  end
-
-  defp lower_branch_target_body(
-         _instructions,
-         _size,
-         nil,
-         _arg_count,
-         _state,
-         _stack_depths,
-         _constants,
-         _entries,
-         _inline_targets
-       ),
-       do: {:error, :missing_branch_fallthrough}
-
-  defp lower_branch_target_body(
-         instructions,
-         size,
-         target,
-         arg_count,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets
-       ) do
-    if MapSet.member?(inline_targets, target) do
-      lower_block(
-        instructions,
-        size,
-        target,
-        CFG.next_entry(entries, target),
-        arg_count,
-        %{state | body: []},
-        stack_depths,
-        constants,
-        entries,
-        inline_targets
-      )
-    else
-      with {:ok, call} <- State.block_jump_call(state, target, stack_depths) do
-        {:ok, [call]}
-      end
-    end
+  defp branch_callbacks do
+    %{
+      lower_block: &lower_block/10,
+      lower_non_branch_instruction: &lower_non_branch_instruction/11
+    }
   end
 
   defp lower_catch_suffix(
