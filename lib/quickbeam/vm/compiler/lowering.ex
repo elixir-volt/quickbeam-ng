@@ -2,7 +2,15 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
   @moduledoc "VM-instruction-to-Erlang lowering pipeline: analyses control flow and types, then emits abstract-form block functions."
 
   alias QuickBEAM.VM.Compiler.Analysis.{CFG, Stack, Types}
-  alias QuickBEAM.VM.Compiler.Lowering.{BlockClauses, Branches, Builder, ObjectLiteralFastPath}
+
+  alias QuickBEAM.VM.Compiler.Lowering.{
+    BlockClauses,
+    Branches,
+    Builder,
+    ExceptionRegions,
+    ObjectLiteralFastPath
+  }
+
   alias QuickBEAM.VM.Compiler.{Lowering.Ops, Lowering.State}
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.OpcodeFamily
@@ -260,7 +268,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
       {op, [target]} ->
         case CFG.opcode_name(op) do
           {:ok, :catch} ->
-            lower_catch_suffix(
+            ExceptionRegions.catch_suffix(
               instructions,
               size,
               idx,
@@ -271,11 +279,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
               constants,
               entries,
               inline_targets,
-              target
+              target,
+              exception_callbacks()
             )
 
           {:ok, :gosub} ->
-            lower_gosub_suffix(
+            ExceptionRegions.gosub_suffix(
               instructions,
               size,
               idx,
@@ -286,7 +295,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
               constants,
               entries,
               inline_targets,
-              target
+              target,
+              exception_callbacks()
             )
 
           _ ->
@@ -539,438 +549,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
     }
   end
 
-  defp lower_catch_suffix(
-         instructions,
-         size,
-         idx,
-         next_entry,
-         arg_count,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         target
-       ) do
-    with :ok <- ensure_catch_region_supported(instructions, idx, target),
-         {saved_stack, state} <- State.freeze_stack(state),
-         {:ok, handler_call} <-
-           State.block_jump_call_values(
-             target,
-             stack_depths,
-             State.ctx_expr(state),
-             State.current_slots(state),
-             [Builder.var("Caught#{idx}") | saved_stack],
-             State.current_capture_cells(state)
-           ),
-         {:ok, try_body} <-
-           lower_block(
-             instructions,
-             size,
-             idx + 1,
-             next_entry,
-             arg_count,
-             %{
-               state
-               | body: [],
-                 stack: [Builder.literal(target) | saved_stack],
-                 stack_types: [:integer | state.stack_types]
-             },
-             stack_depths,
-             constants,
-             entries,
-             inline_targets
-           ) do
-      {:ok,
-       Enum.reverse([
-         Builder.try_catch_expr(try_body, Builder.var("Caught#{idx}"), [handler_call])
-         | state.body
-       ])}
-    end
+  defp exception_callbacks do
+    %{lower_block: &lower_block/10}
   end
-
-  defp lower_gosub_suffix(
-         instructions,
-         size,
-         idx,
-         next_entry,
-         arg_count,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         target
-       ) do
-    state = State.push(state, Builder.atom(:return_addr), :unknown)
-
-    case lower_finally_inline(
-           instructions,
-           size,
-           target,
-           state,
-           stack_depths,
-           constants,
-           entries,
-           inline_targets,
-           target,
-           {:block, idx + 1, next_entry, arg_count}
-         ) do
-      {:ok, body} when is_list(body) ->
-        {:ok, body}
-
-      {:done, body} when is_list(body) ->
-        {:ok, body}
-
-      {:done, terminal_state} ->
-        {:ok, Enum.reverse(terminal_state.body)}
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  defp lower_finally_inline(
-         _instructions,
-         size,
-         idx,
-         _state,
-         _stack_depths,
-         _constants,
-         _entries,
-         _inline_targets,
-         _finally_entry,
-         _continuation
-       )
-       when idx >= size do
-    {:error, {:missing_ret, idx}}
-  end
-
-  defp lower_finally_inline(
-         instructions,
-         size,
-         idx,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         finally_entry,
-         continuation
-       ) do
-    instruction = elem(instructions, idx)
-
-    case instruction do
-      {op, []} ->
-        case CFG.opcode_name(op) do
-          {:ok, :ret} ->
-            resume_finally_continuation(
-              instructions,
-              size,
-              state,
-              stack_depths,
-              constants,
-              entries,
-              inline_targets,
-              continuation
-            )
-
-          {:ok, name} when OpcodeFamily.is_finally_control(name) ->
-            {:error, {:unsupported_finally_opcode, name, idx}}
-
-          _ ->
-            lower_finally_instruction(
-              instructions,
-              size,
-              instruction,
-              idx,
-              state,
-              stack_depths,
-              constants,
-              entries,
-              inline_targets,
-              finally_entry,
-              continuation
-            )
-        end
-
-      {op, _args} ->
-        case CFG.opcode_name(op) do
-          {:ok, :gosub} ->
-            state = State.push(state, Builder.atom(:return_addr), :unknown)
-
-            lower_finally_inline(
-              instructions,
-              size,
-              hd(elem(instruction, 1)),
-              state,
-              stack_depths,
-              constants,
-              entries,
-              inline_targets,
-              hd(elem(instruction, 1)),
-              {:finally, idx + 1, finally_entry, continuation}
-            )
-
-          {:ok, :catch} ->
-            lower_finally_catch(
-              instructions,
-              size,
-              idx,
-              state,
-              stack_depths,
-              constants,
-              entries,
-              inline_targets,
-              finally_entry,
-              continuation,
-              hd(elem(instruction, 1))
-            )
-
-          {:ok, name} when OpcodeFamily.is_goto(name) ->
-            target = hd(elem(instruction, 1))
-
-            if finally_internal_target?(instructions, size, finally_entry, target) do
-              lower_finally_inline(
-                instructions,
-                size,
-                target,
-                state,
-                stack_depths,
-                constants,
-                entries,
-                inline_targets,
-                finally_entry,
-                continuation
-              )
-            else
-              State.goto(state, target, stack_depths)
-            end
-
-          _ ->
-            lower_finally_instruction(
-              instructions,
-              size,
-              instruction,
-              idx,
-              state,
-              stack_depths,
-              constants,
-              entries,
-              inline_targets,
-              finally_entry,
-              continuation
-            )
-        end
-    end
-  end
-
-  defp lower_finally_catch(
-         instructions,
-         size,
-         idx,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         finally_entry,
-         continuation,
-         target
-       ) do
-    with :ok <- ensure_catch_region_supported(instructions, idx, target),
-         {saved_stack, state} <- State.freeze_stack(state),
-         {:ok, try_body} <-
-           lower_finally_body(
-             instructions,
-             size,
-             idx + 1,
-             %{
-               state
-               | body: [],
-                 stack: [Builder.literal(target) | saved_stack],
-                 stack_types: [:integer | state.stack_types]
-             },
-             stack_depths,
-             constants,
-             entries,
-             inline_targets,
-             finally_entry,
-             continuation
-           ),
-         {:ok, catch_body} <-
-           lower_finally_body(
-             instructions,
-             size,
-             target,
-             %{
-               state
-               | body: [],
-                 temp: state.temp + (idx + 1) * 1000,
-                 stack: [Builder.var("Caught#{idx}") | saved_stack],
-                 stack_types: [:unknown | state.stack_types]
-             },
-             stack_depths,
-             constants,
-             entries,
-             inline_targets,
-             finally_entry,
-             continuation
-           ) do
-      {:done,
-       Enum.reverse([
-         Builder.try_catch_expr(try_body, Builder.var("Caught#{idx}"), catch_body) | state.body
-       ])}
-    end
-  end
-
-  defp lower_finally_body(
-         instructions,
-         size,
-         idx,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         finally_entry,
-         continuation
-       ) do
-    case lower_finally_inline(
-           instructions,
-           size,
-           idx,
-           state,
-           stack_depths,
-           constants,
-           entries,
-           inline_targets,
-           finally_entry,
-           continuation
-         ) do
-      {:ok, body} when is_list(body) -> {:ok, body}
-      {:done, body} when is_list(body) -> {:ok, body}
-      {:done, terminal_state} -> {:ok, Enum.reverse(terminal_state.body)}
-      {:error, _} = error -> error
-    end
-  end
-
-  defp finally_internal_target?(instructions, size, finally_entry, target) do
-    target >= finally_entry and
-      finally_region_contains?(instructions, size, finally_entry, target)
-  end
-
-  defp finally_region_contains?(_instructions, _size, idx, target) when idx > target, do: false
-
-  defp finally_region_contains?(instructions, size, idx, target) when idx < size do
-    {op, _args} = elem(instructions, idx)
-
-    case CFG.opcode_name(op) do
-      {:ok, :ret} -> idx == target
-      _ -> idx == target or finally_region_contains?(instructions, size, idx + 1, target)
-    end
-  end
-
-  defp finally_region_contains?(_instructions, _size, _idx, _target), do: false
-
-  defp resume_finally_continuation(
-         instructions,
-         size,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         {:block, idx, next_entry, arg_count}
-       ) do
-    with {:ok, _return_addr, state} <- State.pop(state) do
-      lower_block(
-        instructions,
-        size,
-        idx,
-        next_entry,
-        arg_count,
-        state,
-        stack_depths,
-        constants,
-        entries,
-        inline_targets
-      )
-    end
-  end
-
-  defp resume_finally_continuation(
-         instructions,
-         size,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         {:finally, idx, finally_entry, continuation}
-       ) do
-    with {:ok, _return_addr, state} <- State.pop(state) do
-      lower_finally_inline(
-        instructions,
-        size,
-        idx,
-        state,
-        stack_depths,
-        constants,
-        entries,
-        inline_targets,
-        finally_entry,
-        continuation
-      )
-    end
-  end
-
-  defp lower_finally_instruction(
-         instructions,
-         size,
-         instruction,
-         idx,
-         state,
-         stack_depths,
-         constants,
-         entries,
-         inline_targets,
-         finally_entry,
-         continuation
-       ) do
-    case Ops.lower_instruction(
-           instruction,
-           idx,
-           CFG.next_entry(entries, idx),
-           0,
-           state,
-           stack_depths,
-           constants,
-           entries,
-           inline_targets
-         ) do
-      {:ok, next_state} ->
-        lower_finally_inline(
-          instructions,
-          size,
-          idx + 1,
-          next_state,
-          stack_depths,
-          constants,
-          entries,
-          inline_targets,
-          finally_entry,
-          continuation
-        )
-
-      {:done, body} ->
-        {:done,
-         %{state | body: Enum.reverse(body), stack: state.stack, stack_types: state.stack_types}}
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  defp ensure_catch_region_supported(_instructions, _catch_idx, _target), do: :ok
 end
