@@ -32,8 +32,8 @@ defmodule QuickBEAM.VM.Runtime.Web.Events do
       end
 
       method "removeEventListener" do
-        [type, callback] = argv(args, [nil, nil])
-        EventListeners.remove(listeners_ref, type, callback)
+        [type, callback, opts] = argv(args, [nil, nil, nil])
+        EventListeners.remove(listeners_ref, type, callback, opts)
         :undefined
       end
 
@@ -77,7 +77,10 @@ defmodule QuickBEAM.VM.Runtime.Web.Events do
       end
 
       method "preventDefault" do
-        put_event_flag(this, "defaultPrevented", true)
+        if Get.get(this, "cancelable") == true do
+          put_event_flag(this, "defaultPrevented", true)
+        end
+
         :undefined
       end
     end

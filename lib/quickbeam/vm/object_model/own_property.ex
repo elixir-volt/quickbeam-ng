@@ -73,13 +73,14 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     not match?(%{^key => :deleted}, Heap.get_ctor_statics(builtin))
   end
 
-  def present?({:builtin, _, _} = builtin, key) do
+  def present?({:builtin, _, map} = builtin, key) do
     case Heap.get_ctor_statics(builtin) do
       %{^key => :deleted} ->
         false
 
       statics ->
-        Map.has_key?(statics, key) or module_static_present?(Map.get(statics, :__module__), key)
+        (is_map(map) and Map.has_key?(map, key)) or Map.has_key?(statics, key) or
+          module_static_present?(Map.get(statics, :__module__), key)
     end
   end
 
@@ -218,13 +219,16 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   def descriptor_keys({:closure, _, %QuickBEAM.VM.Function{}} = fun),
     do: callable_descriptor_keys(fun)
 
-  def descriptor_keys({:builtin, _, _} = builtin), do: callable_descriptor_keys(builtin)
+  def descriptor_keys({:builtin, _, map} = builtin), do: callable_descriptor_keys(builtin, map)
   def descriptor_keys({:bound, _, _, _, _} = bound), do: callable_descriptor_keys(bound)
   def descriptor_keys(_), do: []
 
-  defp callable_descriptor_keys(callable) do
+  defp callable_descriptor_keys(callable, inline_map \\ nil) do
     statics = Heap.get_ctor_statics(callable)
-    explicit_keys = statics |> Map.keys() |> Enum.filter(&callable_descriptor_key?/1)
+
+    static_keys = statics |> Map.keys() |> Enum.filter(&callable_descriptor_key?/1)
+    inline_keys = if is_map(inline_map), do: Map.keys(inline_map), else: []
+    explicit_keys = Enum.filter(static_keys ++ inline_keys, &callable_descriptor_key?/1)
     builtin_order = ["length", "name", "prototype"]
 
     (builtin_order ++ (explicit_keys -- builtin_order))

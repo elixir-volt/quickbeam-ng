@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
       ct_offsets =
         map_pairs
         |> Enum.with_index()
-        |> Enum.reduce(%{}, fn {{key_expr, _value_expr}, field_idx}, acc ->
+        |> Enum.reduce(%{}, fn {{key_expr, _value_expr, _safe_value?}, field_idx}, acc ->
           case Literals.string_lossy(key_expr) do
             key when is_binary(key) -> Map.put(acc, key, field_idx)
             _ -> acc
@@ -29,7 +29,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
         end)
 
       value_map =
-        Map.new(map_pairs, fn {key_expr, value_expr} ->
+        map_pairs
+        |> Enum.filter(fn {_key_expr, _value_expr, safe_value?} -> safe_value? end)
+        |> Map.new(fn {key_expr, value_expr, _safe_value?} ->
           {Literals.string_lossy(key_expr), value_expr}
         end)
 
@@ -45,32 +47,49 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
   end
 
   defp collect_define_fields(instructions, size, idx, arg_count, state) do
-    collect_define_fields(instructions, size, idx, arg_count, state, [])
+    collect_define_fields(instructions, size, idx, arg_count, state, [], MapSet.new())
   end
 
-  defp collect_define_fields(_instructions, size, idx, _arg_count, state, acc)
+  defp collect_define_fields(_instructions, size, idx, _arg_count, state, acc, _seen_keys)
        when idx + 1 >= size do
     if acc == [], do: :not_literal, else: {:ok, Enum.reverse(acc), idx, state}
   end
 
-  defp collect_define_fields(instructions, size, idx, arg_count, state, acc) do
+  defp collect_define_fields(instructions, size, idx, arg_count, state, acc, seen_keys) do
     val_instr = elem(instructions, idx)
     df_instr = elem(instructions, idx + 1)
 
     with {val_op, val_args} <- val_instr,
          {df_op, [key_idx]} <- df_instr,
          {:ok, :define_field} <- CFG.opcode_name(df_op),
-         {:ok, val_expr, new_state} <- lower_value_opcode(val_op, val_args, arg_count, state) do
+         {:ok, val_expr, safe_value?, new_state} <-
+           lower_value_opcode(val_op, val_args, arg_count, state) do
       key_name = Builder.atom_name(new_state, key_idx)
 
-      if is_binary(key_name) do
-        key_expr = Builder.literal(key_name)
+      cond do
+        key_name == "__proto__" ->
+          :not_literal
 
-        collect_define_fields(instructions, size, idx + 2, arg_count, new_state, [
-          {key_expr, val_expr} | acc
-        ])
-      else
-        if acc == [], do: :not_literal, else: {:ok, Enum.reverse(acc), idx, state}
+        is_binary(key_name) ->
+          key_expr = Builder.literal(key_name)
+          pair = {key_expr, val_expr, safe_value?}
+          acc = upsert_pair(acc, key_name, pair, MapSet.member?(seen_keys, key_name))
+
+          collect_define_fields(
+            instructions,
+            size,
+            idx + 2,
+            arg_count,
+            new_state,
+            acc,
+            MapSet.put(seen_keys, key_name)
+          )
+
+        acc == [] ->
+          :not_literal
+
+        true ->
+          {:ok, Enum.reverse(acc), idx, state}
       end
     else
       _ ->
@@ -78,38 +97,47 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
     end
   end
 
+  defp upsert_pair(acc, _key_name, pair, false), do: [pair | acc]
+
+  defp upsert_pair(acc, key_name, pair, true) do
+    Enum.map(acc, fn {key_expr, _value_expr, _safe_value?} = existing ->
+      if Literals.string_lossy(key_expr) == key_name, do: pair, else: existing
+    end)
+  end
+
   defp lower_value_opcode(op, args, _arg_count, state) do
     case CFG.opcode_name(op) do
       {:ok, name} when name in [:push_i32, :push_i16, :push_i8] ->
-        {:ok, Builder.integer(hd(args)), state}
+        {:ok, Builder.integer(hd(args)), true, state}
 
       {:ok, name} when is_small_int_push(name) ->
         {:ok, value} = OpcodeFamily.small_int_push(name)
-        {:ok, Builder.integer(value), state}
+        {:ok, Builder.integer(value), true, state}
 
       {:ok, :null} ->
-        {:ok, Builder.atom(nil), state}
+        {:ok, Builder.atom(nil), true, state}
 
       {:ok, :undefined} ->
-        {:ok, Builder.atom(:undefined), state}
+        {:ok, Builder.atom(:undefined), true, state}
 
       {:ok, :push_false} ->
-        {:ok, Builder.atom(false), state}
+        {:ok, Builder.atom(false), true, state}
 
       {:ok, :push_true} ->
-        {:ok, Builder.atom(true), state}
+        {:ok, Builder.atom(true), true, state}
 
       {:ok, :push_empty_string} ->
-        {:ok, Builder.literal(""), state}
+        {:ok, Builder.literal(""), true, state}
 
       {:ok, name} when name in [:get_arg, :get_arg0, :get_arg1, :get_arg2, :get_arg3] ->
-        {:ok, State.slot_expr(state, compact_slot_index(name, args)), state}
+        {:ok, State.slot_expr(state, compact_slot_index(name, args)), false, state}
 
       {:ok, name} when name in [:get_loc, :get_loc0, :get_loc1, :get_loc2, :get_loc3] ->
-        {:ok, State.slot_expr(state, compact_slot_index(name, args)), state}
+        {:ok, State.slot_expr(state, compact_slot_index(name, args)), false, state}
 
       {:ok, :push_atom_value} ->
-        {:ok, State.compiler_call(state, :push_atom_value, [Builder.literal(hd(args))]), state}
+        {:ok, State.compiler_call(state, :push_atom_value, [Builder.literal(hd(args))]), false,
+         state}
 
       _ ->
         :error

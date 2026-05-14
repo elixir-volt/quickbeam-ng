@@ -54,9 +54,10 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
 
       method "forEach" do
         callback = arg(args, 0, nil)
+        this_arg = arg(args, 1, :undefined)
 
         Enum.each(sorted_headers(store_ref), fn {name, value} ->
-          Callback.safe_invoke(callback, [value, name])
+          Callback.safe_invoke(callback, [value, name, this], this_arg)
         end)
 
         :undefined
@@ -169,7 +170,9 @@ defmodule QuickBEAM.VM.Runtime.Web.Headers do
     pairs
     |> Enum.map(&extract_pair/1)
     |> Enum.reject(&is_nil/1)
-    |> Map.new()
+    |> Enum.reduce(%{}, fn {name, value}, acc ->
+      Map.update(acc, name, value, &append_header_value(&1, value))
+    end)
   end
 
   defp internal_header_value?(value, true), do: is_atom(value) or is_tuple(value)

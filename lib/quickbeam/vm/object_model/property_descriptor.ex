@@ -58,13 +58,8 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
     })
   end
 
-  def present?(source_obj, raw_desc, "value") do
-    Map.has_key?(raw_desc, "value") or Get.get(source_obj, "value") != :undefined or
-      HasProperty.has_property?(source_obj, "value")
-  end
-
   def present?(source_obj, raw_desc, key) do
-    Map.has_key?(raw_desc, key) or Get.get(source_obj, key) != :undefined
+    Map.has_key?(raw_desc, key) or HasProperty.has_property?(source_obj, key)
   end
 
   def field(source_obj, raw_desc, "value", default) do
@@ -123,8 +118,11 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
 
   defp get_or_default(source_obj, key, default) do
     case Get.get(source_obj, key) do
-      :undefined -> default
-      value -> value
+      :undefined ->
+        if HasProperty.has_property?(source_obj, key), do: :undefined, else: default
+
+      value ->
+        value
     end
   end
 end

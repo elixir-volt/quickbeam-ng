@@ -10,21 +10,30 @@ defmodule QuickBEAM.VM.Runtime.Web.EventListeners do
   @doc "Adds a listener entry for an event type."
   def add(listeners_ref, type, callback, opts \\ nil) do
     type = to_string(type)
-    entry = %{"callback" => callback, "once" => once?(opts)}
+    entry = %{"callback" => callback, "capture" => capture?(opts), "once" => once?(opts)}
 
     StateRef.update(listeners_ref, %{}, fn listeners ->
-      Map.update(listeners, type, [entry], &(&1 ++ [entry]))
+      entries = Map.get(listeners, type, [])
+
+      if Enum.any?(entries, &same_listener?(&1, entry)) do
+        listeners
+      else
+        Map.put(listeners, type, entries ++ [entry])
+      end
     end)
   end
 
-  @doc "Removes listener entries matching callback for an event type."
-  def remove(listeners_ref, type, callback) do
+  @doc "Removes listener entries matching callback and capture for an event type."
+  def remove(listeners_ref, type, callback, opts \\ nil) do
     type = to_string(type)
+    capture? = capture?(opts)
 
     StateRef.update(listeners_ref, %{}, fn listeners ->
       listeners
       |> Map.get(type, [])
-      |> Enum.reject(&(Map.get(&1, "callback") == callback))
+      |> Enum.reject(
+        &(Map.get(&1, "callback") == callback and Map.get(&1, "capture") == capture?)
+      )
       |> then(&Map.put(listeners, type, &1))
     end)
   end
@@ -43,27 +52,49 @@ defmodule QuickBEAM.VM.Runtime.Web.EventListeners do
   end
 
   defp dispatch(listeners_ref, type, args, stopped?) do
-    listeners = StateRef.get(listeners_ref, %{})
-    type_listeners = Map.get(listeners, to_string(type), [])
+    type = to_string(type)
+    snapshot = listeners_ref |> StateRef.get(%{}) |> Map.get(type, [])
 
-    {survivors, _stopped?} =
-      Enum.reduce(type_listeners, {[], false}, fn
-        entry, {survivors, true} ->
-          {[entry | survivors], true}
+    Enum.reduce_while(snapshot, false, fn entry, _stopped ->
+      if listener_present?(listeners_ref, type, entry) do
+        entry
+        |> Map.get("callback")
+        |> Callback.safe_invoke(args)
 
-        entry, {survivors, false} ->
-          entry
-          |> Map.get("callback")
-          |> Callback.safe_invoke(args)
+        if Map.get(entry, "once", false), do: remove_entry(listeners_ref, type, entry)
 
-          keep? = not Map.get(entry, "once", false)
-          survivors = if keep?, do: [entry | survivors], else: survivors
-          {survivors, stopped?.()}
-      end)
+        if stopped?.(), do: {:halt, true}, else: {:cont, false}
+      else
+        {:cont, false}
+      end
+    end)
+  end
 
-    StateRef.put(listeners_ref, Map.put(listeners, to_string(type), Enum.reverse(survivors)))
+  defp listener_present?(listeners_ref, type, entry) do
+    listeners_ref
+    |> StateRef.get(%{})
+    |> Map.get(type, [])
+    |> Enum.any?(&same_listener?(&1, entry))
+  end
+
+  defp remove_entry(listeners_ref, type, entry) do
+    StateRef.update(listeners_ref, %{}, fn listeners ->
+      listeners
+      |> Map.get(type, [])
+      |> Enum.reject(&same_listener?(&1, entry))
+      |> then(&Map.put(listeners, type, &1))
+    end)
+  end
+
+  defp same_listener?(left, right) do
+    Map.get(left, "callback") == Map.get(right, "callback") and
+      Map.get(left, "capture") == Map.get(right, "capture")
   end
 
   defp once?({:obj, _} = opts), do: Get.get(opts, "once") == true
   defp once?(_), do: false
+
+  defp capture?(true), do: true
+  defp capture?({:obj, _} = opts), do: Get.get(opts, "capture") == true
+  defp capture?(_), do: false
 end

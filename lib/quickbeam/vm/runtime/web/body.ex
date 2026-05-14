@@ -20,13 +20,21 @@ defmodule QuickBEAM.VM.Runtime.Web.Body do
   end
 
   @doc "Creates a fresh unconsumed body state with the same payload."
-  def clone(body_ref), do: new(data(body_ref))
+  def clone(body_ref) do
+    case Heap.get_obj(body_ref, %{}) do
+      %{consumed: true} -> JSThrow.type_error!("Body has already been consumed")
+      %{data: data} -> new(data)
+      _ -> new(nil)
+    end
+  end
 
   @doc "Consumes a body once, marks the owner as bodyUsed, and invokes the callback with payload data."
   def consume(body_ref, owner, fun) when is_function(fun, 1) do
     case Heap.get_obj(body_ref, %{}) do
       %{consumed: true} ->
-        JSThrow.type_error!("Body has already been consumed")
+        "Body has already been consumed"
+        |> Heap.make_error("TypeError")
+        |> PromiseState.rejected()
 
       %{consumed: false, data: data} ->
         Heap.put_obj(body_ref, %{consumed: true, data: data})

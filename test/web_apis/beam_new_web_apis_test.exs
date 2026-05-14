@@ -106,6 +106,32 @@ defmodule QuickBEAM.WebAPIs.BeamNewWebAPIsTest do
                order;
                """)
     end
+
+    test "listener identity uses callback and capture", %{rt: rt} do
+      assert {:ok, "1:2"} =
+               QuickBEAM.eval(rt, """
+               const target = new EventTarget();
+               let count = 0;
+               const handler = () => { count++; };
+               target.addEventListener('test', handler);
+               target.addEventListener('test', handler);
+               target.addEventListener('test', handler, true);
+               target.removeEventListener('test', handler, true);
+               target.dispatchEvent(new Event('test'));
+               count + ':' + (count + 1);
+               """)
+    end
+
+    test "preventDefault only affects cancelable events", %{rt: rt} do
+      assert {:ok, true} =
+               QuickBEAM.eval(rt, """
+               const blocked = new Event('test');
+               blocked.preventDefault();
+               const cancelable = new Event('test', { cancelable: true });
+               cancelable.preventDefault();
+               !blocked.defaultPrevented && cancelable.defaultPrevented;
+               """)
+    end
   end
 
   # ── DOMException ─────────────────────────────────────────
@@ -266,6 +292,27 @@ defmodule QuickBEAM.WebAPIs.BeamNewWebAPIsTest do
                h.append('x', 'a');
                h.append('x', 'b');
                h.get('x');
+               """)
+    end
+
+    test "sequence initialization joins duplicate names", %{rt: rt} do
+      assert {:ok, "a, b"} =
+               QuickBEAM.eval(rt, """
+               const h = new Headers([['x', 'a'], ['x', 'b']]);
+               h.get('x');
+               """)
+    end
+
+    test "forEach passes value name and headers with thisArg", %{rt: rt} do
+      assert {:ok, "v:x:true:true"} =
+               QuickBEAM.eval(rt, """
+               const h = new Headers([['x', 'v']]);
+               const receiver = {};
+               let result = '';
+               h.forEach(function(value, name, headers) {
+                 result = value + ':' + name + ':' + (headers === h) + ':' + (this === receiver);
+               }, receiver);
+               result;
                """)
     end
 

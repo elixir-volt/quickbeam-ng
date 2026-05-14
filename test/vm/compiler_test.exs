@@ -232,6 +232,37 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, 7} = Compiler.invoke(fun, [Heap.wrap(%{"x" => 7})])
     end
 
+    test "installs global and core prototype metadata", %{rt: rt} do
+      global_this = compile_and_decode(rt, "globalThis.globalThis === globalThis").value
+
+      boolean_methods =
+        compile_and_decode(
+          rt,
+          "typeof Boolean.prototype.toString + ':' + typeof Boolean.prototype.valueOf"
+        ).value
+
+      boolean_parent =
+        compile_and_decode(rt, "Object.getPrototypeOf(Boolean.prototype) === Object.prototype").value
+
+      math_keys =
+        compile_and_decode(
+          rt,
+          "Object.hasOwn(Math, 'floor') && Object.getOwnPropertyNames(Math).includes('floor')"
+        ).value
+
+      desc_presence =
+        compile_and_decode(
+          rt,
+          "let obj={}; let proto={get:undefined}; let desc=Object.create(proto); Object.defineProperty(obj,'x',desc); Object.getOwnPropertyDescriptor(obj,'x').hasOwnProperty('get')"
+        ).value
+
+      assert {:ok, true} = Compiler.invoke(global_this, [])
+      assert {:ok, "function:function"} = Compiler.invoke(boolean_methods, [])
+      assert {:ok, true} = Compiler.invoke(boolean_parent, [])
+      assert {:ok, true} = Compiler.invoke(math_keys, [])
+      assert {:ok, true} = Compiler.invoke(desc_presence, [])
+    end
+
     test "compiles object creation plus field writes", %{rt: rt} do
       fun =
         compile_and_decode(rt, "(function(v){ let o={}; o.x=v; return o.x })") |> user_function()
@@ -257,6 +288,33 @@ defmodule QuickBEAM.VM.CompilerTest do
 
       assert {:ok, {:obj, ref}} = Compiler.invoke(fun, [5])
       assert %{"x" => 5} = Heap.get_obj(ref)
+    end
+
+    test "object literal fast path snapshots slot values", %{rt: rt} do
+      fun =
+        compile_and_decode(rt, "(function(){ let x=1; let o={a:x}; x=2; return o.a })")
+        |> user_function()
+
+      assert {:ok, 1} = Compiler.invoke(fun, [])
+    end
+
+    test "object literal fast path deopts special and duplicate keys", %{rt: rt} do
+      proto_fun =
+        compile_and_decode(
+          rt,
+          "(function(){ let __proto__=1; let o={__proto__}; return o.__proto__ })"
+        )
+        |> user_function()
+
+      duplicate_fun =
+        compile_and_decode(
+          rt,
+          "(function(){ let o={a:1,a:2}; return Object.keys(o).join(',')+':'+o.a })"
+        )
+        |> user_function()
+
+      assert {:ok, 1} = Compiler.invoke(proto_fun, [])
+      assert {:ok, "a:2"} = Compiler.invoke(duplicate_fun, [])
     end
 
     test "enumerates numeric object literal keys", %{rt: rt} do

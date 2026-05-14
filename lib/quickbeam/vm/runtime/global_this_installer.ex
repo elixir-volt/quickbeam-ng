@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Runtime.GlobalThisInstaller do
   def install(%{"globalThis" => {:obj, ref}} = bindings) do
     case Heap.get_obj(ref, %{}) do
       map when is_map(map) ->
-        globals = Map.delete(bindings, "globalThis")
+        globals = Map.put(bindings, "globalThis", {:obj, ref})
         Heap.put_obj(ref, Map.merge(globals, map))
         install_property_descriptors(ref, globals)
 
@@ -26,6 +26,9 @@ defmodule QuickBEAM.VM.Runtime.GlobalThisInstaller do
 
       {key, _value} when key in ["NaN", "Infinity", "undefined"] ->
         Heap.put_prop_desc(ref, key, PropertyDescriptor.prototype())
+
+      {"globalThis", _value} ->
+        Heap.put_prop_desc(ref, "globalThis", PropertyDescriptor.method())
 
       {_key, _value} ->
         :ok

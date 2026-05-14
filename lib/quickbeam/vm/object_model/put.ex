@@ -831,7 +831,18 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   defp invoke_setter(fun, val, this_obj) do
     SetterState.mark_invoked()
-    Invocation.invoke_with_receiver(fun, [val], this_obj)
+
+    try do
+      Invocation.invoke_with_receiver(fun, [val], this_obj)
+    rescue
+      error ->
+        SetterState.clear()
+        reraise error, __STACKTRACE__
+    catch
+      kind, reason ->
+        SetterState.clear()
+        :erlang.raise(kind, reason, __STACKTRACE__)
+    end
   end
 
   defp proto_has_property?(nil, _key), do: false

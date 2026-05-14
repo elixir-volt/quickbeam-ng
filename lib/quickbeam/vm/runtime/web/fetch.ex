@@ -169,6 +169,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       prop("url", url_str)
       prop("method", method)
       prop("headers", headers)
+      prop("body", body_val)
       prop("bodyUsed", false)
 
       method "text" do
@@ -203,6 +204,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       prop("url", url)
       prop("method", method)
       prop("headers", headers)
+      prop("body", Body.data(body_ref))
       prop("bodyUsed", false)
       prop("constructor", request_ctor)
 
@@ -284,7 +286,13 @@ defmodule QuickBEAM.VM.Runtime.Web.Fetch do
       end
 
       method "clone" do
-        build_response_obj(Body.data(body_ref), status, status_text, headers, response_ctor)
+        build_response_obj(
+          Body.data(Body.clone(body_ref)),
+          status,
+          status_text,
+          headers,
+          response_ctor
+        )
       end
     end
   end

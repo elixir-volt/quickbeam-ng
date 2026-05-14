@@ -212,6 +212,18 @@ defmodule QuickBEAM.WebAPIs.BeamFetchTest do
         """)
     end
 
+    test "fetch preserves body from Request object", %{rt: rt, base: base} do
+      {:ok, result} =
+        QuickBEAM.eval(rt, """
+          const req = new Request("#{base}/echo", { method: "POST", body: "from request" });
+          const r = await fetch(req);
+          await r.json();
+        """)
+
+      assert result["method"] == "POST"
+      assert result["body"] == "from request"
+    end
+
     test "Request.clone()", %{rt: rt} do
       {:ok, "POST"} =
         QuickBEAM.eval(rt, """
@@ -266,6 +278,15 @@ defmodule QuickBEAM.WebAPIs.BeamFetchTest do
           const r = Response.json({ a: 1 });
           const r2 = r.clone();
           (await r.text()) === (await r2.text())
+        """)
+    end
+
+    test "clone rejects consumed body", %{rt: rt} do
+      {:ok, "Body has already been consumed"} =
+        QuickBEAM.eval(rt, """
+          const r = new Response("x");
+          await r.text();
+          try { r.clone(); "no error" } catch(e) { e.message }
         """)
     end
   end
