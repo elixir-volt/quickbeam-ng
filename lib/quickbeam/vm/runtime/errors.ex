@@ -56,6 +56,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     Heap.put_prop_desc(error_proto_ref, "toString", PropertyDescriptor.method())
 
     Constructors.put_prototype(error_ctor, {:obj, error_proto_ref})
+    install_function_parent(error_ctor)
     Heap.put_ctor_prop_desc(error_ctor, "prototype", PropertyDescriptor.prototype())
 
     Heap.put_ctor_static(
@@ -141,4 +142,19 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   end
 
   defp maybe_install_cause(_error, _options), do: :ok
+
+  defp install_function_parent(ctor) do
+    case Heap.get_func_proto() do
+      {:obj, function_proto_ref} = function_proto ->
+        Heap.put_ctor_static(ctor, "__proto__", function_proto)
+
+        case Heap.get_obj(function_proto_ref, %{}) do
+          %{"constructor" => function_ctor} -> Heap.put_ctor_static(ctor, "constructor", function_ctor)
+          _ -> :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
 end
