@@ -381,8 +381,18 @@ defmodule QuickBEAM.VM.Invocation do
               |> construct_runtime(new_target, args)
             else
               case Runner.invoke_constructor(fun, args, this_obj, new_target, ctx) do
-                {:ok, value} -> value
-                :error -> invoke_constructor(fun, args, ctx.gas, this_obj, new_target)
+                {:ok, value} ->
+                  value
+
+                :error ->
+                  Interpreter.invoke_constructor_fallback(
+                    fun,
+                    args,
+                    ctx.gas,
+                    ctx,
+                    this_obj,
+                    new_target
+                  )
               end
             end
 
@@ -397,7 +407,14 @@ defmodule QuickBEAM.VM.Invocation do
                   value
 
                 :error ->
-                  invoke_constructor(closure, args, ctx.gas, this_obj, new_target)
+                  Interpreter.invoke_constructor_fallback(
+                    closure,
+                    args,
+                    ctx.gas,
+                    ctx,
+                    this_obj,
+                    new_target
+                  )
               end
             end
 

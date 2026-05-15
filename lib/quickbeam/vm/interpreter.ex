@@ -1439,6 +1439,41 @@ defmodule QuickBEAM.VM.Interpreter do
     )
   end
 
+  @doc "Invokes a VM constructor through the interpreter fallback path."
+  def invoke_constructor_fallback(fun, args, gas, ctx, this_obj, new_target)
+
+  def invoke_constructor_fallback(
+        %QuickBEAM.VM.Function{} = fun,
+        args,
+        gas,
+        ctx,
+        this_obj,
+        new_target
+      ) do
+    ctor_ctx = Context.mark_dirty(%{ctx | this: this_obj, new_target: new_target})
+    do_invoke(fun, {:closure, %{}, fun}, args, ClosureBuilder.ctor_var_refs(fun), gas, ctor_ctx)
+  end
+
+  def invoke_constructor_fallback(
+        {:closure, captured, %QuickBEAM.VM.Function{} = fun} = closure,
+        args,
+        gas,
+        ctx,
+        this_obj,
+        new_target
+      ) do
+    ctor_ctx = Context.mark_dirty(%{ctx | this: this_obj, new_target: new_target})
+
+    do_invoke(
+      fun,
+      closure,
+      args,
+      ClosureBuilder.ctor_var_refs(fun, captured),
+      gas,
+      ctor_ctx
+    )
+  end
+
   @doc "Invokes a VM function through the interpreter fallback path."
   def invoke_function_fallback(%QuickBEAM.VM.Function{} = fun, args, gas, ctx) do
     invoke_function(fun, args, gas, ctx)
