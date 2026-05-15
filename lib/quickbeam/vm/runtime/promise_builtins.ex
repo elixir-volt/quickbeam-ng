@@ -195,7 +195,31 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
 
   defp unwrap_value(val), do: val
 
-  defp promise_inputs(arr), do: arr |> Heap.to_list() |> Enum.map(&PromiseState.adopt/1)
+  defp promise_inputs(arr) do
+    arr
+    |> Heap.to_list()
+    |> Enum.map(&PromiseState.adopt/1)
+    |> Enum.map(&observe_input_then/1)
+  end
+
+  defp observe_input_then({:obj, _} = promise) do
+    then = QuickBEAM.VM.ObjectModel.Get.get(promise, "then")
+
+    if QuickBEAM.VM.Builtin.callable?(then) do
+      Invocation.invoke_with_receiver(
+        then,
+        [
+          resolving_function(fn _args -> :undefined end),
+          resolving_function(fn _args -> :undefined end)
+        ],
+        promise
+      )
+    end
+
+    promise
+  end
+
+  defp observe_input_then(value), do: value
 
   defp promise_all(arr) do
     items = promise_inputs(arr)
