@@ -194,9 +194,17 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
           collect_combinator_inputs(next_iter, next_fn, resolve, constructor, [observed | acc])
         catch
           {:js_throw, reason} ->
-            Iterators.iterator_close(next_iter)
+            close_iterator_preserving_throw(next_iter)
             {:abrupt, reason}
         end
+    end
+  end
+
+  defp close_iterator_preserving_throw(iter) do
+    try do
+      Iterators.iterator_close(iter)
+    catch
+      {:js_throw, _reason} -> :ok
     end
   end
 
