@@ -59,7 +59,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
       case args do
         [{:obj, ref} | _] ->
           case Heap.get_obj(ref, %{}) do
-            map when is_map(map) -> Map.get(map, :__raw_json__) == true
+            map when is_map(map) -> Map.get(map, "__raw_json__") == true or Map.get(map, :__raw_json__) == true
             _ -> false
           end
 
@@ -70,18 +70,21 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   end
 
   defp raw_json([text | _]) do
-    json = Runtime.stringify(text)
+    json = raw_json_text(text)
 
     if invalid_raw_json?(json) do
       JSThrow.syntax_error!("Invalid raw JSON")
     end
 
     case Jason.decode(json) do
-      {:ok, _} ->
+      {:ok, decoded} when not is_map(decoded) and not is_list(decoded) ->
         ref = make_ref()
-        Heap.put_obj(ref, %{:__internal_proto__ => nil, :__raw_json__ => true, "rawJSON" => json, key_order() => ["rawJSON"]})
+        Heap.put_obj(ref, %{:__internal_proto__ => nil, "__raw_json__" => true, "rawJSON" => json, key_order() => ["rawJSON"]})
         Heap.put_prop_desc(ref, "rawJSON", PropertyDescriptor.attrs(writable: false, enumerable: true, configurable: false))
         {:obj, ref}
+
+      {:ok, _} ->
+        JSThrow.syntax_error!("Invalid raw JSON")
 
       _ ->
         JSThrow.syntax_error!("Invalid raw JSON")
@@ -89,6 +92,10 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   end
 
   defp raw_json(_), do: raw_json([:undefined])
+
+  defp raw_json_text({:symbol, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+  defp raw_json_text({:symbol, _, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+  defp raw_json_text(text), do: Runtime.stringify(text)
 
   defp invalid_raw_json?(""), do: true
   defp invalid_raw_json?(<<first::utf8, _::binary>>) when first in [0x09, 0x0A, 0x0D, 0x20], do: true
@@ -274,7 +281,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         Enum.map(list, &to_json/1)
 
       map when is_map(map) ->
-        if Map.get(map, :__raw_json__) == true do
+        if Map.get(map, "__raw_json__") == true or Map.get(map, :__raw_json__) == true do
           {:raw_json, Map.get(map, "rawJSON")}
         else
         case Map.get(map, "toJSON") do
