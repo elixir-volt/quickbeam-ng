@@ -187,8 +187,13 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
       try do
         value = val |> apply_root_to_json() |> apply_root_replacer(replacer)
-        result = to_json(value)
-        if result == :undefined, do: :undefined, else: encode(result, replacer, space)
+
+        if value == :undefined do
+          :undefined
+        else
+          result = to_json(value)
+          if result == :undefined, do: :undefined, else: encode(result, replacer, space)
+        end
       rescue
         _ -> :undefined
       after
@@ -508,7 +513,8 @@ defmodule QuickBEAM.VM.Runtime.JSON do
               entries
               |> Enum.map(fn {k, v} ->
                 key = to_string(k)
-                value = v |> resolve_value(obj) |> apply_property_replacer(key, obj) |> to_json()
+                replaced = v |> resolve_value(obj) |> apply_property_replacer(key, obj)
+                value = if replaced == :undefined, do: :undefined, else: to_json(replaced)
                 {key, value}
               end)
               |> Enum.reject(fn {_, v} -> v == :undefined end)
@@ -551,7 +557,10 @@ defmodule QuickBEAM.VM.Runtime.JSON do
     case Get.get(obj, "toJSON") do
       fun when fun != nil and fun != :undefined ->
         if QuickBEAM.VM.Builtin.callable?(fun) do
-          fun |> QuickBEAM.VM.Invocation.invoke_with_receiver([], obj) |> to_json()
+          case QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [], obj) do
+            :undefined -> :undefined
+            result -> to_json(result)
+          end
         else
           json_array_values(obj, values)
         end
@@ -565,9 +574,8 @@ defmodule QuickBEAM.VM.Runtime.JSON do
     values
     |> Enum.with_index()
     |> Enum.map(fn {value, index} ->
-      value
-      |> apply_property_replacer(Integer.to_string(index), obj)
-      |> to_json()
+      replaced = apply_property_replacer(value, Integer.to_string(index), obj)
+      if replaced == :undefined, do: :null, else: to_json(replaced)
     end)
   end
 
