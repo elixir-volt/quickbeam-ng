@@ -492,8 +492,13 @@ defmodule QuickBEAM.VM.Runtime.Math do
   defp math_pow(_base, exp) when exp == 0, do: 1
   defp math_pow(:nan, _exp), do: :nan
   defp math_pow(_base, :nan), do: :nan
+  defp math_pow(:infinity, :infinity), do: :infinity
+  defp math_pow(:infinity, :neg_infinity), do: 0
   defp math_pow(:infinity, exp) when is_number(exp) and exp > 0, do: :infinity
   defp math_pow(:infinity, exp) when is_number(exp) and exp < 0, do: 0
+
+  defp math_pow(:neg_infinity, :infinity), do: :infinity
+  defp math_pow(:neg_infinity, :neg_infinity), do: 0
 
   defp math_pow(:neg_infinity, exp) when is_number(exp) and exp > 0 do
     if odd_integer?(exp), do: :neg_infinity, else: :infinity
@@ -509,8 +514,10 @@ defmodule QuickBEAM.VM.Runtime.Math do
 
   defp math_pow(base, :infinity) when abs(base) > 1, do: :infinity
   defp math_pow(base, :infinity) when abs(base) < 1, do: 0
+  defp math_pow(base, :infinity) when abs(base) == 1, do: :nan
   defp math_pow(base, :neg_infinity) when abs(base) > 1, do: 0
   defp math_pow(base, :neg_infinity) when abs(base) < 1, do: :infinity
+  defp math_pow(base, :neg_infinity) when abs(base) == 1, do: :nan
   defp math_pow(base, exp) do
     try do
       :math.pow(base, exp)
