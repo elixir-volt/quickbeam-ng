@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyDescriptor, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime
 
   @method_lengths %{"parse" => 2, "stringify" => 3, "rawJSON" => 1, "isRawJSON" => 1}
@@ -348,9 +348,20 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp replacer_property_list({:obj, ref} = replacer) do
     case Heap.get_obj(ref) do
       %{proxy_target() => _target, "__proxy_revoked__" => true} -> JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+      %{proxy_target() => target} -> proxy_replacer_property_list(replacer, target)
       {:qb_arr, _} -> {:ok, replacer |> Heap.to_list() |> property_list_items()}
       list when is_list(list) -> {:ok, property_list_items(list)}
       _ -> :not_array
+    end
+  end
+
+  defp proxy_replacer_property_list(replacer, target) do
+    if json_array_like?(target) do
+      length = replacer |> Get.get("length") |> Runtime.to_int() |> max(0)
+      values = if length == 0, do: [], else: for(index <- 0..(length - 1), do: Get.get(replacer, Integer.to_string(index)))
+      {:ok, property_list_items(values)}
+    else
+      :not_array
     end
   end
 
@@ -398,6 +409,9 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
       %{proxy_target() => _target, "__proxy_revoked__" => true} ->
         JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
+      %{proxy_target() => _target} ->
+        proxy_to_json(obj)
 
       map when is_map(map) ->
         if Map.get(map, "__raw_json__") == true or Map.get(map, :__raw_json__) == true do
@@ -448,6 +462,45 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp to_json(list) when is_list(list), do: Enum.map(list, &to_json/1)
   defp to_json({:accessor, _, _}), do: :undefined
   defp to_json(val), do: val
+
+  defp proxy_to_json(proxy) do
+    if json_array_like?(proxy) do
+      length = proxy |> Get.get("length") |> Runtime.to_int() |> max(0)
+
+      if length == 0 do
+        []
+      else
+        for index <- 0..(length - 1) do
+          proxy
+          |> Get.get(Integer.to_string(index))
+          |> to_json()
+        end
+      end
+    else
+      pairs =
+        proxy
+        |> OwnProperty.descriptor_keys()
+        |> Enum.filter(&OwnProperty.enumerable?(proxy, &1))
+        |> Enum.map(fn key -> {to_string(key), proxy |> Get.get(key) |> to_json()} end)
+        |> Enum.reject(fn {_, value} -> value == :undefined end)
+
+      {:ordered_map, pairs}
+    end
+  end
+
+  defp json_array_like?({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} -> JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+      %{proxy_target() => target} -> json_array_like?(target)
+      {:qb_arr, _} -> true
+      list when is_list(list) -> true
+      _ -> false
+    end
+  end
+
+  defp json_array_like?({:qb_arr, _}), do: true
+  defp json_array_like?(list) when is_list(list), do: true
+  defp json_array_like?(_), do: false
 
   defp with_json_ref(ref, fun) do
     seen_refs = Process.get(@seen_refs_key, MapSet.new())
