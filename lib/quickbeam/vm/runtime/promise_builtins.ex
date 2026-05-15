@@ -94,27 +94,27 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
   end
 
   static "all" do
-    promise_all(arg(args, 0, :undefined))
+    wrap_static_result(this, promise_all(arg(args, 0, :undefined)))
   end
 
   static "allSettled" do
-    promise_all_settled(arg(args, 0, :undefined))
+    wrap_static_result(this, promise_all_settled(arg(args, 0, :undefined)))
   end
 
   static "allKeyed" do
-    promise_all_keyed(arg(args, 0, :undefined))
+    wrap_static_result(this, promise_all_keyed(arg(args, 0, :undefined)))
   end
 
   static "allSettledKeyed" do
-    promise_all_settled_keyed(arg(args, 0, :undefined))
+    wrap_static_result(this, promise_all_settled_keyed(arg(args, 0, :undefined)))
   end
 
   static "any" do
-    promise_any(arg(args, 0, :undefined))
+    wrap_static_result(this, promise_any(arg(args, 0, :undefined)))
   end
 
   static "race" do
-    promise_race(arg(args, 0, :undefined))
+    wrap_static_result(this, promise_race(arg(args, 0, :undefined)))
   end
 
   static "try", length: 1 do
@@ -123,6 +123,34 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
 
   static "withResolvers", length: 0 do
     with_resolvers(this)
+  end
+
+  defp wrap_static_result({:builtin, "Promise", _}, result), do: result
+
+  defp wrap_static_result(constructor, result) do
+    {promise, resolve, reject} = new_promise_capability(constructor)
+
+    case result do
+      {:obj, ref} ->
+        case Heap.get_obj(ref, %{}) do
+          %{promise_state() => :resolved, promise_value() => value} ->
+            Invocation.invoke(resolve, [value])
+
+          %{promise_state() => :rejected, promise_value() => reason} ->
+            Invocation.invoke(reject, [reason])
+
+          %{promise_state() => :pending} ->
+            :undefined
+
+          _ ->
+            Invocation.invoke(resolve, [result])
+        end
+
+      value ->
+        Invocation.invoke(resolve, [value])
+    end
+
+    promise
   end
 
   defp promise_resolve({:builtin, "Promise", _}, value), do: PromiseState.adopt(value)
