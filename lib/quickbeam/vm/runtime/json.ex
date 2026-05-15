@@ -186,7 +186,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
       Process.put(@seen_refs_key, MapSet.new())
 
       try do
-        value = apply_root_replacer(val, replacer)
+        value = val |> apply_root_to_json() |> apply_root_replacer(replacer)
         result = to_json(value)
         if result == :undefined, do: :undefined, else: encode(result, replacer, space)
       rescue
@@ -200,6 +200,32 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   end
 
   defp stringify([]), do: :undefined
+
+  defp apply_root_to_json({:bigint, _} = value) do
+    case Get.get(value, "toJSON") do
+      fun when fun != nil and fun != :undefined ->
+        if QuickBEAM.VM.Builtin.callable?(fun),
+          do: QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [""], value),
+          else: value
+
+      _ ->
+        value
+    end
+  end
+
+  defp apply_root_to_json({:obj, _} = value) do
+    case Get.get(value, "toJSON") do
+      fun when fun != nil and fun != :undefined ->
+        if QuickBEAM.VM.Builtin.callable?(fun),
+          do: QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [""], value),
+          else: value
+
+      _ ->
+        value
+    end
+  end
+
+  defp apply_root_to_json(value), do: value
 
   defp apply_root_replacer(value, replacer) do
     if QuickBEAM.VM.Builtin.callable?(replacer) do
