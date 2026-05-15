@@ -12,7 +12,11 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
   def constructor do
     fn args, _this ->
       case args do
-        [executor | _] when not is_nil(executor) and executor != :undefined ->
+        [executor | _] ->
+          unless QuickBEAM.VM.Builtin.callable?(executor) do
+            throw({:js_throw, Heap.make_error("Promise resolver is not a function", "TypeError")})
+          end
+
           ref = make_ref()
           Heap.put_obj(ref, promise_pending_obj(ref))
 
@@ -42,7 +46,7 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
           {:obj, ref}
 
         _ ->
-          Heap.wrap(%{})
+          throw({:js_throw, Heap.make_error("Promise resolver is not a function", "TypeError")})
       end
     end
   end
