@@ -499,6 +499,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp to_json(:undefined), do: :null
 
   defp to_json({:bigint, _}), do: JSThrow.type_error!("Do not know how to serialize a BigInt")
+  defp to_json({:regexp, _, _, _}), do: {:ordered_map, []}
 
   defp to_json({:closure, _, _}), do: :undefined
   defp to_json(%QuickBEAM.VM.Function{}), do: :undefined
