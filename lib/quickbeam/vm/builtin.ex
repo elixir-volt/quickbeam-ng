@@ -108,6 +108,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("Date"), do: meta("Date", [length: 7, constructable: true], :constructor)
   def named_meta("Promise"), do: meta("Promise", [length: 1, constructable: true], :constructor)
   def named_meta("Error"), do: meta("Error", [length: 1, constructable: true], :constructor)
+  def named_meta("AggregateError"), do: meta("AggregateError", [length: 2, constructable: true], :constructor)
   def named_meta("EvalError"), do: meta("EvalError", [length: 1, constructable: true], :constructor)
   def named_meta("RangeError"), do: meta("RangeError", [length: 1, constructable: true], :constructor)
   def named_meta("ReferenceError"), do: meta("ReferenceError", [length: 1, constructable: true], :constructor)

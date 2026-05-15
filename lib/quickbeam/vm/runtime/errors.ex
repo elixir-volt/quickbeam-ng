@@ -5,14 +5,15 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 2]
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, Invocation}
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyDescriptor}
+  alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Constructors
   alias QuickBEAM.VM.Stacktrace
 
-  @error_types ~w(Error TypeError RangeError SyntaxError ReferenceError URIError EvalError)
+  @error_types ~w(Error TypeError RangeError SyntaxError ReferenceError URIError EvalError AggregateError)
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
@@ -111,7 +112,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     derived =
       for name <- Enum.reject(@error_types, &(&1 == "Error")), into: %{} do
         proto_ref = make_ref()
-        ctor = {:builtin, name, fn args, _this -> error_constructor(name, args) end}
+        ctor = {:builtin, name, fn args, _this -> construct_error(name, args) end}
 
         Heap.put_obj(
           proto_ref,
@@ -136,6 +137,9 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     Map.put(derived, "Error", error_ctor)
   end
 
+  defp construct_error("AggregateError", args), do: aggregate_error_constructor(args)
+  defp construct_error(name, args), do: error_constructor(name, args)
+
   defp error_constructor(name, args) do
     msg = arg(args, 0, :undefined)
     message = if msg == :undefined, do: "", else: stringify_error_slot(msg)
@@ -153,6 +157,76 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   end
 
   defp maybe_install_cause(_error, _options), do: :ok
+
+  defp aggregate_error_constructor(args) do
+    errors = arg(args, 0, :undefined)
+    message_arg = arg(args, 1, :undefined)
+    options = arg(args, 2, :undefined)
+    message = if message_arg == :undefined, do: "", else: stringify_error_slot(message_arg)
+    error = Heap.make_error(message, "AggregateError")
+    if message_arg == :undefined, do: delete_message(error)
+
+    with {:obj, ref} <- error do
+      Heap.put_obj_key(ref, "errors", Heap.wrap(iterable_list(errors)))
+      Heap.put_prop_desc(ref, "errors", PropertyDescriptor.method())
+    end
+
+    maybe_install_cause(error, options)
+    Stacktrace.attach_stack(error)
+  end
+
+  defp iterable_list(errors) when errors in [nil, :undefined],
+    do: JSThrow.type_error!("object is not iterable")
+
+  defp iterable_list({:obj, ref} = errors) do
+    case Heap.get_obj(ref, %{}) do
+      {:qb_arr, arr} ->
+        :array.to_list(arr)
+
+      map when is_map(map) ->
+        sym_iter = {:symbol, "Symbol.iterator"}
+        iter_fn = Get.get(errors, sym_iter)
+
+        cond do
+          QuickBEAM.VM.Builtin.callable?(iter_fn) ->
+            iter = Invocation.invoke_with_receiver(iter_fn, [], errors)
+            unless match?({:obj, _}, iter), do: JSThrow.type_error!("iterator is not an object")
+            next_fn = Get.get(iter, "next")
+            unless QuickBEAM.VM.Builtin.callable?(next_fn), do: JSThrow.type_error!("iterator.next is not callable")
+            collect_iterable(iter, next_fn, [])
+
+          QuickBEAM.VM.Builtin.callable?(Get.get(errors, "next")) ->
+            collect_iterable(errors, Get.get(errors, "next"), [])
+
+          true ->
+            JSThrow.type_error!("object is not iterable")
+        end
+
+      _ ->
+        JSThrow.type_error!("object is not iterable")
+    end
+  end
+
+  defp iterable_list(errors) do
+    {iter, next_fn} = Iterators.for_of_start(errors)
+    collect_iterable(iter, next_fn, [])
+  end
+
+  defp collect_iterable({:list_iter, [head | tail]}, next_fn, acc),
+    do: collect_iterable({:list_iter, tail}, next_fn, [head | acc])
+
+  defp collect_iterable({:list_iter, []}, _next_fn, acc), do: Enum.reverse(acc)
+
+  defp collect_iterable(iter, next_fn, acc) do
+    result = Invocation.invoke_with_receiver(next_fn, [], iter)
+    unless match?({:obj, _}, result), do: JSThrow.type_error!("iterator result is not an object")
+
+    if Get.get(result, "done") == true do
+      Enum.reverse(acc)
+    else
+      collect_iterable(iter, next_fn, [Get.get(result, "value") | acc])
+    end
+  end
 
   defp delete_message({:obj, ref}) do
     Heap.put_obj(ref, Map.delete(Heap.get_obj(ref, %{}), "message"))
