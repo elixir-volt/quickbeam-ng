@@ -105,8 +105,9 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp invalid_raw_json?(<<first::utf8, _::binary>>) when first in [0x09, 0x0A, 0x0D, 0x20], do: true
   defp invalid_raw_json?(json), do: json |> String.last() |> Kernel.in(["\t", "\n", "\r", " "])
 
-  defp parse([text | _]) do
+  defp parse([text | rest]) do
     json_text = json_parse_text(text)
+    reviver = Enum.at(rest, 0)
 
     decoded =
       try do
@@ -117,7 +118,14 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         _, _ -> JSThrow.syntax_error!("Unexpected end of JSON input")
       end
 
-    to_js_root(decoded, json_text)
+    value = to_js_root(decoded, json_text)
+
+    if QuickBEAM.VM.Builtin.callable?(reviver) and primitive_json_value?(value) do
+      wrapper = json_replacer_wrapper(value)
+      QuickBEAM.VM.Invocation.invoke_with_receiver(reviver, ["", value, json_source_context(String.trim(json_text))], wrapper)
+    else
+      value
+    end
   end
 
   defp parse(_), do: parse([:undefined])
@@ -128,6 +136,20 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp json_parse_text({:symbol, _, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
 
   defp json_parse_text(text), do: Runtime.stringify(text)
+
+  defp primitive_json_value?(value), do: not match?({:obj, _}, value) and not is_list(value)
+
+  defp json_source_context(source) do
+    ref = make_ref()
+
+    Heap.put_obj(ref, %{
+      :__internal_proto__ => Heap.get_object_prototype(),
+      "source" => source,
+      key_order() => ["source"]
+    })
+
+    {:obj, ref}
+  end
 
   defp to_js_root(0, json_str) when is_binary(json_str) do
     if Regex.match?(~r/^\s*-0(?:\.0*)?(?:[eE][+\-]?0+)?\s*$/, json_str), do: -0.0, else: 0
