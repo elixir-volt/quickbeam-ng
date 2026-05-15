@@ -156,20 +156,26 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   end
 
   defp to_js_root(val, json_str) when is_map(val) do
-    keys =
-      case Jason.decode(json_str, objects: :ordered_objects) do
-        {:ok, %Jason.OrderedObject{values: pairs}} ->
-          pairs |> Enum.map(&elem(&1, 0)) |> Enum.reverse()
+    case Jason.decode(json_str, objects: :ordered_objects) do
+      {:ok, %Jason.OrderedObject{values: pairs}} ->
+        keys = pairs |> Enum.map(&elem(&1, 0)) |> Enum.reverse()
+        to_js(ordered_json_object_to_map(pairs), keys)
 
-        _ ->
-          Map.keys(val) |> Enum.reverse()
-      end
-
-    to_js(val, keys)
+      _ ->
+        to_js(val, Map.keys(val) |> Enum.reverse())
+    end
   end
 
   defp to_js_root(val, _) when is_list(val), do: Enum.map(val, &to_js/1)
   defp to_js_root(val, _), do: to_js(val)
+
+  defp ordered_json_object_to_map(pairs) do
+    Enum.reduce(pairs, %{}, fn {key, value}, acc -> Map.put(acc, key, ordered_json_value(value)) end)
+  end
+
+  defp ordered_json_value(%Jason.OrderedObject{values: pairs}), do: ordered_json_object_to_map(pairs)
+  defp ordered_json_value(list) when is_list(list), do: Enum.map(list, &ordered_json_value/1)
+  defp ordered_json_value(value), do: value
 
   defp to_js(nil), do: nil
   defp to_js(:null), do: nil

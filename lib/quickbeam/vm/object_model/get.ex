@@ -517,13 +517,18 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         end
 
       map when is_map(map) ->
-        if Heap.get_prop_desc(ref, key) == :deleted do
-          :undefined
-        else
-          case prototype_object_property(map, key) do
-            :undefined -> get_wrapped_or_map_property(map, key, {:obj, ref})
-            val -> val
-          end
+        cond do
+          Heap.get_prop_desc(ref, key) == :deleted ->
+            :undefined
+
+          key == "__proto__" and Map.has_key?(map, :__internal_proto__) and Map.has_key?(map, key) ->
+            get_map_property(map, key, {:obj, ref})
+
+          true ->
+            case prototype_object_property(map, key) do
+              :undefined -> get_wrapped_or_map_property(map, key, {:obj, ref})
+              val -> val
+            end
         end
     end
   end
