@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
+  alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Constructors
   alias QuickBEAM.VM.Stacktrace
@@ -73,7 +73,11 @@ defmodule QuickBEAM.VM.Runtime.Errors do
       {:builtin, "isError",
        fn args, _ ->
          case arg(args, 0, :undefined) do
-           {:obj, ref} -> Map.has_key?(Heap.get_obj(ref, %{}), "__error_name__")
+           {:obj, ref} ->
+             case Heap.get_obj(ref, %{}) do
+               map when is_map(map) -> Map.has_key?(map, "__error_name__")
+               _ -> false
+             end
            _ -> false
          end
        end}
@@ -134,22 +138,26 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   defp error_constructor(name, args) do
     msg = arg(args, 0, :undefined)
-    message = if msg == :undefined, do: "", else: Runtime.stringify(msg)
+    message = if msg == :undefined, do: "", else: stringify_error_slot(msg)
     error = Heap.make_error(message, name)
+    if msg == :undefined, do: delete_message(error)
     maybe_install_cause(error, arg(args, 1, :undefined))
     Stacktrace.attach_stack(error)
   end
 
-  defp maybe_install_cause({:obj, error_ref}, {:obj, options_ref}) do
-    options = Heap.get_obj(options_ref, %{})
-
-    if Map.has_key?(options, "cause") do
-      Heap.put_obj_key(error_ref, "cause", Map.get(options, "cause"))
+  defp maybe_install_cause({:obj, error_ref}, {:obj, _} = options) do
+    if HasProperty.has_property?(options, "cause") do
+      Heap.put_obj_key(error_ref, "cause", Get.get(options, "cause"))
       Heap.put_prop_desc(error_ref, "cause", PropertyDescriptor.method())
     end
   end
 
   defp maybe_install_cause(_error, _options), do: :ok
+
+  defp delete_message({:obj, ref}) do
+    Heap.put_obj(ref, Map.delete(Heap.get_obj(ref, %{}), "message"))
+    Heap.delete_prop_desc(ref, "message")
+  end
 
   defp stringify_error_slot({:symbol, _}),
     do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
