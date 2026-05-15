@@ -529,6 +529,39 @@ defmodule QuickBEAM.VM.Runtime.Math do
   defp odd_integer?(value), do: is_integer(value) or (is_float(value) and value == trunc(value) and rem(trunc(value), 2) != 0)
 
   defp shewchuk_sum(list) do
+    validate_sum_numbers!(list)
+
+    cond do
+      Enum.any?(list, &(&1 == :nan)) ->
+        :nan
+
+      Enum.any?(list, &(&1 == :infinity)) and Enum.any?(list, &(&1 == :neg_infinity)) ->
+        :nan
+
+      Enum.any?(list, &(&1 == :infinity)) ->
+        :infinity
+
+      Enum.any?(list, &(&1 == :neg_infinity)) ->
+        :neg_infinity
+
+      all_negative_zero?(list) ->
+        -0.0
+
+      true ->
+        finite_sum(list)
+    end
+  end
+
+  defp validate_sum_numbers!(list) do
+    unless Enum.all?(list, &(is_number(&1) or &1 in [:nan, :infinity, :neg_infinity])) do
+      QuickBEAM.VM.JSThrow.type_error!("Math.sumPrecise requires numbers")
+    end
+  end
+
+  defp all_negative_zero?([]), do: true
+  defp all_negative_zero?(list), do: Enum.all?(list, &Values.neg_zero?/1)
+
+  defp finite_sum(list) do
     partials =
       Enum.reduce(list, [], fn v, partials ->
         x = Runtime.to_float(v)
@@ -536,15 +569,9 @@ defmodule QuickBEAM.VM.Runtime.Math do
       end)
 
     case partials do
-      [] ->
-        0.0
-
-      [x] ->
-        x
-
-      _ ->
-        partials = Enum.reverse(partials)
-        finalize_partials(partials)
+      [] -> 0.0
+      [x] -> x
+      _ -> partials |> Enum.reverse() |> finalize_partials()
     end
   end
 
