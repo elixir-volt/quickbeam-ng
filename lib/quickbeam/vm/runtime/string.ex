@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   alias QuickBEAM.VM.{Builtin, Heap, Invocation}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Interpreter.Values.Coercion
-  alias QuickBEAM.VM.ObjectModel.{Get, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.RegExp
 
@@ -176,10 +176,45 @@ defmodule QuickBEAM.VM.Runtime.String do
     this
     |> coerce_string_this()
     |> String.codepoints()
-    |> iterator_from()
+    |> string_iterator_from()
   end
 
   # ── Implementations ──
+
+  defp string_iterator_from(items) do
+    iter = iterator_from(items)
+
+    next_fn =
+      case iter do
+        {:obj, ref} -> Heap.get_obj(ref, %{}) |> Map.get("next")
+        _ -> :undefined
+      end
+
+    proto =
+      Heap.wrap(%{
+        "__proto__" => Heap.get_object_prototype(),
+        "next" => next_fn,
+        {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _, this -> this end},
+        {:symbol, "Symbol.toStringTag"} => "String Iterator"
+      })
+
+    with {:obj, proto_ref} <- proto do
+      Heap.put_prop_desc(proto_ref, "next", PropertyDescriptor.method())
+      Heap.put_prop_desc(proto_ref, {:symbol, "Symbol.iterator"}, PropertyDescriptor.method())
+
+      Heap.put_prop_desc(
+        proto_ref,
+        {:symbol, "Symbol.toStringTag"},
+        PropertyDescriptor.hidden_readonly()
+      )
+    end
+
+    with {:obj, ref} <- iter do
+      Heap.put_obj_key(ref, "__proto__", proto)
+    end
+
+    iter
+  end
 
   @doc "Returns the JavaScript UTF-16 code-unit length of a string."
   def utf16_length(string) when is_binary(string) do
@@ -1472,7 +1507,8 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp special_regex_replace(s, "\\S+", _flags, replacement, false) do
-    {:ok, Regex.replace(@non_ecma_whitespace_run, s, Runtime.stringify(replacement), global: false)}
+    {:ok,
+     Regex.replace(@non_ecma_whitespace_run, s, Runtime.stringify(replacement), global: false)}
   end
 
   defp special_regex_replace(s, ".", flags, replacement, true) do
@@ -1682,7 +1718,8 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp named_capture_values(source, capture_strings) when is_binary(source) and is_list(capture_strings) do
+  defp named_capture_values(source, capture_strings)
+       when is_binary(source) and is_list(capture_strings) do
     names =
       ~r/\(\?<([^>]+)>/
       |> Regex.scan(source, capture: :all_but_first)
@@ -1768,7 +1805,15 @@ defmodule QuickBEAM.VM.Runtime.String do
           )
 
         next_offset = match_start + max(match_len, 1)
-        regex_replace_all(s, bytecode, source, replacement, next_offset, acc ++ [before_match, rep])
+
+        regex_replace_all(
+          s,
+          bytecode,
+          source,
+          replacement,
+          next_offset,
+          acc ++ [before_match, rep]
+        )
     end
   end
 
@@ -1825,14 +1870,17 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp groups_replacer_args(named_captures) do
     groups =
       named_captures
-      |> Enum.reduce(%{:__internal_proto__ => nil}, fn {name, value}, acc -> Map.put(acc, name, value) end)
+      |> Enum.reduce(%{:__internal_proto__ => nil}, fn {name, value}, acc ->
+        Map.put(acc, name, value)
+      end)
       |> Heap.wrap()
 
     [groups]
   end
 
-  defp replace_named_capture_substitutions(rep, named_captures) when map_size(named_captures) == 0,
-    do: rep
+  defp replace_named_capture_substitutions(rep, named_captures)
+       when map_size(named_captures) == 0,
+       do: rep
 
   defp replace_named_capture_substitutions(rep, named_captures) do
     Regex.replace(~r/\$<([^>]+)>/, rep, fn _match, name ->
