@@ -12,15 +12,15 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor do
-    fn args, _this ->
+    fn args, this ->
       case args do
         [executor | _] ->
           unless QuickBEAM.VM.Builtin.callable?(executor) do
             throw({:js_throw, Heap.make_error("Promise resolver is not a function", "TypeError")})
           end
 
-          ref = make_ref()
-          Heap.put_obj(ref, promise_pending_obj(ref))
+          ref = promise_result_ref(this)
+          install_promise_slots(ref)
 
           resolve_fn =
             resolving_function(fn args ->
@@ -49,6 +49,18 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
           throw({:js_throw, Heap.make_error("Promise resolver is not a function", "TypeError")})
       end
     end
+  end
+
+  defp promise_result_ref({:obj, ref}), do: ref
+  defp promise_result_ref(_this), do: make_ref()
+
+  defp install_promise_slots(ref) do
+    existing = Heap.get_obj(ref, %{})
+    pending = promise_pending_obj(ref)
+    proto = Map.get(existing, "__proto__", Map.get(pending, "__proto__"))
+
+    ref
+    |> Heap.put_obj(existing |> Map.merge(pending) |> Map.put("__proto__", proto))
   end
 
   defp promise_pending_obj(_ref) do
