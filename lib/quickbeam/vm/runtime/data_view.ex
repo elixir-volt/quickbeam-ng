@@ -18,6 +18,37 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
   def proto_property_names, do: @methods
 
+  def prevalidate_construct_args!([{:obj, buffer_ref}, offset | rest])
+      when is_integer(offset) or is_float(offset) do
+    buffer_map = Heap.get_obj(buffer_ref, %{})
+
+    if is_map(buffer_map) and is_map_key(buffer_map, buffer()) and
+         not is_map_key(buffer_map, typed_array()) do
+      buffer_len = byte_size(Map.get(buffer_map, buffer(), <<>>))
+
+      view_len =
+        if rest == [],
+          do: buffer_len - trunc(offset),
+          else: data_view_length([nil, nil | rest], buffer_len, trunc(offset))
+
+      cond do
+        offset < 0 ->
+          JSThrow.range_error!("DataView byteOffset out of range")
+
+        offset > buffer_len ->
+          JSThrow.range_error!("DataView byteOffset out of range")
+
+        trunc(offset) + view_len > buffer_len ->
+          JSThrow.range_error!("DataView byteLength out of range")
+
+        true ->
+          :ok
+      end
+    end
+  end
+
+  def prevalidate_construct_args!(_), do: :ok
+
   def constructor(args, this \\ nil) do
     buffer_obj = List.first(args) || :undefined
     buffer_ref = require_array_buffer!(buffer_obj)

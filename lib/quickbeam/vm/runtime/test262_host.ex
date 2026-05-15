@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Boolean, as: JSBoolean
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
+  alias QuickBEAM.VM.Runtime.DataView
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
   alias QuickBEAM.VM.Runtime.Errors
   alias QuickBEAM.VM.Runtime.FinalizationRegistry, as: JSFinalizationRegistry
@@ -82,6 +83,10 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     date_ctor = realm_constructor("Date", &JSDate.constructor/2, date_proto)
     Heap.put_obj_key(elem(date_proto, 1), "constructor", date_ctor)
 
+    data_view_proto = Heap.wrap(%{"__proto__" => object_proto})
+    data_view_ctor = realm_constructor("DataView", &DataView.constructor/2, data_view_proto)
+    Heap.put_obj_key(elem(data_view_proto, 1), "constructor", data_view_ctor)
+
     map_proto = Heap.wrap(%{"__proto__" => object_proto})
     map_ctor = realm_constructor("Map", JSMap.constructor(), map_proto)
     Heap.put_obj_key(elem(map_proto, 1), "constructor", map_ctor)
@@ -141,6 +146,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         number_proto,
         string_proto,
         date_proto,
+        data_view_proto,
         map_proto,
         set_proto,
         weak_map_proto,
@@ -164,6 +170,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "RegExp" => regexp_ctor,
         "BigInt" => bigint_ctor,
         "Date" => date_ctor,
+        "DataView" => data_view_ctor,
         "Map" => map_ctor,
         "Set" => set_ctor,
         "WeakMap" => weak_map_ctor,
@@ -214,6 +221,9 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
       %{date_proto: date_proto} when intrinsic == :date ->
         date_proto
+
+      %{data_view_proto: data_view_proto} when intrinsic == :data_view ->
+        data_view_proto
 
       %{map_proto: map_proto} when intrinsic == :map ->
         map_proto
@@ -356,6 +366,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          number_proto,
          string_proto,
          date_proto,
+         data_view_proto,
          map_proto,
          set_proto,
          weak_map_proto,
@@ -402,6 +413,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
           number_proto,
           string_proto,
           date_proto,
+          data_view_proto,
           map_proto,
           set_proto,
           weak_map_proto,
@@ -430,6 +442,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         number_proto,
         string_proto,
         date_proto,
+        data_view_proto,
         map_proto,
         set_proto,
         weak_map_proto,
@@ -488,6 +501,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          number_proto,
          string_proto,
          date_proto,
+         data_view_proto,
          map_proto,
          set_proto,
          weak_map_proto,
@@ -506,6 +520,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       number_proto: number_proto,
       string_proto: string_proto,
       date_proto: date_proto,
+      data_view_proto: data_view_proto,
       map_proto: map_proto,
       set_proto: set_proto,
       weak_map_proto: weak_map_proto,

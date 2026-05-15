@@ -350,6 +350,7 @@ defmodule QuickBEAM.VM.Invocation do
 
       raw_ctor = unwrap_constructor_target(ctor)
       raw_new_target = unwrap_new_target(new_target)
+      prevalidate_builtin_construct_args!(raw_ctor, args)
 
       new_target_proto = Get.get(new_target, "prototype")
       reject_revoked_proxy_new_target!(new_target, new_target_proto)
@@ -726,6 +727,11 @@ defmodule QuickBEAM.VM.Invocation do
 
   defp reject_revoked_proxy_new_target!(_new_target, _proto), do: :ok
 
+  defp prevalidate_builtin_construct_args!({:builtin, "DataView", _}, args),
+    do: QuickBEAM.VM.Runtime.DataView.prevalidate_construct_args!(args)
+
+  defp prevalidate_builtin_construct_args!(_ctor, _args), do: :ok
+
   defp realm_default_prototype({:builtin, "Array", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :array)
 
@@ -737,6 +743,11 @@ defmodule QuickBEAM.VM.Invocation do
 
   defp realm_default_prototype({:builtin, "Date", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :date)
+
+  defp realm_default_prototype({:builtin, "DataView", _}, new_target),
+    do:
+      QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :data_view) ||
+        Runtime.global_class_proto("DataView")
 
   defp realm_default_prototype({:builtin, "Function", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :function)
