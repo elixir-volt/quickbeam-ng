@@ -36,7 +36,7 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
             end)
 
           try do
-            QuickBEAM.VM.Interpreter.invoke_callback(executor, [resolve_fn, reject_fn])
+            Invocation.invoke_with_receiver(executor, [resolve_fn, reject_fn], :undefined)
           catch
             {:js_throw, err} ->
               unless already_settled?(ref), do: PromiseState.resolve(ref, :rejected, err)
