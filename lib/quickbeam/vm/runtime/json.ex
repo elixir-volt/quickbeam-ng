@@ -496,6 +496,21 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp to_json(nil), do: :null
   defp to_json(:undefined), do: :null
+
+  defp to_json({:bigint, _} = value) do
+    case Get.get(value, "toJSON") do
+      fun when fun != nil and fun != :undefined ->
+        if QuickBEAM.VM.Builtin.callable?(fun) do
+          fun |> QuickBEAM.VM.Invocation.invoke_with_receiver([""], value) |> to_json()
+        else
+          JSThrow.type_error!("Do not know how to serialize a BigInt")
+        end
+
+      _ ->
+        JSThrow.type_error!("Do not know how to serialize a BigInt")
+    end
+  end
+
   defp to_json({:closure, _, _}), do: :undefined
   defp to_json(%QuickBEAM.VM.Function{}), do: :undefined
   defp to_json({:builtin, _, _}), do: :undefined
@@ -513,6 +528,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
       :number -> {:ok, map |> Heap.wrap() |> Runtime.to_number()}
       :string -> {:ok, map |> Heap.wrap() |> Runtime.stringify()}
       :boolean -> WrappedPrimitive.value(map, :boolean)
+      :bigint -> WrappedPrimitive.value(map, :bigint)
       _ -> :error
     end
   end
