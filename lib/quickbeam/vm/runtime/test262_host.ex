@@ -11,6 +11,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.Globals.Functions
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
+  alias QuickBEAM.VM.Runtime.RegExp, as: JSRegExp
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.String, as: JSString
   alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
@@ -42,6 +43,11 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     string_ctor = realm_constructor("String", &Constructors.string/2, string_proto)
     Heap.put_obj_key(elem(string_proto, 1), "constructor", string_ctor)
     install_realm_string_methods(string_proto)
+
+    regexp_proto = Heap.wrap(%{"__proto__" => object_proto})
+    regexp_ctor = realm_constructor("RegExp", &Constructors.regexp/2, regexp_proto)
+    Heap.put_obj_key(elem(regexp_proto, 1), "constructor", regexp_ctor)
+    Heap.put_ctor_static(regexp_ctor, "escape", JSRegExp.static_property("escape"))
 
     date_proto = Heap.wrap(%{"__proto__" => object_proto})
     date_ctor = realm_constructor("Date", &JSDate.constructor/2, date_proto)
@@ -116,6 +122,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Boolean" => boolean_ctor,
         "Number" => number_ctor,
         "String" => string_ctor,
+        "RegExp" => regexp_ctor,
         "Date" => date_ctor,
         "Map" => map_ctor,
         "Set" => set_ctor,

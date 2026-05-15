@@ -147,6 +147,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("keys"), do: meta("keys", [length: 1, constructable: false], :static)
   def named_meta("values"), do: meta("values", [length: 1, constructable: false], :static)
   def named_meta("entries"), do: meta("entries", [length: 1, constructable: false], :static)
+  def named_meta("escape"), do: meta("escape", [length: 1, constructable: false], :static)
   def named_meta("freeze"), do: meta("freeze", [length: 1, constructable: false], :static)
 
   def named_meta("preventExtensions"),
