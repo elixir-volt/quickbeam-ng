@@ -122,6 +122,8 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("defineProperties"),
     do: meta("defineProperties", [length: 2, constructable: false], :static)
 
+  def named_meta("parse"), do: meta("parse", [length: 2, constructable: false], :static)
+  def named_meta("stringify"), do: meta("stringify", [length: 3, constructable: false], :static)
   def named_meta("rawJSON"), do: meta("rawJSON", [length: 1, constructable: false], :static)
   def named_meta("isRawJSON"), do: meta("isRawJSON", [length: 1, constructable: false], :static)
 

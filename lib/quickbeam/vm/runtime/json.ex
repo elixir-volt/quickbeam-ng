@@ -57,8 +57,14 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
     method "isRawJSON" do
       case args do
-        [{:obj, ref} | _] -> Map.get(Heap.get_obj(ref, %{}), :__raw_json__) == true
-        _ -> false
+        [{:obj, ref} | _] ->
+          case Heap.get_obj(ref, %{}) do
+            map when is_map(map) -> Map.get(map, :__raw_json__) == true
+            _ -> false
+          end
+
+        _ ->
+          false
       end
     end
   end
@@ -204,6 +210,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp raw_json_entries({:__raw_json__, json}), do: [{raw_token(json), json}]
   defp raw_json_entries(%Jason.OrderedObject{values: pairs}), do: Enum.flat_map(pairs, fn {_k, v} -> raw_json_entries(v) end)
+  defp raw_json_entries({_key, value}), do: raw_json_entries(value)
   defp raw_json_entries(list) when is_list(list), do: Enum.flat_map(list, &raw_json_entries/1)
   defp raw_json_entries(_), do: []
 
