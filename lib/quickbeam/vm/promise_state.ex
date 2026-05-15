@@ -188,11 +188,8 @@ defmodule QuickBEAM.VM.PromiseState do
     ref = make_ref()
     Heap.put_obj(ref, promise_obj(:pending, nil, ref))
 
-    resolve_fn =
-      {:builtin, "resolve", fn args, _ -> settle_adopt_once(ref, arg(args, 0, :undefined)) end}
-
-    reject_fn =
-      {:builtin, "reject", fn args, _ -> settle_reject_once(ref, arg(args, 0, :undefined)) end}
+    resolve_fn = finalizer_function(fn value -> settle_adopt_once(ref, value) end)
+    reject_fn = finalizer_function(fn reason -> settle_reject_once(ref, reason) end)
 
     try do
       Invocation.invoke_method_runtime(then_fn, obj, [resolve_fn, reject_fn])
