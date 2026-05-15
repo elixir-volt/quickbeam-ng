@@ -3056,10 +3056,12 @@ defmodule QuickBEAM.VM.Runtime.Array do
   def make_array_iterator(arr, mode) do
     list_fn = array_iterator_list_fn(arr)
     idx_ref = :atomics.new(2, signed: false)
+    iterator_ref = make_ref()
 
     next_fn =
       {:builtin, "next",
-       fn _args, _this ->
+       fn _args, this ->
+         reject_inherited_array_iterator_receiver!(this, iterator_ref)
          i = :atomics.get(idx_ref, 1)
          done = :atomics.get(idx_ref, 2) == 1
          list = list_fn.()
@@ -3108,15 +3110,26 @@ defmodule QuickBEAM.VM.Runtime.Array do
       )
     end
 
-    object do
-      prop("__proto__", proto)
-      prop("next", next_fn)
+    iterator_symbol = {:builtin, "[Symbol.iterator]", fn _, this -> this end}
 
-      symbol_method "Symbol.iterator" do
-        this
-      end
+    Heap.put_obj(iterator_ref, %{
+      "__proto__" => proto,
+      "next" => next_fn,
+      {:symbol, "Symbol.iterator"} => iterator_symbol
+    })
+
+    Heap.put_prop_desc(iterator_ref, "next", PropertyDescriptor.method())
+    Heap.put_prop_desc(iterator_ref, {:symbol, "Symbol.iterator"}, PropertyDescriptor.method())
+    {:obj, iterator_ref}
+  end
+
+  defp reject_inherited_array_iterator_receiver!({:obj, ref}, iterator_ref) do
+    if Map.get(Heap.get_obj(ref, %{}), "__proto__") == {:obj, iterator_ref} do
+      JSThrow.type_error!("Array Iterator next called on incompatible receiver")
     end
   end
+
+  defp reject_inherited_array_iterator_receiver!(_, _), do: :ok
 
   defp array_iterator_list_fn({:obj, ref} = obj) do
     case Heap.get_obj(ref, %{}) do
