@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   alias QuickBEAM.VM.{Heap, Invocation}
   alias QuickBEAM.VM.JSThrow
+  alias QuickBEAM.VM.Interpreter.Values.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyDescriptor}
   alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.Runtime
@@ -18,7 +19,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
     error_proto_ref = make_ref()
-    error_ctor = {:builtin, "Error", fn args, _this -> error_constructor("Error", args) end}
+    error_ctor = {:builtin, "Error", fn args, this -> construct_error("Error", args, this) end}
 
     error_tostring =
       {:builtin, "toString",
@@ -79,7 +80,9 @@ defmodule QuickBEAM.VM.Runtime.Errors do
                map when is_map(map) -> Map.has_key?(map, "__error_name__")
                _ -> false
              end
-           _ -> false
+
+           _ ->
+             false
          end
        end}
     )
@@ -112,7 +115,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     derived =
       for name <- Enum.reject(@error_types, &(&1 == "Error")), into: %{} do
         proto_ref = make_ref()
-        ctor = {:builtin, name, fn args, _this -> construct_error(name, args) end}
+        ctor = {:builtin, name, fn args, this -> construct_error(name, args, this) end}
 
         Heap.put_obj(
           proto_ref,
@@ -137,13 +140,17 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     Map.put(derived, "Error", error_ctor)
   end
 
-  defp construct_error("AggregateError", args), do: aggregate_error_constructor(args)
-  defp construct_error(name, args), do: error_constructor(name, args)
+  defp construct_error(name, args, this_obj)
 
-  defp error_constructor(name, args) do
+  defp construct_error("AggregateError", args, this_obj),
+    do: aggregate_error_constructor(args, this_obj)
+
+  defp construct_error(name, args, this_obj), do: error_constructor(name, args, this_obj)
+
+  defp error_constructor(name, args, this_obj) do
     msg = arg(args, 0, :undefined)
     message = if msg == :undefined, do: "", else: stringify_error_slot(msg)
-    error = Heap.make_error(message, name)
+    error = make_error_object(message, name, this_obj)
     if msg == :undefined, do: delete_message(error)
     maybe_install_cause(error, arg(args, 1, :undefined))
     Stacktrace.attach_stack(error)
@@ -158,12 +165,12 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   defp maybe_install_cause(_error, _options), do: :ok
 
-  defp aggregate_error_constructor(args) do
+  defp aggregate_error_constructor(args, this_obj) do
     errors = arg(args, 0, :undefined)
     message_arg = arg(args, 1, :undefined)
     options = arg(args, 2, :undefined)
     message = if message_arg == :undefined, do: "", else: stringify_error_slot(message_arg)
-    error = Heap.make_error(message, "AggregateError")
+    error = make_error_object(message, "AggregateError", this_obj)
     if message_arg == :undefined, do: delete_message(error)
 
     with {:obj, ref} <- error do
@@ -192,7 +199,10 @@ defmodule QuickBEAM.VM.Runtime.Errors do
             iter = Invocation.invoke_with_receiver(iter_fn, [], errors)
             unless match?({:obj, _}, iter), do: JSThrow.type_error!("iterator is not an object")
             next_fn = Get.get(iter, "next")
-            unless QuickBEAM.VM.Builtin.callable?(next_fn), do: JSThrow.type_error!("iterator.next is not callable")
+
+            unless QuickBEAM.VM.Builtin.callable?(next_fn),
+              do: JSThrow.type_error!("iterator.next is not callable")
+
             collect_iterable(iter, next_fn, [])
 
           QuickBEAM.VM.Builtin.callable?(Get.get(errors, "next")) ->
@@ -239,7 +249,33 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   defp stringify_error_slot({:symbol, _, _}),
     do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
 
+  defp stringify_error_slot({:obj, _} = value),
+    do: value |> Coercion.to_primitive("string") |> stringify_error_slot()
+
   defp stringify_error_slot(value), do: Runtime.stringify(value)
+
+  defp make_error_object(message, name, {:obj, ref} = this_obj) do
+    map = Heap.get_obj(ref, %{})
+
+    Heap.put_obj(
+      ref,
+      Map.merge(map, %{
+        "message" => message,
+        "name" => name,
+        "stack" => "",
+        "__error_name__" => name,
+        {:symbol, "Symbol.toStringTag"} => "Error"
+      })
+    )
+
+    for key <- ["message", "name", "stack"] do
+      Heap.put_prop_desc(ref, key, PropertyDescriptor.method())
+    end
+
+    this_obj
+  end
+
+  defp make_error_object(message, name, _this_obj), do: Heap.make_error(message, name)
 
   defp install_function_parent(ctor) do
     case Heap.get_func_proto() do
@@ -247,8 +283,11 @@ defmodule QuickBEAM.VM.Runtime.Errors do
         Heap.put_ctor_static(ctor, "__proto__", function_proto)
 
         case Heap.get_obj(function_proto_ref, %{}) do
-          %{"constructor" => function_ctor} -> Heap.put_ctor_static(ctor, "constructor", function_ctor)
-          _ -> :ok
+          %{"constructor" => function_ctor} ->
+            Heap.put_ctor_static(ctor, "constructor", function_ctor)
+
+          _ ->
+            :ok
         end
 
       _ ->
