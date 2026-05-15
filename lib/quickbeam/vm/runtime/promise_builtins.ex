@@ -114,9 +114,13 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
   end
 
   static "allSettled" do
-    case combinator_inputs(this, arg(args, 0, :undefined)) do
-      {:ok, items} -> wrap_static_result(this, promise_all_settled_items(items))
-      {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+    if default_promise_constructor?(this) do
+      case combinator_inputs(this, arg(args, 0, :undefined)) do
+        {:ok, items} -> wrap_static_result(this, promise_all_settled_items(items))
+        {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+      end
+    else
+      perform_promise_all_settled(this, arg(args, 0, :undefined))
     end
   end
 
@@ -329,6 +333,109 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
     end
 
     :undefined
+  end
+
+  defp perform_promise_all_settled(constructor, iterable) do
+    {promise, resolve, reject} = new_promise_capability(constructor)
+
+    try do
+      {iter, next_fn} = Iterators.for_of_start(iterable)
+      promise_resolve_fn = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+
+      unless QuickBEAM.VM.Builtin.callable?(promise_resolve_fn) do
+        JSThrow.type_error!("Promise resolve is not callable")
+      end
+
+      state_ref = make_ref()
+      Heap.put_obj(state_ref, %{"remaining" => 1, "values" => []})
+
+      perform_all_settled_loop(
+        iter,
+        next_fn,
+        constructor,
+        promise_resolve_fn,
+        state_ref,
+        resolve,
+        reject
+      )
+
+      promise
+    catch
+      {:js_throw, reason} ->
+        Invocation.invoke(reject, [reason])
+        promise
+    end
+  end
+
+  defp perform_all_settled_loop(
+         iter,
+         next_fn,
+         constructor,
+         promise_resolve_fn,
+         state_ref,
+         resolve,
+         reject
+       ) do
+    case Iterators.for_of_next(next_fn, iter) do
+      {true, _, _} ->
+        state = Heap.get_obj(state_ref, %{})
+        remaining = state["remaining"] - 1
+        Heap.put_obj(state_ref, %{state | "remaining" => remaining})
+
+        if remaining == 0 do
+          invoke_capability_resolve(resolve, reject, Heap.wrap(state["values"]))
+        end
+
+      {false, value, next_iter} ->
+        try do
+          next_promise = Invocation.invoke_with_receiver(promise_resolve_fn, [value], constructor)
+          index = append_pending_all_value(state_ref)
+          then = QuickBEAM.VM.ObjectModel.Get.get(next_promise, "then")
+
+          unless QuickBEAM.VM.Builtin.callable?(then) do
+            JSThrow.type_error!("Promise then is not callable")
+          end
+
+          Invocation.invoke_with_receiver(
+            then,
+            [
+              once_function(fn settled ->
+                fulfill_all_element(
+                  state_ref,
+                  resolve,
+                  reject,
+                  index,
+                  Heap.wrap(%{"status" => "fulfilled", "value" => settled})
+                )
+              end),
+              once_function(fn reason ->
+                fulfill_all_element(
+                  state_ref,
+                  resolve,
+                  reject,
+                  index,
+                  Heap.wrap(%{"status" => "rejected", "reason" => reason})
+                )
+              end)
+            ],
+            next_promise
+          )
+
+          perform_all_settled_loop(
+            next_iter,
+            next_fn,
+            constructor,
+            promise_resolve_fn,
+            state_ref,
+            resolve,
+            reject
+          )
+        catch
+          {:js_throw, reason} ->
+            close_iterator_preserving_throw(next_iter)
+            throw({:js_throw, reason})
+        end
+    end
   end
 
   defp promise_resolve({:builtin, "Promise", _} = constructor, {:obj, ref} = value) do
