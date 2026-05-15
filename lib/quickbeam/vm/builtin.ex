@@ -122,6 +122,9 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("defineProperties"),
     do: meta("defineProperties", [length: 2, constructable: false], :static)
 
+  def named_meta("rawJSON"), do: meta("rawJSON", [length: 1, constructable: false], :static)
+  def named_meta("isRawJSON"), do: meta("isRawJSON", [length: 1, constructable: false], :static)
+
   def named_meta(name)
       when name in [
              "abs",

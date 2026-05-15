@@ -7,8 +7,40 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
+
+  @method_lengths %{"parse" => 2, "stringify" => 3, "rawJSON" => 1, "isRawJSON" => 1}
+
+  def install_metadata({:builtin, _name, map} = json) when is_map(map) do
+    Enum.each(@method_lengths, fn {name, length} ->
+      method = Map.get(map, name)
+      Heap.put_ctor_static(json, name, method)
+      Heap.put_prop_desc(json, name, PropertyDescriptor.method())
+      Heap.put_ctor_prop_desc(json, name, PropertyDescriptor.method())
+
+      case method do
+        {:builtin, _, _} = method ->
+          Heap.put_ctor_static(method, "length", length)
+          Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
+
+        _ ->
+          :ok
+      end
+    end)
+
+    tag = {:symbol, "Symbol.toStringTag"}
+    Heap.put_ctor_static(json, tag, "JSON")
+    Heap.put_prop_desc(json, tag, PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(json, tag, PropertyDescriptor.hidden_readonly())
+
+    case Heap.get_object_prototype() do
+      {:obj, _} = object_proto -> Heap.put_ctor_static(json, proto(), object_proto)
+      _ -> :ok
+    end
+
+    json
+  end
 
   js_object "JSON" do
     method "parse" do
@@ -18,7 +50,43 @@ defmodule QuickBEAM.VM.Runtime.JSON do
     method "stringify" do
       stringify(args)
     end
+
+    method "rawJSON" do
+      raw_json(args)
+    end
+
+    method "isRawJSON" do
+      case args do
+        [{:obj, ref} | _] -> Map.get(Heap.get_obj(ref, %{}), :__raw_json__) == true
+        _ -> false
+      end
+    end
   end
+
+  defp raw_json([text | _]) do
+    json = Runtime.stringify(text)
+
+    if invalid_raw_json?(json) do
+      JSThrow.syntax_error!("Invalid raw JSON")
+    end
+
+    case Jason.decode(json) do
+      {:ok, _} ->
+        ref = make_ref()
+        Heap.put_obj(ref, %{:__internal_proto__ => nil, :__raw_json__ => true, "rawJSON" => json, key_order() => ["rawJSON"]})
+        Heap.put_prop_desc(ref, "rawJSON", PropertyDescriptor.attrs(writable: false, enumerable: true, configurable: false))
+        {:obj, ref}
+
+      _ ->
+        JSThrow.syntax_error!("Invalid raw JSON")
+    end
+  end
+
+  defp raw_json(_), do: raw_json([:undefined])
+
+  defp invalid_raw_json?(""), do: true
+  defp invalid_raw_json?(<<first::utf8, _::binary>>) when first in [0x09, 0x0A, 0x0D, 0x20], do: true
+  defp invalid_raw_json?(json), do: json |> String.last() |> Kernel.in(["\t", "\n", "\r", " "])
 
   defp parse([s | _]) when is_binary(s) do
     decoded =
@@ -98,11 +166,50 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         _ -> []
       end
 
-    case Jason.encode(elixir_val, opts) do
+    case encode_raw_json(elixir_val, opts) do
       {:ok, json} -> json
       _ -> :undefined
     end
   end
+
+  defp encode_raw_json({:__raw_json__, json}, _opts), do: {:ok, json}
+
+  defp encode_raw_json(%Jason.OrderedObject{values: pairs} = object, opts) do
+    with {:ok, json} <- Jason.encode(raw_placeholder(object), opts) do
+      {:ok, restore_raw_placeholders(json, pairs)}
+    end
+  end
+
+  defp encode_raw_json(list, opts) when is_list(list) do
+    with {:ok, json} <- Jason.encode(raw_placeholder(list), opts) do
+      {:ok, restore_raw_placeholders(json, list)}
+    end
+  end
+
+  defp encode_raw_json(value, opts), do: Jason.encode(value, opts)
+
+  defp raw_placeholder({:__raw_json__, json}), do: raw_token(json)
+
+  defp raw_placeholder(%Jason.OrderedObject{values: pairs}),
+    do: %Jason.OrderedObject{values: Enum.map(pairs, fn {k, v} -> {k, raw_placeholder(v)} end)}
+
+  defp raw_placeholder(list) when is_list(list), do: Enum.map(list, &raw_placeholder/1)
+  defp raw_placeholder(value), do: value
+
+  defp restore_raw_placeholders(json, value) do
+    value
+    |> raw_json_entries()
+    |> Enum.reduce(json, fn {token, raw}, acc -> String.replace(acc, Jason.encode!(token), raw) end)
+  end
+
+  defp raw_json_entries({:__raw_json__, json}), do: [{raw_token(json), json}]
+  defp raw_json_entries(%Jason.OrderedObject{values: pairs}), do: Enum.flat_map(pairs, fn {_k, v} -> raw_json_entries(v) end)
+  defp raw_json_entries(list) when is_list(list), do: Enum.flat_map(list, &raw_json_entries/1)
+  defp raw_json_entries(_), do: []
+
+  defp raw_token(json), do: "__quickbeam_raw_json_#{:erlang.phash2(json)}__"
+
+  defp to_elixir({:raw_json, json}), do: {:__raw_json__, json}
 
   defp to_elixir({:ordered_map, pairs}) do
     Jason.OrderedObject.new(Enum.map(pairs, fn {k, v} -> {k, to_elixir(v)} end))
@@ -147,6 +254,9 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         Enum.map(list, &to_json/1)
 
       map when is_map(map) ->
+        if Map.get(map, :__raw_json__) == true do
+          {:raw_json, Map.get(map, "rawJSON")}
+        else
         case Map.get(map, "toJSON") do
           fun when fun != nil and fun != :undefined ->
             result = Runtime.call_callback(fun, [])
@@ -183,6 +293,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
               |> Enum.reject(fn {_, v} -> v == :undefined end)
 
             {:ordered_map, pairs}
+        end
         end
     end
   end
