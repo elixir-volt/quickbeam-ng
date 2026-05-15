@@ -550,12 +550,14 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   defp make_map_iterator(ref, mode) do
     state_ref = make_ref()
-    Process.put(state_ref, ordered_keys(ref))
+    Process.put(state_ref, {[], false})
+    {:obj, iter_ref} = iter = Heap.wrap(%{})
 
     next_fn =
       {:builtin, "next",
-       fn _, _ ->
-         next_map_iterator_value(ref, state_ref, mode)
+       fn _, this ->
+         {iter_ref, iter_state, iter_mode} = require_map_iterator!(this)
+         next_map_iterator_value(iter_ref, iter_state, iter_mode)
        end}
 
     proto =
@@ -577,40 +579,61 @@ defmodule QuickBEAM.VM.Runtime.Map do
       )
     end
 
-    Heap.wrap(%{
+    Heap.put_obj(iter_ref, %{
       "__proto__" => proto,
+      "__map_iterator_ref__" => ref,
+      "__map_iterator_state__" => state_ref,
+      "__map_iterator_mode__" => mode,
       "next" => next_fn,
       {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _, this -> this end}
     })
+
+    iter
   end
+
+  defp require_map_iterator!({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{
+        "__map_iterator_ref__" => map_ref,
+        "__map_iterator_state__" => state_ref,
+        "__map_iterator_mode__" => mode
+      } ->
+        {map_ref, state_ref, mode}
+
+      _ ->
+        JSThrow.type_error!("Map Iterator next called on incompatible receiver")
+    end
+  end
+
+  defp require_map_iterator!(_),
+    do: JSThrow.type_error!("Map Iterator next called on incompatible receiver")
 
   defp next_map_iterator_value(ref, state_ref, mode) do
-    case next_present_key(ref, Process.get(state_ref, [])) do
-      {:done, pending} ->
-        Process.put(state_ref, pending)
+    case Process.get(state_ref, {[], false}) do
+      {_seen, true} ->
         Heap.wrap(%{"value" => :undefined, "done" => true})
 
-      {key, pending} ->
-        Process.put(state_ref, pending)
-        data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
+      {seen, false} ->
+        case next_present_key(ref, seen) do
+          :done ->
+            Process.put(state_ref, {seen, true})
+            Heap.wrap(%{"value" => :undefined, "done" => true})
 
-        Heap.wrap(%{
-          "value" => map_iterator_result(mode, key, Map.get(data, key)),
-          "done" => false
-        })
+          key ->
+            Process.put(state_ref, {[key | seen], false})
+            data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
+
+            Heap.wrap(%{
+              "value" => map_iterator_result(mode, key, Map.get(data, key)),
+              "done" => false
+            })
+        end
     end
   end
 
-  defp next_present_key(_ref, []), do: {:done, []}
-
-  defp next_present_key(ref, [key | rest]) do
+  defp next_present_key(ref, seen) do
     data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
-
-    if Map.has_key?(data, key) do
-      {key, rest}
-    else
-      next_present_key(ref, rest)
-    end
+    Enum.find(ordered_keys(ref), :done, &(Map.has_key?(data, &1) and &1 not in seen))
   end
 
   defp map_iterator_result(:keys, key, _value), do: key
