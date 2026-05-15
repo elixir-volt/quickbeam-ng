@@ -108,6 +108,8 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("Date"), do: meta("Date", [length: 7, constructable: true], :constructor)
   def named_meta("Map"), do: meta("Map", [length: 0, constructable: true], :constructor)
   def named_meta("Set"), do: meta("Set", [length: 0, constructable: true], :constructor)
+  def named_meta("WeakMap"), do: meta("WeakMap", [length: 0, constructable: true], :constructor)
+  def named_meta("WeakSet"), do: meta("WeakSet", [length: 0, constructable: true], :constructor)
   def named_meta("WeakRef"), do: meta("WeakRef", [length: 1, constructable: true], :constructor)
 
   def named_meta("FinalizationRegistry"),
