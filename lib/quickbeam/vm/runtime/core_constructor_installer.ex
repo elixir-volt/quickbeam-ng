@@ -100,7 +100,7 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
   end
 
   defp install_iterator(ctor) do
-    for name <- ~w(concat from) do
+    for name <- ~w(concat from zip zipKeyed) do
       Heap.put_ctor_static(ctor, name, Iterator.static_property(name))
       Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.method())
     end

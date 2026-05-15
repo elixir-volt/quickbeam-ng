@@ -3,6 +3,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   use QuickBEAM.VM.Builtin
 
+  import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
+
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Interpreter.Values
@@ -28,6 +30,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   def static_property("from"), do: static_method("from", 1, &from/2)
   def static_property("concat"), do: static_method("concat", 0, &concat/2)
+  def static_property("zip"), do: static_method("zip", 1, &zip/2)
+  def static_property("zipKeyed"), do: static_method("zipKeyed", 1, &zip_keyed/2)
 
   def static_property(_), do: :undefined
 
@@ -75,6 +79,28 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     helper_iterator(%{"kind" => :concat, "iterators" => iterators, "index" => 0})
   end
 
+  def zip(args, _this) do
+    iterables = args |> Builtin.arg(0, []) |> Heap.to_list()
+    options = Builtin.arg(args, 1, :undefined)
+    helper_iterator(zip_state(iterables, nil, options))
+  end
+
+  def zip_keyed(args, _this) do
+    source = Builtin.arg(args, 0, [])
+    entries = keyed_iterables(source)
+    options = Builtin.arg(args, 1, :undefined)
+    {keys, iterables} = Enum.unzip(entries)
+    helper_iterator(zip_state(iterables, keys, options))
+  end
+
+  defp from_value(value) when is_binary(value) do
+    value
+    |> String.graphemes()
+    |> list_iterator()
+  end
+
+  defp from_value(value) when is_list(value), do: list_iterator(value)
+
   defp from_value(value) do
     unless object_like?(value), do: JSThrow.type_error!("Iterator.from requires an object")
 
@@ -96,6 +122,30 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       iterator
     else
       wrap_iterator(iterator)
+    end
+  end
+
+  defp list_iterator(items) do
+    state_ref = make_ref()
+    Heap.put_obj(state_ref, %{"items" => items, "index" => 0})
+
+    Heap.wrap(%{
+      "__proto__" => wrap_for_valid_iterator_prototype(),
+      "next" => {:builtin, "next", fn _args, _this -> list_iterator_next(state_ref) end},
+      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
+    })
+  end
+
+  defp list_iterator_next(state_ref) do
+    state = Heap.get_obj(state_ref, %{})
+    index = state["index"]
+    items = state["items"]
+
+    if index >= length(items) do
+      iter_result(:undefined, true)
+    else
+      Heap.put_obj(state_ref, %{state | "index" => index + 1})
+      iter_result(Enum.at(items, index), false)
     end
   end
 
@@ -254,6 +304,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
     case state["kind"] do
       :concat -> concat_next(state_ref, state)
+      :zip -> zip_next(state_ref, state)
       :drop -> drop_next(state_ref, state)
       :take -> take_next(state_ref, state)
       :filter -> filter_next(state_ref, state)
@@ -261,6 +312,89 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       :flat_map -> flat_map_next(state_ref, state)
       _ -> iter_result(:undefined, true)
     end
+  end
+
+  defp zip_state(iterables, keys, options) do
+    mode = if object_like?(options), do: Get.get(options, "mode"), else: :undefined
+    padding = if object_like?(options), do: Get.get(options, "padding"), else: :undefined
+
+    %{
+      "kind" => :zip,
+      "iterators" => Enum.map(iterables, &(from_value(&1) |> iterator_record())),
+      "keys" => keys,
+      "mode" => if(mode == "longest", do: :longest, else: :shortest),
+      "padding" => padding_values(padding)
+    }
+  end
+
+  defp keyed_iterables(value) do
+    values = Heap.to_list(value)
+
+    if values != [] do
+      Enum.with_index(values, fn item, index -> {Integer.to_string(index), item} end)
+    else
+      case value do
+        {:obj, ref} ->
+          Heap.get_obj(ref, %{})
+          |> Enum.reject(fn {key, _} -> not is_binary(key) or String.starts_with?(key, "__") end)
+
+        _ ->
+          []
+      end
+    end
+  end
+
+  defp padding_values(:undefined), do: []
+  defp padding_values(nil), do: []
+  defp padding_values(value), do: Heap.to_list(value)
+
+  defp zip_next(_state_ref, %{"iterators" => []}), do: iter_result(:undefined, true)
+
+  defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :shortest} = state) do
+    results = Enum.map(iterators, &iterator_next/1)
+
+    if Enum.any?(results, &(Get.get(&1, "done") == true)) do
+      iter_result(:undefined, true)
+    else
+      zip_result(state["keys"], Enum.map(results, &Get.get(&1, "value")))
+    end
+  end
+
+  defp zip_next(
+         _state_ref,
+         %{"iterators" => iterators, "mode" => :longest, "padding" => padding} = state
+       ) do
+    results = Enum.map(iterators, &iterator_next/1)
+
+    if Enum.all?(results, &(Get.get(&1, "done") == true)) do
+      iter_result(:undefined, true)
+    else
+      values =
+        results
+        |> Enum.with_index()
+        |> Enum.map(fn {result, index} ->
+          if Get.get(result, "done") == true do
+            Enum.at(padding, index, :undefined)
+          else
+            Get.get(result, "value")
+          end
+        end)
+
+      zip_result(state["keys"], values)
+    end
+  end
+
+  defp zip_result(nil, values), do: iter_result(Heap.wrap(values), false)
+
+  defp zip_result(keys, values) do
+    object =
+      keys
+      |> Enum.zip(values)
+      |> Enum.reduce(%{"__proto__" => :null_proto}, fn {key, value}, acc ->
+        Map.put(acc, key, value)
+      end)
+
+    iter_result(Heap.wrap(object), false)
   end
 
   defp concat_next(_state_ref, %{"iterators" => iterators, "index" => index})
@@ -526,7 +660,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp iter_result(value, done), do: Heap.wrap(%{"value" => value, "done" => done})
+  defp iter_result(value, done) do
+    Heap.wrap(%{
+      "value" => value,
+      "done" => done,
+      "__proto__" => Heap.get_object_prototype(),
+      key_order() => ["done", "value"]
+    })
+  end
 
   defp non_negative_integer_limit(value) do
     number = Runtime.to_number(value)
