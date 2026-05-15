@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   import QuickBEAM.VM.Heap.Keys, only: [buffer: 0, typed_array: 0]
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
+  alias QuickBEAM.VM.Interpreter.Values
 
   @slot "__data_view__"
   @methods ~w(
@@ -433,11 +434,16 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   defp bigint_value({:bigint, n}), do: n
   defp bigint_value(n) when is_integer(n), do: n
 
+  defp bigint_value(:undefined), do: JSThrow.type_error!("Cannot convert value to BigInt")
+  defp bigint_value(:infinity), do: JSThrow.range_error!("Cannot convert value to BigInt")
+  defp bigint_value(:neg_infinity), do: JSThrow.range_error!("Cannot convert value to BigInt")
+
   defp bigint_value(value) do
     case Runtime.to_number(value) do
       {:bigint, n} -> n
       n when is_integer(n) -> n
       n when is_float(n) and n == trunc(n) -> trunc(n)
+      :nan -> JSThrow.range_error!("Cannot convert value to BigInt")
       _ -> JSThrow.range_error!("Cannot convert value to BigInt")
     end
   end
@@ -482,9 +488,9 @@ defmodule QuickBEAM.VM.Runtime.DataView do
     f = Runtime.to_float(value)
 
     cond do
-      f == 0.0 -> if :erlang.float_to_binary(f, [:compact]) == "-0.0", do: 0x8000, else: 0
-      f > 65_504 -> 0x7C00
-      f < -65_504 -> 0xFC00
+      f == 0.0 -> if Values.neg_zero?(f), do: 0x8000, else: 0
+      f >= 65_520 -> 0x7C00
+      f <= -65_520 -> 0xFC00
       true -> encode_normal_float16(f)
     end
   end
@@ -496,11 +502,30 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
     cond do
       exp < -14 ->
-        sign ||| min(0x03FF, round(abs_f / :math.pow(2, -24)))
+        rounded = round_ties_even(abs_f / :math.pow(2, -24))
+        sign ||| min(0x0400, rounded)
 
       true ->
-        frac = round((abs_f / :math.pow(2, exp) - 1) * 1024)
-        sign ||| (exp + 15) <<< 10 ||| band(frac, 0x03FF)
+        frac = round_ties_even((abs_f / :math.pow(2, exp) - 1) * 1024)
+        {exp, frac} = if frac == 1024, do: {exp + 1, 0}, else: {exp, frac}
+
+        if exp > 15 do
+          sign ||| 0x7BFF
+        else
+          sign ||| (exp + 15) <<< 10 ||| band(frac, 0x03FF)
+        end
+    end
+  end
+
+  defp round_ties_even(value) do
+    floor = Float.floor(value)
+    fraction = value - floor
+
+    cond do
+      fraction < 0.5 -> trunc(floor)
+      fraction > 0.5 -> trunc(floor) + 1
+      rem(trunc(floor), 2) == 0 -> trunc(floor)
+      true -> trunc(floor) + 1
     end
   end
 end

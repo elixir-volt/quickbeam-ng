@@ -216,6 +216,9 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   defp stringify_arg(val) when is_binary(val), do: val
   defp stringify_arg(val), do: QuickBEAM.VM.Interpreter.Values.stringify(val)
 
+  def bigint([:undefined | _], _), do: JSThrow.type_error!("Cannot convert to BigInt")
+  def bigint([:infinity | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
+  def bigint([:neg_infinity | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
   def bigint([n | _], _) when is_integer(n), do: {:bigint, n}
   def bigint([{:bigint, n} | _], _), do: {:bigint, n}
 
@@ -230,6 +233,8 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
     case Runtime.to_number(value) do
       n when is_integer(n) -> {:bigint, n}
       n when is_float(n) and n == trunc(n) -> {:bigint, trunc(n)}
+      n when is_float(n) -> JSThrow.range_error!("Cannot convert to BigInt")
+      :nan -> JSThrow.range_error!("Cannot convert to BigInt")
       _ -> JSThrow.type_error!("Cannot convert to BigInt")
     end
   end
@@ -320,7 +325,9 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   defp regexp_constructing?(_), do: false
 
   defp regexp_object_source(obj) do
-    if regexp_like?(obj), do: Runtime.stringify(Get.get(obj, "source")), else: Runtime.stringify(obj)
+    if regexp_like?(obj),
+      do: Runtime.stringify(Get.get(obj, "source")),
+      else: Runtime.stringify(obj)
   end
 
   defp regexp_source_flags({:regexp, bytecode, _source}) do
@@ -358,8 +365,10 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
 
   defp invalid_regexp_source?(source) do
     starts_with_quantifier?(source) or dangling_escape?(source) or
-      repeated_quantifier?(source) or adjacent_interval_quantifiers?(source) or invalid_class_range?(source) or
-      descending_character_range?(source) or invalid_interval_quantifier?(source) or invalid_modifiers?(source) or
+      repeated_quantifier?(source) or adjacent_interval_quantifiers?(source) or
+      invalid_class_range?(source) or
+      descending_character_range?(source) or invalid_interval_quantifier?(source) or
+      invalid_modifiers?(source) or
       duplicate_group_name_in_alternative?(source)
   end
 
