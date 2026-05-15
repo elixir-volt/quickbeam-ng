@@ -175,7 +175,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   proto {:symbol, "Symbol.iterator"} do
     this
     |> coerce_string_this()
-    |> String.codepoints()
+    |> string_iterator_items()
     |> string_iterator_from()
   end
 
@@ -245,6 +245,31 @@ defmodule QuickBEAM.VM.Runtime.String do
     |> Enum.with_index()
     |> Enum.map(fn {char, index} -> {Integer.to_string(index), char} end)
   end
+
+  defp string_iterator_items(string), do: do_string_iterator_items(string, [])
+
+  defp do_string_iterator_items(<<>>, acc), do: Enum.reverse(acc)
+
+  defp do_string_iterator_items(<<cp, rest::binary>>, acc) when cp < 0x80,
+    do: do_string_iterator_items(rest, [<<cp>> | acc])
+
+  defp do_string_iterator_items(<<b1, b2, rest::binary>>, acc) when b1 >= 0xC0 and b1 < 0xE0,
+    do: do_string_iterator_items(rest, [<<b1, b2>> | acc])
+
+  defp do_string_iterator_items(<<h1, h2, h3, l1, l2, l3, rest::binary>>, acc)
+       when h1 == 0xED and h2 >= 0xA0 and h2 <= 0xAF and l1 == 0xED and l2 >= 0xB0 and
+              l2 <= 0xBF do
+    do_string_iterator_items(rest, [<<h1, h2, h3, l1, l2, l3>> | acc])
+  end
+
+  defp do_string_iterator_items(<<b1, b2, b3, rest::binary>>, acc) when b1 >= 0xE0 and b1 < 0xF0,
+    do: do_string_iterator_items(rest, [<<b1, b2, b3>> | acc])
+
+  defp do_string_iterator_items(<<b1, b2, b3, b4, rest::binary>>, acc) when b1 >= 0xF0,
+    do: do_string_iterator_items(rest, [<<b1, b2, b3, b4>> | acc])
+
+  defp do_string_iterator_items(<<_invalid, rest::binary>>, acc),
+    do: do_string_iterator_items(rest, acc)
 
   def utf16_code_units(string) when is_binary(string) do
     string
