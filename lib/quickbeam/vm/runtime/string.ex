@@ -184,11 +184,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp string_iterator_from(items) do
     iter = iterator_from(items)
 
-    next_fn =
-      case iter do
-        {:obj, ref} -> Heap.get_obj(ref, %{}) |> Map.get("next")
-        _ -> :undefined
-      end
+    next_fn = string_iterator_next(iter)
 
     proto =
       Heap.wrap(%{
@@ -210,11 +206,34 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
 
     with {:obj, ref} <- iter do
+      Heap.put_obj_key(ref, "next", next_fn)
       Heap.put_obj_key(ref, "__proto__", proto)
     end
 
     iter
   end
+
+  defp string_iterator_next({:obj, _} = iter) do
+    raw_next =
+      case iter do
+        {:obj, ref} -> Heap.get_obj(ref, %{}) |> Map.get("next")
+        _ -> :undefined
+      end
+
+    {:builtin, "next",
+     fn _args, this ->
+       if this == iter do
+         Invocation.invoke_with_receiver(raw_next, [], iter)
+       else
+         throw(
+           {:js_throw,
+            Heap.make_error("String Iterator next called on incompatible receiver", "TypeError")}
+         )
+       end
+     end}
+  end
+
+  defp string_iterator_next(_), do: :undefined
 
   @doc "Returns the JavaScript UTF-16 code-unit length of a string."
   def utf16_length(string) when is_binary(string) do
