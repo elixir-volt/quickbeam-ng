@@ -23,6 +23,7 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
   static_val("hasInstance", {:symbol, "Symbol.hasInstance"})
   static_val("toStringTag", {:symbol, "Symbol.toStringTag"})
   static_val("asyncIterator", {:symbol, "Symbol.asyncIterator"})
+  static_val("dispose", {:symbol, "Symbol.dispose"})
   static_val("isConcatSpreadable", {:symbol, "Symbol.isConcatSpreadable"})
   static_val("species", {:symbol, "Symbol.species"})
   static_val("match", {:symbol, "Symbol.match"})

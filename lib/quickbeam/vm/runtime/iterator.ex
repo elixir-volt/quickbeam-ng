@@ -48,6 +48,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
   end
 
+  def proto_property({:symbol, "Symbol.dispose"}), do: method("[Symbol.dispose]", 0, &dispose/2)
+
   def proto_property("drop"), do: method("drop", 1, &drop/2)
   def proto_property("filter"), do: method("filter", 1, &filter/2)
   def proto_property("flatMap"), do: method("flatMap", 1, &flat_map/2)
@@ -73,6 +75,16 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   def from([value | _], _this), do: from_value(value)
   def from(_, _this), do: JSThrow.type_error!("Iterator.from requires an object")
+
+  def dispose(_args, this) do
+    return_method = Get.get(this, "return")
+
+    if Builtin.callable?(return_method) do
+      Invocation.invoke_with_receiver(return_method, [], this)
+    end
+
+    :undefined
+  end
 
   def concat(args, _this) do
     iterators = Enum.map(args, &(from_value(&1) |> iterator_record()))

@@ -117,6 +117,8 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
       )
 
       InstallerHelpers.install_symbol_iterator(proto_ref, Iterator)
+      Heap.put_obj_key(proto_ref, {:symbol, "Symbol.dispose"}, Iterator.proto_property({:symbol, "Symbol.dispose"}))
+      Heap.put_prop_desc(proto_ref, {:symbol, "Symbol.dispose"}, PropertyDescriptor.method())
       InstallerHelpers.install_to_string_tag(proto_ref, "Iterator")
     end)
   end

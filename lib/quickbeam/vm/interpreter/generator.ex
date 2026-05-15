@@ -149,7 +149,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
     iterator_symbol = {:builtin, "[Symbol.iterator]", fn _, this -> this end}
 
     object do
-      prop("__proto__", QuickBEAM.VM.Runtime.Iterator.wrap_for_valid_iterator_prototype())
+      prop("__proto__", QuickBEAM.VM.Runtime.global_class_proto("Iterator"))
       prop("next", next_fn)
       prop("return", return_fn)
       prop({:symbol, "Symbol.iterator"}, iterator_symbol)

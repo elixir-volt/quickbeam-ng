@@ -3101,7 +3101,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       Heap.put_obj_key(
         proto_ref,
         "__proto__",
-        QuickBEAM.VM.Runtime.Iterator.wrap_for_valid_iterator_prototype()
+        QuickBEAM.VM.Runtime.global_class_proto("Iterator")
       )
 
       Heap.put_prop_desc(proto_ref, "next", PropertyDescriptor.method())
