@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   use QuickBEAM.VM.Builtin
 
+  import Bitwise
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.Heap
@@ -343,6 +344,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp raw_token(json), do: "__quickbeam_raw_json_#{:erlang.phash2(json)}__"
 
   defp to_elixir({:raw_json, json}), do: {:__raw_json__, json}
+  defp to_elixir(value) when is_binary(value), do: json_string_value(value)
 
   defp to_elixir({:ordered_map, pairs}) do
     Jason.OrderedObject.new(Enum.map(pairs, fn {k, v} -> {k, to_elixir(v)} end))
@@ -352,6 +354,25 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp to_elixir(:null), do: nil
   defp to_elixir(:undefined), do: nil
   defp to_elixir(val), do: val
+
+  defp json_string_value(value) do
+    if String.valid?(value), do: value, else: {:__raw_json__, quote_json_string(value)}
+  end
+
+  defp quote_json_string(value), do: "\"" <> quote_json_string_content(value, "") <> "\""
+
+  defp quote_json_string_content(<<>>, acc), do: acc
+
+  defp quote_json_string_content(<<0xED, b2, b3, rest::binary>>, acc)
+       when b2 in 0xA0..0xBF and b3 in 0x80..0xBF do
+    code = (0xD <<< 12) + ((b2 &&& 0x3F) <<< 6) + (b3 &&& 0x3F)
+    quote_json_string_content(rest, acc <> "\\u" <> String.downcase(Integer.to_string(code, 16)))
+  end
+
+  defp quote_json_string_content(<<cp::utf8, rest::binary>>, acc) do
+    escaped = Jason.encode!(<<cp::utf8>>) |> String.slice(1..-2//1)
+    quote_json_string_content(rest, acc <> escaped)
+  end
 
   defp apply_replacer({:ordered_map, pairs}, {:obj, _} = replacer) do
     case replacer_property_list(replacer) do
