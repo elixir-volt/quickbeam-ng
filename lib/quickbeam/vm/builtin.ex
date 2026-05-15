@@ -122,6 +122,47 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("defineProperties"),
     do: meta("defineProperties", [length: 2, constructable: false], :static)
 
+  def named_meta(name)
+      when name in [
+             "abs",
+             "acos",
+             "acosh",
+             "asin",
+             "asinh",
+             "atan",
+             "atan2",
+             "atanh",
+             "cbrt",
+             "ceil",
+             "clz32",
+             "cos",
+             "cosh",
+             "exp",
+             "expm1",
+             "floor",
+             "fround",
+             "hypot",
+             "imul",
+             "log",
+             "log10",
+             "log1p",
+             "log2",
+             "max",
+             "min",
+             "pow",
+             "random",
+             "round",
+             "sign",
+             "sin",
+             "sinh",
+             "sqrt",
+             "sumPrecise",
+             "tan",
+             "tanh",
+             "trunc"
+           ],
+      do: meta(name, [constructable: false], :static)
+
   def named_meta("getOwnPropertyDescriptor"),
     do: meta("getOwnPropertyDescriptor", [length: 2, constructable: false], :static)
 

@@ -69,8 +69,9 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end)
 
     Enum.each(@constants, fn name ->
-      Heap.put_prop_desc(math, name, PropertyDescriptor.hidden_readonly())
-      Heap.put_ctor_prop_desc(math, name, PropertyDescriptor.hidden_readonly())
+      descriptor = PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+      Heap.put_prop_desc(math, name, descriptor)
+      Heap.put_ctor_prop_desc(math, name, descriptor)
     end)
 
     tag = {:symbol, "Symbol.toStringTag"}
