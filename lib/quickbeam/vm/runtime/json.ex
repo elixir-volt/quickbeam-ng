@@ -155,7 +155,13 @@ defmodule QuickBEAM.VM.Runtime.JSON do
     ref = make_ref()
     map = Map.new(val, fn {k, v} -> {k, to_js(v, nil)} end)
     order = key_order || Map.keys(val) |> Enum.reverse()
-    Heap.put_obj(ref, Map.put(map, key_order(), order))
+
+    object =
+      map
+      |> Map.put(:__internal_proto__, Heap.get_object_prototype())
+      |> Map.put(key_order(), order)
+
+    Heap.put_obj(ref, object)
     {:obj, ref}
   end
 
