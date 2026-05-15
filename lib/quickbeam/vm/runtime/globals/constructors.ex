@@ -284,17 +284,21 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   end
 
   defp regexp_function_identity?(pattern, rest, this) do
-    regexp_value?(pattern) and regexp_flags_omitted?(rest) and not regexp_constructing?(this)
+    regexp_value?(pattern) and regexp_flags_omitted?(rest) and not regexp_constructing?(this) and
+      Get.get(pattern, "constructor") == QuickBEAM.VM.Runtime.Constructors.lookup("RegExp")
   end
 
-  defp regexp_value?({:regexp, _, _}), do: true
-  defp regexp_value?({:regexp, _, _, _}), do: true
-
-  defp regexp_value?({:obj, _} = obj) do
-    regexp_like?(obj) and Get.get(obj, "constructor") == QuickBEAM.VM.Runtime.Constructors.lookup("RegExp")
-  end
-
+  defp regexp_value?({:regexp, _, _} = regexp), do: regexp_matcher_truthy_or_absent?(regexp)
+  defp regexp_value?({:regexp, _, _, _} = regexp), do: regexp_matcher_truthy_or_absent?(regexp)
+  defp regexp_value?({:obj, _} = obj), do: regexp_like?(obj)
   defp regexp_value?(_), do: false
+
+  defp regexp_matcher_truthy_or_absent?(regexp) do
+    case Get.get(regexp, {:symbol, "Symbol.match"}) do
+      :undefined -> true
+      value -> Runtime.truthy?(value)
+    end
+  end
 
   defp regexp_like?({:obj, _} = obj) do
     Runtime.truthy?(Get.get(obj, {:symbol, "Symbol.match"}))
