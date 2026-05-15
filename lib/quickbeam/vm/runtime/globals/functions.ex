@@ -24,6 +24,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
     else
       %{runtime_pid: nil} -> eval_without_runtime(code)
       nil -> eval_without_runtime(code)
+      {:error, {:js_throw, value}} -> throw({:js_throw, value})
       {:error, %{message: msg}} -> JSThrow.syntax_error!(msg)
       {:error, msg} when is_binary(msg) -> JSThrow.syntax_error!(msg)
       _ -> :undefined
