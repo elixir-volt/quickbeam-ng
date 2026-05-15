@@ -183,7 +183,8 @@ defmodule QuickBEAM.VM.Runtime.JSON do
       Process.put(@seen_refs_key, MapSet.new())
 
       try do
-        result = to_json(val)
+        value = apply_root_replacer(val, replacer)
+        result = to_json(value)
         if result == :undefined, do: :undefined, else: encode(result, replacer, space)
       rescue
         _ -> :undefined
@@ -195,6 +196,27 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   end
 
   defp stringify([]), do: :undefined
+
+  defp apply_root_replacer(value, replacer) do
+    if QuickBEAM.VM.Builtin.callable?(replacer) do
+      wrapper = json_replacer_wrapper(value)
+      QuickBEAM.VM.Invocation.call_callback!(replacer, ["", value], wrapper)
+    else
+      value
+    end
+  end
+
+  defp json_replacer_wrapper(value) do
+    ref = make_ref()
+
+    Heap.put_obj(ref, %{
+      :__internal_proto__ => Heap.get_object_prototype(),
+      "" => value,
+      key_order() => [""]
+    })
+
+    {:obj, ref}
+  end
 
   defp install_replacer_property_list({:obj, _} = replacer) do
     case replacer_property_list(replacer) do
