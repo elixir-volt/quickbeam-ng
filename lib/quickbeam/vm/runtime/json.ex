@@ -224,6 +224,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp to_elixir(list) when is_list(list), do: Enum.map(list, &to_elixir/1)
   defp to_elixir(:null), do: nil
+  defp to_elixir(:undefined), do: nil
   defp to_elixir(val), do: val
 
   defp apply_replacer({:ordered_map, pairs}, {:obj, ref}) do
@@ -282,17 +283,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
               |> Map.drop([key_order()])
               |> Enum.reject(fn {k, v} -> v == :undefined or internal?(k) end)
 
-            entries =
-              if order do
-                Enum.sort_by(entries, fn {k, _} ->
-                  case Enum.find_index(order, &(&1 == k)) do
-                    nil -> length(order)
-                    idx -> idx
-                  end
-                end)
-              else
-                entries
-              end
+            entries = sort_json_entries(entries, order)
 
             pairs =
               entries
@@ -311,11 +302,30 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp to_json(%QuickBEAM.VM.Function{}), do: :undefined
   defp to_json({:builtin, _, _}), do: :undefined
   defp to_json({:bound, _, _, _, _}), do: :undefined
+  defp to_json(n) when is_float(n) and n == 0, do: 0
   defp to_json(:nan), do: :null
   defp to_json(:infinity), do: :null
+  defp to_json(:neg_infinity), do: :null
   defp to_json(list) when is_list(list), do: Enum.map(list, &to_json/1)
   defp to_json({:accessor, _, _}), do: :undefined
   defp to_json(val), do: val
+
+  defp sort_json_entries(entries, order) do
+    Enum.sort_by(entries, fn {key, _} -> json_entry_sort_key(key, order) end)
+  end
+
+  defp json_entry_sort_key(key, order) do
+    string_key = to_string(key)
+
+    case Integer.parse(string_key) do
+      {index, ""} when index >= 0 and index < 4_294_967_295 ->
+        {0, index}
+
+      _ ->
+        order_index = if order, do: Enum.find_index(order, &(&1 == key || &1 == string_key)), else: nil
+        {1, order_index || 4_294_967_295, string_key}
+    end
+  end
 
   defp resolve_value({:accessor, getter, _}, obj) when getter != nil do
     Get.call_getter(getter, obj)
