@@ -25,20 +25,21 @@ defmodule QuickBEAM.VM.Runtime.DataView do
     if is_map(buffer_map) and is_map_key(buffer_map, buffer()) and
          not is_map_key(buffer_map, typed_array()) do
       buffer_len = byte_size(Map.get(buffer_map, buffer(), <<>>))
+      integer_offset = trunc(offset)
 
       view_len =
         if rest == [],
-          do: buffer_len - trunc(offset),
-          else: data_view_length([nil, nil | rest], buffer_len, trunc(offset))
+          do: buffer_len - integer_offset,
+          else: data_view_length([nil, nil | rest], buffer_len, integer_offset)
 
       cond do
-        offset < 0 ->
+        integer_offset < 0 ->
           JSThrow.range_error!("DataView byteOffset out of range")
 
-        offset > buffer_len ->
+        integer_offset > buffer_len ->
           JSThrow.range_error!("DataView byteOffset out of range")
 
-        trunc(offset) + view_len > buffer_len ->
+        integer_offset + view_len > buffer_len ->
           JSThrow.range_error!("DataView byteLength out of range")
 
         true ->
