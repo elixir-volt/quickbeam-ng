@@ -107,6 +107,13 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("RegExp"), do: meta("RegExp", [length: 2, constructable: true], :constructor)
   def named_meta("Date"), do: meta("Date", [length: 7, constructable: true], :constructor)
   def named_meta("Promise"), do: meta("Promise", [length: 1, constructable: true], :constructor)
+
+  def named_meta("ArrayBuffer"),
+    do: meta("ArrayBuffer", [length: 1, constructable: true], :constructor)
+
+  def named_meta("SharedArrayBuffer"),
+    do: meta("SharedArrayBuffer", [length: 1, constructable: true], :constructor)
+
   def named_meta("DataView"), do: meta("DataView", [length: 1, constructable: true], :constructor)
   def named_meta("Error"), do: meta("Error", [length: 1, constructable: true], :constructor)
 

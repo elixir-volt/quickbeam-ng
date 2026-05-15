@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   use QuickBEAM.VM.Builtin
 
   import Bitwise
-  import QuickBEAM.VM.Heap.Keys, only: [buffer: 0]
+  import QuickBEAM.VM.Heap.Keys, only: [buffer: 0, typed_array: 0]
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
 
@@ -189,8 +189,11 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
   defp require_array_buffer!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
-      map when is_map(map) and is_map_key(map, buffer()) -> ref
-      _ -> JSThrow.type_error!("DataView buffer must be an ArrayBuffer")
+      map when is_map(map) and is_map_key(map, buffer()) and not is_map_key(map, typed_array()) ->
+        ref
+
+      _ ->
+        JSThrow.type_error!("DataView buffer must be an ArrayBuffer")
     end
   end
 

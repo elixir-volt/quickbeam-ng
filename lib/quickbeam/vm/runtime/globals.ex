@@ -55,6 +55,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
       "RegExp" => RegExpInstaller.constructor(),
       "Date" => DateInstaller.constructor(),
       "ArrayBuffer" => ArrayBufferInstaller.constructor(),
+      "SharedArrayBuffer" => ArrayBufferInstaller.shared_constructor(),
       "Proxy" => ProxyInstaller.constructor(),
       "Math" => Math.object() |> Math.install_metadata(),
       "JSON" => JSON.object() |> JSON.install_metadata(),

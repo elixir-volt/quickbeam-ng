@@ -7,9 +7,13 @@ defmodule QuickBEAM.VM.Runtime.ArrayBufferInstaller do
   alias QuickBEAM.VM.Runtime.InstallerHelpers
 
   @doc "Returns the global ArrayBuffer constructor binding."
-  def constructor do
-    ctor =
-      ConstructorRegistry.register("ArrayBuffer", &ArrayBuffer.constructor/2, auto_proto: true)
+  def constructor, do: constructor_named("ArrayBuffer")
+
+  @doc "Returns the global SharedArrayBuffer constructor binding."
+  def shared_constructor, do: constructor_named("SharedArrayBuffer")
+
+  defp constructor_named(name) do
+    ctor = ConstructorRegistry.register(name, &ArrayBuffer.constructor/2, auto_proto: true)
 
     install_prototype_methods(ctor)
     install_species(ctor)
