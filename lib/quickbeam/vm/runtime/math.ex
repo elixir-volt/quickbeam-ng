@@ -353,8 +353,15 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "hypot" do
-      sum = Enum.reduce(args, 0.0, fn a, acc -> acc + :math.pow(Runtime.to_float(a), 2) end)
-      :math.sqrt(sum)
+      values = Enum.map(args, &Runtime.to_float/1)
+
+      cond do
+        Enum.any?(values, &(&1 in [:infinity, :neg_infinity])) -> :infinity
+        Enum.any?(values, &(&1 == :nan)) -> :nan
+        true ->
+          sum = Enum.reduce(values, 0.0, fn a, acc -> acc + :math.pow(a, 2) end)
+          :math.sqrt(sum)
+      end
     end
 
     val("PI", :math.pi())
