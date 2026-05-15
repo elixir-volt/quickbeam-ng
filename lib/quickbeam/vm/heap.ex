@@ -124,11 +124,11 @@ defmodule QuickBEAM.VM.Heap do
   end
 
   @doc "Wraps a function arguments list as an arguments object."
-  def wrap_arguments(args, _opts \\ []) when is_list(args) do
+  def wrap_arguments(args, opts \\ []) when is_list(args) do
     {:obj, ref} = obj = wrap(args)
     put_array_prop(ref, "__arguments__", true)
 
-    thrower = throw_type_error_intrinsic()
+    thrower = Keyword.get_lazy(opts, :thrower, &throw_type_error_intrinsic/0)
     put_array_prop(ref, "callee", {:accessor, thrower, thrower})
 
     put_prop_desc(
@@ -140,13 +140,16 @@ defmodule QuickBEAM.VM.Heap do
     obj
   end
 
-  def throw_type_error_intrinsic do
-    case Process.get(:qb_throw_type_error_intrinsic) do
+  def throw_type_error_intrinsic(realm_key \\ :default) do
+    storage_key = {:qb_throw_type_error_intrinsic, realm_key}
+
+    case Process.get(storage_key) do
       nil ->
         thrower =
           {:builtin, "ThrowTypeError",
            fn _args, _this ->
-             throw({:js_throw, make_error("ThrowTypeError", "TypeError")})
+             message = if realm_key == :default, do: "ThrowTypeError", else: "ThrowTypeError"
+             throw({:js_throw, make_error(message, "TypeError")})
            end}
 
         put_ctor_static(thrower, "length", 0)
@@ -164,7 +167,7 @@ defmodule QuickBEAM.VM.Heap do
           PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
         )
 
-        Process.put(:qb_throw_type_error_intrinsic, thrower)
+        Process.put(storage_key, thrower)
         thrower
 
       thrower ->

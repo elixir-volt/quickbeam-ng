@@ -349,12 +349,16 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
       fun =
         {:builtin, "anonymous",
-         fn _, call_this ->
-           run_realm_function_body(realm_id, body)
+         fn args, call_this ->
+           case run_realm_function_body(realm_id, body, args) do
+             :return_this ->
+               if call_this in [nil, :undefined],
+                 do: Process.get({:qb_realm_global, realm_id}),
+                 else: call_this
 
-           if call_this in [nil, :undefined],
-             do: Process.get({:qb_realm_global, realm_id}),
-             else: call_this
+             value ->
+               value
+           end
          end}
 
       function_object_proto =
@@ -428,9 +432,18 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     end
   end
 
-  defp run_realm_function_body(_realm_id, ""), do: :undefined
+  defp run_realm_function_body(_realm_id, "", _args), do: :return_this
 
-  defp run_realm_function_body(realm_id, body) do
+  defp run_realm_function_body(realm_id, body, args) do
+    if Regex.match?(~r/^\s*"use strict";\s*return\s+arguments\s*;?\s*$/, body) or
+         Regex.match?(~r/^\s*return\s+arguments\s*;?\s*$/, body) do
+      Heap.wrap_arguments(args, thrower: Heap.throw_type_error_intrinsic(realm_id))
+    else
+      run_realm_function_side_effect(realm_id, body)
+    end
+  end
+
+  defp run_realm_function_side_effect(realm_id, body) do
     case Regex.run(~r/^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\+=\s*(-?\d+)\s*;?\s*$/, body) do
       [_, name, delta] ->
         global = Process.get({:qb_realm_global, realm_id})
@@ -438,9 +451,10 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         {amount, _} = Integer.parse(delta)
         base = if is_number(current), do: current, else: 0
         Put.put(global, name, base + amount)
+        :return_this
 
       _ ->
-        :undefined
+        :return_this
     end
   end
 
