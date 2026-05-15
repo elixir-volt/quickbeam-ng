@@ -258,6 +258,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       end
 
     validate_regexp_flags!(flags)
+    validate_regexp_source!(source)
 
     ref = make_ref()
     RegexpState.put(ref, "flags", flags)
@@ -298,6 +299,37 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
     unless valid? and unique? do
       JSThrow.syntax_error!("Invalid regular expression flags")
     end
+  end
+
+  defp validate_regexp_source!(source) when is_binary(source) do
+    if invalid_regexp_source?(source) do
+      JSThrow.syntax_error!("Invalid regular expression")
+    end
+  end
+
+  defp invalid_regexp_source?(source) do
+    starts_with_quantifier?(source) or dangling_escape?(source) or
+      repeated_quantifier?(source) or adjacent_interval_quantifiers?(source)
+  end
+
+  defp starts_with_quantifier?(<<first::binary-size(1), _::binary>>), do: first in ["*", "+", "?"]
+  defp starts_with_quantifier?(""), do: false
+
+  defp dangling_escape?(source) do
+    source
+    |> String.to_charlist()
+    |> Enum.reverse()
+    |> Enum.take_while(&(&1 == ?\\))
+    |> length()
+    |> rem(2) == 1
+  end
+
+  defp repeated_quantifier?(source) do
+    String.contains?(source, ["**", "++", "???", "????"])
+  end
+
+  defp adjacent_interval_quantifiers?(source) do
+    Regex.match?(~r/\{\d+(?:,\d*)?\}\{\d+(?:,\d*)?\}/, source)
   end
 
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
