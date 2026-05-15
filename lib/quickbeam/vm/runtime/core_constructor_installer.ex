@@ -83,6 +83,7 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
         Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.accessor())
       end
 
+      InstallerHelpers.install_methods(proto_ref, DataView, DataView.proto_property_names())
       InstallerHelpers.install_to_string_tag(proto_ref, "DataView")
     end)
   end

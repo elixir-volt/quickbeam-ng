@@ -107,6 +107,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("RegExp"), do: meta("RegExp", [length: 2, constructable: true], :constructor)
   def named_meta("Date"), do: meta("Date", [length: 7, constructable: true], :constructor)
   def named_meta("Promise"), do: meta("Promise", [length: 1, constructable: true], :constructor)
+  def named_meta("DataView"), do: meta("DataView", [length: 1, constructable: true], :constructor)
   def named_meta("Error"), do: meta("Error", [length: 1, constructable: true], :constructor)
 
   def named_meta("AggregateError"),
@@ -505,6 +506,39 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("any"), do: meta("any", [length: 1, constructable: false], :static)
   def named_meta("race"), do: meta("race", [length: 1, constructable: false], :static)
   def named_meta("isError"), do: meta("isError", [length: 1, constructable: false], :static)
+
+  def named_meta(name)
+      when name in [
+             "getBigInt64",
+             "getBigUint64",
+             "getFloat16",
+             "getFloat32",
+             "getFloat64",
+             "getInt8",
+             "getInt16",
+             "getInt32",
+             "getUint8",
+             "getUint16",
+             "getUint32"
+           ],
+      do: meta(name, [length: 1, constructable: false], :proto)
+
+  def named_meta(name)
+      when name in [
+             "setBigInt64",
+             "setBigUint64",
+             "setFloat16",
+             "setFloat32",
+             "setFloat64",
+             "setInt8",
+             "setInt16",
+             "setInt32",
+             "setUint8",
+             "setUint16",
+             "setUint32"
+           ],
+      do: meta(name, [length: 2, constructable: false], :proto)
+
   def named_meta("next"), do: meta("next", [length: 0, constructable: false], :proto)
   def named_meta("delete"), do: meta("delete", [length: 1, constructable: false], :proto)
   def named_meta("clear"), do: meta("clear", [length: 0, constructable: false], :proto)
