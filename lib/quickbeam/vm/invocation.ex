@@ -766,6 +766,9 @@ defmodule QuickBEAM.VM.Invocation do
   defp realm_default_prototype({:builtin, "Set", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :set)
 
+  defp realm_default_prototype({:builtin, "Promise", _}, new_target),
+    do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :promise)
+
   defp realm_default_prototype({:builtin, "WeakMap", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :weak_map)
 

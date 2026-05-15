@@ -14,6 +14,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.Globals.Functions
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
+  alias QuickBEAM.VM.Runtime.PromiseBuiltins
   alias QuickBEAM.VM.Runtime.RegExp, as: JSRegExp
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.String, as: JSString
@@ -95,6 +96,10 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     set_ctor = realm_constructor("Set", JSSet.constructor(), set_proto)
     Heap.put_obj_key(elem(set_proto, 1), "constructor", set_ctor)
 
+    promise_proto = PromiseBuiltins.prototype()
+    promise_ctor = realm_constructor("Promise", PromiseBuiltins.constructor(), promise_proto)
+    Heap.put_obj_key(elem(promise_proto, 1), "constructor", promise_ctor)
+
     weak_map_proto = Heap.wrap(%{"__proto__" => object_proto})
     weak_map_ctor = realm_constructor("WeakMap", JSMap.weak_constructor(), weak_map_proto)
     Heap.put_obj_key(elem(weak_map_proto, 1), "constructor", weak_map_ctor)
@@ -149,6 +154,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         data_view_proto,
         map_proto,
         set_proto,
+        promise_proto,
         weak_map_proto,
         weak_set_proto,
         weak_ref_proto,
@@ -173,6 +179,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "DataView" => data_view_ctor,
         "Map" => map_ctor,
         "Set" => set_ctor,
+        "Promise" => promise_ctor,
         "WeakMap" => weak_map_ctor,
         "WeakSet" => weak_set_ctor,
         "WeakRef" => weak_ref_ctor,
@@ -230,6 +237,9 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
       %{set_proto: set_proto} when intrinsic == :set ->
         set_proto
+
+      %{promise_proto: promise_proto} when intrinsic == :promise ->
+        promise_proto
 
       %{weak_map_proto: weak_map_proto} when intrinsic == :weak_map ->
         weak_map_proto
@@ -369,6 +379,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          data_view_proto,
          map_proto,
          set_proto,
+         promise_proto,
          weak_map_proto,
          weak_set_proto,
          weak_ref_proto,
@@ -416,6 +427,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
           data_view_proto,
           map_proto,
           set_proto,
+          promise_proto,
           weak_map_proto,
           weak_set_proto,
           weak_ref_proto,
@@ -445,6 +457,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         data_view_proto,
         map_proto,
         set_proto,
+        promise_proto,
         weak_map_proto,
         weak_set_proto,
         weak_ref_proto,
@@ -504,6 +517,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          data_view_proto,
          map_proto,
          set_proto,
+         promise_proto,
          weak_map_proto,
          weak_set_proto,
          weak_ref_proto,
@@ -523,6 +537,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       data_view_proto: data_view_proto,
       map_proto: map_proto,
       set_proto: set_proto,
+      promise_proto: promise_proto,
       weak_map_proto: weak_map_proto,
       weak_set_proto: weak_set_proto,
       weak_ref_proto: weak_ref_proto,
