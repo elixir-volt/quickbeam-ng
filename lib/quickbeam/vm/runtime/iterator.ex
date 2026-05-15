@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Runtime
 
@@ -26,14 +26,19 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  def static_property("from") do
-    from = {:builtin, "from", &from/2}
-    Heap.put_ctor_static(from, "length", 1)
-    Heap.put_ctor_static(from, "name", "from")
-    from
-  end
+  def static_property("from"), do: static_method("from", 1, &from/2)
+  def static_property("concat"), do: static_method("concat", 0, &concat/2)
 
   def static_property(_), do: :undefined
+
+  defp static_method(name, length, callback) do
+    fun = {:builtin, name, callback}
+    Heap.put_ctor_static(fun, "length", length)
+    Heap.put_ctor_static(fun, "name", name)
+    Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
+    fun
+  end
 
   def proto_property({:symbol, "Symbol.iterator"}) do
     {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
@@ -57,11 +62,18 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     fun = {:builtin, name, callback}
     Heap.put_ctor_static(fun, "length", length)
     Heap.put_ctor_static(fun, "name", name)
+    Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
     fun
   end
 
   def from([value | _], _this), do: from_value(value)
   def from(_, _this), do: JSThrow.type_error!("Iterator.from requires an object")
+
+  def concat(args, _this) do
+    iterators = Enum.map(args, &(from_value(&1) |> iterator_record()))
+    helper_iterator(%{"kind" => :concat, "iterators" => iterators, "index" => 0})
+  end
 
   defp from_value(value) do
     unless object_like?(value), do: JSThrow.type_error!("Iterator.from requires an object")
@@ -241,12 +253,29 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     state = Heap.get_obj(state_ref, %{})
 
     case state["kind"] do
+      :concat -> concat_next(state_ref, state)
       :drop -> drop_next(state_ref, state)
       :take -> take_next(state_ref, state)
       :filter -> filter_next(state_ref, state)
       :map -> map_next(state_ref, state)
       :flat_map -> flat_map_next(state_ref, state)
       _ -> iter_result(:undefined, true)
+    end
+  end
+
+  defp concat_next(_state_ref, %{"iterators" => iterators, "index" => index})
+       when index >= length(iterators),
+       do: iter_result(:undefined, true)
+
+  defp concat_next(state_ref, %{"iterators" => iterators, "index" => index} = state) do
+    iterator = Enum.at(iterators, index)
+    result = iterator_next(iterator)
+
+    if Get.get(result, "done") == true do
+      Heap.put_obj(state_ref, %{state | "index" => index + 1})
+      concat_next(state_ref, Heap.get_obj(state_ref, %{}))
+    else
+      iter_result(Get.get(result, "value"), false)
     end
   end
 

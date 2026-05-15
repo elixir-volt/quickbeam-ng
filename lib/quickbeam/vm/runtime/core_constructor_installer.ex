@@ -100,8 +100,11 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
   end
 
   defp install_iterator(ctor) do
-    Heap.put_ctor_static(ctor, "from", Iterator.static_property("from"))
-    Heap.put_ctor_prop_desc(ctor, "from", PropertyDescriptor.method())
+    for name <- ~w(concat from) do
+      Heap.put_ctor_static(ctor, name, Iterator.static_property(name))
+      Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.method())
+    end
+
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
