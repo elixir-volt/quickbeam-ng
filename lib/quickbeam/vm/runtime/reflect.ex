@@ -165,14 +165,14 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     method "preventExtensions" do
       case hd(args) do
         {:obj, _} = obj -> prevent_extensions(obj)
-        _ -> false
+        _ -> JSThrow.type_error!("Reflect.preventExtensions called on non-object")
       end
     end
 
     method "isExtensible" do
       case hd(args) do
         {:obj, _} = obj -> extensible?(obj)
-        _ -> false
+        _ -> JSThrow.type_error!("Reflect.isExtensible called on non-object")
       end
     end
 

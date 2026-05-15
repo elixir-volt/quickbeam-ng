@@ -622,8 +622,8 @@ defmodule QuickBEAM.VM.CompilerTest do
           ~S|let a={}; let b=Object.create(a); let c=Object.create(b); a.isPrototypeOf(c)|
         ).value
 
-      prevent_primitive = compile_and_decode(rt, "Reflect.preventExtensions(1)").value
-      extensible_primitive = compile_and_decode(rt, "Reflect.isExtensible(1)").value
+      prevent_primitive = compile_and_decode(rt, ~S|try{Reflect.preventExtensions(1)}catch(e){e.name}|).value
+      extensible_primitive = compile_and_decode(rt, ~S|try{Reflect.isExtensible(1)}catch(e){e.name}|).value
 
       reflect_define_primitive =
         compile_and_decode(rt, ~S|try{Reflect.defineProperty(1,"x",{value:1})}catch(e){e.name}|).value
@@ -888,8 +888,8 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, "object"} = Compiler.invoke(object_value_of_string, [])
       assert {:ok, true} = Compiler.invoke(object_is_prototype_of_direct, [])
       assert {:ok, true} = Compiler.invoke(object_is_prototype_of_chain, [])
-      assert {:ok, false} = Compiler.invoke(prevent_primitive, [])
-      assert {:ok, false} = Compiler.invoke(extensible_primitive, [])
+      assert {:ok, "TypeError"} = Compiler.invoke(prevent_primitive, [])
+      assert {:ok, "TypeError"} = Compiler.invoke(extensible_primitive, [])
       assert {:ok, "TypeError"} = Compiler.invoke(reflect_define_primitive, [])
       assert {:ok, "TypeError"} = Compiler.invoke(object_define_primitive, [])
       assert {:ok, false} = Compiler.invoke(reflect_define_blocked, [])
