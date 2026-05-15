@@ -334,7 +334,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
 
   defp invalid_regexp_source?(source) do
     starts_with_quantifier?(source) or dangling_escape?(source) or
-      repeated_quantifier?(source) or adjacent_interval_quantifiers?(source)
+      repeated_quantifier?(source) or adjacent_interval_quantifiers?(source) or invalid_class_range?(source)
   end
 
   defp starts_with_quantifier?(<<first::binary-size(1), _::binary>>), do: first in ["*", "+", "?"]
@@ -355,6 +355,10 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
 
   defp adjacent_interval_quantifiers?(source) do
     Regex.match?(~r/\{\d+(?:,\d*)?\}\{\d+(?:,\d*)?\}/, source)
+  end
+
+  defp invalid_class_range?(source) do
+    String.contains?(source, ["[{-", "--"])
   end
 
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
