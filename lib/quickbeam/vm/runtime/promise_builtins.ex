@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
 
   alias QuickBEAM.VM.{Heap, Invocation, JSThrow}
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
+  alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.PromiseState
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
@@ -94,13 +95,17 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
   end
 
   static "all" do
-    iterable = observe_constructor_resolve(this, arg(args, 0, :undefined))
-    wrap_static_result(this, promise_all(iterable))
+    case combinator_inputs(this, arg(args, 0, :undefined)) do
+      {:ok, items} -> wrap_static_result(this, promise_all_items(items))
+      {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+    end
   end
 
   static "allSettled" do
-    iterable = observe_constructor_resolve(this, arg(args, 0, :undefined))
-    wrap_static_result(this, promise_all_settled(iterable))
+    case combinator_inputs(this, arg(args, 0, :undefined)) do
+      {:ok, items} -> wrap_static_result(this, promise_all_settled_items(items))
+      {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+    end
   end
 
   static "allKeyed" do
@@ -112,13 +117,17 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
   end
 
   static "any" do
-    iterable = observe_constructor_resolve(this, arg(args, 0, :undefined))
-    wrap_static_result(this, promise_any(iterable))
+    case combinator_inputs(this, arg(args, 0, :undefined)) do
+      {:ok, items} -> wrap_static_result(this, promise_any_items(items))
+      {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+    end
   end
 
   static "race" do
-    iterable = observe_constructor_resolve(this, arg(args, 0, :undefined))
-    wrap_static_result(this, promise_race(iterable))
+    case combinator_inputs(this, arg(args, 0, :undefined)) do
+      {:ok, items} -> wrap_static_result(this, promise_race_items(items))
+      {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+    end
   end
 
   static "try", length: 1 do
@@ -157,17 +166,37 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
     promise
   end
 
-  defp observe_constructor_resolve(constructor, iterable) do
-    values = Heap.to_list(iterable)
-    resolve = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+  defp combinator_inputs(constructor, iterable) do
+    try do
+      {iter, next_fn} = Iterators.for_of_start(iterable)
+      resolve = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
 
-    unless QuickBEAM.VM.Builtin.callable?(resolve) do
-      JSThrow.type_error!("Promise resolve is not callable")
+      unless QuickBEAM.VM.Builtin.callable?(resolve) do
+        JSThrow.type_error!("Promise resolve is not callable")
+      end
+
+      collect_combinator_inputs(iter, next_fn, resolve, constructor, [])
+    catch
+      {:js_throw, reason} -> {:abrupt, reason}
     end
+  end
 
-    Enum.map(values, fn value ->
-      Invocation.invoke_with_receiver(resolve, [value], constructor)
-    end)
+  defp collect_combinator_inputs(iter, next_fn, resolve, constructor, acc) do
+    case Iterators.for_of_next(next_fn, iter) do
+      {true, _, _} ->
+        {:ok, Enum.reverse(acc)}
+
+      {false, value, next_iter} ->
+        try do
+          next_promise = Invocation.invoke_with_receiver(resolve, [value], constructor)
+          observed = observe_input_then(next_promise)
+          collect_combinator_inputs(next_iter, next_fn, resolve, constructor, [observed | acc])
+        catch
+          {:js_throw, reason} ->
+            Iterators.iterator_close(next_iter)
+            {:abrupt, reason}
+        end
+    end
   end
 
   defp promise_resolve({:builtin, "Promise", _}, value), do: PromiseState.adopt(value)
@@ -221,9 +250,9 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
 
   defp observe_input_then(value), do: value
 
-  defp promise_all(arr) do
-    items = promise_inputs(arr)
+  defp promise_all(arr), do: arr |> promise_inputs() |> promise_all_items()
 
+  defp promise_all_items(items) do
     cond do
       rejection = first_rejection(items) ->
         {:rejected, reason} = rejection
@@ -258,9 +287,9 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
     end)
   end
 
-  defp promise_all_settled(arr) do
-    items = promise_inputs(arr)
+  defp promise_all_settled(arr), do: arr |> promise_inputs() |> promise_all_settled_items()
 
+  defp promise_all_settled_items(items) do
     if pending_input?(items) do
       PromiseState.pending()
     else
@@ -339,9 +368,7 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
       else: Heap.wrap(%{"status" => status, "reason" => val})
   end
 
-  defp promise_any(arr) do
-    items = promise_inputs(arr)
-
+  defp promise_any_items(items) do
     case first_fulfillment(items) do
       {:fulfilled, value} ->
         PromiseState.resolved(value)
@@ -463,9 +490,7 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
     fun
   end
 
-  defp promise_race(arr) do
-    items = promise_inputs(arr)
-
+  defp promise_race_items(items) do
     if items == [] do
       PromiseState.pending()
     else
