@@ -172,8 +172,9 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
   defp write(this, args, type) do
     view = require_view!(this)
+    assert_view_buffer_mutable!(view)
     offset = to_index(List.first(args) || 0)
-    value = Enum.at(args, 1, :undefined)
+    value = convert_write_value(Enum.at(args, 1, :undefined), type)
     little? = Runtime.truthy?(Enum.at(args, 2, false))
     {buf, byte_offset, byte_length, buffer_ref} = view_buffer_state_for_write!(view)
     size = elem_size(type)
@@ -291,6 +292,15 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
   defp assert_view_buffer_attached!(_), do: :ok
 
+  defp assert_view_buffer_mutable!(%{"__viewed_buffer__" => {:obj, buffer_ref}}) do
+    case Heap.get_obj(buffer_ref, %{}) do
+      %{"__immutable__" => true} -> JSThrow.type_error!("ArrayBuffer is immutable")
+      _ -> :ok
+    end
+  end
+
+  defp assert_view_buffer_mutable!(_), do: :ok
+
   defp update_buffer(buffer_ref, new_buf) do
     Heap.update_obj(buffer_ref, %{}, fn map -> Map.put(map, buffer(), new_buf) end)
   end
@@ -367,6 +377,11 @@ defmodule QuickBEAM.VM.Runtime.DataView do
     write_bytes(buf, pos, maybe_reverse(bytes, little?))
   end
 
+  defp convert_write_value(value, type) when type in [:bigint64, :biguint64],
+    do: bigint_value(value)
+
+  defp convert_write_value(value, _type), do: Runtime.to_number(value)
+
   defp encode_scalar(value, :int8), do: <<trunc_number(value)::signed-8>>
   defp encode_scalar(value, :uint8), do: <<band(trunc_number(value), 0xFF)::8>>
   defp encode_scalar(value, :int16), do: <<trunc_number(value)::signed-16>>
@@ -376,8 +391,8 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   defp encode_scalar(value, :float16), do: <<encode_float16(value)::16>>
   defp encode_scalar(value, :float32), do: <<float32_bits(value)::32>>
   defp encode_scalar(value, :float64), do: <<float64_bits(value)::64>>
-  defp encode_scalar(value, :bigint64), do: <<bigint_value(value)::signed-64>>
-  defp encode_scalar(value, :biguint64), do: <<bigint_value(value)::unsigned-64>>
+  defp encode_scalar(value, :bigint64), do: <<value::signed-64>>
+  defp encode_scalar(value, :biguint64), do: <<value::unsigned-64>>
 
   defp read_uint(buf, pos, size, little?),
     do: :binary.decode_unsigned(part_endian(buf, pos, size, little?), :big)
@@ -408,7 +423,7 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   end
 
   defp trunc_number(value) do
-    case Runtime.to_number(value) do
+    case value do
       n when is_integer(n) -> n
       n when is_float(n) -> trunc(n)
       _ -> 0
@@ -417,7 +432,15 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
   defp bigint_value({:bigint, n}), do: n
   defp bigint_value(n) when is_integer(n), do: n
-  defp bigint_value(_), do: JSThrow.type_error!("Cannot convert value to BigInt")
+
+  defp bigint_value(value) do
+    case Runtime.to_number(value) do
+      {:bigint, n} -> n
+      n when is_integer(n) -> n
+      n when is_float(n) and n == trunc(n) -> trunc(n)
+      _ -> JSThrow.range_error!("Cannot convert value to BigInt")
+    end
+  end
 
   defp float32_bits(:nan), do: 0x7FC00000
   defp float32_bits(:infinity), do: 0x7F800000

@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   alias QuickBEAM.VM.Runtime
 
   @doc "Returns prototype method names installed on ArrayBuffer.prototype."
-  def proto_property_names, do: ~w(transfer resize slice sliceToImmutable)
+  def proto_property_names, do: ~w(transfer resize slice sliceToImmutable transferToImmutable)
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor(args, _this \\ nil) do
@@ -117,7 +117,30 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
     do_slice(this, args)
   end
 
+  proto "transferToImmutable" do
+    immutable = do_slice_to_immutable(this, args)
+
+    case this do
+      {:obj, ref} ->
+        map = Heap.get_obj(ref, %{})
+
+        Heap.put_obj(
+          ref,
+          Map.merge(map, %{buffer() => <<>>, "byteLength" => 0, "__detached__" => true})
+        )
+
+      _ ->
+        :ok
+    end
+
+    immutable
+  end
+
   proto "sliceToImmutable" do
+    do_slice_to_immutable(this, args)
+  end
+
+  defp do_slice_to_immutable(this, args) do
     case this do
       {:obj, ref} ->
         map = Heap.get_obj(ref, %{})
