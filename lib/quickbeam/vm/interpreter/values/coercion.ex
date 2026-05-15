@@ -228,8 +228,13 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
     end
   end
 
-  defp own_or_inherited_method(obj, data, name) when is_map(data),
-    do: Map.get(data, name) || Get.get(obj, name)
+  defp own_or_inherited_method(obj, data, name) when is_map(data) do
+    case Map.get(data, name) do
+      {:accessor, getter, _} when getter != nil -> Get.call_getter(getter, obj)
+      nil -> Get.get(obj, name)
+      value -> value
+    end
+  end
 
   defp own_or_inherited_method(obj, _data, name), do: Get.get(obj, name)
 
