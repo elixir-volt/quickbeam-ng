@@ -1313,7 +1313,7 @@ defmodule QuickBEAM.VM.Runtime.String do
         captures ->
           strings =
             Enum.map(captures, fn
-              {start, len} -> binary_part(s, start, len)
+              {start, len} -> String.slice(s, start, len)
               nil -> :undefined
             end)
 
