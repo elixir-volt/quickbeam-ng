@@ -14,6 +14,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.RegExp, as: JSRegExp
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.String, as: JSString
+  alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
   alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
 
   def object do
@@ -24,8 +25,6 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
   def create_realm do
     object_proto = Heap.wrap(%{})
-    object_ctor = realm_constructor("Object", &Constructors.object/2, object_proto)
-    Heap.put_obj_key(elem(object_proto, 1), "constructor", object_ctor)
 
     array_proto = Array.prototype()
     array_ctor = realm_constructor("Array", &Constructors.array/2, array_proto)
@@ -38,6 +37,13 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     number_proto = Heap.wrap(%{"__proto__" => object_proto})
     number_ctor = realm_constructor("Number", &Constructors.number/2, number_proto)
     Heap.put_obj_key(elem(number_proto, 1), "constructor", number_ctor)
+
+    bigint_proto = Heap.wrap(%{"__proto__" => object_proto})
+    bigint_ctor = realm_constructor("BigInt", &Constructors.bigint/2, bigint_proto)
+    Heap.put_obj_key(elem(bigint_proto, 1), "constructor", bigint_ctor)
+
+    object_ctor = realm_object_constructor(object_proto, boolean_proto, number_proto, bigint_proto)
+    Heap.put_obj_key(elem(object_proto, 1), "constructor", object_ctor)
 
     string_proto = Heap.wrap(%{"__proto__" => object_proto})
     string_ctor = realm_constructor("String", &Constructors.string/2, string_proto)
@@ -123,6 +129,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Number" => number_ctor,
         "String" => string_ctor,
         "RegExp" => regexp_ctor,
+        "BigInt" => bigint_ctor,
         "Date" => date_ctor,
         "Map" => map_ctor,
         "Set" => set_ctor,
@@ -153,6 +160,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       %{array_proto: array_proto} when intrinsic == :array -> array_proto
       %{boolean_proto: boolean_proto} when intrinsic == :boolean -> boolean_proto
       %{number_proto: number_proto} when intrinsic == :number -> number_proto
+      %{bigint_proto: bigint_proto} when intrinsic == :bigint -> bigint_proto
       %{string_proto: string_proto} when intrinsic == :string -> string_proto
       %{date_proto: date_proto} when intrinsic == :date -> date_proto
       %{map_proto: map_proto} when intrinsic == :map -> map_proto
@@ -165,6 +173,24 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       _ -> nil
     end
   end
+
+  defp realm_object_constructor(object_proto, boolean_proto, number_proto, bigint_proto) do
+    callback = fn
+      [value | _], _this -> realm_object_value(value, object_proto, boolean_proto, number_proto, bigint_proto)
+      [], _this -> Heap.wrap(%{"__proto__" => object_proto})
+    end
+
+    ctor = {:builtin, "Object", callback}
+    ConstructorRegistry.put_prototype(ctor, object_proto)
+    ctor
+  end
+
+  defp realm_object_value({:obj, _} = value, _object_proto, _boolean_proto, _number_proto, _bigint_proto), do: value
+  defp realm_object_value(value, _object_proto, boolean_proto, _number_proto, _bigint_proto) when is_boolean(value), do: Heap.wrap(%{WrappedPrimitive.slot(:boolean) => value, "__proto__" => boolean_proto})
+  defp realm_object_value(value, _object_proto, _boolean_proto, number_proto, _bigint_proto) when is_number(value), do: Heap.wrap(%{WrappedPrimitive.slot(:number) => value, "__proto__" => number_proto})
+  defp realm_object_value({:bigint, _} = value, _object_proto, _boolean_proto, _number_proto, bigint_proto), do: Heap.wrap(%{WrappedPrimitive.slot(:bigint) => value, "__proto__" => bigint_proto})
+  defp realm_object_value(value, object_proto, _boolean_proto, _number_proto, _bigint_proto) when is_binary(value), do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => object_proto})
+  defp realm_object_value(_value, object_proto, _boolean_proto, _number_proto, _bigint_proto), do: Heap.wrap(%{"__proto__" => object_proto})
 
   defp realm_constructor(name, callback, proto) do
     cb = fn args, this -> callback.(args, this) end
