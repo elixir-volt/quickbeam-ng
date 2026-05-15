@@ -545,38 +545,24 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp values(_, this) do
     ref = require_strong_set_ref!(this)
-
-    ref
-    |> Heap.get_obj(%{})
-    |> Map.get(set_data(), [])
-    |> make_set_iterator("Set Iterator")
+    make_set_iterator(ref, :values, "Set Iterator")
   end
 
   defp entries(_, this) do
     ref = require_strong_set_ref!(this)
-
-    ref
-    |> Heap.get_obj(%{})
-    |> Map.get(set_data(), [])
-    |> Enum.map(fn value -> Heap.wrap([value, value]) end)
-    |> make_set_iterator("Set Iterator")
+    make_set_iterator(ref, :entries, "Set Iterator")
   end
 
-  defp make_set_iterator(items, tag) do
-    pos_ref = make_ref()
-    Process.put(pos_ref, {items, 0})
+  defp make_set_iterator(ref, mode, tag) do
+    state_ref = make_ref()
+    Process.put(state_ref, {[], false})
+    {:obj, iter_ref} = iter = Heap.wrap(%{})
 
     next_fn =
       {:builtin, "next",
-       fn _, _ ->
-         case Process.get(pos_ref) do
-           {items, idx} when idx < length(items) ->
-             Process.put(pos_ref, {items, idx + 1})
-             Heap.wrap(%{"value" => Enum.at(items, idx), "done" => false})
-
-           _ ->
-             Heap.wrap(%{"value" => :undefined, "done" => true})
-         end
+       fn _, this ->
+         {set_ref, iter_state, iter_mode} = require_set_iterator!(this)
+         next_set_iterator_value(set_ref, iter_state, iter_mode)
        end}
 
     proto =
@@ -598,12 +584,62 @@ defmodule QuickBEAM.VM.Runtime.Set do
       )
     end
 
-    Heap.wrap(%{
+    Heap.put_obj(iter_ref, %{
       "__proto__" => proto,
+      "__set_iterator_ref__" => ref,
+      "__set_iterator_state__" => state_ref,
+      "__set_iterator_mode__" => mode,
       "next" => next_fn,
       {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _, this -> this end}
     })
+
+    iter
   end
+
+  defp require_set_iterator!({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{
+        "__set_iterator_ref__" => set_ref,
+        "__set_iterator_state__" => state_ref,
+        "__set_iterator_mode__" => mode
+      } ->
+        {set_ref, state_ref, mode}
+
+      _ ->
+        JSThrow.type_error!("Set Iterator next called on incompatible receiver")
+    end
+  end
+
+  defp require_set_iterator!(_),
+    do: JSThrow.type_error!("Set Iterator next called on incompatible receiver")
+
+  defp next_set_iterator_value(ref, state_ref, mode) do
+    case Process.get(state_ref, {[], false}) do
+      {_seen, true} ->
+        Heap.wrap(%{"value" => :undefined, "done" => true})
+
+      {seen, false} ->
+        case next_set_iterator_key(ref, seen) do
+          :done ->
+            Process.put(state_ref, {seen, true})
+            Heap.wrap(%{"value" => :undefined, "done" => true})
+
+          value ->
+            Process.put(state_ref, {[value | seen], false})
+            Heap.wrap(%{"value" => set_iterator_result(mode, value), "done" => false})
+        end
+    end
+  end
+
+  defp next_set_iterator_key(ref, seen) do
+    ref
+    |> Heap.get_obj(%{})
+    |> Map.get(set_data(), [])
+    |> Enum.find(:done, &(&1 not in seen))
+  end
+
+  defp set_iterator_result(:entries, value), do: Heap.wrap([value, value])
+  defp set_iterator_result(_mode, value), do: value
 
   defp for_each([callback | rest], this) do
     ref = require_strong_set_ref!(this)
