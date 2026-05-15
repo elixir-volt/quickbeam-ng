@@ -489,13 +489,24 @@ defmodule QuickBEAM.VM.Runtime.Math do
       else: :math.atan2(y, x)
   end
 
-  defp math_pow(_base, 0), do: 1
+  defp math_pow(_base, exp) when exp == 0, do: 1
   defp math_pow(:nan, _exp), do: :nan
   defp math_pow(_base, :nan), do: :nan
   defp math_pow(:infinity, exp) when is_number(exp) and exp > 0, do: :infinity
   defp math_pow(:infinity, exp) when is_number(exp) and exp < 0, do: 0
-  defp math_pow(:neg_infinity, exp) when is_number(exp) and exp > 0, do: :infinity
-  defp math_pow(:neg_infinity, exp) when is_number(exp) and exp < 0, do: 0
+
+  defp math_pow(:neg_infinity, exp) when is_number(exp) and exp > 0 do
+    if odd_integer?(exp), do: :neg_infinity, else: :infinity
+  end
+
+  defp math_pow(:neg_infinity, exp) when is_number(exp) and exp < 0 do
+    if odd_integer?(exp), do: -0.0, else: 0
+  end
+
+  defp math_pow(base, exp) when is_number(base) and base == 0 and is_number(exp) and exp < 0 do
+    if Values.neg_zero?(base) and odd_integer?(exp), do: :neg_infinity, else: :infinity
+  end
+
   defp math_pow(base, :infinity) when abs(base) > 1, do: :infinity
   defp math_pow(base, :infinity) when abs(base) < 1, do: 0
   defp math_pow(base, :neg_infinity) when abs(base) > 1, do: 0
@@ -507,6 +518,8 @@ defmodule QuickBEAM.VM.Runtime.Math do
       ArithmeticError -> :nan
     end
   end
+
+  defp odd_integer?(value), do: is_integer(value) or (is_float(value) and value == trunc(value) and rem(trunc(value), 2) != 0)
 
   defp shewchuk_sum(list) do
     partials =
