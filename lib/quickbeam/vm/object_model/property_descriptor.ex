@@ -44,6 +44,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
       "writable" => attrs.writable,
       "enumerable" => attrs.enumerable,
       "configurable" => attrs.configurable,
+      "__proto__" => Heap.get_object_prototype(),
       key_order() => ["configurable", "enumerable", "writable", "value"]
     })
   end
@@ -54,6 +55,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
       "set" => setter || :undefined,
       "enumerable" => attrs.enumerable,
       "configurable" => attrs.configurable,
+      "__proto__" => Heap.get_object_prototype(),
       key_order() => ["configurable", "enumerable", "set", "get"]
     })
   end
