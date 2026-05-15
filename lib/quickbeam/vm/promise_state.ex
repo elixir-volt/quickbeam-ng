@@ -81,7 +81,16 @@ defmodule QuickBEAM.VM.PromiseState do
 
   @doc "Resolves a Promise state and drains queued reactions."
   def resolve(ref, state, val) do
-    Heap.put_obj(ref, promise_obj(state, val, ref))
+    existing = Heap.get_obj(ref, %{})
+    updated = promise_obj(state, val, ref)
+
+    updated =
+      case existing do
+        %{"__proto__" => proto} -> Map.put(updated, "__proto__", proto)
+        _ -> updated
+      end
+
+    Heap.put_obj(ref, updated)
 
     for {on_fulfilled, on_rejected, child_ref} <- pop_waiters(ref) do
       handler =
