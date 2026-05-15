@@ -212,10 +212,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     index_entries = Enum.map(captures, &capture_indices/1)
     indices = Heap.wrap(index_entries)
 
-    if names != [] do
-      {:obj, indices_ref} = indices
-      materialize_regexp_result_props(indices_ref, %{"groups" => regexp_index_groups(names, captures)})
-    end
+    {:obj, indices_ref} = indices
+    materialize_regexp_result_props(indices_ref, %{"groups" => regexp_index_groups(names, captures)})
 
     Map.put(props, "indices", indices)
   end
