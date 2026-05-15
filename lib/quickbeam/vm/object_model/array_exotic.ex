@@ -101,7 +101,7 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
 
     if fields.value_present and length_value != current_length(ref) do
       if non_configurable_index_at_or_above?(ref, length_value, current_length(ref)) do
-        throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
+        partially_shrink_to_nonconfigurable!(ref, length_value, current_length(ref), writable)
       end
 
       try do
@@ -260,10 +260,35 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
     end
   end
 
-  defp non_configurable_index_at_or_above?(ref, new_len, old_len) do
-    Enum.any?(new_len..(old_len - 1)//1, fn index ->
+  defp non_configurable_index_at_or_above?(ref, new_len, old_len),
+    do: non_configurable_index(ref, new_len, old_len) != nil
+
+  defp non_configurable_index(ref, new_len, old_len) do
+    Enum.find((old_len - 1)..new_len//-1, fn index ->
       match?(%{configurable: false}, Heap.get_prop_desc(ref, Integer.to_string(index)))
     end)
+  end
+
+  defp partially_shrink_to_nonconfigurable!(ref, new_len, old_len, writable) do
+    kept_len = non_configurable_index(ref, new_len, old_len) + 1
+
+    for index <- kept_len..(old_len - 1)//1 do
+      key = Integer.to_string(index)
+      Heap.delete_array_prop(ref, key)
+      Heap.put_prop_desc(ref, key, nil)
+    end
+
+    case Heap.get_obj(ref, []) do
+      {:qb_arr, arr} -> Heap.put_obj_raw(ref, {:qb_arr, :array.resize(kept_len, arr)})
+      list when is_list(list) -> Heap.put_obj(ref, Enum.take(list, kept_len))
+      _ -> Heap.put_array_prop(ref, "length", kept_len)
+    end
+
+    if writable == false do
+      put_length_attrs(ref, false)
+    end
+
+    throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
   end
 
   defp descriptor_attribute_present?(desc) do
