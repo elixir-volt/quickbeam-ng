@@ -1831,6 +1831,9 @@ defmodule QuickBEAM.VM.Runtime.String do
     [groups]
   end
 
+  defp replace_named_capture_substitutions(rep, named_captures) when map_size(named_captures) == 0,
+    do: rep
+
   defp replace_named_capture_substitutions(rep, named_captures) do
     Regex.replace(~r/\$<([^>]+)>/, rep, fn _match, name ->
       case Map.get(named_captures, name, "") do
