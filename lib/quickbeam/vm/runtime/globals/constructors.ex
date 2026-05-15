@@ -242,41 +242,66 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   def regexp([], this), do: regexp(["" | []], this)
 
   def regexp([pattern | rest], this) do
-    source =
-      case pattern do
-        {:regexp, _bytecode, value} -> value
-        {:regexp, _bytecode, value, _ref} -> value
-        value when is_binary(value) -> value
-        :undefined -> ""
-        _ -> QuickBEAM.VM.Runtime.stringify(pattern)
-      end
-
-    flags =
-      case rest do
-        [value | _] when value != :undefined -> QuickBEAM.VM.Runtime.stringify(value)
-        _ -> regexp_source_flags(pattern)
-      end
-
-    validate_regexp_flags!(flags)
-    validate_regexp_source!(source)
-
-    ref = make_ref()
-    RegexpState.put(ref, "flags", flags)
-    RegexpState.put(ref, "lastIndex", 0)
-
-    case this do
-      {:obj, this_ref} ->
-        case Heap.get_obj(this_ref, %{}) do
-          %{proto() => instance_proto} -> RegexpState.put(ref, proto(), instance_proto)
-          _ -> :ok
+    if regexp_function_identity?(pattern, rest, this) do
+      pattern
+    else
+      source =
+        case pattern do
+          {:regexp, _bytecode, value} -> value
+          {:regexp, _bytecode, value, _ref} -> value
+          value when is_binary(value) -> value
+          :undefined -> ""
+          _ -> QuickBEAM.VM.Runtime.stringify(pattern)
         end
 
-      _ ->
-        :ok
-    end
+      flags =
+        case rest do
+          [value | _] when value != :undefined -> QuickBEAM.VM.Runtime.stringify(value)
+          _ -> regexp_source_flags(pattern)
+        end
 
-    {:regexp, nil, source, ref}
+      validate_regexp_flags!(flags)
+      validate_regexp_source!(source)
+
+      ref = make_ref()
+      RegexpState.put(ref, "flags", flags)
+      RegexpState.put(ref, "lastIndex", 0)
+
+      case this do
+        {:obj, this_ref} ->
+          case Heap.get_obj(this_ref, %{}) do
+            %{proto() => instance_proto} -> RegexpState.put(ref, proto(), instance_proto)
+            _ -> :ok
+          end
+
+        _ ->
+          :ok
+      end
+
+      {:regexp, nil, source, ref}
+    end
   end
+
+  defp regexp_function_identity?(pattern, rest, this) do
+    regexp_value?(pattern) and regexp_flags_omitted?(rest) and not regexp_constructing?(this)
+  end
+
+  defp regexp_value?({:regexp, _, _}), do: true
+  defp regexp_value?({:regexp, _, _, _}), do: true
+  defp regexp_value?(_), do: false
+
+  defp regexp_flags_omitted?([]), do: true
+  defp regexp_flags_omitted?([:undefined | _]), do: true
+  defp regexp_flags_omitted?(_), do: false
+
+  defp regexp_constructing?({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{proto() => _} -> true
+      _ -> false
+    end
+  end
+
+  defp regexp_constructing?(_), do: false
 
   defp regexp_source_flags({:regexp, bytecode, _source}) do
     QuickBEAM.VM.ObjectModel.Get.regexp_flags(bytecode)
