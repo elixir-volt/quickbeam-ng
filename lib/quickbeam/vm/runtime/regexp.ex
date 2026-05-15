@@ -5,9 +5,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
   alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put}
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
   static "escape", length: 1, constructable: false do
@@ -458,19 +458,23 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_match_all(regexp, [string | _]) do
     string = QuickBEAM.VM.Interpreter.Values.stringify(string)
-    regexp_string_iterator(regexp_match_all_results(regexp, string, 0, []))
+    regexp_string_iterator(regexp_match_all_results(regexp, string, 0, []), regexp, string)
   end
 
   defp regexp_match_all(regexp, []), do: regexp_match_all(regexp, [""])
 
-  defp regexp_string_iterator(items) do
+  defp regexp_string_iterator(items, regexp, string) do
     iter = Heap.wrap_iterator(items)
+    state_ref = make_ref()
+    Process.put(state_ref, false)
 
-    next_fn =
+    raw_next =
       case iter do
         {:obj, ref} -> Heap.get_obj(ref, %{}) |> Map.get("next")
         _ -> :undefined
       end
+
+    next_fn = regexp_string_iterator_next(iter, raw_next, state_ref, regexp, string)
 
     proto =
       Heap.wrap(%{
@@ -492,11 +496,104 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
 
     with {:obj, ref} <- iter do
+      Heap.put_obj_key(ref, "next", next_fn)
       Heap.put_obj_key(ref, "__proto__", proto)
     end
 
     iter
   end
+
+  defp regexp_string_iterator_next(iter, raw_next, state_ref, regexp, string) do
+    {:builtin, "next",
+     fn _args, this ->
+       if this != iter do
+         JSThrow.type_error!("RegExp String Iterator next called on incompatible receiver")
+       end
+
+       exec = Get.get(regexp, "exec")
+
+       if custom_regexp_exec?(exec) do
+         regexp_string_iterator_exec_next(state_ref, regexp, string, exec)
+       else
+         Invocation.invoke_with_receiver(raw_next, [], iter)
+       end
+     end}
+  end
+
+  defp custom_regexp_exec?({:builtin, "exec", _}), do: false
+  defp custom_regexp_exec?(exec), do: Builtin.callable?(exec)
+
+  defp regexp_string_iterator_exec_next(state_ref, regexp, string, exec) do
+    if Process.get(state_ref) do
+      iterator_result(:undefined, true)
+    else
+      case Invocation.invoke_with_receiver(exec, [string], regexp) do
+        nil ->
+          Process.put(state_ref, true)
+          iterator_result(:undefined, true)
+
+        match when is_tuple(match) and elem(match, 0) == :obj ->
+          if regexp_match_all_global?(regexp) do
+            maybe_advance_empty_match(regexp, string, match)
+          else
+            Process.put(state_ref, true)
+          end
+
+          iterator_result(match, false)
+
+        _ ->
+          JSThrow.type_error!("RegExp exec method returned a non-object")
+      end
+    end
+  end
+
+  defp iterator_result(value, done), do: Heap.wrap(%{"value" => value, "done" => done})
+
+  defp regexp_match_all_global?(regexp),
+    do: regexp_match_all_flags(regexp) |> String.contains?("g")
+
+  defp regexp_match_all_unicode?(regexp) do
+    flags = regexp_match_all_flags(regexp)
+    String.contains?(flags, "u") or String.contains?(flags, "v")
+  end
+
+  defp regexp_match_all_flags({:regexp, bytecode, _source, ref}) when is_binary(bytecode),
+    do: regexp_flags(bytecode, ref)
+
+  defp regexp_match_all_flags({:regexp, bytecode, _source}) when is_binary(bytecode),
+    do: Get.regexp_flags(bytecode)
+
+  defp regexp_match_all_flags(regexp) do
+    case Get.get(regexp, "flags") do
+      :undefined -> ""
+      flags -> Values.stringify(flags)
+    end
+  end
+
+  defp maybe_advance_empty_match(regexp, string, match) do
+    if Values.stringify(Get.get(match, "0")) == "" do
+      this_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+
+      Put.put(
+        regexp,
+        "lastIndex",
+        advance_string_index(string, this_index, regexp_match_all_unicode?(regexp))
+      )
+    end
+  end
+
+  defp advance_string_index(string, index, true) do
+    first = JSString.utf16_code_unit_at(string, index)
+    second = JSString.utf16_code_unit_at(string, index + 1)
+
+    if is_binary(first) and is_binary(second) and byte_size(first) == 3 and byte_size(second) == 3 and
+         match?(<<0xED, h, _>> when h >= 0xA0 and h <= 0xAF, first) and
+         match?(<<0xED, l, _>> when l >= 0xB0 and l <= 0xBF, second),
+       do: index + 2,
+       else: index + 1
+  end
+
+  defp advance_string_index(_string, index, _unicode?), do: index + 1
 
   defp regexp_match_all_results({:regexp, nil, source}, string, offset, acc)
        when is_binary(source) do
@@ -516,18 +613,25 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
        when is_binary(bytecode) do
     flags = Get.regexp_flags(bytecode)
 
-    case special_match_results(source, flags, string, true) do
+    global? = String.contains?(flags, "g")
+
+    case special_match_results(source, flags, string, global?) do
       {:ok, results} ->
-        Enum.map(results, fn {match, index} -> exec_result([match], index, string) end)
+        results
+        |> maybe_first_match_only(global?)
+        |> Enum.map(fn {match, index} -> exec_result([match], index, string) end)
 
       :none ->
-        regexp_match_all_nif(regexp, string, offset, acc)
+        regexp_match_all_nif(regexp, string, offset, acc, global?)
     end
   end
 
   defp regexp_match_all_results(_regexp, _string, _offset, acc), do: Enum.reverse(acc)
 
-  defp regexp_match_all_nif({:regexp, bytecode, _source} = regexp, string, offset, acc) do
+  defp maybe_first_match_only(results, true), do: results
+  defp maybe_first_match_only(results, false), do: Enum.take(results, 1)
+
+  defp regexp_match_all_nif({:regexp, bytecode, _source} = regexp, string, offset, acc, global?) do
     case nif_exec(bytecode, string, offset) do
       nil ->
         Enum.reverse(acc)
@@ -541,7 +645,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
         {start, len} = hd(captures)
         result = exec_result(strings, start, string)
-        regexp_match_all_results(regexp, string, start + max(len, 1), [result | acc])
+
+        if global?,
+          do: regexp_match_all_results(regexp, string, start + max(len, 1), [result | acc]),
+          else: Enum.reverse([result | acc])
     end
   end
 
@@ -747,7 +854,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
               0x205F,
               0x3000,
               0xFEFF
-            ], do: unicode_escape(cp)
+            ],
+       do: unicode_escape(cp)
 
   defp escape_codepoint(cp, _first) when cp < 0x20, do: unicode_escape(cp)
   defp escape_codepoint(cp, _first), do: <<cp::utf8>>
