@@ -481,9 +481,9 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
             pairs =
               entries
-              |> Enum.map(fn {k, v} ->
+              |> Enum.map(fn {k, _v} ->
                 key = to_string(k)
-                replaced = v |> resolve_value(obj) |> apply_to_json_hook(key) |> apply_property_replacer(key, obj)
+                replaced = obj |> Get.get(key) |> apply_to_json_hook(key) |> apply_property_replacer(key, obj)
                 value = if replaced == :undefined, do: :undefined, else: to_json(replaced)
                 {key, value}
               end)
@@ -647,13 +647,4 @@ defmodule QuickBEAM.VM.Runtime.JSON do
     end
   end
 
-  defp resolve_value({:accessor, getter, _}, obj) when getter != nil do
-    Get.call_getter(getter, obj)
-  rescue
-    _ -> :undefined
-  catch
-    _, _ -> :undefined
-  end
-
-  defp resolve_value(val, _obj), do: val
 end
