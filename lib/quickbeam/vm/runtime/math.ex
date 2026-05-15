@@ -160,7 +160,12 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "trunc" do
-      trunc(Runtime.to_float(hd(args)))
+      case Runtime.to_float(hd(args)) do
+        :infinity -> :infinity
+        :neg_infinity -> :neg_infinity
+        :nan -> :nan
+        n -> trunc(n)
+      end
     end
 
     method "sign" do
@@ -275,7 +280,12 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "log1p" do
-      math_log(1 + Runtime.to_float(hd(args)), &:math.log/1)
+      case Runtime.to_float(hd(args)) do
+        :infinity -> :infinity
+        :neg_infinity -> :nan
+        :nan -> :nan
+        n -> math_log(1 + n, &:math.log/1)
+      end
     end
 
     method "expm1" do
@@ -307,6 +317,7 @@ defmodule QuickBEAM.VM.Runtime.Math do
     method "acosh" do
       case Runtime.to_float(hd(args)) do
         :infinity -> :infinity
+        :neg_infinity -> :nan
         :nan -> :nan
         n when n < 1 -> :nan
         n -> :math.acosh(n)
