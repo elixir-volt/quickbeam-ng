@@ -1262,9 +1262,15 @@ defmodule QuickBEAM.VM.Runtime.Object do
     Define.property(obj, key, desc_obj, desc)
   end
 
-  defp define_property([{:regexp, _, _, ref} = regexp, key, {:obj, desc_ref} | _]) do
+  defp define_property([{:regexp, _, _, ref} = regexp, key, {:obj, desc_ref} = desc_obj | _]) do
     key = normalize_well_known_symbol(key)
     desc = Heap.get_obj(desc_ref, %{})
+    existing_flags = Heap.get_prop_desc(ref, key)
+
+    if match?(%{configurable: false}, existing_flags) and Map.get(desc, "configurable") == true do
+      throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
+    end
+
     getter = Map.get(desc, "get")
     setter = Map.get(desc, "set")
 
@@ -1273,7 +1279,17 @@ defmodule QuickBEAM.VM.Runtime.Object do
         do: {:accessor, getter, setter},
         else: Map.get(desc, "value", Get.get(regexp, key))
 
+    attrs =
+      PropertyDescriptor.attrs(
+        writable: PropertyDescriptor.attribute(desc_obj, desc, "writable", existing_flags, false),
+        enumerable:
+          PropertyDescriptor.attribute(desc_obj, desc, "enumerable", existing_flags, false),
+        configurable:
+          PropertyDescriptor.attribute(desc_obj, desc, "configurable", existing_flags, false)
+      )
+
     RegexpState.put(ref, key, value)
+    Heap.put_prop_desc(ref, key, attrs)
     regexp
   end
 

@@ -332,7 +332,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   def put({:regexp, _, _, ref}, key, val) do
     key = normalize_key(key)
 
-    RegexpState.put(ref, key, val)
+    case Heap.get_prop_desc(ref, key) do
+      %{writable: false} -> reject_failed_write!()
+      _ -> RegexpState.put(ref, key, val)
+    end
   end
 
   def put(_, _, _), do: :ok

@@ -40,6 +40,16 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     delete_static_property(builtin, key)
   end
 
+  def delete_property({:regexp, _, _, ref}, key) do
+    if match?(%{configurable: false}, Heap.get_prop_desc(ref, key)) do
+      false
+    else
+      Process.put(QuickBEAM.VM.Execution.RegexpState.key(ref), Map.delete(QuickBEAM.VM.Execution.RegexpState.get(ref), key))
+      Heap.delete_prop_desc(ref, key)
+      true
+    end
+  end
+
   def delete_property(target, key) when is_tuple(target) or is_struct(target) do
     delete_static_property(target, key)
   end

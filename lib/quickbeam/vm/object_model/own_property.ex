@@ -4,6 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.Execution.RegexpState
 
   alias QuickBEAM.VM.ObjectModel.{
     ArrayExotic,
@@ -64,6 +65,8 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   end
 
   def present?({:builtin, "Object", _}, "prototype"), do: true
+
+  def present?({:regexp, _, _, ref}, key), do: RegexpState.has_property?(ref, key)
 
   def present?({:builtin, "Object", _} = builtin, "assign") do
     not match?(%{"assign" => :deleted}, Heap.get_ctor_statics(builtin))
@@ -373,6 +376,28 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
         map_descriptor(ref, data, prop_name)
 
       true ->
+        :undefined
+    end
+  end
+
+  def descriptor({:regexp, _, _, ref}, key) do
+    case RegexpState.fetch(ref, key) do
+      {:ok, {:accessor, getter, setter}} ->
+        PropertyDescriptor.accessor_object(
+          getter,
+          setter,
+          Heap.get_prop_desc(ref, key) ||
+            PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+        )
+
+      {:ok, value} ->
+        PropertyDescriptor.data_object(
+          value,
+          Heap.get_prop_desc(ref, key) ||
+            PropertyDescriptor.attrs(writable: true, enumerable: false, configurable: true)
+        )
+
+      :error ->
         :undefined
     end
   end
