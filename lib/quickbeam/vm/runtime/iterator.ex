@@ -508,7 +508,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       result
     else
       value = Get.get(result, "value")
-      keep = Invocation.invoke_with_receiver(predicate, [value, index], :undefined)
+      keep = invoke_or_close(iterator, predicate, [value, index])
       Heap.put_obj(state_ref, %{state | "index" => index + 1})
 
       if Values.truthy?(keep) do
@@ -529,7 +529,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       result
     else
       value = Get.get(result, "value")
-      mapped = Invocation.invoke_with_receiver(mapper, [value, index], :undefined)
+      mapped = invoke_or_close(iterator, mapper, [value, index])
       Heap.put_obj(state_ref, %{state | "index" => index + 1})
       iter_result(mapped, false)
     end
@@ -548,7 +548,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
         else
           value = Get.get(outer, "value")
           index = state["index"]
-          mapped = Invocation.invoke_with_receiver(state["mapper"], [value, index], :undefined)
+          mapped = invoke_or_close(state["iterator"], state["mapper"], [value, index])
           inner = iterator_record_from_value(mapped)
           Heap.put_obj(state_ref, %{state | "index" => index + 1, "inner" => inner})
           flat_map_next(state_ref, Heap.get_obj(state_ref, %{}))
@@ -580,7 +580,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       :ok
     else
       value = Get.get(result, "value")
-      Invocation.invoke_with_receiver(callback, [value, index], :undefined)
+      invoke_or_close(iterator, callback, [value, index])
       for_each_loop(iterator, callback, index + 1)
     end
   end
@@ -592,7 +592,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       false
     else
       value = Get.get(result, "value")
-      keep = Invocation.invoke_with_receiver(predicate, [value, index], :undefined)
+      keep = invoke_or_close(iterator, predicate, [value, index])
 
       if Values.truthy?(keep) do
         iterator_return(iterator)
@@ -620,7 +620,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       accumulator
     else
       value = Get.get(result, "value")
-      next_acc = Invocation.invoke_with_receiver(reducer, [accumulator, value, index], :undefined)
+      next_acc = invoke_or_close(iterator, reducer, [accumulator, value, index])
       reduce_loop(iterator, reducer, next_acc, index + 1)
     end
   end
@@ -642,7 +642,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       true
     else
       value = Get.get(result, "value")
-      keep = Invocation.invoke_with_receiver(predicate, [value, index], :undefined)
+      keep = invoke_or_close(iterator, predicate, [value, index])
 
       if Values.truthy?(keep) do
         every_loop(iterator, predicate, index + 1)
@@ -660,7 +660,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       :undefined
     else
       value = Get.get(result, "value")
-      keep = Invocation.invoke_with_receiver(predicate, [value, index], :undefined)
+      keep = invoke_or_close(iterator, predicate, [value, index])
 
       if Values.truthy?(keep) do
         iterator_return(iterator)
@@ -684,6 +684,22 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp helper_return(_), do: JSThrow.type_error!("Iterator helper expected")
+
+  defp invoke_or_close(iterator, callback, args) do
+    Invocation.invoke_with_receiver(callback, args, :undefined)
+  catch
+    {:js_throw, _} = reason ->
+      close_record_preserving_reason(iterator)
+      throw(reason)
+  end
+
+  defp close_record_preserving_reason(iterator) do
+    try do
+      iterator_return(iterator)
+    catch
+      {:js_throw, _} -> :ok
+    end
+  end
 
   defp close_and_type_error(this, message) do
     close_iterator_like(this)
