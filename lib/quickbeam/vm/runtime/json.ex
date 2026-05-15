@@ -510,7 +510,9 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp json_boxed_primitive(map) do
     case WrappedPrimitive.type(map) do
-      type when type in [:string, :number, :boolean] -> WrappedPrimitive.value(map, type)
+      :number -> {:ok, map |> Heap.wrap() |> Runtime.to_number()}
+      :string -> {:ok, map |> Heap.wrap() |> Runtime.stringify()}
+      :boolean -> WrappedPrimitive.value(map, :boolean)
       _ -> :error
     end
   end
