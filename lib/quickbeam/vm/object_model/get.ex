@@ -413,7 +413,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp shape_value(value, _receiver), do: value
 
   defp get_wrapped_or_map_property(map, key, receiver) do
-    if WrappedPrimitive.type(map) in [:string, :boolean] and Map.has_key?(map, key) do
+    if WrappedPrimitive.type(map) in [:string, :number, :boolean] and Map.has_key?(map, key) do
       get_map_property(map, key, receiver)
     else
       case wrapped_proto_property(map, key) do
