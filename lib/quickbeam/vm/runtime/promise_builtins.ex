@@ -133,16 +133,24 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
   end
 
   static "any" do
-    case combinator_inputs(this, arg(args, 0, :undefined)) do
-      {:ok, items} -> wrap_static_result(this, promise_any_items(items))
-      {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+    if default_promise_constructor?(this) do
+      case combinator_inputs(this, arg(args, 0, :undefined)) do
+        {:ok, items} -> wrap_static_result(this, promise_any_items(items))
+        {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+      end
+    else
+      perform_promise_any(this, arg(args, 0, :undefined))
     end
   end
 
   static "race" do
-    case combinator_inputs(this, arg(args, 0, :undefined)) do
-      {:ok, items} -> wrap_static_result(this, promise_race_items(items))
-      {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+    if default_promise_constructor?(this) do
+      case combinator_inputs(this, arg(args, 0, :undefined)) do
+        {:ok, items} -> wrap_static_result(this, promise_race_items(items))
+        {:abrupt, reason} -> wrap_static_result(this, PromiseState.rejected(reason))
+      end
+    else
+      perform_promise_race(this, arg(args, 0, :undefined))
     end
   end
 
@@ -430,6 +438,164 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
             resolve,
             reject
           )
+        catch
+          {:js_throw, reason} ->
+            close_iterator_preserving_throw(next_iter)
+            throw({:js_throw, reason})
+        end
+    end
+  end
+
+  defp perform_promise_any(constructor, iterable) do
+    {promise, resolve, reject} = new_promise_capability(constructor)
+
+    try do
+      {iter, next_fn} = Iterators.for_of_start(iterable)
+      promise_resolve_fn = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+
+      unless QuickBEAM.VM.Builtin.callable?(promise_resolve_fn) do
+        JSThrow.type_error!("Promise resolve is not callable")
+      end
+
+      state_ref = make_ref()
+      Heap.put_obj(state_ref, %{"remaining" => 1, "errors" => []})
+      perform_any_loop(iter, next_fn, constructor, promise_resolve_fn, state_ref, resolve, reject)
+      promise
+    catch
+      {:js_throw, reason} ->
+        Invocation.invoke(reject, [reason])
+        promise
+    end
+  end
+
+  defp perform_any_loop(
+         iter,
+         next_fn,
+         constructor,
+         promise_resolve_fn,
+         state_ref,
+         resolve,
+         reject
+       ) do
+    case Iterators.for_of_next(next_fn, iter) do
+      {true, _, _} ->
+        state = Heap.get_obj(state_ref, %{})
+        remaining = state["remaining"] - 1
+        Heap.put_obj(state_ref, %{state | "remaining" => remaining})
+
+        if remaining == 0 do
+          Invocation.invoke(reject, [aggregate_error_from_list(state["errors"])])
+        end
+
+      {false, value, next_iter} ->
+        try do
+          next_promise = Invocation.invoke_with_receiver(promise_resolve_fn, [value], constructor)
+          index = append_pending_any_error(state_ref)
+          then = QuickBEAM.VM.ObjectModel.Get.get(next_promise, "then")
+
+          unless QuickBEAM.VM.Builtin.callable?(then) do
+            JSThrow.type_error!("Promise then is not callable")
+          end
+
+          Invocation.invoke_with_receiver(
+            then,
+            [
+              once_function(fn settled -> Invocation.invoke(resolve, [settled]) end),
+              once_function(fn reason ->
+                reject_any_element_direct(state_ref, reject, index, reason)
+              end)
+            ],
+            next_promise
+          )
+
+          perform_any_loop(
+            next_iter,
+            next_fn,
+            constructor,
+            promise_resolve_fn,
+            state_ref,
+            resolve,
+            reject
+          )
+        catch
+          {:js_throw, reason} ->
+            close_iterator_preserving_throw(next_iter)
+            throw({:js_throw, reason})
+        end
+    end
+  end
+
+  defp append_pending_any_error(state_ref) do
+    state = Heap.get_obj(state_ref, %{})
+    errors = state["errors"] ++ [:undefined]
+    index = length(errors) - 1
+    Heap.put_obj(state_ref, %{state | "errors" => errors, "remaining" => state["remaining"] + 1})
+    index
+  end
+
+  defp reject_any_element_direct(state_ref, reject, index, reason) do
+    state = Heap.get_obj(state_ref, %{})
+    errors = List.replace_at(state["errors"], index, reason)
+    remaining = state["remaining"] - 1
+    Heap.put_obj(state_ref, %{state | "errors" => errors, "remaining" => remaining})
+
+    if remaining == 0 do
+      Invocation.invoke(reject, [aggregate_error_from_list(errors)])
+    end
+
+    :undefined
+  end
+
+  defp aggregate_error_from_list(errors) do
+    {:obj, ref} = error = Heap.make_error("All promises were rejected", "AggregateError")
+    Heap.put_obj(ref, Map.put(Heap.get_obj(ref, %{}), "errors", Heap.wrap(errors)))
+    error
+  end
+
+  defp perform_promise_race(constructor, iterable) do
+    {promise, resolve, reject} = new_promise_capability(constructor)
+
+    try do
+      {iter, next_fn} = Iterators.for_of_start(iterable)
+      promise_resolve_fn = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+
+      unless QuickBEAM.VM.Builtin.callable?(promise_resolve_fn) do
+        JSThrow.type_error!("Promise resolve is not callable")
+      end
+
+      perform_race_loop(iter, next_fn, constructor, promise_resolve_fn, resolve, reject)
+      promise
+    catch
+      {:js_throw, reason} ->
+        Invocation.invoke(reject, [reason])
+        promise
+    end
+  end
+
+  defp perform_race_loop(iter, next_fn, constructor, promise_resolve_fn, resolve, reject) do
+    case Iterators.for_of_next(next_fn, iter) do
+      {true, _, _} ->
+        :ok
+
+      {false, value, next_iter} ->
+        try do
+          next_promise = Invocation.invoke_with_receiver(promise_resolve_fn, [value], constructor)
+          then = QuickBEAM.VM.ObjectModel.Get.get(next_promise, "then")
+
+          unless QuickBEAM.VM.Builtin.callable?(then) do
+            JSThrow.type_error!("Promise then is not callable")
+          end
+
+          Invocation.invoke_with_receiver(
+            then,
+            [
+              once_function(fn settled -> Invocation.invoke(resolve, [settled]) end),
+              once_function(fn reason -> Invocation.invoke(reject, [reason]) end)
+            ],
+            next_promise
+          )
+
+          perform_race_loop(next_iter, next_fn, constructor, promise_resolve_fn, resolve, reject)
         catch
           {:js_throw, reason} ->
             close_iterator_preserving_throw(next_iter)
