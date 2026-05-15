@@ -562,7 +562,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
     proto =
       Heap.wrap(%{
-        "__proto__" => Heap.get_object_prototype(),
+        "__proto__" => QuickBEAM.VM.Runtime.Iterator.wrap_for_valid_iterator_prototype(),
         "next" => next_fn,
         {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _, this -> this end},
         {:symbol, "Symbol.toStringTag"} => "Map Iterator"

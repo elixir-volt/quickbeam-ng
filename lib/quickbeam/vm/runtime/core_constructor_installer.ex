@@ -8,6 +8,7 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.InstallerHelpers
+  alias QuickBEAM.VM.Runtime.Iterator
   alias QuickBEAM.VM.Runtime.PromiseBuiltins
   alias QuickBEAM.VM.Runtime.Symbol
 
@@ -49,9 +50,19 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
     install_promise_prototype(promise)
     InstallerHelpers.install_species(promise)
 
+    iterator =
+      ConstructorRegistry.register("Iterator", Iterator.constructor(),
+        module: Iterator,
+        auto_proto: true,
+        prototype_parent: Heap.get_object_prototype()
+      )
+
+    install_iterator(iterator)
+
     %{
       "BigInt" => big_int,
       "Boolean" => boolean,
+      "Iterator" => iterator,
       "Promise" => promise,
       "Symbol" => symbol,
       "DataView" => data_view
@@ -85,6 +96,18 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
 
       InstallerHelpers.install_methods(proto_ref, DataView, DataView.proto_property_names())
       InstallerHelpers.install_to_string_tag(proto_ref, "DataView")
+    end)
+  end
+
+  defp install_iterator(ctor) do
+    Heap.put_ctor_static(ctor, "from", Iterator.static_property("from"))
+    Heap.put_ctor_prop_desc(ctor, "from", PropertyDescriptor.method())
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
+      InstallerHelpers.install_symbol_iterator(proto_ref, Iterator)
+      InstallerHelpers.install_to_string_tag(proto_ref, "Iterator")
     end)
   end
 

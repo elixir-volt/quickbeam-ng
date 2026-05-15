@@ -146,9 +146,13 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
          [], _this -> return_impl.(gen_ref, :undefined)
        end}
 
+    iterator_symbol = {:builtin, "[Symbol.iterator]", fn _, this -> this end}
+
     object do
+      prop("__proto__", QuickBEAM.VM.Runtime.Iterator.wrap_for_valid_iterator_prototype())
       prop("next", next_fn)
       prop("return", return_fn)
+      prop({:symbol, "Symbol.iterator"}, iterator_symbol)
     end
   end
 end
