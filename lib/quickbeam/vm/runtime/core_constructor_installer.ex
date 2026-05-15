@@ -3,8 +3,8 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
-  alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Boolean
+  alias QuickBEAM.VM.Runtime.DataView
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.InstallerHelpers
@@ -28,14 +28,16 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
       )
 
     data_view =
-      ConstructorRegistry.register("DataView", fn _, _ -> Runtime.new_object() end,
-        auto_proto: true
-      )
+      ConstructorRegistry.register("DataView", &DataView.constructor/2, auto_proto: true)
+
+    Heap.put_ctor_static(data_view, "length", 1)
+    Heap.put_ctor_prop_desc(data_view, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(data_view, "prototype", PropertyDescriptor.prototype())
 
     install_plain_prototype(big_int)
     install_boolean_prototype(boolean)
     install_plain_prototype(symbol)
-    install_plain_prototype(data_view)
+    install_data_view_prototype(data_view)
 
     promise =
       ConstructorRegistry.register("Promise", PromiseBuiltins.constructor(),
@@ -68,6 +70,20 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
       InstallerHelpers.install_object_parent(proto_ref)
       InstallerHelpers.install_methods(proto_ref, Boolean, ~w(toString valueOf))
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
+    end)
+  end
+
+  defp install_data_view_prototype(ctor) do
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
+
+      for name <- ~w(buffer byteLength byteOffset) do
+        Heap.put_obj_key(proto_ref, name, DataView.accessor(name))
+        Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.accessor())
+      end
+
+      InstallerHelpers.install_to_string_tag(proto_ref, "DataView")
     end)
   end
 
