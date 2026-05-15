@@ -110,7 +110,7 @@ defmodule QuickBEAM.VM.Runtime.CoreConstructorInstaller do
       InstallerHelpers.install_methods(
         proto_ref,
         Iterator,
-        ~w(drop filter flatMap forEach map every find)
+        ~w(drop filter flatMap forEach map reduce some take toArray every find)
       )
 
       InstallerHelpers.install_symbol_iterator(proto_ref, Iterator)

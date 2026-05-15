@@ -44,6 +44,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   def proto_property("flatMap"), do: method("flatMap", 1, &flat_map/2)
   def proto_property("forEach"), do: method("forEach", 1, &for_each/2)
   def proto_property("map"), do: method("map", 1, &map/2)
+  def proto_property("reduce"), do: method("reduce", 1, &reduce/2)
+  def proto_property("some"), do: method("some", 1, &some/2)
+  def proto_property("take"), do: method("take", 1, &take/2)
+  def proto_property("toArray"), do: method("toArray", 0, &to_array/2)
   def proto_property("every"), do: method("every", 1, &every/2)
   def proto_property("find"), do: method("find", 1, &find/2)
 
@@ -123,6 +127,12 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     helper_iterator(%{"kind" => :drop, "iterator" => iterator, "remaining" => remaining})
   end
 
+  def take(args, this) do
+    iterator = iterator_record(this)
+    remaining = non_negative_integer_limit(Builtin.arg(args, 0, :undefined))
+    helper_iterator(%{"kind" => :take, "iterator" => iterator, "remaining" => remaining})
+  end
+
   def filter(args, this) do
     predicate = Builtin.arg(args, 0, :undefined)
     unless Builtin.callable?(predicate), do: JSThrow.type_error!("predicate must be callable")
@@ -158,6 +168,32 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       "index" => 0,
       "inner" => nil
     })
+  end
+
+  def some(args, this) do
+    predicate = Builtin.arg(args, 0, :undefined)
+    unless Builtin.callable?(predicate), do: JSThrow.type_error!("predicate must be callable")
+    some_loop(iterator_record(this), predicate, 0)
+  end
+
+  def reduce(args, this) do
+    reducer = Builtin.arg(args, 0, :undefined)
+    unless Builtin.callable?(reducer), do: JSThrow.type_error!("reducer must be callable")
+
+    iterator = iterator_record(this)
+
+    case args do
+      [_reducer, initial | _] -> reduce_loop(iterator, reducer, initial, 0)
+      _ -> reduce_without_initial(iterator, reducer)
+    end
+  end
+
+  def to_array(_args, this) do
+    this
+    |> iterator_record()
+    |> collect_values([])
+    |> Enum.reverse()
+    |> Heap.wrap()
   end
 
   def for_each(args, this) do
@@ -206,10 +242,29 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
     case state["kind"] do
       :drop -> drop_next(state_ref, state)
+      :take -> take_next(state_ref, state)
       :filter -> filter_next(state_ref, state)
       :map -> map_next(state_ref, state)
       :flat_map -> flat_map_next(state_ref, state)
       _ -> iter_result(:undefined, true)
+    end
+  end
+
+  defp take_next(state_ref, %{"remaining" => remaining})
+       when is_number(remaining) and remaining <= 0 do
+    Heap.put_obj(state_ref, %{"kind" => :done})
+    iter_result(:undefined, true)
+  end
+
+  defp take_next(state_ref, %{"iterator" => iterator, "remaining" => remaining} = state) do
+    result = iterator_next(iterator)
+
+    if Get.get(result, "done") == true do
+      result
+    else
+      next_remaining = if remaining == :infinity, do: :infinity, else: remaining - 1
+      Heap.put_obj(state_ref, %{state | "remaining" => next_remaining})
+      iter_result(Get.get(result, "value"), false)
     end
   end
 
@@ -316,6 +371,56 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       value = Get.get(result, "value")
       Invocation.invoke_with_receiver(callback, [value, index], :undefined)
       for_each_loop(iterator, callback, index + 1)
+    end
+  end
+
+  defp some_loop(iterator, predicate, index) do
+    result = iterator_next(iterator)
+
+    if Get.get(result, "done") == true do
+      false
+    else
+      value = Get.get(result, "value")
+      keep = Invocation.invoke_with_receiver(predicate, [value, index], :undefined)
+
+      if Values.truthy?(keep) do
+        iterator_return(iterator)
+        true
+      else
+        some_loop(iterator, predicate, index + 1)
+      end
+    end
+  end
+
+  defp reduce_without_initial(iterator, reducer) do
+    result = iterator_next(iterator)
+
+    if Get.get(result, "done") == true do
+      JSThrow.type_error!("Reduce of empty iterator with no initial value")
+    else
+      reduce_loop(iterator, reducer, Get.get(result, "value"), 1)
+    end
+  end
+
+  defp reduce_loop(iterator, reducer, accumulator, index) do
+    result = iterator_next(iterator)
+
+    if Get.get(result, "done") == true do
+      accumulator
+    else
+      value = Get.get(result, "value")
+      next_acc = Invocation.invoke_with_receiver(reducer, [accumulator, value, index], :undefined)
+      reduce_loop(iterator, reducer, next_acc, index + 1)
+    end
+  end
+
+  defp collect_values(iterator, acc) do
+    result = iterator_next(iterator)
+
+    if Get.get(result, "done") == true do
+      acc
+    else
+      collect_values(iterator, [Get.get(result, "value") | acc])
     end
   end
 
