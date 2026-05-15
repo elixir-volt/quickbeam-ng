@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyDescriptor, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Delete, Get, OwnProperty, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime
 
   @method_lengths %{"parse" => 2, "stringify" => 3, "rawJSON" => 1, "isRawJSON" => 1}
@@ -118,13 +118,14 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         _, _ -> JSThrow.syntax_error!("Unexpected end of JSON input")
       end
 
-    value = to_js_root(decoded, json_text)
-
-    if QuickBEAM.VM.Builtin.callable?(reviver) and primitive_json_value?(value) do
+    if QuickBEAM.VM.Builtin.callable?(reviver) do
+      ordered = decode_ordered_json(json_text)
+      source = json_source_tree(json_text)
+      value = to_js_reviver(ordered_value(ordered, decoded, json_text))
       wrapper = json_replacer_wrapper(value)
-      QuickBEAM.VM.Invocation.invoke_with_receiver(reviver, ["", value, json_source_context(String.trim(json_text))], wrapper)
+      internalize_json_property(wrapper, "", reviver, source)
     else
-      value
+      to_js_root(decoded, json_text)
     end
   end
 
@@ -137,7 +138,84 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp json_parse_text(text), do: Runtime.stringify(text)
 
-  defp primitive_json_value?(value), do: not match?({:obj, _}, value) and not is_list(value)
+  defp decode_ordered_json(json_text) do
+    case Jason.decode(json_text, objects: :ordered_objects) do
+      {:ok, value} -> value
+      _ -> nil
+    end
+  end
+
+  defp ordered_value(nil, decoded, _json_text), do: decoded
+  defp ordered_value(%Jason.OrderedObject{} = ordered, _decoded, _json_text), do: ordered
+  defp ordered_value(value, _decoded, _json_text), do: value
+
+  defp json_source_tree(json_text) do
+    {source, _rest} = parse_json_source_value(String.trim_leading(json_text))
+    source
+  rescue
+    _ -> {:primitive, String.trim(json_text)}
+  end
+
+  defp parse_json_source_value(<<"{", rest::binary>>), do: parse_json_source_object(String.trim_leading(rest), [])
+  defp parse_json_source_value(<<"[", rest::binary>>), do: parse_json_source_array(String.trim_leading(rest), [])
+
+  defp parse_json_source_value(<<"\"", _::binary>> = input) do
+    {token, rest} = take_json_source_string(input, "")
+    {{:primitive, token}, rest}
+  end
+
+  defp parse_json_source_value(input) do
+    {token, rest} = take_json_source_atom(input, "")
+    {{:primitive, token}, rest}
+  end
+
+  defp parse_json_source_object(<<"}", rest::binary>>, acc), do: {{:object, Enum.reverse(acc)}, rest}
+
+  defp parse_json_source_object(input, acc) do
+    {key_token, rest} = take_json_source_string(String.trim_leading(input), "")
+    {:ok, key} = Jason.decode(key_token)
+    rest = rest |> String.trim_leading() |> strip_json_char(?:)
+    {value, rest} = parse_json_source_value(String.trim_leading(rest))
+    rest = String.trim_leading(rest)
+    acc = [{key, value} | acc]
+
+    case rest do
+      <<",", tail::binary>> -> parse_json_source_object(String.trim_leading(tail), acc)
+      <<"}", tail::binary>> -> {{:object, Enum.reverse(acc)}, tail}
+      _ -> {{:object, Enum.reverse(acc)}, rest}
+    end
+  end
+
+  defp parse_json_source_array(<<"]", rest::binary>>, acc), do: {{:array, Enum.reverse(acc)}, rest}
+
+  defp parse_json_source_array(input, acc) do
+    {value, rest} = parse_json_source_value(String.trim_leading(input))
+    rest = String.trim_leading(rest)
+    acc = [value | acc]
+
+    case rest do
+      <<",", tail::binary>> -> parse_json_source_array(String.trim_leading(tail), acc)
+      <<"]", tail::binary>> -> {{:array, Enum.reverse(acc)}, tail}
+      _ -> {{:array, Enum.reverse(acc)}, rest}
+    end
+  end
+
+  defp strip_json_char(<<char, rest::binary>>, char), do: rest
+  defp strip_json_char(rest, _char), do: rest
+
+  defp take_json_source_string(<<"\"", rest::binary>>, ""), do: take_json_source_string_content(rest, "")
+
+  defp take_json_source_string_content(<<"\\", escaped, rest::binary>>, acc),
+    do: take_json_source_string_content(rest, acc <> <<?\\, escaped>>)
+
+  defp take_json_source_string_content(<<"\"", rest::binary>>, acc), do: {"\"" <> acc <> "\"", rest}
+  defp take_json_source_string_content(<<char, rest::binary>>, acc), do: take_json_source_string_content(rest, acc <> <<char>>)
+
+  defp take_json_source_atom(<<char, rest::binary>>, acc) when char in [?{, ?}, ?[, ?], ?:, ?,] or char in [9, 10, 13, 32],
+    do: {acc, <<char, rest::binary>>}
+
+  defp take_json_source_atom(<<char, rest::binary>>, acc), do: take_json_source_atom(rest, acc <> <<char>>)
+  defp take_json_source_atom(<<>>, acc), do: {acc, ""}
 
   defp json_source_context(source) do
     ref = make_ref()
@@ -168,6 +246,30 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp to_js_root(val, _) when is_list(val), do: Enum.map(val, &to_js/1)
   defp to_js_root(val, _), do: to_js(val)
+
+  defp to_js_reviver(%Jason.OrderedObject{values: pairs}) do
+    map = ordered_json_object_to_map(pairs)
+    keys = pairs |> Enum.map(&elem(&1, 0)) |> Enum.reverse()
+    to_js_reviver(map, keys)
+  end
+
+  defp to_js_reviver(value) when is_map(value), do: to_js_reviver(value, nil)
+  defp to_js_reviver(value) when is_list(value), do: Heap.wrap(Enum.map(value, &to_js_reviver/1))
+  defp to_js_reviver(value), do: to_js(value)
+
+  defp to_js_reviver(value, key_order) when is_map(value) do
+    ref = make_ref()
+    map = Map.new(value, fn {key, child} -> {key, to_js_reviver(child)} end)
+    order = key_order || Map.keys(value) |> Enum.reverse()
+
+    object =
+      map
+      |> Map.put(:__internal_proto__, Heap.get_object_prototype())
+      |> Map.put(key_order(), order)
+
+    Heap.put_obj(ref, object)
+    {:obj, ref}
+  end
 
   defp ordered_json_object_to_map(pairs) do
     Enum.reduce(pairs, %{}, fn {key, value}, acc -> Map.put(acc, key, ordered_json_value(value)) end)
@@ -244,6 +346,97 @@ defmodule QuickBEAM.VM.Runtime.JSON do
     else
       value
     end
+  end
+
+  defp internalize_json_property(holder, key, reviver, source) do
+    value = Get.get(holder, key)
+    internalize_json_children(value, reviver, source)
+    value = Get.get(holder, key)
+    QuickBEAM.VM.Invocation.invoke_with_receiver(reviver, [key, value, json_reviver_context(value, source)], holder)
+  end
+
+  defp internalize_json_children({:obj, _} = value, reviver, source) do
+    cond do
+      revoked_json_proxy?(value) ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
+      json_array_like?(value) ->
+        sources = array_source_items(source)
+        length = value |> Get.get("length") |> Runtime.to_int() |> max(0)
+
+        if length > 0 do
+          Enum.each(0..(length - 1), fn index ->
+            key = Integer.to_string(index)
+            new_value = internalize_json_property(value, key, reviver, Enum.at(sources, index))
+            create_or_delete_json_property(value, key, new_value)
+          end)
+        end
+
+      true ->
+        sources = object_source_pairs(source)
+
+        value
+        |> OwnProperty.descriptor_keys()
+        |> Enum.filter(&OwnProperty.enumerable?(value, &1))
+        |> Enum.uniq()
+        |> Enum.each(fn key ->
+          key = to_string(key)
+          new_value = internalize_json_property(value, key, reviver, object_child_source(sources, key))
+          create_or_delete_json_property(value, key, new_value)
+        end)
+    end
+  end
+
+  defp internalize_json_children(_value, _reviver, _source), do: :ok
+
+  defp create_or_delete_json_property(object, key, :undefined), do: Delete.delete_property(object, key)
+
+  defp create_or_delete_json_property({:obj, ref} = object, key, value) do
+    case Heap.get_prop_desc(ref, key) do
+      %{configurable: false} -> object
+      _ -> Put.put(object, key, value)
+    end
+  end
+
+  defp revoked_json_proxy?({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} -> true
+      _ -> false
+    end
+  end
+
+  defp array_source_items({:array, items}), do: items
+  defp array_source_items(_source), do: []
+
+  defp object_source_pairs({:object, pairs}), do: pairs
+  defp object_source_pairs(_source), do: []
+
+  defp object_child_source(pairs, key) do
+    pairs
+    |> Enum.reverse()
+    |> Enum.find_value(fn {source_key, source} -> if source_key == key, do: source end)
+  end
+
+  defp json_reviver_context({:obj, _}, _source), do: json_empty_context()
+
+  defp json_reviver_context(value, {:primitive, source}) do
+    if same_json_primitive?(value, source), do: json_source_context(source), else: json_empty_context()
+  end
+
+  defp json_reviver_context(_value, _source), do: json_empty_context()
+
+  defp same_json_primitive?(value, source) do
+    case Jason.decode(source) do
+      {:ok, decoded} when is_number(decoded) and is_number(value) -> decoded == value
+      {:ok, decoded} -> decoded == value
+      _ -> false
+    end
+  end
+
+  defp json_empty_context do
+    ref = make_ref()
+    Heap.put_obj(ref, %{:__internal_proto__ => Heap.get_object_prototype(), key_order() => []})
+    {:obj, ref}
   end
 
   defp json_replacer_wrapper(value) do
