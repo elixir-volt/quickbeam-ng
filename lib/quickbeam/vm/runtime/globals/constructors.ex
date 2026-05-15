@@ -355,7 +355,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   defp invalid_regexp_source?(source) do
     starts_with_quantifier?(source) or dangling_escape?(source) or
       repeated_quantifier?(source) or adjacent_interval_quantifiers?(source) or invalid_class_range?(source) or
-      descending_character_range?(source) or invalid_interval_quantifier?(source)
+      descending_character_range?(source) or invalid_interval_quantifier?(source) or invalid_modifiers?(source)
   end
 
   defp starts_with_quantifier?(<<first::binary-size(1), _::binary>>), do: first in ["*", "+", "?"]
@@ -386,6 +386,17 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
 
   defp invalid_class_range?(source) do
     String.contains?(source, ["[{-", "--"])
+  end
+
+  defp invalid_modifiers?(source) do
+    ~r/\(\?([^):]+):/u
+    |> Regex.scan(source, capture: :all_but_first)
+    |> Enum.any?(fn [modifiers] -> invalid_modifier_text?(modifiers) end)
+  end
+
+  defp invalid_modifier_text?(modifiers) do
+    chars = modifiers |> String.replace("-", "") |> String.graphemes()
+    Enum.any?(chars, &(&1 not in ~w(i m s))) or Enum.uniq(chars) != chars
   end
 
   defp descending_character_range?(source) do
