@@ -42,7 +42,9 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     bigint_ctor = realm_constructor("BigInt", &Constructors.bigint/2, bigint_proto)
     Heap.put_obj_key(elem(bigint_proto, 1), "constructor", bigint_ctor)
 
-    object_ctor = realm_object_constructor(object_proto, boolean_proto, number_proto, bigint_proto)
+    object_ctor =
+      realm_object_constructor(object_proto, boolean_proto, number_proto, bigint_proto)
+
     Heap.put_obj_key(elem(object_proto, 1), "constructor", object_ctor)
 
     string_proto = Heap.wrap(%{"__proto__" => object_proto})
@@ -97,6 +99,10 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     function_proto = QuickBEAM.VM.Runtime.Function.prototype()
     realm_id = make_ref()
 
+    proxy_ctor = realm_proxy_constructor()
+    error_bindings = Errors.bindings()
+    aggregate_error_proto = Heap.get_class_proto(Map.fetch!(error_bindings, "AggregateError"))
+
     function_ctor =
       realm_function_constructor(
         realm_id,
@@ -112,11 +118,9 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         weak_map_proto,
         weak_set_proto,
         weak_ref_proto,
-        finalization_registry_proto
+        finalization_registry_proto,
+        aggregate_error_proto
       )
-
-    proxy_ctor = realm_proxy_constructor()
-    error_bindings = Errors.bindings()
 
     global =
       Heap.wrap(%{
@@ -158,7 +162,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     end
   end
 
-  def realm_intrinsic({:bound, _, _, target, _}, intrinsic), do: realm_intrinsic(target, intrinsic)
+  def realm_intrinsic({:bound, _, _, target, _}, intrinsic),
+    do: realm_intrinsic(target, intrinsic)
 
   def realm_intrinsic(constructor, intrinsic) do
     case Process.get({:qb_realm_intrinsics, constructor}) do
@@ -174,6 +179,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       %{weak_set_proto: weak_set_proto} when intrinsic == :weak_set -> weak_set_proto
       %{weak_ref_proto: weak_ref_proto} when intrinsic == :weak_ref -> weak_ref_proto
       %{finalization_registry_proto: proto} when intrinsic == :finalization_registry -> proto
+      %{aggregate_error_proto: proto} when intrinsic == :aggregate_error -> proto
       %{object_proto: object_proto} when intrinsic == :object -> object_proto
       %{function_proto: function_proto} when intrinsic == :function -> function_proto
       _ -> nil
@@ -182,9 +188,14 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
   defp realm_object_constructor(object_proto, boolean_proto, number_proto, bigint_proto) do
     callback = fn
-      [value | _], _this -> realm_object_value(value, object_proto, boolean_proto, number_proto, bigint_proto)
-      [], {:obj, _} = this -> this
-      [], _this -> Heap.wrap(%{"__proto__" => object_proto})
+      [value | _], _this ->
+        realm_object_value(value, object_proto, boolean_proto, number_proto, bigint_proto)
+
+      [], {:obj, _} = this ->
+        this
+
+      [], _this ->
+        Heap.wrap(%{"__proto__" => object_proto})
     end
 
     ctor = {:builtin, "Object", callback}
@@ -192,18 +203,44 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     ctor
   end
 
-  defp realm_object_value({:obj, _} = value, _object_proto, _boolean_proto, _number_proto, _bigint_proto), do: value
-  defp realm_object_value(value, _object_proto, boolean_proto, _number_proto, _bigint_proto) when is_boolean(value), do: Heap.wrap(%{WrappedPrimitive.slot(:boolean) => value, "__proto__" => boolean_proto})
-  defp realm_object_value(value, _object_proto, _boolean_proto, number_proto, _bigint_proto) when is_number(value), do: Heap.wrap(%{WrappedPrimitive.slot(:number) => value, "__proto__" => number_proto})
-  defp realm_object_value({:bigint, _} = value, _object_proto, _boolean_proto, _number_proto, bigint_proto), do: Heap.wrap(%{WrappedPrimitive.slot(:bigint) => value, "__proto__" => bigint_proto})
-  defp realm_object_value(value, object_proto, _boolean_proto, _number_proto, _bigint_proto) when is_binary(value), do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => object_proto})
-  defp realm_object_value(_value, object_proto, _boolean_proto, _number_proto, _bigint_proto), do: Heap.wrap(%{"__proto__" => object_proto})
+  defp realm_object_value(
+         {:obj, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto
+       ), do: value
+
+  defp realm_object_value(value, _object_proto, boolean_proto, _number_proto, _bigint_proto)
+       when is_boolean(value),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:boolean) => value, "__proto__" => boolean_proto})
+
+  defp realm_object_value(value, _object_proto, _boolean_proto, number_proto, _bigint_proto)
+       when is_number(value),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:number) => value, "__proto__" => number_proto})
+
+  defp realm_object_value(
+         {:bigint, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         bigint_proto
+       ), do: Heap.wrap(%{WrappedPrimitive.slot(:bigint) => value, "__proto__" => bigint_proto})
+
+  defp realm_object_value(value, object_proto, _boolean_proto, _number_proto, _bigint_proto)
+       when is_binary(value),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => object_proto})
+
+  defp realm_object_value(_value, object_proto, _boolean_proto, _number_proto, _bigint_proto),
+    do: Heap.wrap(%{"__proto__" => object_proto})
 
   defp realm_constructor(name, callback, proto) do
     realm_constructor_token = make_ref()
 
     cb = fn args, this ->
-      if is_reference(realm_constructor_token), do: callback.(args, this), else: callback.(args, this)
+      if is_reference(realm_constructor_token),
+        do: callback.(args, this),
+        else: callback.(args, this)
     end
 
     ctor = {:builtin, name, cb}
@@ -258,7 +295,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          weak_map_proto,
          weak_set_proto,
          weak_ref_proto,
-         finalization_registry_proto
+         finalization_registry_proto,
+         aggregate_error_proto
        ) do
     cb = fn args, this ->
       body = realm_function_body(args)
@@ -267,10 +305,15 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         {:builtin, "anonymous",
          fn _, call_this ->
            run_realm_function_body(realm_id, body)
-           if call_this in [nil, :undefined], do: Process.get({:qb_realm_global, realm_id}), else: call_this
+
+           if call_this in [nil, :undefined],
+             do: Process.get({:qb_realm_global, realm_id}),
+             else: call_this
          end}
 
-      function_object_proto = if this in [nil, :undefined], do: function_proto, else: Prototype.get(this)
+      function_object_proto =
+        if this in [nil, :undefined], do: function_proto, else: Prototype.get(this)
+
       function_prototype = Heap.wrap(%{"__proto__" => object_proto})
 
       Heap.put_ctor_static(fun, "__proto__", function_object_proto || function_proto)
@@ -293,7 +336,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
           weak_map_proto,
           weak_set_proto,
           weak_ref_proto,
-          finalization_registry_proto
+          finalization_registry_proto,
+          aggregate_error_proto
         )
       )
 
@@ -319,7 +363,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         weak_map_proto,
         weak_set_proto,
         weak_ref_proto,
-        finalization_registry_proto
+        finalization_registry_proto,
+        aggregate_error_proto
       )
     )
 
@@ -365,7 +410,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          weak_map_proto,
          weak_set_proto,
          weak_ref_proto,
-         finalization_registry_proto
+         finalization_registry_proto,
+         aggregate_error_proto
        ) do
     %{
       realm_id: realm_id,
@@ -381,7 +427,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       weak_map_proto: weak_map_proto,
       weak_set_proto: weak_set_proto,
       weak_ref_proto: weak_ref_proto,
-      finalization_registry_proto: finalization_registry_proto
+      finalization_registry_proto: finalization_registry_proto,
+      aggregate_error_proto: aggregate_error_proto
     }
   end
 end
