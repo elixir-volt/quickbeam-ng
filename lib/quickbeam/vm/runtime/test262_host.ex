@@ -14,7 +14,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.RegExp, as: JSRegExp
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.String, as: JSString
-  alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
+  alias QuickBEAM.VM.ObjectModel.{Get, Prototype, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
 
   def object do
@@ -155,6 +155,8 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     end
   end
 
+  def realm_intrinsic({:bound, _, _, target, _}, intrinsic), do: realm_intrinsic(target, intrinsic)
+
   def realm_intrinsic(constructor, intrinsic) do
     case Process.get({:qb_realm_intrinsics, constructor}) do
       %{array_proto: array_proto} when intrinsic == :array -> array_proto
@@ -170,6 +172,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       %{weak_ref_proto: weak_ref_proto} when intrinsic == :weak_ref -> weak_ref_proto
       %{finalization_registry_proto: proto} when intrinsic == :finalization_registry -> proto
       %{object_proto: object_proto} when intrinsic == :object -> object_proto
+      %{function_proto: function_proto} when intrinsic == :function -> function_proto
       _ -> nil
     end
   end
@@ -177,6 +180,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   defp realm_object_constructor(object_proto, boolean_proto, number_proto, bigint_proto) do
     callback = fn
       [value | _], _this -> realm_object_value(value, object_proto, boolean_proto, number_proto, bigint_proto)
+      [], {:obj, _} = this -> this
       [], _this -> Heap.wrap(%{"__proto__" => object_proto})
     end
 
@@ -248,21 +252,29 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          weak_ref_proto,
          finalization_registry_proto
        ) do
-    cb = fn _args, _this ->
+    cb = fn args, this ->
+      body = realm_function_body(args)
+
       fun =
         {:builtin, "anonymous",
-         fn _, this ->
-           if this in [nil, :undefined], do: Process.get({:qb_realm_global, realm_id}), else: this
+         fn _, call_this ->
+           run_realm_function_body(realm_id, body)
+           if call_this in [nil, :undefined], do: Process.get({:qb_realm_global, realm_id}), else: call_this
          end}
 
-      Heap.put_class_proto(fun, object_proto)
-      Heap.put_ctor_static(fun, "prototype", :undefined)
+      function_object_proto = if this in [nil, :undefined], do: function_proto, else: Prototype.get(this)
+      function_prototype = Heap.wrap(%{"__proto__" => object_proto})
+
+      Heap.put_ctor_static(fun, "__proto__", function_object_proto || function_proto)
+      Heap.put_ctor_static(fun, "prototype", function_prototype)
+      Heap.put_class_proto(fun, function_prototype)
 
       Process.put(
         {:qb_realm_intrinsics, fun},
         realm_intrinsics(
           realm_id,
           object_proto,
+          function_proto,
           array_proto,
           boolean_proto,
           number_proto,
@@ -288,6 +300,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       realm_intrinsics(
         realm_id,
         object_proto,
+        function_proto,
         array_proto,
         boolean_proto,
         number_proto,
@@ -305,9 +318,35 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     ctor
   end
 
+  defp realm_function_body(args) do
+    case List.last(args) do
+      body when is_binary(body) -> body
+      :undefined -> ""
+      nil -> ""
+      body -> to_string(body)
+    end
+  end
+
+  defp run_realm_function_body(_realm_id, ""), do: :undefined
+
+  defp run_realm_function_body(realm_id, body) do
+    case Regex.run(~r/^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\+=\s*(-?\d+)\s*;?\s*$/, body) do
+      [_, name, delta] ->
+        global = Process.get({:qb_realm_global, realm_id})
+        current = Get.get(global, name)
+        {amount, _} = Integer.parse(delta)
+        base = if is_number(current), do: current, else: 0
+        Put.put(global, name, base + amount)
+
+      _ ->
+        :undefined
+    end
+  end
+
   defp realm_intrinsics(
          realm_id,
          object_proto,
+         function_proto,
          array_proto,
          boolean_proto,
          number_proto,
@@ -323,6 +362,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     %{
       realm_id: realm_id,
       object_proto: object_proto,
+      function_proto: function_proto,
       array_proto: array_proto,
       boolean_proto: boolean_proto,
       number_proto: number_proto,
