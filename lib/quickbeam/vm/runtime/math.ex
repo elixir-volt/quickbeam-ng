@@ -90,19 +90,22 @@ defmodule QuickBEAM.VM.Runtime.Math do
 
   js_object "Math" do
     method "floor" do
-      case Runtime.to_float(hd(args)) do
+      case Runtime.to_number(hd(args)) do
         :infinity -> :infinity
         :neg_infinity -> :neg_infinity
         :nan -> :nan
+        n when n == 0 -> n
         n -> floor(n)
       end
     end
 
     method "ceil" do
-      case Runtime.to_float(hd(args)) do
+      case Runtime.to_number(hd(args)) do
         :infinity -> :infinity
         :neg_infinity -> :neg_infinity
         :nan -> :nan
+        n when n == 0 -> n
+        n when n > -1 and n < 0 -> -0.0
         n -> ceil(n)
       end
     end
@@ -154,10 +157,12 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "trunc" do
-      case Runtime.to_float(hd(args)) do
+      case Runtime.to_number(hd(args)) do
         :infinity -> :infinity
         :neg_infinity -> :neg_infinity
         :nan -> :nan
+        n when n == 0 -> n
+        n when n > -1 and n < 0 -> -0.0
         n -> trunc(n)
       end
     end
@@ -174,15 +179,15 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "log" do
-      math_log(Runtime.to_float(hd(args)), &:math.log/1)
+      math_log(Runtime.to_number(hd(args)), &:math.log/1)
     end
 
     method "log2" do
-      math_log(Runtime.to_float(hd(args)), &:math.log2/1)
+      math_log(Runtime.to_number(hd(args)), &:math.log2/1)
     end
 
     method "log10" do
-      math_log(Runtime.to_float(hd(args)), &:math.log10/1)
+      math_log(Runtime.to_number(hd(args)), &:math.log10/1)
     end
 
     method "sin" do
@@ -274,10 +279,11 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "log1p" do
-      case Runtime.to_float(hd(args)) do
+      case Runtime.to_number(hd(args)) do
         :infinity -> :infinity
         :neg_infinity -> :nan
         :nan -> :nan
+        n when n == 0 -> n
         n -> math_log(1 + n, &:math.log/1)
       end
     end
