@@ -118,7 +118,9 @@ defmodule QuickBEAM.VM.Runtime.Math do
         :nan -> :nan
         n when n == 0 -> n
         n when n >= -0.5 and n < 0 -> -0.0
-        n -> round(n)
+        n when n > 0 and n < 0.5 -> 0
+        n when abs(n) >= 4_503_599_627_370_496.0 -> n
+        n -> floor(n + 0.5)
       end
     end
 
