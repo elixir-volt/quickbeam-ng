@@ -11,6 +11,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   alias QuickBEAM.VM.Runtime
 
   @method_lengths %{"parse" => 2, "stringify" => 3, "rawJSON" => 1, "isRawJSON" => 1}
+  @property_list_key {__MODULE__, :property_list}
 
   def install_metadata({:builtin, _name, map} = json) when is_map(map) do
     Enum.each(@method_lengths, fn {name, length} ->
@@ -175,16 +176,33 @@ defmodule QuickBEAM.VM.Runtime.JSON do
       replacer = Enum.at(rest, 0)
       space = Enum.at(rest, 1)
 
+      previous_property_list = Process.get(@property_list_key)
+      install_replacer_property_list(replacer)
+
       try do
         result = to_json(val)
         if result == :undefined, do: :undefined, else: encode(result, replacer, space)
       rescue
         _ -> :undefined
+      after
+        restore_replacer_property_list(previous_property_list)
       end
     end
   end
 
   defp stringify([]), do: :undefined
+
+  defp install_replacer_property_list({:obj, _} = replacer) do
+    case replacer_property_list(replacer) do
+      {:ok, list} -> Process.put(@property_list_key, list)
+      :not_array -> Process.delete(@property_list_key)
+    end
+  end
+
+  defp install_replacer_property_list(_), do: Process.delete(@property_list_key)
+
+  defp restore_replacer_property_list(nil), do: Process.delete(@property_list_key)
+  defp restore_replacer_property_list(list), do: Process.put(@property_list_key, list)
 
   defp encode(result, replacer, space) do
     result = apply_replacer(result, replacer)
@@ -305,13 +323,17 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp apply_replacer({:ordered_map, pairs}, replacer)
        when replacer != nil and replacer != :undefined do
-    filtered =
-      Enum.reduce(pairs, [], fn {k, v}, acc ->
-        result = Runtime.call_callback(replacer, [k, v])
-        if result == :undefined, do: acc, else: [{k, result} | acc]
-      end)
+    if QuickBEAM.VM.Builtin.callable?(replacer) do
+      filtered =
+        Enum.reduce(pairs, [], fn {k, v}, acc ->
+          result = Runtime.call_callback(replacer, [k, v])
+          if result == :undefined, do: acc, else: [{k, result} | acc]
+        end)
 
-    {:ordered_map, Enum.reverse(filtered)}
+      {:ordered_map, Enum.reverse(filtered)}
+    else
+      {:ordered_map, pairs}
+    end
   end
 
   defp apply_replacer(result, _), do: result
@@ -337,6 +359,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp property_list_item(value) when is_binary(value), do: value
   defp property_list_item(value) when is_integer(value), do: Integer.to_string(value)
   defp property_list_item(value) when is_float(value), do: Runtime.stringify(value)
+  defp property_list_item(value) when value in [:infinity, :neg_infinity, :nan], do: Runtime.stringify(value)
 
   defp property_list_item({:obj, ref} = value) do
     case Heap.get_obj(ref, %{}) do
@@ -386,7 +409,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
               |> Map.drop([key_order()])
               |> Enum.reject(fn {k, v} -> v == :undefined or internal?(k) end)
 
-            entries = sort_json_entries(entries, order)
+            entries = order_json_entries(entries, order)
 
             pairs =
               entries
@@ -412,6 +435,20 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp to_json(list) when is_list(list), do: Enum.map(list, &to_json/1)
   defp to_json({:accessor, _, _}), do: :undefined
   defp to_json(val), do: val
+
+  defp order_json_entries(entries, order) do
+    case Process.get(@property_list_key) do
+      list when is_list(list) ->
+        for key <- list,
+            {entry_key, value} <- entries,
+            to_string(entry_key) == key do
+          {entry_key, value}
+        end
+
+      _ ->
+        sort_json_entries(entries, order)
+    end
+  end
 
   defp sort_json_entries(entries, order) do
     Enum.sort_by(entries, fn {key, _} -> json_entry_sort_key(key, order) end)
