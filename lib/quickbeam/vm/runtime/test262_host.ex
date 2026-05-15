@@ -197,7 +197,12 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   defp realm_object_value(_value, object_proto, _boolean_proto, _number_proto, _bigint_proto), do: Heap.wrap(%{"__proto__" => object_proto})
 
   defp realm_constructor(name, callback, proto) do
-    cb = fn args, this -> callback.(args, this) end
+    realm_constructor_token = make_ref()
+
+    cb = fn args, this ->
+      if is_reference(realm_constructor_token), do: callback.(args, this), else: callback.(args, this)
+    end
+
     ctor = {:builtin, name, cb}
     ConstructorRegistry.put_prototype(ctor, proto)
     ctor
