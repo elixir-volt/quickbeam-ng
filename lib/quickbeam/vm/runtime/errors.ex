@@ -22,21 +22,29 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     error_tostring =
       {:builtin, "toString",
        fn _args, this ->
+         unless match?({:obj, _}, this) do
+           JSThrow.type_error!("Error.prototype.toString called on non-object")
+         end
+
          name =
            case QuickBEAM.VM.ObjectModel.Get.get(this, "name") do
              nil -> "Error"
              :undefined -> "Error"
-             n -> Runtime.stringify(n)
+             n -> stringify_error_slot(n)
            end
 
          msg =
            case QuickBEAM.VM.ObjectModel.Get.get(this, "message") do
              nil -> ""
              :undefined -> ""
-             m -> Runtime.stringify(m)
+             m -> stringify_error_slot(m)
            end
 
-         if msg == "", do: name, else: name <> ": " <> msg
+         cond do
+           name == "" -> msg
+           msg == "" -> name
+           true -> name <> ": " <> msg
+         end
        end}
 
     Heap.put_obj(
@@ -142,6 +150,14 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   end
 
   defp maybe_install_cause(_error, _options), do: :ok
+
+  defp stringify_error_slot({:symbol, _}),
+    do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+
+  defp stringify_error_slot({:symbol, _, _}),
+    do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+
+  defp stringify_error_slot(value), do: Runtime.stringify(value)
 
   defp install_function_parent(ctor) do
     case Heap.get_func_proto() do
