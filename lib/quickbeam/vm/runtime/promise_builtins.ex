@@ -147,7 +147,7 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
       {:obj, ref} ->
         case Heap.get_obj(ref, %{}) do
           %{promise_state() => :resolved, promise_value() => value} ->
-            Invocation.invoke(resolve, [value])
+            invoke_capability_resolve(resolve, reject, value)
 
           %{promise_state() => :rejected, promise_value() => reason} ->
             Invocation.invoke(reject, [reason])
@@ -156,14 +156,22 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
             PromiseState.promise_then([resolve, reject], result)
 
           _ ->
-            Invocation.invoke(resolve, [result])
+            invoke_capability_resolve(resolve, reject, result)
         end
 
       value ->
-        Invocation.invoke(resolve, [value])
+        invoke_capability_resolve(resolve, reject, value)
     end
 
     promise
+  end
+
+  defp invoke_capability_resolve(resolve, reject, value) do
+    try do
+      Invocation.invoke(resolve, [value])
+    catch
+      {:js_throw, reason} -> Invocation.invoke(reject, [reason])
+    end
   end
 
   defp combinator_inputs(constructor, iterable) do
