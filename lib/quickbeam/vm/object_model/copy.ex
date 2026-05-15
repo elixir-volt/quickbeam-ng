@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
   alias QuickBEAM.VM.{Heap, Runtime}
+  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.ObjectModel.{Get, Semantics, WrappedPrimitive}
 
   @doc "Appends values from a spread source into an array-like target and returns the next index."
@@ -189,6 +190,8 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
     do: numeric_index_keys(Get.string_length(string))
 
   def enumerable_keys({:bound, _, _, _, _} = fun), do: enumerable_callable_keys(fun)
+  def enumerable_keys({:regexp, _, _, ref}), do: enumerable_regexp_keys(ref)
+  def enumerable_keys({:regexp, _, _}), do: enumerable_regexp_keys(nil)
 
   def enumerable_keys(_), do: []
 
@@ -314,6 +317,28 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
       _ ->
         []
     end
+  end
+
+  defp enumerable_regexp_keys(ref) do
+    own_keys =
+      case ref do
+        nil -> []
+        _ ->
+          ref
+          |> RegexpState.get()
+          |> Map.keys()
+          |> Enum.filter(fn key ->
+            is_binary(key) and not match?(%{enumerable: false}, Heap.get_prop_desc(ref, key))
+          end)
+      end
+
+    proto_keys =
+      case Runtime.global_class_proto("RegExp") do
+        {:obj, _} = proto -> enumerable_keys(proto)
+        _ -> []
+      end
+
+    Runtime.sort_numeric_keys(own_keys ++ Enum.reject(proto_keys, &(&1 in own_keys)))
   end
 
   defp enumerable_callable_keys(fun) do
