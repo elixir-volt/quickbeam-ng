@@ -100,6 +100,10 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
         else: current_attrs.writable
 
     if fields.value_present and length_value != current_length(ref) do
+      if non_configurable_index_at_or_above?(ref, length_value, current_length(ref)) do
+        throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
+      end
+
       try do
         Put.put(obj, "length", length_value)
       catch
@@ -254,6 +258,12 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
       %MapSet{} = deleted -> MapSet.member?(deleted, idx)
       _ -> false
     end
+  end
+
+  defp non_configurable_index_at_or_above?(ref, new_len, old_len) do
+    Enum.any?(new_len..(old_len - 1)//1, fn index ->
+      match?(%{configurable: false}, Heap.get_prop_desc(ref, Integer.to_string(index)))
+    end)
   end
 
   defp descriptor_attribute_present?(desc) do
