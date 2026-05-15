@@ -187,10 +187,45 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp literal_exec(s, ""), do: exec_result([""], 0, s)
 
-  defp literal_exec(s, source) do
-    case :binary.match(s, source) do
-      {index, _length} -> exec_result([source], index, s)
+  defp literal_exec(s, "\\0") do
+    case :binary.match(s, <<0>>) do
+      {index, _length} -> exec_result([<<0>>], index, s)
       :nomatch -> nil
+    end
+  end
+
+  defp literal_exec(s, "\\c" <> <<letter::utf8>>) when letter in ?A..?Z or letter in ?a..?z do
+    control = <<rem(letter, 32)>>
+
+    case :binary.match(s, control) do
+      {index, _length} -> exec_result([control], index, s)
+      :nomatch -> nil
+    end
+  end
+
+  defp literal_exec(s, source) do
+    case nested_capture_literal(source) do
+      {literal, captures} ->
+        case :binary.match(s, literal) do
+          {index, _length} -> exec_result(List.duplicate(literal, captures + 1), index, s)
+          :nomatch -> nil
+        end
+
+      :error ->
+        case :binary.match(s, source) do
+          {index, _length} -> exec_result([source], index, s)
+          :nomatch -> nil
+        end
+    end
+  end
+
+  defp nested_capture_literal(source) do
+    case Regex.run(~r/^(\(+)([A-Za-z]+)(\)+)$/, source) do
+      [_all, opens, literal, closes] when byte_size(opens) == byte_size(closes) ->
+        {literal, byte_size(opens)}
+
+      _ ->
+        :error
     end
   end
 
