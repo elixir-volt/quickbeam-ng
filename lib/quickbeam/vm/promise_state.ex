@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.PromiseState do
   alias QuickBEAM.VM.{Builtin, Heap, Runtime}
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
 
   @doc "Creates or returns a resolved Promise state value."
   def resolved(val), do: make_promise(:resolved, val)
@@ -31,24 +31,40 @@ defmodule QuickBEAM.VM.PromiseState do
   def adopt(val), do: resolved(val)
 
   @doc "Implements Promise.prototype.then state transitions."
-  def promise_then(args, {:obj, promise_ref}), do: then_impl(args, promise_ref)
-  def promise_then(_args, _this), do: resolved(:undefined)
+  def promise_then(args, {:obj, promise_ref}) do
+    case Heap.get_obj(promise_ref, %{}) do
+      %{promise_state() => state} when state in [:resolved, :rejected, :pending] ->
+        then_impl(args, promise_ref)
 
-  @doc "Implements Promise.prototype.catch state transitions."
-  def promise_catch(args, this), do: promise_then([nil, arg(args, 0, nil)], this)
-
-  @doc "Implements Promise.prototype.finally state transitions."
-  def promise_finally([callback | _], {:obj, promise_ref}) do
-    then_impl(
-      [
-        fn value -> finalize(callback, :resolved, value) end,
-        fn reason -> finalize(callback, :rejected, reason) end
-      ],
-      promise_ref
-    )
+      _ ->
+        throw(
+          {:js_throw,
+           Heap.make_error("Promise.prototype.then called on incompatible receiver", "TypeError")}
+        )
+    end
   end
 
-  def promise_finally(_args, _this), do: resolved(:undefined)
+  def promise_then(_args, _this),
+    do:
+      throw(
+        {:js_throw,
+         Heap.make_error("Promise.prototype.then called on incompatible receiver", "TypeError")}
+      )
+
+  @doc "Implements Promise.prototype.catch state transitions."
+  def promise_catch(args, this) do
+    then = Get.get(this, "then")
+
+    unless Builtin.callable?(then) do
+      throw({:js_throw, Heap.make_error("not a function", "TypeError")})
+    end
+
+    Invocation.invoke_with_receiver(then, [:undefined, arg(args, 0, nil)], this)
+  end
+
+  @doc "Implements Promise.prototype.finally state transitions."
+  def promise_finally([callback | _], this), do: invoke_finally_then(this, callback)
+  def promise_finally(_args, this), do: invoke_finally_then(this, nil)
 
   @doc "Resolves a Promise state with normal Promise-resolution adoption."
   def resolve_adopt(ref, {:obj, obj_ref} = obj) do
@@ -113,6 +129,32 @@ defmodule QuickBEAM.VM.PromiseState do
   end
 
   # ── Internal ──
+
+  defp invoke_finally_then(this, callback) do
+    then = Get.get(this, "then")
+
+    unless Builtin.callable?(then) do
+      throw({:js_throw, Heap.make_error("not a function", "TypeError")})
+    end
+
+    Invocation.invoke_with_receiver(
+      then,
+      [
+        finalizer_function(fn value -> finalize(callback, :resolved, value) end),
+        finalizer_function(fn reason -> finalize(callback, :rejected, reason) end)
+      ],
+      this
+    )
+  end
+
+  defp finalizer_function(callback) do
+    fun = {:builtin, "resolve", fn args, _ -> callback.(arg(args, 0, :undefined)) end}
+    Heap.put_ctor_static(fun, "length", 1)
+    Heap.put_ctor_static(fun, "name", "")
+    Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
+    fun
+  end
 
   defp make_promise(state, val) do
     ref = make_ref()
