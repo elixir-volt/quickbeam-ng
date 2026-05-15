@@ -214,7 +214,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
     if names != [] do
       {:obj, indices_ref} = indices
-      Heap.put_regexp_result(indices_ref, %{"groups" => regexp_index_groups(names, captures)})
+      materialize_regexp_result_props(indices_ref, %{"groups" => regexp_index_groups(names, captures)})
     end
 
     Map.put(props, "indices", indices)
@@ -312,7 +312,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp decode_hex_escape(hex, digits) do
     case Integer.parse(hex, 16) do
-      {cp, ""} when digits == 2 -> <<cp>>
+      {cp, ""} when digits == 2 -> <<cp::utf8>>
       {cp, ""} -> <<cp::utf8>>
       _ -> :error
     end

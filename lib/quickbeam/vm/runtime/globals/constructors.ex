@@ -359,7 +359,8 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   defp invalid_regexp_source?(source) do
     starts_with_quantifier?(source) or dangling_escape?(source) or
       repeated_quantifier?(source) or adjacent_interval_quantifiers?(source) or invalid_class_range?(source) or
-      descending_character_range?(source) or invalid_interval_quantifier?(source) or invalid_modifiers?(source)
+      descending_character_range?(source) or invalid_interval_quantifier?(source) or invalid_modifiers?(source) or
+      duplicate_group_name_in_alternative?(source)
   end
 
   defp starts_with_quantifier?(<<first::binary-size(1), _::binary>>), do: first in ["*", "+", "?"]
@@ -396,6 +397,19 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
     ~r/\(\?([^):]+):/u
     |> Regex.scan(source, capture: :all_but_first)
     |> Enum.any?(fn [modifiers] -> invalid_modifier_text?(modifiers) end)
+  end
+
+  defp duplicate_group_name_in_alternative?(source) do
+    source
+    |> String.split("|")
+    |> Enum.any?(fn alternative ->
+      names =
+        ~r/\(\?<([^>]+)>/
+        |> Regex.scan(alternative, capture: :all_but_first)
+        |> Enum.map(fn [name] -> name end)
+
+      Enum.uniq(names) != names
+    end)
   end
 
   defp invalid_modifier_text?(modifiers) do
