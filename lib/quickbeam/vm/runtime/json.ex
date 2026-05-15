@@ -437,23 +437,10 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         %{}
 
       {:qb_arr, arr} ->
-        arr
-        |> :array.to_list()
-        |> Enum.with_index()
-        |> Enum.map(fn {value, index} ->
-          value
-          |> apply_property_replacer(Integer.to_string(index), obj)
-          |> to_json()
-        end)
+        json_array_or_to_json(obj, :array.to_list(arr))
 
       list when is_list(list) ->
-        list
-        |> Enum.with_index()
-        |> Enum.map(fn {value, index} ->
-          value
-          |> apply_property_replacer(Integer.to_string(index), obj)
-          |> to_json()
-        end)
+        json_array_or_to_json(obj, list)
 
       %{proxy_target() => _target, "__proxy_revoked__" => true} ->
         JSThrow.type_error!("Cannot perform operation on a revoked proxy")
@@ -514,6 +501,30 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp to_json(list) when is_list(list), do: Enum.map(list, &to_json/1)
   defp to_json({:accessor, _, _}), do: :undefined
   defp to_json(val), do: val
+
+  defp json_array_or_to_json(obj, values) do
+    case Get.get(obj, "toJSON") do
+      fun when fun != nil and fun != :undefined ->
+        if QuickBEAM.VM.Builtin.callable?(fun) do
+          fun |> QuickBEAM.VM.Invocation.invoke_with_receiver([], obj) |> to_json()
+        else
+          json_array_values(obj, values)
+        end
+
+      _ ->
+        json_array_values(obj, values)
+    end
+  end
+
+  defp json_array_values(obj, values) do
+    values
+    |> Enum.with_index()
+    |> Enum.map(fn {value, index} ->
+      value
+      |> apply_property_replacer(Integer.to_string(index), obj)
+      |> to_json()
+    end)
+  end
 
   defp proxy_to_json(proxy) do
     if json_array_like?(proxy) do
