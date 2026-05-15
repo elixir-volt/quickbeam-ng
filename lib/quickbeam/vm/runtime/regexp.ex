@@ -157,13 +157,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         literal_exec_decoded(s, literal)
 
       :error ->
-        exec_nif(bytecode, s)
+        exec_nif(bytecode, source, Get.regexp_flags(bytecode), s)
     end
   end
 
   defp exec(_, _), do: nil
 
-  defp exec_nif(bytecode, s) do
+  defp exec_nif(bytecode, source, flags, s) do
     case nif_exec(bytecode, s, 0) do
       nil ->
         nil
@@ -184,15 +184,71 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         ref = make_ref()
         Heap.put_obj(ref, strings)
 
-        # Store extra properties accessible via get_own_property
-        Heap.put_regexp_result(ref, %{
-          "index" => match_start,
-          "input" => s,
-          "groups" => :undefined
-        })
+        props = regexp_result_props(source, flags, captures, strings, match_start, s)
+        materialize_regexp_result_props(ref, props)
 
         {:obj, ref}
     end
+  end
+
+  defp materialize_regexp_result_props(ref, props) do
+    Enum.each(props, fn {key, value} ->
+      Heap.put_array_prop(ref, key, value)
+      Heap.put_prop_desc(ref, key, %{writable: true, enumerable: true, configurable: true})
+    end)
+  end
+
+  defp regexp_result_props(source, flags, captures, strings, match_start, input) do
+    names = group_names(source)
+    groups = regexp_groups(names, strings)
+
+    %{"index" => match_start, "input" => input, "groups" => groups}
+    |> maybe_put_indices(String.contains?(flags, "d"), names, captures)
+  end
+
+  defp maybe_put_indices(props, false, _names, _captures), do: props
+
+  defp maybe_put_indices(props, true, names, captures) do
+    index_entries = Enum.map(captures, &capture_indices/1)
+    indices = Heap.wrap(index_entries)
+
+    if names != [] do
+      {:obj, indices_ref} = indices
+      Heap.put_regexp_result(indices_ref, %{"groups" => regexp_index_groups(names, captures)})
+    end
+
+    Map.put(props, "indices", indices)
+  end
+
+  defp capture_indices({start, len}), do: Heap.wrap([start, start + len])
+  defp capture_indices(nil), do: :undefined
+
+  defp regexp_groups([], _strings), do: :undefined
+
+  defp regexp_groups(names, strings) do
+    values = Enum.drop(strings, 1)
+
+    names
+    |> Enum.zip(values)
+    |> Enum.reduce(%{:__internal_proto__ => nil}, fn {name, value}, acc -> Map.put(acc, name, value) end)
+    |> Heap.wrap()
+  end
+
+  defp regexp_index_groups([], _captures), do: :undefined
+
+  defp regexp_index_groups(names, captures) do
+    values = captures |> Enum.drop(1) |> Enum.map(&capture_indices/1)
+
+    names
+    |> Enum.zip(values)
+    |> Enum.reduce(%{:__internal_proto__ => nil}, fn {name, value}, acc -> Map.put(acc, name, value) end)
+    |> Heap.wrap()
+  end
+
+  defp group_names(source) do
+    ~r/\(\?<([^>]+)>/
+    |> Regex.scan(source, capture: :all_but_first)
+    |> Enum.map(fn [name] -> name end)
   end
 
   defp decoded_simple_escape("\\x" <> hex) when byte_size(hex) == 2, do: decode_hex_escape(hex, 2)

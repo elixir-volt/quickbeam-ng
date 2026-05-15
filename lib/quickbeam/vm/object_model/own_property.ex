@@ -26,6 +26,9 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
       key == "length" and array_prototype_object?(Heap.get_obj_raw(ref)) ->
         true
 
+      match?(%{^key => _}, Heap.get_regexp_result(ref) || %{}) ->
+        true
+
       key == proto() and Heap.get_prop_desc(ref, key) == nil ->
         false
 
@@ -344,6 +347,14 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     data = Heap.get_obj(ref, %{})
 
     cond do
+      match?(%{^prop_name => _}, Heap.get_regexp_result(ref) || %{}) ->
+        %{^prop_name => value} = Heap.get_regexp_result(ref)
+
+        PropertyDescriptor.data_object(
+          value,
+          PropertyDescriptor.attrs(writable: true, enumerable: true, configurable: true)
+        )
+
       prop_name in ["caller", "arguments"] and Heap.get_func_proto() == {:obj, ref} and
           Heap.get_prop_desc(ref, prop_name) != :deleted ->
         thrower =

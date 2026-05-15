@@ -182,7 +182,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   def regexp_flags(<<flags_byte::8, unicode_sets_byte::8, _::binary>>) do
     base =
-      [{1, "g"}, {2, "i"}, {4, "m"}, {8, "s"}, {16, "u"}, {32, "y"}]
+      [{1, "g"}, {2, "i"}, {4, "m"}, {8, "s"}, {16, "u"}, {32, "y"}, {64, "d"}]
       |> Enum.reduce("", fn {bit, ch}, acc ->
         if band(flags_byte, bit) != 0, do: acc <> ch, else: acc
       end)
@@ -191,7 +191,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   def regexp_flags(<<flags_byte::8, _::binary>>) do
-    [{1, "g"}, {2, "i"}, {4, "m"}, {8, "s"}, {16, "u"}, {32, "y"}]
+    [{1, "g"}, {2, "i"}, {4, "m"}, {8, "s"}, {16, "u"}, {32, "y"}, {64, "d"}]
     |> Enum.reduce("", fn {bit, ch}, acc ->
       if band(flags_byte, bit) != 0, do: acc <> ch, else: acc
     end)
