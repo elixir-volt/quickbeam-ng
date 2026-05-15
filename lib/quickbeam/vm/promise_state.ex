@@ -137,14 +137,17 @@ defmodule QuickBEAM.VM.PromiseState do
       throw({:js_throw, Heap.make_error("not a function", "TypeError")})
     end
 
-    Invocation.invoke_with_receiver(
-      then,
-      [
-        finalizer_function(fn value -> finalize(callback, :resolved, value) end),
-        finalizer_function(fn reason -> finalize(callback, :rejected, reason) end)
-      ],
-      this
-    )
+    handlers =
+      if Builtin.callable?(callback) do
+        [
+          finalizer_function(fn value -> finalize(callback, :resolved, value) end),
+          finalizer_function(fn reason -> finalize(callback, :rejected, reason) end)
+        ]
+      else
+        [callback, callback]
+      end
+
+    Invocation.invoke_with_receiver(then, handlers, this)
   end
 
   defp finalizer_function(callback) do
