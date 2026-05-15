@@ -730,6 +730,14 @@ defmodule QuickBEAM.VM.Invocation do
   defp prevalidate_builtin_construct_args!({:builtin, "DataView", _}, args),
     do: QuickBEAM.VM.Runtime.DataView.prevalidate_construct_args!(args)
 
+  defp prevalidate_builtin_construct_args!({:builtin, "Promise", _}, args) do
+    executor = QuickBEAM.VM.Builtin.arg(args, 0, :undefined)
+
+    unless QuickBEAM.VM.Builtin.callable?(executor) do
+      QuickBEAM.VM.JSThrow.type_error!("Promise resolver is not a function")
+    end
+  end
+
   defp prevalidate_builtin_construct_args!(_ctor, _args), do: :ok
 
   defp realm_default_prototype({:builtin, "Array", _}, new_target),
