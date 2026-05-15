@@ -3,9 +3,88 @@ defmodule QuickBEAM.VM.Runtime.Math do
 
   use QuickBEAM.VM.Builtin
 
+  import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
+
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime
+
+  @method_lengths %{
+    "abs" => 1,
+    "acos" => 1,
+    "acosh" => 1,
+    "asin" => 1,
+    "asinh" => 1,
+    "atan" => 1,
+    "atan2" => 2,
+    "atanh" => 1,
+    "cbrt" => 1,
+    "ceil" => 1,
+    "clz32" => 1,
+    "cos" => 1,
+    "cosh" => 1,
+    "exp" => 1,
+    "expm1" => 1,
+    "floor" => 1,
+    "fround" => 1,
+    "hypot" => 2,
+    "imul" => 2,
+    "log" => 1,
+    "log10" => 1,
+    "log1p" => 1,
+    "log2" => 1,
+    "max" => 2,
+    "min" => 2,
+    "pow" => 2,
+    "random" => 0,
+    "round" => 1,
+    "sign" => 1,
+    "sin" => 1,
+    "sinh" => 1,
+    "sqrt" => 1,
+    "sumPrecise" => 1,
+    "tan" => 1,
+    "tanh" => 1,
+    "trunc" => 1
+  }
+
+  @constants ~w(E LN10 LN2 LOG10E LOG2E PI SQRT1_2 SQRT2 MAX_SAFE_INTEGER MIN_SAFE_INTEGER)
+
+  def install_metadata({:builtin, _name, map} = math) when is_map(map) do
+    Enum.each(@method_lengths, fn {name, length} ->
+      method = Map.get(map, name)
+      Heap.put_ctor_static(math, name, method)
+      Heap.put_prop_desc(math, name, PropertyDescriptor.method())
+      Heap.put_ctor_prop_desc(math, name, PropertyDescriptor.method())
+
+      case method do
+        {:builtin, _, _} = method ->
+          Heap.put_ctor_static(method, "length", length)
+          Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
+
+        _ ->
+          :ok
+      end
+    end)
+
+    Enum.each(@constants, fn name ->
+      Heap.put_prop_desc(math, name, PropertyDescriptor.hidden_readonly())
+      Heap.put_ctor_prop_desc(math, name, PropertyDescriptor.hidden_readonly())
+    end)
+
+    tag = {:symbol, "Symbol.toStringTag"}
+    Heap.put_ctor_static(math, tag, "Math")
+    Heap.put_prop_desc(math, tag, PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(math, tag, PropertyDescriptor.hidden_readonly())
+
+    case Heap.get_object_prototype() do
+      {:obj, _} = object_proto -> Heap.put_ctor_static(math, proto(), object_proto)
+      _ -> :ok
+    end
+
+    math
+  end
 
   js_object "Math" do
     method "floor" do

@@ -56,7 +56,7 @@ defmodule QuickBEAM.VM.Runtime.Globals do
       "Date" => DateInstaller.constructor(),
       "ArrayBuffer" => ArrayBufferInstaller.constructor(),
       "Proxy" => ProxyInstaller.constructor(),
-      "Math" => Math.object(),
+      "Math" => Math.object() |> Math.install_metadata(),
       "JSON" => JSON.object(),
       "Reflect" => Reflect.object() |> Reflect.install_metadata(),
       "console" => Console.object()
