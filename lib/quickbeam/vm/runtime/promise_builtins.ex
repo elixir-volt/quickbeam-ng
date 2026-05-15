@@ -212,6 +212,20 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
     end
   end
 
+  defp promise_resolve({:builtin, "Promise", _} = constructor, {:obj, ref} = value) do
+    case Heap.get_obj(ref, %{}) do
+      %{promise_state() => state} when state in [:resolved, :rejected, :pending] ->
+        if QuickBEAM.VM.ObjectModel.Get.get(value, "constructor") == constructor do
+          value
+        else
+          PromiseState.resolved(value)
+        end
+
+      _ ->
+        PromiseState.adopt(value)
+    end
+  end
+
   defp promise_resolve({:builtin, "Promise", _}, value), do: PromiseState.adopt(value)
 
   defp promise_resolve(constructor, value) do
