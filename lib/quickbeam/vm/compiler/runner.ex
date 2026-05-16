@@ -146,6 +146,12 @@ defmodule QuickBEAM.VM.Compiler.Runner do
 
     try do
       apply_compiled(compiled, ctx, args)
+    catch
+      {:generator_yield, _val, continuation} when is_function(continuation, 1) ->
+        build_suspended_generator(continuation)
+
+      {:generator_yield_star, _val, continuation} when is_function(continuation, 1) ->
+        build_suspended_generator(continuation)
     after
       Trace.pop()
     end
@@ -161,6 +167,12 @@ defmodule QuickBEAM.VM.Compiler.Runner do
         Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation})
     end
 
+    GeneratorIterator.build(gen_ref)
+  end
+
+  defp build_suspended_generator(continuation) do
+    gen_ref = make_ref()
+    Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation})
     GeneratorIterator.build(gen_ref)
   end
 
