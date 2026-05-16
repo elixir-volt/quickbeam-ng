@@ -8,6 +8,7 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
   alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Interpreter.Values.Coercion
 
   @slot "__data_view__"
   @methods ~w(
@@ -241,12 +242,21 @@ defmodule QuickBEAM.VM.Runtime.DataView do
     end
   end
 
-  defp to_index(:infinity), do: JSThrow.range_error!("DataView index out of range")
-  defp to_index(:neg_infinity), do: JSThrow.range_error!("DataView index out of range")
-
   defp to_index(value) do
-    index = Runtime.to_int(value)
-    if index < 0, do: JSThrow.range_error!("DataView index out of range"), else: index
+    case Runtime.to_number(value) do
+      :infinity ->
+        JSThrow.range_error!("DataView index out of range")
+
+      :neg_infinity ->
+        JSThrow.range_error!("DataView index out of range")
+
+      :nan ->
+        0
+
+      number when is_number(number) ->
+        index = trunc(number)
+        if index < 0, do: JSThrow.range_error!("DataView index out of range"), else: index
+    end
   end
 
   defp view_field!({:obj, ref}, field) do
@@ -464,6 +474,8 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   end
 
   defp bigint_value({:bigint, n}), do: n
+  defp bigint_value(true), do: 1
+  defp bigint_value(false), do: 0
 
   defp bigint_value(value) when is_binary(value) do
     value
@@ -474,6 +486,9 @@ defmodule QuickBEAM.VM.Runtime.DataView do
       :error -> JSThrow.syntax_error!("Cannot convert value to BigInt")
     end
   end
+
+  defp bigint_value({:obj, _} = value),
+    do: value |> Coercion.to_primitive("number") |> bigint_value()
 
   defp bigint_value(_value), do: JSThrow.type_error!("Cannot convert value to BigInt")
 
