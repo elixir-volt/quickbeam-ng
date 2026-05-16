@@ -20,6 +20,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def copy_data_properties(ctx, target, source, exclude),
     do: RuntimeHelpers.copy_data_properties(ctx, target, source, exclude)
 
+  def special_object(ctx, type), do: RuntimeHelpers.special_object(ctx, type)
+
   def get_array_el2(ctx, obj, index), do: RuntimeHelpers.get_array_el2(ctx, obj, index)
 
   def put_array_el(ctx, obj, index, value),

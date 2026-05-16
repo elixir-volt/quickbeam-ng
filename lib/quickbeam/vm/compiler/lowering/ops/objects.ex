@@ -30,7 +30,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
         {:ok,
          Emit.push(
            state,
-           State.compiler_call(state, :special_object, [Builder.literal(type)]),
+           State.abi_call(state, :special_object, [Builder.literal(type)]),
            special_object_type(type)
          )}
 
