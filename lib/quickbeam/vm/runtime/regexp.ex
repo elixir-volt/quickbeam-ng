@@ -339,7 +339,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       captures ->
         strings =
           Enum.map(captures, fn
-            {start, len} -> String.slice(s, start, len)
+            {start, len} -> capture_string(s, start, len, flags)
             nil -> :undefined
           end)
 
@@ -356,6 +356,14 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         materialize_regexp_result_props(ref, props)
 
         {:obj, ref}
+    end
+  end
+
+  defp capture_string(string, start, len, flags) do
+    if String.contains?(flags, "u") or String.contains?(flags, "v") do
+      String.slice(string, start, len)
+    else
+      JSString.utf16_slice(string, start, len)
     end
   end
 
@@ -1011,6 +1019,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         end
       end}, nil}
   end
+
+  defp regexp_flags(bytecode, _ref) when is_binary(bytecode), do: Get.regexp_flags(bytecode)
 
   defp regexp_flags(bytecode, ref) do
     case RegexpState.fetch(ref, "flags") do

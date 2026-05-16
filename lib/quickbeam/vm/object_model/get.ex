@@ -184,24 +184,40 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     Invocation.invoke_with_receiver(fun, [], this_obj)
   end
 
-  def regexp_flags(<<flags_byte::8, unicode_sets_byte::8, _::binary>>) do
-    base =
-      [{1, "g"}, {2, "i"}, {4, "m"}, {8, "s"}, {16, "u"}, {32, "y"}, {64, "d"}]
-      |> Enum.reduce("", fn {bit, ch}, acc ->
-        if band(flags_byte, bit) != 0, do: acc <> ch, else: acc
-      end)
+  def regexp_flags(bytecode) when is_binary(bytecode) do
+    case regexp_header_bytes(bytecode) do
+      {flags_byte, unicode_sets_byte} ->
+        base =
+          [{1, "g"}, {2, "i"}, {4, "m"}, {8, "s"}, {16, "u"}, {32, "y"}, {64, "d"}]
+          |> Enum.reduce("", fn {bit, ch}, acc ->
+            if band(flags_byte, bit) != 0, do: acc <> ch, else: acc
+          end)
 
-    if band(unicode_sets_byte, 1) != 0, do: base <> "v", else: base
-  end
+        if band(unicode_sets_byte, 1) != 0, do: base <> "v", else: base
 
-  def regexp_flags(<<flags_byte::8, _::binary>>) do
-    [{1, "g"}, {2, "i"}, {4, "m"}, {8, "s"}, {16, "u"}, {32, "y"}, {64, "d"}]
-    |> Enum.reduce("", fn {bit, ch}, acc ->
-      if band(flags_byte, bit) != 0, do: acc <> ch, else: acc
-    end)
+      :error ->
+        ""
+    end
   end
 
   def regexp_flags(_), do: ""
+
+  defp regexp_header_bytes(bytecode) do
+    case regexp_latin1_bytes(bytecode, 2, []) do
+      [flags_byte, unicode_sets_byte] -> {flags_byte, unicode_sets_byte}
+      [flags_byte] -> {flags_byte, 0}
+      _ -> :error
+    end
+  end
+
+  defp regexp_latin1_bytes(_bytecode, 0, acc), do: Enum.reverse(acc)
+  defp regexp_latin1_bytes(<<>>, _count, acc), do: Enum.reverse(acc)
+
+  defp regexp_latin1_bytes(<<cp::utf8, rest::binary>>, count, acc) when cp <= 0xFF,
+    do: regexp_latin1_bytes(rest, count - 1, [cp | acc])
+
+  defp regexp_latin1_bytes(<<byte, rest::binary>>, count, acc),
+    do: regexp_latin1_bytes(rest, count - 1, [byte | acc])
 
   @doc "Returns the JavaScript UTF-16 code-unit length of a string."
   def string_length(s), do: JSString.utf16_length(s)
@@ -653,6 +669,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         end
     end
   end
+
+  defp get_own({:regexp, bytecode, _source, _ref}, "flags") when is_binary(bytecode),
+    do: regexp_flags(bytecode)
 
   defp get_own({:regexp, bytecode, _source, ref}, "flags") do
     case RegexpState.fetch(ref, "flags") do

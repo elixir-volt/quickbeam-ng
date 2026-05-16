@@ -237,16 +237,16 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   @doc "Returns the JavaScript UTF-16 code-unit length of a string."
   def utf16_length(string) when is_binary(string) do
-    if byte_size(string) == String.length(string) do
+    if ascii_string?(string) do
       byte_size(string)
     else
-      string
-      |> String.to_charlist()
-      |> Enum.reduce(0, fn cp, acc ->
-        if cp > 0xFFFF, do: acc + 2, else: acc + 1
-      end)
+      string |> utf16_code_unit_values() |> length()
     end
   end
+
+  defp ascii_string?(<<>>), do: true
+  defp ascii_string?(<<byte, rest::binary>>) when byte < 0x80, do: ascii_string?(rest)
+  defp ascii_string?(_), do: false
 
   @doc "Returns the string value for a JavaScript UTF-16 code-unit index."
   def utf16_code_unit_at(_string, index) when index < 0, do: :undefined
@@ -770,9 +770,9 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp utf16_slice(_string, _start, count) when count <= 0, do: ""
+  def utf16_slice(_string, _start, count) when count <= 0, do: ""
 
-  defp utf16_slice(string, start, count) do
+  def utf16_slice(string, start, count) do
     string
     |> utf16_code_units()
     |> Enum.slice(start, count)
@@ -1397,7 +1397,7 @@ defmodule QuickBEAM.VM.Runtime.String do
         captures ->
           strings =
             Enum.map(captures, fn
-              {start, len} -> String.slice(s, start, len)
+              {start, len} -> regexp_capture_string(s, start, len, flags)
               nil -> :undefined
             end)
 
@@ -1419,6 +1419,14 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp match(_, _), do: nil
+
+  defp regexp_capture_string(string, start, len, flags) do
+    if String.contains?(flags, "u") or String.contains?(flags, "v") do
+      String.slice(string, start, len)
+    else
+      utf16_slice(string, start, len)
+    end
+  end
 
   defp regexp_create(:undefined), do: {:regexp, nil, ""}
 

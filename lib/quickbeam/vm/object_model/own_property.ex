@@ -179,18 +179,22 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp typed_array_index_key(_), do: nil
 
-  defp present_array_property?(ref, key) do
-    case Integer.parse(to_string(key)) do
-      {idx, ""} when idx >= 0 ->
-        prop_key = to_string(key)
+  defp present_array_property?(ref, key) when is_binary(key) or is_integer(key) do
+    prop_key = to_string(key)
 
+    case Integer.parse(prop_key) do
+      {idx, ""} when idx >= 0 ->
         Heap.array_get(ref, idx) != :undefined or Heap.get_array_prop(ref, prop_key) != :undefined or
           Heap.get_prop_desc(ref, prop_key) != nil
 
       _ ->
-        key == "length" or Heap.get_array_prop(ref, to_string(key)) != :undefined or
-          Heap.get_prop_desc(ref, to_string(key)) != nil
+        key == "length" or Heap.get_array_prop(ref, prop_key) != :undefined or
+          Heap.get_prop_desc(ref, prop_key) != nil
     end
+  end
+
+  defp present_array_property?(ref, key) do
+    Heap.get_array_prop(ref, key) != :undefined or Heap.get_prop_desc(ref, key) != nil
   end
 
   def enumerable?({:obj, ref}, key),
