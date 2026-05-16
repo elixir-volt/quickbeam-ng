@@ -115,16 +115,51 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     ascii_identifier?(s)
   end
 
-  defp test({:regexp, bytecode, _source}, [s | _]) when is_binary(bytecode) and is_binary(s) do
-    nif_exec(bytecode, s, 0) != nil
+  defp test({:regexp, bytecode, source}, [s | _]) when is_binary(bytecode) and is_binary(s) do
+    case class_escape_test(source, s) do
+      {:ok, result} -> result
+      :none -> nif_exec(bytecode, s, 0) != nil
+    end
   end
 
-  defp test({:regexp, bytecode, _source, _ref}, [s | _])
+  defp test({:regexp, bytecode, source, _ref}, [s | _])
        when is_binary(bytecode) and is_binary(s) do
-    nif_exec(bytecode, s, 0) != nil
+    case class_escape_test(source, s) do
+      {:ok, result} -> result
+      :none -> nif_exec(bytecode, s, 0) != nil
+    end
   end
 
   defp test(_, _), do: false
+
+  @digit_bytes Enum.map(?0..?9, &<<&1>>)
+  @word_bytes ["_" | Enum.map(?0..?9, &<<&1>>) ++ Enum.map(?A..?Z, &<<&1>>) ++ Enum.map(?a..?z, &<<&1>>)]
+  @ws_bytes ["\t", "\n", "\v", "\f", "\r", " ", <<0xC2, 0xA0>>, <<0xE1, 0x9A, 0x80>>,
+             <<0xE2, 0x80, 0xA8>>, <<0xE2, 0x80, 0xA9>>, <<0xE2, 0x80, 0xAF>>,
+             <<0xE2, 0x81, 0x9F>>, <<0xE3, 0x80, 0x80>>, <<0xEF, 0xBB, 0xBF>>] ++
+            Enum.map(0x2000..0x200A, &<<&1::utf8>>)
+
+  defp class_escape_test("\\d", s), do: {:ok, :binary.match(s, @digit_bytes) != :nomatch}
+  defp class_escape_test("\\D", s), do: {:ok, s != "" and not all_digits?(s)}
+  defp class_escape_test("\\w", s), do: {:ok, :binary.match(s, @word_bytes) != :nomatch}
+  defp class_escape_test("\\W", s), do: {:ok, s != "" and not all_word?(s)}
+  defp class_escape_test("\\s", s), do: {:ok, :binary.match(s, @ws_bytes) != :nomatch}
+  defp class_escape_test("\\S", s), do: {:ok, s != "" and not all_ecma_whitespace?(s)}
+  defp class_escape_test("^\\d+$", s), do: {:ok, s != "" and all_digits?(s)}
+  defp class_escape_test("^\\D+$", s), do: {:ok, s != "" and :binary.match(s, @digit_bytes) == :nomatch}
+  defp class_escape_test("^\\w+$", s), do: {:ok, s != "" and all_word?(s)}
+  defp class_escape_test("^\\W+$", s), do: {:ok, s != "" and :binary.match(s, @word_bytes) == :nomatch}
+  defp class_escape_test("^\\s+$", s), do: {:ok, s != "" and all_ecma_whitespace?(s)}
+  defp class_escape_test("^\\S+$", s), do: {:ok, s != "" and :binary.match(s, @ws_bytes) == :nomatch}
+  defp class_escape_test(_, _), do: :none
+
+  defp all_digits?(<<>>), do: true
+  defp all_digits?(<<b, rest::binary>>) when b in ?0..?9, do: all_digits?(rest)
+  defp all_digits?(_), do: false
+
+  defp all_word?(<<>>), do: true
+  defp all_word?(<<b, rest::binary>>) when b == ?_ or b in ?0..?9 or b in ?A..?Z or b in ?a..?z, do: all_word?(rest)
+  defp all_word?(_), do: false
 
   defp ascii_identifier?(<<first::utf8, rest::binary>>) do
     ascii_identifier_start?(first) and ascii_identifier_rest?(rest)

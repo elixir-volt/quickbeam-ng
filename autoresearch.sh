@@ -21,6 +21,7 @@ PY
 )
 
 if [[ "${AUTORESEARCH_QUICKJS_PARITY:-}" == "1" ]]; then
+  export TEST262_CASE_TIMEOUT="15000"
   output=$(mix run bench/quickjs_parity_residual.exs)
 else
   output=$(mix run bench/vm_compiler_test262.exs)

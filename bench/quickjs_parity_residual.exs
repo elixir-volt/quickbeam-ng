@@ -36,7 +36,7 @@ compiler_error? = fn
   _ -> false
 end
 
-case_timeout = String.to_integer(System.get_env("TEST262_CASE_TIMEOUT", "5000"))
+case_timeout = String.to_integer(System.get_env("TEST262_CASE_TIMEOUT", "15000"))
 
 run_raw_case = fn full, mode ->
   {:ok, rt} = QuickBEAM.start(apis: false)

@@ -2277,41 +2277,47 @@ defmodule QuickBEAM.VM.Runtime.String do
   # ── String static methods ──
 
   static "fromCodePoint" do
-    Enum.map_join(args, fn n ->
-      num = Runtime.to_number(n)
+    Enum.map_join(args, &from_code_point/1)
+  end
 
-      cond do
-        num in [:nan, :infinity, :neg_infinity] ->
-          throw(
-            {:js_throw,
-             Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
-          )
+  defp from_code_point(n) when is_integer(n) and n >= 0 and n <= 0x10FFFF do
+    if n >= 0xD800 and n <= 0xDFFF, do: "", else: <<n::utf8>>
+  end
 
-        is_number(num) and num != trunc(num * 1.0) ->
-          throw(
-            {:js_throw,
-             Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
-          )
+  defp from_code_point(n) when is_integer(n) do
+    throw({:js_throw, Heap.make_error("Invalid code point " <> Integer.to_string(n), "RangeError")})
+  end
 
-        is_number(num) and (num < 0 or num > 0x10FFFF) ->
-          throw(
-            {:js_throw,
-             Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
-          )
+  defp from_code_point(n) when is_float(n) and n >= 0.0 and n <= 1_114_111.0 do
+    cp = trunc(n)
+    if n != cp * 1.0 do
+      throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+    end
+    if cp >= 0xD800 and cp <= 0xDFFF, do: "", else: <<cp::utf8>>
+  end
 
-        is_number(num) ->
-          <<trunc(num)::utf8>>
+  defp from_code_point(n) when is_float(n) do
+    throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+  end
 
-        match?({:symbol, _}, n) or match?({:symbol, _, _}, n) ->
-          throw(
-            {:js_throw, Heap.make_error("Cannot convert a Symbol value to a number", "TypeError")}
-          )
+  defp from_code_point(n) do
+    if match?({:symbol, _}, n) or match?({:symbol, _, _}, n) do
+      throw({:js_throw, Heap.make_error("Cannot convert a Symbol value to a number", "TypeError")})
+    end
 
-        true ->
-          cp = Runtime.to_int(n)
-          if cp >= 0 and cp <= 0x10FFFF, do: <<cp::utf8>>, else: ""
-      end
-    end)
+    num = Runtime.to_number(n)
+    cond do
+      num in [:nan, :infinity, :neg_infinity] ->
+        throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+      is_number(num) and num != trunc(num * 1.0) ->
+        throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+      is_number(num) and (num < 0 or num > 0x10FFFF) ->
+        throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+      is_number(num) ->
+        cp = trunc(num)
+        if cp >= 0xD800 and cp <= 0xDFFF, do: "", else: <<cp::utf8>>
+      true -> ""
+    end
   end
 
   static "fromCharCode" do
