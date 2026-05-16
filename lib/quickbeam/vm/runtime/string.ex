@@ -1497,22 +1497,26 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   def regex_replace(s, {:regexp, nil, source, _ref} = regexp, replacement)
       when is_binary(source) do
-    flags = Runtime.stringify(Get.get(regexp, "flags"))
+    if custom_regexp_exec?(regexp) do
+      replace_with_custom_exec(s, regexp, replacement)
+    else
+      flags = Runtime.stringify(Get.get(regexp, "flags"))
 
-    case compile_elixir_regex(source, flags) do
-      {:ok, regex} ->
-        if String.contains?(flags, "g") do
-          regex_replace_all_elixir(s, regex, replacement, flags, 0, [])
-        else
-          regex_replace_first_elixir(s, regex, replacement, flags)
-        end
+      case compile_elixir_regex(source, flags) do
+        {:ok, regex} ->
+          if String.contains?(flags, "g") do
+            regex_replace_all_elixir(s, regex, replacement, flags, 0, [])
+          else
+            regex_replace_first_elixir(s, regex, replacement, flags)
+          end
 
-      :error ->
-        if String.contains?(flags, "g") do
-          string_replace_all_literal(s, source, replacement, 0, [])
-        else
-          string_replace_first(s, source, replacement)
-        end
+        :error ->
+          if String.contains?(flags, "g") do
+            string_replace_all_literal(s, source, replacement, 0, [])
+          else
+            string_replace_first(s, source, replacement)
+          end
+      end
     end
   end
 
@@ -1521,6 +1525,10 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   def regex_replace(s, {:regexp, nil, source}, replacement) when is_binary(source),
     do: string_replace_first(s, source, replacement)
+
+  def regex_replace(s, {:obj, _} = regexp, replacement) when is_binary(s) do
+    replace_with_custom_exec(s, regexp, replacement)
+  end
 
   def regex_replace(s, {:regexp, bytecode, source}, replacement)
       when is_binary(s) and is_binary(bytecode) do
@@ -1539,6 +1547,96 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   def regex_replace(s, _, _), do: s
+
+  defp custom_regexp_exec?(regexp) do
+    exec = Get.get(regexp, "exec")
+    proto_exec = Get.get(Runtime.global_class_proto("RegExp"), "exec")
+    Builtin.callable?(exec) and exec != proto_exec
+  end
+
+  defp replace_with_custom_exec(s, regexp, replacement) do
+    exec = Get.get(regexp, "exec")
+
+    case Invocation.invoke_with_receiver(exec, [s], Runtime.gas_budget(), regexp) do
+      nil ->
+        s
+
+      :undefined ->
+        s
+
+      {:obj, _} = result ->
+        replace_from_exec_result(s, result, replacement)
+
+      _ ->
+        throw(
+          {:js_throw, Heap.make_error("RegExp exec method returned a non-object", "TypeError")}
+        )
+    end
+  end
+
+  defp replace_from_exec_result(s, {:obj, _} = result, replacement) do
+    matched = Runtime.stringify(Get.get(result, "0"))
+    index = Runtime.to_int(Get.get(result, "index"))
+    captures = result |> Heap.to_list() |> Enum.drop(1)
+    before = binary_part(s, 0, index)
+    after_offset = index + byte_size(matched)
+    after_str = binary_part(s, after_offset, byte_size(s) - after_offset)
+    groups = Get.get(result, "groups")
+
+    rep =
+      object_replacement_text(replacement, matched, before, after_str, captures, index, s, groups)
+
+    before <> rep <> after_str
+  end
+
+  defp object_replacement_text(
+         replacement,
+         matched,
+         before,
+         after_str,
+         captures,
+         index,
+         input,
+         groups
+       ) do
+    if Builtin.callable?(replacement) do
+      args = [matched | captures] ++ [index, input] ++ object_groups_arg(groups)
+
+      replacement
+      |> Invocation.invoke_with_receiver(args, Runtime.gas_budget(), :undefined)
+      |> Runtime.stringify()
+    else
+      replacement
+      |> Runtime.stringify()
+      |> substitute_object_replacement(matched, before, after_str, captures, groups)
+    end
+  end
+
+  defp object_groups_arg(groups) when groups in [nil, :undefined], do: []
+  defp object_groups_arg(groups), do: [groups]
+
+  defp substitute_object_replacement(rep, matched, before, after_str, captures, groups) do
+    rep
+    |> String.replace("$$", "\0")
+    |> String.replace("$&", matched)
+    |> String.replace("$`", before)
+    |> String.replace("$'", after_str)
+    |> replace_object_named_substitutions(groups)
+    |> replace_capture_substitutions(captures)
+    |> String.replace("\0", "$")
+  end
+
+  defp replace_object_named_substitutions(rep, groups) when groups in [nil, :undefined], do: rep
+
+  defp replace_object_named_substitutions(rep, groups) do
+    Regex.replace(~r/\$<([^>]+)>/, rep, fn _, name ->
+      case Get.get(groups, name) do
+        nil -> ""
+        :undefined -> ""
+        value -> Runtime.stringify(value)
+      end
+    end)
+  end
 
   defp special_regex_replace(s, "𠮷", _flags, replacement, global?),
     do: replace_unicode_matches(s, [{"𠮷", 0, 0}], "𠮷", replacement, global?)
