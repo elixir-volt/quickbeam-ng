@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put}
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Runtime
 
@@ -149,9 +149,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp from_value(value) when is_binary(value) do
-    value
-    |> String.graphemes()
-    |> list_iterator()
+    case string_iterator_method(value) do
+      method when method != :undefined ->
+        iterator = Invocation.invoke_with_receiver(method, [], value)
+
+        unless object_like?(iterator),
+          do: JSThrow.type_error!("iterator method returned non-object")
+
+        wrap_iterator(iterator)
+
+      :undefined ->
+        value
+        |> String.graphemes()
+        |> list_iterator()
+    end
   end
 
   defp from_value(value) when is_list(value), do: list_iterator(value)
@@ -159,7 +170,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp from_value(value) do
     unless object_like?(value), do: JSThrow.type_error!("Iterator.from requires an object")
 
-    iterator_method = Get.get(value, {:symbol, "Symbol.iterator"})
+    iterator_method =
+      string_object_iterator_method(value) || Get.get(value, {:symbol, "Symbol.iterator"})
 
     iterator =
       cond do
@@ -182,6 +194,39 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       iterator
     else
       wrap_iterator(iterator)
+    end
+  end
+
+  defp string_object_iterator_method({:obj, ref} = receiver) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) ->
+        if WrappedPrimitive.type(map) == :string do
+          string_iterator_method(receiver)
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp string_object_iterator_method(_), do: nil
+
+  defp string_iterator_method(receiver) do
+    case Runtime.global_class_proto("String") do
+      {:obj, proto_ref} ->
+        case Heap.get_obj(proto_ref, %{}) do
+          %{{:symbol, "Symbol.iterator"} => {:accessor, getter, _setter}} when getter != nil ->
+            Get.call_getter(getter, receiver)
+
+          %{{:symbol, "Symbol.iterator"} => value} ->
+            value
+
+          _ ->
+            :undefined
+        end
+
+      _ ->
+        :undefined
     end
   end
 
