@@ -2471,7 +2471,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp iterator_source?({:qb_arr, _}), do: true
   defp iterator_source?(list) when is_list(list), do: true
-  defp iterator_source?(_), do: false
+
+  defp iterator_source?(value),
+    do: QuickBEAM.VM.Builtin.callable?(primitive_iterator_method(value))
 
   defp array_from_iterator({:obj, _} = obj) do
     iterator_method = Get.get(obj, {:symbol, "Symbol.iterator"})
@@ -2483,7 +2485,33 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end
   end
 
-  defp array_from_iterator(value), do: value
+  defp array_from_iterator(value) do
+    method = primitive_iterator_method(value)
+
+    if QuickBEAM.VM.Builtin.callable?(method) do
+      QuickBEAM.VM.Invocation.invoke_with_receiver(method, [], value)
+    else
+      value
+    end
+  end
+
+  defp primitive_iterator_method(value) when is_number(value),
+    do: primitive_proto_iterator("Number")
+
+  defp primitive_iterator_method(value) when is_boolean(value),
+    do: primitive_proto_iterator("Boolean")
+
+  defp primitive_iterator_method({:bigint, _}), do: primitive_proto_iterator("BigInt")
+  defp primitive_iterator_method({:symbol, _}), do: primitive_proto_iterator("Symbol")
+  defp primitive_iterator_method({:symbol, _, _}), do: primitive_proto_iterator("Symbol")
+  defp primitive_iterator_method(_), do: :undefined
+
+  defp primitive_proto_iterator(class_name) do
+    case Runtime.global_class_proto(class_name) do
+      {:obj, _} = proto -> Get.get(proto, {:symbol, "Symbol.iterator"})
+      _ -> :undefined
+    end
+  end
 
   defp iterator_like_source?({:obj, _} = obj),
     do:
