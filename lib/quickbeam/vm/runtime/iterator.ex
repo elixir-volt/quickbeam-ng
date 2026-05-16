@@ -865,9 +865,18 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
           mark_helper_done(state_ref)
 
           cond do
-            state["iterator"] != nil -> iterator_return(state["iterator"])
-            state["active"] != nil -> iterator_return(state["active"])
-            true -> :ok
+            state["kind"] == :flat_map and state["inner"] != nil ->
+              iterator_return(state["inner"])
+              iterator_return(state["iterator"])
+
+            state["iterator"] != nil ->
+              iterator_return(state["iterator"])
+
+            state["active"] != nil ->
+              iterator_return(state["active"])
+
+            true ->
+              :ok
           end
         end
 
