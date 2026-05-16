@@ -155,15 +155,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     iterator_method = Get.get(value, {:symbol, "Symbol.iterator"})
 
     iterator =
-      if Builtin.callable?(iterator_method) do
-        result = Invocation.invoke_with_receiver(iterator_method, [], value)
+      cond do
+        Builtin.callable?(iterator_method) ->
+          result = Invocation.invoke_with_receiver(iterator_method, [], value)
 
-        unless object_like?(result),
-          do: JSThrow.type_error!("iterator method returned non-object")
+          unless object_like?(result),
+            do: JSThrow.type_error!("iterator method returned non-object")
 
-        result
-      else
-        value
+          result
+
+        iterator_method in [:undefined, nil] ->
+          value
+
+        true ->
+          JSThrow.type_error!("iterator method is not callable")
       end
 
     if iterator_method != :undefined and iterator_method != nil and iterator == value do
