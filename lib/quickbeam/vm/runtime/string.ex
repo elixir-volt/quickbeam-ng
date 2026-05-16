@@ -1836,8 +1836,8 @@ defmodule QuickBEAM.VM.Runtime.String do
     before = binary_part(s, 0, match_start)
     matched = binary_part(s, match_start, match_len)
     after_str = binary_part(s, match_start + match_len, byte_size(s) - match_start - match_len)
-    capture_strings = capture_strings(s, captures)
-    named_captures = named_capture_values(regex, s)
+    capture_strings = pad_captures(capture_strings(s, captures), length(Regex.names(regex)))
+    named_captures = named_capture_values(regex, capture_strings)
 
     rep =
       replacement_text(
@@ -1858,6 +1858,20 @@ defmodule QuickBEAM.VM.Runtime.String do
     else
       {:parts, parts}
     end
+  end
+
+  defp pad_captures(captures, count) when length(captures) >= count, do: captures
+
+  defp pad_captures(captures, count),
+    do: captures ++ List.duplicate(:undefined, count - length(captures))
+
+  defp named_capture_values(%Regex{} = regex, capture_strings) when is_list(capture_strings) do
+    regex
+    |> Regex.names()
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {name, index}, acc ->
+      Map.put(acc, name, Enum.at(capture_strings, index, :undefined))
+    end)
   end
 
   defp named_capture_values(source, capture_strings)

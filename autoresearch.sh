@@ -32,14 +32,25 @@ metric() {
   printf '%s\n' "$output" | awk -F= -v key="METRIC ${name}" '$1 == key {print $2}' | tail -1
 }
 
-cases=$(metric compiler_test262_cases)
-pass=$(metric compiler_test262_pass)
-failures=$(metric compiler_test262_failures)
-compiler_errors=$(metric compiler_test262_compiler_errors)
-compiler_crashes=$(metric compiler_test262_compiler_crashes)
-compiler_fails=$(metric compiler_test262_compiler_fails)
-both_fail=$(metric compiler_test262_both_fail)
-interpreter_fail_compiler_pass=$(metric compiler_test262_interpreter_fail_compiler_pass)
+if [[ "${AUTORESEARCH_QUICKJS_PARITY:-}" == "1" ]]; then
+  cases=$(metric quickjs_parity_cases)
+  pass=$(metric quickjs_parity_pass)
+  failures=$(metric quickjs_parity_failures)
+  compiler_errors=$(metric compiler_errors)
+  compiler_crashes=$(metric compiler_crashes)
+  compiler_fails=$(metric compiler_fails)
+  both_fail=$(metric both_fail)
+  interpreter_fail_compiler_pass=$(metric interpreter_fail_compiler_pass)
+else
+  cases=$(metric compiler_test262_cases)
+  pass=$(metric compiler_test262_pass)
+  failures=$(metric compiler_test262_failures)
+  compiler_errors=$(metric compiler_test262_compiler_errors)
+  compiler_crashes=$(metric compiler_test262_compiler_crashes)
+  compiler_fails=$(metric compiler_test262_compiler_fails)
+  both_fail=$(metric compiler_test262_both_fail)
+  interpreter_fail_compiler_pass=$(metric compiler_test262_interpreter_fail_compiler_pass)
+fi
 
 end_ms=$(python3 - <<'PY'
 import time
