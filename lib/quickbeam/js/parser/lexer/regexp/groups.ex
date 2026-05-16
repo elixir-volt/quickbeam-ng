@@ -33,9 +33,14 @@ defmodule QuickBEAM.JS.Parser.Lexer.Regexp.Groups do
           case read_regexp_group_name(pattern, name_start) do
             {:ok, name, next_offset} ->
               cond do
-                not valid_regexp_group_name?(name) -> {:error, "invalid group name"}
-                name in names -> {:error, "duplicate group name"}
-                true -> collect_regexp_group_names(pattern, next_offset, [name | names])
+                not valid_regexp_group_name?(name) ->
+                  {:error, "invalid group name"}
+
+                name in names and not disjunctive_duplicate_group?(pattern, name, index) ->
+                  {:error, "duplicate group name"}
+
+                true ->
+                  collect_regexp_group_names(pattern, next_offset, [name | names])
               end
 
             :error ->
@@ -56,6 +61,74 @@ defmodule QuickBEAM.JS.Parser.Lexer.Regexp.Groups do
       ch == ?> -> {:ok, IO.iodata_to_binary(Enum.reverse(acc)), index + 1}
       ch in [?/, ?), ?(, ?|] -> :error
       true -> read_regexp_group_name(pattern, index + 1, [ch | acc])
+    end
+  end
+
+  defp disjunctive_duplicate_group?(pattern, name, current_index) do
+    pattern
+    |> named_group_positions(name)
+    |> Enum.any?(fn previous_index ->
+      previous_index < current_index and
+        top_level_disjunction_between?(pattern, previous_index, current_index)
+    end)
+  end
+
+  defp named_group_positions(pattern, name) do
+    pattern
+    |> :binary.matches("(?<")
+    |> Enum.flat_map(fn {index, 3} ->
+      name_start = index + 3
+
+      cond do
+        name_start < byte_size(pattern) and :binary.at(pattern, name_start) in [?=, ?!] ->
+          []
+
+        true ->
+          case read_regexp_group_name(pattern, name_start) do
+            {:ok, ^name, _next_offset} -> [index]
+            _other -> []
+          end
+      end
+    end)
+  end
+
+  defp top_level_disjunction_between?(pattern, previous_index, current_index) do
+    pattern
+    |> binary_part(previous_index, current_index - previous_index)
+    |> top_level_disjunction_between?(0, 0, false)
+  end
+
+  defp top_level_disjunction_between?(slice, offset, _depth, _in_class?)
+       when offset >= byte_size(slice),
+       do: false
+
+  defp top_level_disjunction_between?(slice, offset, depth, in_class?) do
+    ch = :binary.at(slice, offset)
+
+    cond do
+      ch == ?\\ ->
+        top_level_disjunction_between?(slice, min(offset + 2, byte_size(slice)), depth, in_class?)
+
+      in_class? and ch == ?] ->
+        top_level_disjunction_between?(slice, offset + 1, depth, false)
+
+      in_class? ->
+        top_level_disjunction_between?(slice, offset + 1, depth, true)
+
+      ch == ?[ ->
+        top_level_disjunction_between?(slice, offset + 1, depth, true)
+
+      ch == ?( ->
+        top_level_disjunction_between?(slice, offset + 1, depth + 1, false)
+
+      ch == ?) ->
+        top_level_disjunction_between?(slice, offset + 1, max(depth - 1, 0), false)
+
+      ch == ?| and depth <= 1 ->
+        true
+
+      true ->
+        top_level_disjunction_between?(slice, offset + 1, depth, false)
     end
   end
 

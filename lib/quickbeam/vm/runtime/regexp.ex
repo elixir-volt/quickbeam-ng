@@ -310,12 +310,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     values = Enum.drop(strings, 1)
 
     names
-    |> Enum.zip(values)
-    |> Enum.reduce(%{:__internal_proto__ => nil, key_order() => Enum.reverse(names)}, fn {name,
-                                                                                          value},
-                                                                                         acc ->
-      Map.put(acc, name, value)
-    end)
+    |> regexp_group_entries(values)
+    |> Enum.reduce(
+      %{:__internal_proto__ => nil, key_order() => unique_group_order(names)},
+      fn {name, value}, acc ->
+        Map.put(acc, name, value)
+      end
+    )
     |> Heap.wrap()
   end
 
@@ -325,13 +326,39 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     values = captures |> Enum.drop(1) |> Enum.map(&capture_indices/1)
 
     names
-    |> Enum.zip(values)
-    |> Enum.reduce(%{:__internal_proto__ => nil, key_order() => Enum.reverse(names)}, fn {name,
-                                                                                          value},
-                                                                                         acc ->
-      Map.put(acc, name, value)
-    end)
+    |> regexp_group_entries(values)
+    |> Enum.reduce(
+      %{:__internal_proto__ => nil, key_order() => unique_group_order(names)},
+      fn {name, value}, acc ->
+        Map.put(acc, name, value)
+      end
+    )
     |> Heap.wrap()
+  end
+
+  defp regexp_group_entries(names, values) do
+    names
+    |> Enum.zip(values)
+    |> Enum.reduce([], fn {name, value}, acc ->
+      case List.keyfind(acc, name, 0) do
+        nil ->
+          [{name, value} | acc]
+
+        {^name, :undefined} when value != :undefined ->
+          List.keyreplace(acc, name, 0, {name, value})
+
+        _entry ->
+          acc
+      end
+    end)
+    |> Enum.reverse()
+  end
+
+  defp unique_group_order(names) do
+    names
+    |> Enum.reduce([], fn name, acc ->
+      if name in acc, do: acc, else: [name | acc]
+    end)
   end
 
   defp group_names(source) do

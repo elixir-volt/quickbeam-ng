@@ -1180,6 +1180,61 @@ static int find_group_name(REParseState *s, const char *name)
     return -1;
 }
 
+static bool re_has_top_level_disjunction_between(const uint8_t *start,
+                                                 const uint8_t *end)
+{
+    int depth = 0;
+    bool in_class = false;
+    const uint8_t *p;
+
+    for (p = start; p < end; p++) {
+        int c = *p;
+        if (c == '\\') {
+            if (p + 1 < end)
+                p++;
+        } else if (in_class) {
+            if (c == ']')
+                in_class = false;
+        } else if (c == '[') {
+            in_class = true;
+        } else if (c == '(') {
+            depth++;
+        } else if (c == ')') {
+            if (depth > 0)
+                depth--;
+        } else if (c == '|' && depth == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool re_duplicate_group_is_disjunctive(REParseState *s,
+                                              const char *name,
+                                              const uint8_t *current_group)
+{
+    const uint8_t *p;
+    size_t name_len = strlen(name);
+
+    for (p = s->buf_start; p + 3 < current_group; p++) {
+        const uint8_t *name_start, *name_end;
+        if (p[0] != '(' || p[1] != '?' || p[2] != '<' || p[3] == '=' || p[3] == '!')
+            continue;
+
+        name_start = p + 3;
+        name_end = name_start;
+        while (name_end < current_group && *name_end != '>')
+            name_end++;
+
+        if (name_end < current_group && (size_t)(name_end - name_start) == name_len &&
+            memcmp(name_start, name, name_len) == 0 &&
+            re_has_top_level_disjunction_between(name_end + 1, current_group)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static int re_parse_disjunction(REParseState *s, bool is_backward_dir);
 
 static int re_parse_term(REParseState *s, bool is_backward_dir)
@@ -1284,12 +1339,14 @@ static int re_parse_term(REParseState *s, bool is_backward_dir)
                     return -1;
                 put_u32(s->byte_code.buf + pos, s->byte_code.size - (pos + 4));
             } else if (p[2] == '<') {
+                const uint8_t *group_start = p;
                 p += 3;
                 if (re_parse_group_name(s->u.tmp_buf, sizeof(s->u.tmp_buf),
                                         &p)) {
                     return re_parse_error(s, "invalid group name");
                 }
-                if (find_group_name(s, s->u.tmp_buf) > 0) {
+                if (find_group_name(s, s->u.tmp_buf) > 0 &&
+                    !re_duplicate_group_is_disjunctive(s, s->u.tmp_buf, group_start)) {
                     return re_parse_error(s, "duplicate group name");
                 }
                 /* group name with a trailing zero */
