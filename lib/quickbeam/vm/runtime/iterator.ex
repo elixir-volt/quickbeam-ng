@@ -480,9 +480,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp take_next(state_ref, %{"remaining" => remaining})
+  defp take_next(state_ref, %{"iterator" => iterator, "remaining" => remaining})
        when is_number(remaining) and remaining <= 0 do
-    Heap.put_obj(state_ref, %{"kind" => :done})
+    mark_helper_done(state_ref)
+    iterator_return(iterator)
     iter_result(:undefined, true)
   end
 
