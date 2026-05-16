@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   alias QuickBEAM.VM.Compiler.Lowering.Operators
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
-  alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.ObjectModel.{Class, Private, Put}
 
   @doc "Lowers a VM instruction or function into compiler IR."
@@ -92,10 +92,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
         {:ok, state}
 
       {{:ok, :to_object}, []} ->
-        Operators.unary_call(state, RuntimeABI, :to_object)
+        Operators.unary_abi_call(state, :to_object)
 
       {{:ok, :to_propkey}, []} ->
-        Operators.unary_call(state, RuntimeABI, :to_property_key)
+        Operators.unary_abi_call(state, :to_property_key)
 
       {{:ok, :to_propkey2}, []} ->
         lower_to_propkey2(state)

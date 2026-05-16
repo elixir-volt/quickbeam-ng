@@ -496,6 +496,11 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
         Names.resolve_atom(InvokeContext.current_atoms(), atom_idx)
       )
 
+  def get_field(ctx, obj, key) when is_binary(key), do: PropertyAccess.get_property(ctx, obj, key)
+
+  def get_field(ctx, obj, atom_idx),
+    do: PropertyAccess.get_property(ctx, obj, Names.resolve_atom(context_atoms(ctx), atom_idx))
+
   def get_array_el2(ctx \\ nil, obj, idx), do: {PropertyAccess.get_property(ctx, obj, idx), obj}
 
   def get_private_field(_ctx, obj, key) do

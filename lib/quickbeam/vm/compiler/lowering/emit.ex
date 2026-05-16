@@ -95,8 +95,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Emit do
 
   @doc "Duplicates the top two operand-stack expressions preserving order."
   def duplicate_top_two(%{stack: [a, b | rest], stack_types: [ta, tb | type_rest]} = state) do
-    {bound_a, state} = bind(state, Builder.temp_name(state.temp), a)
     {bound_b, state} = bind(state, Builder.temp_name(state.temp), b)
+    {bound_a, state} = bind(state, Builder.temp_name(state.temp), a)
 
     {:ok,
      %{

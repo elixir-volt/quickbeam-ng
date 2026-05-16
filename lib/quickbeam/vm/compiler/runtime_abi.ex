@@ -10,10 +10,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
-  def to_object(value), do: RuntimeHelpers.to_object(value)
   def to_object(_ctx, value), do: RuntimeHelpers.to_object(value)
 
-  def to_property_key(value), do: RuntimeHelpers.to_property_key(value)
   def to_property_key(ctx, value), do: RuntimeHelpers.to_property_key(ctx, value)
 
   def to_property_key_for_access(ctx, receiver, key),
@@ -27,7 +25,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def put_array_el(ctx, obj, index, value),
     do: RuntimeHelpers.put_array_el(ctx, obj, index, value)
 
-  def get_field(_ctx, obj, key), do: RuntimeHelpers.get_field(obj, key)
+  def get_field(ctx, obj, key), do: RuntimeHelpers.get_field(ctx, obj, key)
 
   def put_field(ctx, obj, key, value), do: RuntimeHelpers.put_field(ctx, obj, key, value)
 

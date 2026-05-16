@@ -55,16 +55,22 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKey do
 
   def array_index?(key), do: match?({:ok, _}, array_index(key))
   def canonical_array_index?(key), do: array_index?(key)
-  def integer_index?(key) when is_integer(key), do: key >= 0
+  def integer_index(key) when is_integer(key) and key >= 0, do: {:ok, key}
+  def integer_index(key) when is_integer(key), do: :error
 
-  def integer_index?(key) when is_binary(key) do
+  def integer_index(key) when is_binary(key) do
     case Integer.parse(key) do
-      {idx, ""} -> idx >= 0
-      _ -> false
+      {idx, ""} when idx >= 0 ->
+        if Integer.to_string(idx) == key, do: {:ok, idx}, else: :error
+
+      _ ->
+        :error
     end
   end
 
-  def integer_index?(_), do: false
+  def integer_index(_), do: :error
+
+  def integer_index?(key), do: match?({:ok, _}, integer_index(key))
 
   @doc "Sorts own property keys in ECMAScript order while preserving string/symbol order."
   def sort_own_keys(keys) do

@@ -11,6 +11,12 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKeyTest do
     assert PropertyKey.array_index(-0.0) == {:ok, 0}
   end
 
+  test "integer index classification is not capped to array-index range" do
+    assert PropertyKey.integer_index("4294967294") == {:ok, 4_294_967_294}
+    assert PropertyKey.integer_index("4294967295") == {:ok, 4_294_967_295}
+    assert PropertyKey.integer_index("01") == :error
+  end
+
   test "own key sorting preserves string and symbol order after indexes" do
     sym = {:symbol, "s"}
 

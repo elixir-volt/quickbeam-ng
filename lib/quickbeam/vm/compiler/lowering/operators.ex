@@ -1,7 +1,8 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Operators do
   @moduledoc "Unary, binary, and update operator lowering helpers."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit}
+  alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
 
   @line 1
 
@@ -25,7 +26,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Operators do
          }}
       else
         {pair, state} =
-          Emit.bind(state, Builder.temp_name(state.temp), State.compiler_call(state, fun, [expr]))
+          Emit.bind(state, Builder.temp_name(state.temp), compiler_call(state, fun, [expr]))
 
         {:ok,
          %{
@@ -40,6 +41,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Operators do
   def unary_call(state, mod, fun, extra_args \\ []) do
     with {:ok, expr, _type, state} <- Emit.pop_typed(state) do
       {:ok, Emit.push(state, Builder.remote_call(mod, fun, [expr | extra_args]))}
+    end
+  end
+
+  def unary_abi_call(state, fun) do
+    with {:ok, expr, _type, state} <- Emit.pop_typed(state) do
+      {:ok, Emit.push(state, Builder.remote_call(RuntimeABI, fun, [state.ctx, expr]))}
     end
   end
 
@@ -125,6 +132,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Operators do
 
   def specialize_binary(fun, left, _left_type, right, _right_type),
     do: {Builder.local_call(fun, [left, right]), :unknown}
+
+  defp compiler_call(state, fun, args),
+    do: Builder.remote_call(RuntimeHelpers, fun, [state.ctx | args])
 
   defp specialize_get_length(expr, _type),
     do: {Builder.remote_call(QuickBEAM.VM.ObjectModel.Get, :length_of, [expr]), :integer}

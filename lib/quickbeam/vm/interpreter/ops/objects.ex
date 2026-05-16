@@ -24,11 +24,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       # ── Objects ──
 
       defp run({@op_object, []}, pc, frame, stack, gas, ctx) do
-        ref = make_ref()
-        proto = Heap.get_object_prototype()
-        init = if proto, do: %{proto() => proto}, else: %{}
-        Heap.put_obj(ref, init)
-        run(pc + 1, frame, [{:obj, ref} | stack], gas, ctx)
+        run(pc + 1, frame, [Construction.new_object() | stack], gas, ctx)
       end
 
       defp run({@op_get_field, [atom_idx]}, __pc, frame, [obj | _rest], gas, ctx)

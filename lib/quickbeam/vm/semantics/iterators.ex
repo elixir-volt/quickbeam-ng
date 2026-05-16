@@ -47,7 +47,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
     do: {Heap.wrap(%{"done" => true, "value" => :undefined}), :undefined}
 
   def iterator_next_result(_ctx, next_fn, iter_obj, val) do
-    result = Runtime.call_callback(next_fn, [val])
+    result = Invocation.invoke_callback_or_throw(next_fn, [val])
     next_iter = if Get.get(result, "done") == true, do: :undefined, else: iter_obj
     {result, next_iter}
   end
@@ -223,12 +223,20 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   end
 
   defp object_for_of(ctx, obj_ref, map) do
-    sym_iter = {:symbol, "Symbol.iterator"}
+    iter_fn = Get.get(obj_ref, {:symbol, "Symbol.iterator"})
 
     cond do
-      Map.has_key?(map, sym_iter) -> invoke_custom_iter(ctx, Map.get(map, sym_iter), obj_ref)
-      Map.has_key?(map, "next") -> {obj_ref, Get.get(obj_ref, "next")}
-      true -> {{:list_iter, []}, :undefined}
+      Builtin.callable?(iter_fn) ->
+        invoke_custom_iter(ctx, iter_fn, obj_ref)
+
+      iter_fn not in [nil, :undefined] ->
+        throw({:js_throw, Heap.make_error("[Symbol.iterator] is not a function", "TypeError")})
+
+      Map.has_key?(map, "next") ->
+        {obj_ref, Get.get(obj_ref, "next")}
+
+      true ->
+        {{:list_iter, []}, :undefined}
     end
   end
 
