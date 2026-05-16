@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
   import QuickBEAM.VM.OpcodeFamily, only: [is_small_int_push: 1]
 
   alias QuickBEAM.VM.Compiler.Analysis.CFG
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Literals, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Literals, Emit, State}
   alias QuickBEAM.VM.OpcodeFamily
 
   @line 1
@@ -36,7 +36,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
         end)
 
       {obj, state} =
-        State.bind(
+        Emit.bind(
           state,
           Builder.temp_name(state.temp),
           Builder.remote_call(QuickBEAM.VM.Heap, :wrap_keyed_object_literal, [
@@ -45,7 +45,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
           ])
         )
 
-      {:ok, State.push(state, obj, {:shaped_object, ct_offsets, value_map}), skip_to}
+      {:ok, Emit.push(state, obj, {:shaped_object, ct_offsets, value_map}), skip_to}
     end
   end
 

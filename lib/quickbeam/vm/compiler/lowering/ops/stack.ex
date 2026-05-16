@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   alias QuickBEAM.VM.Compiler.Analysis.Types, as: AnalysisTypes
   import QuickBEAM.VM.OpcodeFamily, only: [is_small_int_push: 1]
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Emit, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.OpcodeFamily
 
@@ -12,42 +12,42 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   def lower(state, constants, arg_count, name_args) do
     case name_args do
       {{:ok, :push_i32}, [value]} ->
-        {:ok, State.push(state, Builder.integer(value))}
+        {:ok, Emit.push(state, Builder.integer(value))}
 
       {{:ok, :push_i16}, [value]} ->
-        {:ok, State.push(state, Builder.integer(value))}
+        {:ok, Emit.push(state, Builder.integer(value))}
 
       {{:ok, :push_i8}, [value]} ->
-        {:ok, State.push(state, Builder.integer(value))}
+        {:ok, Emit.push(state, Builder.integer(value))}
 
       {{:ok, name}, [_]} when is_small_int_push(name) ->
         {:ok, value} = OpcodeFamily.small_int_push(name)
-        {:ok, State.push(state, Builder.integer(value))}
+        {:ok, Emit.push(state, Builder.integer(value))}
 
       {{:ok, :push_true}, []} ->
-        {:ok, State.push(state, Builder.atom(true))}
+        {:ok, Emit.push(state, Builder.atom(true))}
 
       {{:ok, :push_false}, []} ->
-        {:ok, State.push(state, Builder.atom(false))}
+        {:ok, Emit.push(state, Builder.atom(false))}
 
       {{:ok, :null}, []} ->
-        {:ok, State.push(state, Builder.atom(nil))}
+        {:ok, Emit.push(state, Builder.atom(nil))}
 
       {{:ok, :undefined}, []} ->
-        {:ok, State.push(state, Builder.atom(:undefined))}
+        {:ok, Emit.push(state, Builder.atom(:undefined))}
 
       {{:ok, :push_empty_string}, []} ->
-        {:ok, State.push(state, Builder.literal(""))}
+        {:ok, Emit.push(state, Builder.literal(""))}
 
       {{:ok, :push_bigint_i32}, [value]} ->
         {:ok,
-         State.push(state, Builder.tuple_expr([Builder.atom(:bigint), Builder.integer(value)]))}
+         Emit.push(state, Builder.tuple_expr([Builder.atom(:bigint), Builder.integer(value)]))}
 
       {{:ok, :push_atom_value}, [atom_idx]} ->
-        {:ok, State.push(state, Builder.literal(Builder.atom_name(state, atom_idx)), :string)}
+        {:ok, Emit.push(state, Builder.literal(Builder.atom_name(state, atom_idx)), :string)}
 
       {{:ok, :push_this}, []} ->
-        {:ok, State.push(state, State.compiler_call(state, :push_this, []), :object)}
+        {:ok, Emit.push(state, State.compiler_call(state, :push_this, []), :object)}
 
       {{:ok, :push_const}, [const_idx]} ->
         push_const(state, constants, arg_count, const_idx)
@@ -63,7 +63,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
 
       {{:ok, :private_symbol}, [atom_idx]} ->
         {:ok,
-         State.push(
+         Emit.push(
            state,
            State.compiler_call(state, :private_symbol, [
              Builder.literal(Builder.atom_name(state, atom_idx))
@@ -144,27 +144,27 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
       value
       when is_integer(value) or is_float(value) or is_binary(value) or is_boolean(value) or
              is_nil(value) ->
-        {:ok, State.push(state, Builder.literal(value))}
+        {:ok, Emit.push(state, Builder.literal(value))}
 
       :undefined ->
-        {:ok, State.push(state, Builder.atom(:undefined), :undefined)}
+        {:ok, Emit.push(state, Builder.atom(:undefined), :undefined)}
 
       value when value in [:nan, :infinity, :neg_infinity] ->
-        {:ok, State.push(state, Builder.atom(value), :number)}
+        {:ok, Emit.push(state, Builder.atom(value), :number)}
 
       {:bigint, value} ->
         {:ok,
-         State.push(state, Builder.tuple_expr([Builder.atom(:bigint), Builder.integer(value)]))}
+         Emit.push(state, Builder.tuple_expr([Builder.atom(:bigint), Builder.integer(value)]))}
 
       %QuickBEAM.VM.Function{} = fun when fun.closure_vars == [] ->
-        {:ok, State.push(state, Builder.literal(fun), AnalysisTypes.function_type(fun))}
+        {:ok, Emit.push(state, Builder.literal(fun), AnalysisTypes.function_type(fun))}
 
       %QuickBEAM.VM.Function{} ->
         lower_fclosure(state, constants, arg_count, idx)
 
       {:template_object, _elems, _raw} = value ->
         {:ok,
-         State.push(
+         Emit.push(
            state,
            State.compiler_call(state, :materialize_constant, [Builder.literal(value)]),
            :object
@@ -185,7 +185,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
             Builder.literal(fun)
           ])
 
-        {:ok, State.push(state, closure, AnalysisTypes.function_type(fun))}
+        {:ok, Emit.push(state, closure, AnalysisTypes.function_type(fun))}
 
       %QuickBEAM.VM.Function{} = fun ->
         with {:ok, state, entries} <-
@@ -197,7 +197,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
               Builder.literal(fun)
             ])
 
-          {:ok, State.push(state, closure, AnalysisTypes.function_type(fun))}
+          {:ok, Emit.push(state, closure, AnalysisTypes.function_type(fun))}
         end
 
       nil ->
@@ -217,7 +217,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
          acc
        ) do
     {parent_ref, state} =
-      State.bind(
+      Emit.bind(
         state,
         Builder.temp_name(state.temp),
         Builder.remote_call(RuntimeHelpers, :get_var_ref, [
@@ -227,7 +227,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
       )
 
     {cell, state} =
-      State.bind(
+      Emit.bind(
         state,
         Builder.temp_name(state.temp),
         State.compiler_call(state, :ensure_capture_cell, [parent_ref, parent_ref])
@@ -255,10 +255,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
     do: {:error, {:closure_type_not_supported, type, idx}}
 
   defp lower_dup1(state) do
-    with {:ok, a, ta, state} <- State.pop_typed(state),
-         {:ok, b, tb, state} <- State.pop_typed(state) do
-      {b_bound, state} = State.bind(state, Builder.temp_name(state.temp), b)
-      {a_bound, state} = State.bind(state, Builder.temp_name(state.temp), a)
+    with {:ok, a, ta, state} <- Emit.pop_typed(state),
+         {:ok, b, tb, state} <- Emit.pop_typed(state) do
+      {b_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), b)
+      {a_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), a)
 
       {:ok,
        %{
@@ -270,12 +270,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   end
 
   defp lower_dup3(state) do
-    with {:ok, a, ta, state} <- State.pop_typed(state),
-         {:ok, b, tb, state} <- State.pop_typed(state),
-         {:ok, c, tc, state} <- State.pop_typed(state) do
-      {c_bound, state} = State.bind(state, Builder.temp_name(state.temp), c)
-      {b_bound, state} = State.bind(state, Builder.temp_name(state.temp), b)
-      {a_bound, state} = State.bind(state, Builder.temp_name(state.temp), a)
+    with {:ok, a, ta, state} <- Emit.pop_typed(state),
+         {:ok, b, tb, state} <- Emit.pop_typed(state),
+         {:ok, c, tc, state} <- Emit.pop_typed(state) do
+      {c_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), c)
+      {b_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), b)
+      {a_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), a)
 
       {:ok,
        %{
@@ -287,11 +287,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   end
 
   defp lower_insert4(state) do
-    with {:ok, a, ta, state} <- State.pop_typed(state),
-         {:ok, b, tb, state} <- State.pop_typed(state),
-         {:ok, c, tc, state} <- State.pop_typed(state),
-         {:ok, d, td, state} <- State.pop_typed(state) do
-      {a_bound, state} = State.bind(state, Builder.temp_name(state.temp), a)
+    with {:ok, a, ta, state} <- Emit.pop_typed(state),
+         {:ok, b, tb, state} <- Emit.pop_typed(state),
+         {:ok, c, tc, state} <- Emit.pop_typed(state),
+         {:ok, d, td, state} <- Emit.pop_typed(state) do
+      {a_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), a)
 
       {:ok,
        %{

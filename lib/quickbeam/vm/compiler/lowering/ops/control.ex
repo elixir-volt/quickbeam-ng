@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Control do
   @moduledoc "Control flow opcodes: if_true, if_false, goto, catch, nip_catch, throw, throw_error, gosub, ret."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, idx, next_entry, stack_depths, inline_targets, name_args) do
@@ -50,7 +50,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Control do
         {:done, Enum.reverse([Builder.atom(:undefined) | state.body])}
 
       {{:ok, :catch}, [_target]} ->
-        {:ok, State.push(state, Builder.integer(0))}
+        {:ok, Emit.push(state, Builder.integer(0))}
 
       _ ->
         :not_handled

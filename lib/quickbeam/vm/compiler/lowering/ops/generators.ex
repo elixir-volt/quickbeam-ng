@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
   @moduledoc "Generator and async opcodes: initial_yield, yield, yield_star, async_yield_star, await, return_async."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
   @doc "Lowers a VM instruction or function into compiler IR."
@@ -11,12 +11,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
         initial_yield_throw(state, next_entry, stack_depths)
 
       {{:ok, :yield}, []} ->
-        with {:ok, val, _type, state} <- State.pop_typed(state) do
+        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
           yield_throw(state, val, next_entry, stack_depths)
         end
 
       {{:ok, :yield_star}, []} ->
-        with {:ok, val, _type, state} <- State.pop_typed(state) do
+        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
           {:done,
            Enum.reverse([
              Builder.remote_call(:erlang, :throw, [
@@ -31,7 +31,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
         end
 
       {{:ok, :async_yield_star}, []} ->
-        with {:ok, val, _type, state} <- State.pop_typed(state) do
+        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
           {:done,
            Enum.reverse([
              Builder.remote_call(:erlang, :throw, [
@@ -46,7 +46,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
         end
 
       {{:ok, :await}, []} ->
-        with {:ok, val, _type, state} <- State.pop_typed(state) do
+        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
           State.effectful_push(
             state,
             Builder.remote_call(RuntimeHelpers, :await, [
@@ -57,7 +57,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
         end
 
       {{:ok, :return_async}, []} ->
-        with {:ok, val, _state} <- State.pop(state) do
+        with {:ok, val, _state} <- Emit.pop(state) do
           {:done,
            Enum.reverse([
              Builder.remote_call(:erlang, :throw, [

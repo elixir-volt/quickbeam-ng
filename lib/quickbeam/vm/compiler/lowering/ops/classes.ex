@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
   @moduledoc "Class definition opcodes: define_class, define_method, add_brand, check_brand, init_ctor."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, name_args) do
@@ -44,11 +44,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
   end
 
   defp lower_define_class_computed(state, atom_idx) do
-    with {:ok, ctor, state} <- State.pop(state),
-         {:ok, parent_ctor, state} <- State.pop(state),
-         {:ok, computed_name, state} <- State.pop(state) do
+    with {:ok, ctor, state} <- Emit.pop(state),
+         {:ok, parent_ctor, state} <- Emit.pop(state),
+         {:ok, computed_name, state} <- Emit.pop(state) do
       {pair, state} =
-        State.bind(
+        Emit.bind(
           state,
           Builder.temp_name(state.temp),
           State.compiler_call(state, :define_class, [
@@ -72,8 +72,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
   end
 
   defp lower_check_brand(state) do
-    with {:ok, state, brand} <- State.bind_stack_entry(state, 0),
-         {:ok, state, obj} <- State.bind_stack_entry(state, 1) do
+    with {:ok, state, brand} <- Emit.bind_stack_entry(state, 0),
+         {:ok, state, obj} <- Emit.bind_stack_entry(state, 1) do
       {:ok,
        %{
          state

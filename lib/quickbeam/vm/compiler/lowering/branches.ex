@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Branches do
   @moduledoc "Lowers conditional branches, including inlineable branch target bodies."
 
   alias QuickBEAM.VM.Compiler.Analysis.CFG
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Driver, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Driver, Emit, State}
 
   @doc "Lowers a branch instruction, inlining target bodies when either edge is inlineable."
   def lower(
@@ -68,7 +68,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Branches do
          sense,
          callbacks
        ) do
-    with {:ok, cond_expr, cond_type, state} <- State.pop_typed(state),
+    with {:ok, cond_expr, cond_type, state} <- Emit.pop_typed(state),
          {:ok, target_body} <-
            target_body(
              instructions,

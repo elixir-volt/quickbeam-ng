@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
   @moduledoc "Arithmetic, bitwise, comparison, and unary opcodes."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.Interpreter.Values
 
@@ -36,8 +36,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
         State.unary_call(state, RuntimeHelpers, :typeof_is_function)
 
       {{:ok, :typeof}, []} ->
-        with {:ok, expr, _type, state} <- State.pop_typed(state) do
-          {:ok, State.push(state, Builder.local_call(:op_typeof, [expr]))}
+        with {:ok, expr, _type, state} <- Emit.pop_typed(state) do
+          {:ok, Emit.push(state, Builder.local_call(:op_typeof, [expr]))}
         end
 
       {{:ok, :inc}, []} ->
@@ -118,7 +118,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
   end
 
   defp lower_inc_dec(state, op) do
-    with {:ok, expr, type, state} <- State.pop_typed(state) do
+    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       {result_expr, result_type} =
         if type == :integer do
           {{:op, 1, op, expr, {:integer, 1, 1}}, :integer}
@@ -127,12 +127,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
           {State.compiler_call(state, fun, [expr]), :unknown}
         end
 
-      {:ok, State.push(state, result_expr, result_type)}
+      {:ok, Emit.push(state, result_expr, result_type)}
     end
   end
 
   defp lower_is_undefined_or_null(state) do
-    with {:ok, expr, type, state} <- State.pop_typed(state) do
+    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       result =
         case type do
           :undefined -> Builder.atom(true)
@@ -140,7 +140,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
           _ -> Builder.undefined_or_null_expr(expr)
         end
 
-      {:ok, State.push(state, result, :boolean)}
+      {:ok, Emit.push(state, result, :boolean)}
     end
   end
 end

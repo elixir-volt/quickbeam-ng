@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   @moduledoc "Lowering accumulator: tracks the operand stack, slot bindings, and emitted body forms during a block compilation."
 
   alias QuickBEAM.VM.Compiler.Effects
-  alias QuickBEAM.VM.Compiler.Lowering.{Atoms, Builder, Captures, Literals, Types}
+  alias QuickBEAM.VM.Compiler.Lowering.{Atoms, Builder, Captures, Emit, Literals, Types}
   alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
   alias QuickBEAM.VM.Operands.CopyDataProperties
 
@@ -98,8 +98,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   # ── Core state accessors and emitters ──
 
   @doc "Prepends one Erlang abstract-form expression to the accumulated body."
-  def emit(state, expr), do: %{state | body: [expr | state.body]}
-  def emit_all(state, exprs), do: %{state | body: Enum.reverse(exprs, state.body)}
 
   def ctx_expr(%{ctx: ctx}), do: ctx
   def closure_vars_expr(%{closure_vars: cvs}), do: cvs
@@ -112,7 +110,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
         key = Builder.literal({type, var_idx})
 
         {bound, state} =
-          bind(state, Builder.temp_name(state.temp), compiler_call(state, :get_capture, [key]))
+          Emit.bind(
+            state,
+            Builder.temp_name(state.temp),
+            compiler_call(state, :get_capture, [key])
+          )
 
         {bound, state}
 
@@ -128,14 +130,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def abi_call(state, fun, args),
     do: Builder.remote_call(RuntimeABI, fun, [ctx_expr(state) | args])
 
-  def bind(state, name, expr) do
-    var = Builder.var(name)
-    {var, %{state | body: [Builder.match(var, expr) | state.body], temp: state.temp + 1}}
-  end
-
   @doc "Binds a new context expression and marks it as the current context."
   def update_ctx(state, expr) do
-    {ctx, state} = bind(state, "Ctx#{state.temp}", expr)
+    {ctx, state} = Emit.bind(state, "Ctx#{state.temp}", expr)
     %{state | ctx: ctx}
   end
 
@@ -169,7 +166,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   end
 
   def branch(state, _idx, next_entry, target, sense, stack_depths) do
-    with {:ok, cond_expr, cond_type, state} <- pop_typed(state),
+    with {:ok, cond_expr, cond_type, state} <- Emit.pop_typed(state),
          {:ok, target_call} <- block_jump_call(state, target, stack_depths),
          {:ok, next_call} <- block_jump_call(state, next_entry, stack_depths) do
       truthy = Builder.branch_condition(cond_expr, cond_type)
@@ -189,14 +186,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers RegExp literal construction from pattern and flags stack values."
   def regexp_literal(state) do
-    with {:ok, pattern, _pattern_type, state} <- pop_typed(state),
-         {:ok, flags, _flags_type, state} <- pop_typed(state) do
-      {:ok, push(state, compiler_call(state, :regexp_literal, [pattern, flags]), :unknown)}
+    with {:ok, pattern, _pattern_type, state} <- Emit.pop_typed(state),
+         {:ok, flags, _flags_type, state} <- Emit.pop_typed(state) do
+      {:ok, Emit.push(state, compiler_call(state, :regexp_literal, [pattern, flags]), :unknown)}
     end
   end
 
   def add_to_slot(state, idx) do
-    with {:ok, expr, expr_type, state} <- pop_typed(state) do
+    with {:ok, expr, expr_type, state} <- Emit.pop_typed(state) do
       {op_expr, result_type} =
         specialize_binary(
           :op_add,
@@ -234,26 +231,26 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers property read and applies shaped-object fast paths when possible."
   def get_field_call(state, key_expr) do
-    with {:ok, obj, type, state} <- pop_typed(state) do
+    with {:ok, obj, type, state} <- Emit.pop_typed(state) do
       key_str = Literals.string(key_expr)
 
       case {type, key_str} do
         {{:shaped_object, _offsets, value_map}, key}
         when is_binary(key) and is_map_key(value_map, key) ->
-          {:ok, push(state, Builder.local_call(:op_get_field, [obj, key_expr]))}
+          {:ok, Emit.push(state, Builder.local_call(:op_get_field, [obj, key_expr]))}
 
         {{:shaped_object, offsets}, key} when is_binary(key) and is_map_key(offsets, key) ->
-          {:ok, push(state, Builder.local_call(:op_get_field, [obj, key_expr]))}
+          {:ok, Emit.push(state, Builder.local_call(:op_get_field, [obj, key_expr]))}
 
         _ ->
-          {:ok, push(state, Builder.local_call(:op_get_field, [obj, key_expr]))}
+          {:ok, Emit.push(state, Builder.local_call(:op_get_field, [obj, key_expr]))}
       end
     end
   end
 
   @doc "Lowers property read while preserving both object and property result on the stack."
   def get_field2(state, key_expr) do
-    with {:ok, obj, _type, state} <- pop_typed(state) do
+    with {:ok, obj, _type, state} <- Emit.pop_typed(state) do
       field = Builder.local_call(:op_get_field, [obj, key_expr])
 
       {:ok,
@@ -267,10 +264,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers array element read while preserving receiver and element result on the stack."
   def get_array_el2(state) do
-    with {:ok, idx, _idx_type, state} <- pop_typed(state),
-         {:ok, obj, _obj_type, state} <- pop_typed(state) do
+    with {:ok, idx, _idx_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       {pair, state} =
-        bind(
+        Emit.bind(
           state,
           Builder.temp_name(state.temp),
           abi_call(state, :get_array_el2, [obj, idx])
@@ -287,9 +284,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers function-name assignment from an atom-table index."
   def set_name_atom(state, atom_name) do
-    with {:ok, fun, fun_type, state} <- pop_typed(state) do
+    with {:ok, fun, fun_type, state} <- Emit.pop_typed(state) do
       {:ok,
-       push(
+       Emit.push(
          state,
          compiler_call(state, :set_function_name, [fun, Builder.literal(atom_name)]),
          fun_type
@@ -299,8 +296,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers function-name assignment from a computed property value."
   def set_name_computed(state) do
-    with {:ok, fun, fun_type, state} <- pop_typed(state),
-         {:ok, name, name_type, state} <- pop_typed(state) do
+    with {:ok, fun, fun_type, state} <- Emit.pop_typed(state),
+         {:ok, name, name_type, state} <- Emit.pop_typed(state) do
       named = compiler_call(state, :set_function_name_computed, [fun, name])
 
       {:ok,
@@ -314,9 +311,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers method home-object attachment for `super` support."
   def set_home_object(state) do
-    with {:ok, state, method} <- bind_stack_entry(state, 0),
-         {:ok, state, target} <- bind_stack_entry(state, 1) do
-      {:ok, emit(state, compiler_call(state, :set_home_object, [method, target]))}
+    with {:ok, state, method} <- Emit.bind_stack_entry(state, 0),
+         {:ok, state, target} <- Emit.bind_stack_entry(state, 1) do
+      {:ok, Emit.emit(state, compiler_call(state, :set_home_object, [method, target]))}
     else
       :error -> {:error, :set_home_object_state_missing}
     end
@@ -324,33 +321,33 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers private brand attachment."
   def add_brand(state) do
-    with {:ok, obj, state} <- pop(state),
-         {:ok, brand, state} <- pop(state) do
-      {:ok, emit(state, compiler_call(state, :add_brand, [obj, brand]))}
+    with {:ok, obj, state} <- Emit.pop(state),
+         {:ok, brand, state} <- Emit.pop(state) do
+      {:ok, Emit.emit(state, compiler_call(state, :add_brand, [obj, brand]))}
     end
   end
 
   def put_field_call(state, key_expr) do
-    with {:ok, val, _val_type, state} <- pop_typed(state),
-         {:ok, obj, _obj_type, state} <- pop_typed(state) do
+    with {:ok, val, _val_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       state = invalidate_shaped_aliases(state, obj)
 
-      {:ok, emit(state, abi_call(state, :put_field, [obj, key_expr, val]))}
+      {:ok, Emit.emit(state, abi_call(state, :put_field, [obj, key_expr, val]))}
     end
   end
 
   @doc "Lowers object field definition with an atom-table field name."
   def define_field_name_call(state, key_expr) do
-    with {:ok, val, _val_type, state} <- pop_typed(state),
-         {:ok, obj, obj_type, state} <- pop_typed(state) do
+    with {:ok, val, _val_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, obj_type, state} <- Emit.pop_typed(state) do
       key_str = Literals.string(key_expr)
-      {obj, state} = bind(state, Builder.temp_name(state.temp), obj)
+      {obj, state} = Emit.bind(state, Builder.temp_name(state.temp), obj)
 
       if key_str == "__proto__" do
         {:ok,
          state
-         |> emit(compiler_call(state, :define_field, [obj, key_expr, val]))
-         |> push(obj, :object)}
+         |> Emit.emit(compiler_call(state, :define_field, [obj, key_expr, val]))
+         |> Emit.push(obj, :object)}
       else
         new_type =
           case {obj_type, key_str} do
@@ -364,18 +361,18 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
         {:ok,
          state
-         |> emit(
+         |> Emit.emit(
            Builder.remote_call(QuickBEAM.VM.ObjectModel.Put, :put_field, [obj, key_expr, val])
          )
-         |> push(obj, new_type)}
+         |> Emit.push(obj, new_type)}
       end
     end
   end
 
   @doc "Lowers method/getter/setter definition with an atom-table name."
   def define_method_call(state, method_name, flags) do
-    with {:ok, method, _method_type, state} <- pop_typed(state),
-         {:ok, target, _target_type, state} <- pop_typed(state) do
+    with {:ok, method, _method_type, state} <- Emit.pop_typed(state),
+         {:ok, target, _target_type, state} <- Emit.pop_typed(state) do
       effectful_push(
         state,
         compiler_call(state, :define_method, [
@@ -391,9 +388,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers method/getter/setter definition with a computed name."
   def define_method_computed_call(state, flags) do
-    with {:ok, method, state} <- pop(state),
-         {:ok, field_name, state} <- pop(state),
-         {:ok, target, state} <- pop(state) do
+    with {:ok, method, state} <- Emit.pop(state),
+         {:ok, field_name, state} <- Emit.pop(state),
+         {:ok, target, state} <- Emit.pop(state) do
       effectful_push(
         state,
         compiler_call(state, :define_method_computed, [
@@ -408,10 +405,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers class definition and constructor/prototype wiring."
   def define_class_call(state, atom_idx) do
-    with {:ok, ctor, state} <- pop(state),
-         {:ok, parent_ctor, state} <- pop(state) do
+    with {:ok, ctor, state} <- Emit.pop(state),
+         {:ok, parent_ctor, state} <- Emit.pop(state) do
       {pair, state} =
-        bind(
+        Emit.bind(
           state,
           Builder.temp_name(state.temp),
           compiler_call(state, :define_class, [ctor, parent_ctor, Builder.literal(atom_idx)])
@@ -437,21 +434,21 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers array element assignment."
   def put_array_el_call(state) do
-    with {:ok, val, _val_type, state} <- pop_typed(state),
-         {:ok, idx, _idx_type, state} <- pop_typed(state),
-         {:ok, obj, _obj_type, state} <- pop_typed(state) do
+    with {:ok, val, _val_type, state} <- Emit.pop_typed(state),
+         {:ok, idx, _idx_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       state = invalidate_shaped_aliases(state, obj)
-      {:ok, emit(state, abi_call(state, :put_array_el, [obj, idx, val]))}
+      {:ok, Emit.emit(state, abi_call(state, :put_array_el, [obj, idx, val]))}
     end
   end
 
   @doc "Lowers array element definition with descriptor metadata."
   def define_array_el_call(state) do
-    with {:ok, val, _val_type, state} <- pop_typed(state),
-         {:ok, idx, idx_type, state} <- pop_typed(state),
-         {:ok, obj, _obj_type, state} <- pop_typed(state) do
+    with {:ok, val, _val_type, state} <- Emit.pop_typed(state),
+         {:ok, idx, idx_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       {pair, state} =
-        bind(
+        Emit.bind(
           state,
           Builder.temp_name(state.temp),
           compiler_call(state, :define_array_el, [obj, idx, val])
@@ -468,9 +465,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers conversion of an iterable or array-like value into an array object."
   def array_from_call(state, argc) do
-    with {:ok, elems, _types, state} <- pop_n_typed(state, argc) do
+    with {:ok, elems, _types, state} <- Emit.pop_n_typed(state, argc) do
       {:ok,
-       push(
+       Emit.push(
          state,
          compiler_call(state, :array_from, [Builder.list_expr(Enum.reverse(elems))]),
          :object
@@ -480,19 +477,19 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers the JavaScript `in` operator."
   def in_call(state) do
-    with {:ok, obj, _obj_type, state} <- pop_typed(state),
-         {:ok, key, _key_type, state} <- pop_typed(state) do
-      {:ok, push(state, compiler_call(state, :in_operator, [key, obj]), :boolean)}
+    with {:ok, obj, _obj_type, state} <- Emit.pop_typed(state),
+         {:ok, key, _key_type, state} <- Emit.pop_typed(state) do
+      {:ok, Emit.push(state, compiler_call(state, :in_operator, [key, obj]), :boolean)}
     end
   end
 
   @doc "Lowers array/object spread append into an aggregate literal."
   def append_call(state) do
-    with {:ok, obj, _obj_type, state} <- pop_typed(state),
-         {:ok, idx, _idx_type, state} <- pop_typed(state),
-         {:ok, arr, _arr_type, state} <- pop_typed(state) do
+    with {:ok, obj, _obj_type, state} <- Emit.pop_typed(state),
+         {:ok, idx, _idx_type, state} <- Emit.pop_typed(state),
+         {:ok, arr, _arr_type, state} <- Emit.pop_typed(state) do
       {:ok,
-       bind_pair(
+       Emit.bind_pair(
          state,
          Builder.temp_name(state.temp),
          compiler_call(state, :append_spread, [arr, idx, obj]),
@@ -506,9 +503,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     %{target_idx: target_idx, source_idx: source_idx, exclude_idx: exclude_idx} =
       CopyDataProperties.decode(mask)
 
-    with {:ok, state, target} <- bind_stack_entry(state, target_idx),
-         {:ok, state, source} <- bind_stack_entry(state, source_idx),
-         {:ok, state, exclude} <- bind_stack_entry(state, exclude_idx) do
+    with {:ok, state, target} <- Emit.bind_stack_entry(state, target_idx),
+         {:ok, state, source} <- Emit.bind_stack_entry(state, source_idx),
+         {:ok, state, exclude} <- Emit.bind_stack_entry(state, exclude_idx) do
       state = apply_effect(state, :copy_data_properties, target)
 
       {:ok,
@@ -526,8 +523,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers the JavaScript `delete` operator."
   def delete_call(state) do
-    with {:ok, key, _key_type, state} <- pop_typed(state),
-         {:ok, obj, _obj_type, state} <- pop_typed(state) do
+    with {:ok, key, _key_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       state = invalidate_shaped_aliases(state, obj)
       effectful_push(state, compiler_call(state, :delete_property, [obj, key]), :boolean)
     end
@@ -535,73 +532,13 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   # ── Stack ──
 
-  @doc "Pushes an expression and optional type onto the lowering operand stack."
-  def push(state, expr), do: push(state, expr, Types.infer_expr_type(expr))
-
-  def push(state, expr, type),
-    do: %{state | stack: [expr | state.stack], stack_types: [type | state.stack_types]}
-
-  @doc "Pushes several expressions onto the lowering operand stack in stack order."
-  def push_many(state, exprs, types) when length(exprs) == length(types),
-    do: %{state | stack: exprs ++ state.stack, stack_types: types ++ state.stack_types}
-
-  @doc "Binds a runtime call that returns a tuple and pushes selected tuple elements."
-  def bind_pair(state, name, call, types) do
-    {pair, state} = bind(state, name, call)
-    elements = Enum.map(1..length(types), &Builder.tuple_element(pair, &1))
-    push_many(state, elements, types)
-  end
-
-  def pop_typed(%{stack: [expr | rest], stack_types: [type | type_rest]} = state),
-    do: {:ok, expr, type, %{state | stack: rest, stack_types: type_rest}}
-
-  def pop_typed(_state), do: {:error, :stack_underflow}
-
-  @doc "Helper for lowering accumulator: tracks the operand stack, slot bindings, and emitted body forms during a block compilation."
-  def pop(%{stack: [expr | rest], stack_types: [_type | type_rest]} = state),
-    do: {:ok, expr, %{state | stack: rest, stack_types: type_rest}}
-
-  def pop(_state), do: {:error, :stack_underflow}
-
-  @doc "Pops several operand-stack expressions preserving evaluation order."
-  def pop_n(state, 0), do: {:ok, [], state}
-
-  def pop_n(state, count) when count > 0 do
-    with {:ok, expr, state} <- pop(state),
-         {:ok, rest, state} <- pop_n(state, count - 1) do
-      {:ok, [expr | rest], state}
-    end
-  end
-
-  @doc "Pops several operand-stack expressions with their inferred types."
-  def pop_n_typed(state, 0), do: {:ok, [], [], state}
-
-  def pop_n_typed(state, count) when count > 0 do
-    with {:ok, expr, type, state} <- pop_typed(state),
-         {:ok, rest, rest_types, state} <- pop_n_typed(state, count - 1) do
-      {:ok, [expr | rest], [type | rest_types], state}
-    end
-  end
-
-  @doc "Binds a stack entry to a temporary variable when it must be evaluated once."
-  def bind_stack_entry(state, idx) do
-    case Enum.fetch(state.stack, idx) do
-      {:ok, expr} ->
-        {bound, state} = bind(state, Builder.temp_name(state.temp), expr)
-        {:ok, %{state | stack: List.replace_at(state.stack, idx, bound)}, bound}
-
-      :error ->
-        :error
-    end
-  end
-
   @doc "Binds every current stack entry so catch/finally continuations evaluate values once."
   def freeze_stack(%{stack: []} = state), do: {[], state}
 
   def freeze_stack(state) do
     state =
       Enum.reduce(0..(length(state.stack) - 1), state, fn idx, state ->
-        {:ok, state, _bound} = bind_stack_entry(state, idx)
+        {:ok, state, _bound} = Emit.bind_stack_entry(state, idx)
         state
       end)
 
@@ -610,8 +547,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Duplicates the top operand-stack expression."
   def duplicate_top(state) do
-    with {:ok, expr, type, state} <- pop_typed(state) do
-      {bound, state} = bind(state, Builder.temp_name(state.temp), expr)
+    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
+      {bound, state} = Emit.bind(state, Builder.temp_name(state.temp), expr)
 
       {:ok,
        %{
@@ -624,10 +561,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Duplicates the top two operand-stack expressions."
   def duplicate_top_two(state) do
-    with {:ok, first, first_type, state} <- pop_typed(state),
-         {:ok, second, second_type, state} <- pop_typed(state) do
-      {second_bound, state} = bind(state, Builder.temp_name(state.temp), second)
-      {first_bound, state} = bind(state, Builder.temp_name(state.temp), first)
+    with {:ok, first, first_type, state} <- Emit.pop_typed(state),
+         {:ok, second, second_type, state} <- Emit.pop_typed(state) do
+      {second_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), second)
+      {first_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), first)
 
       {:ok,
        %{
@@ -640,9 +577,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Reorders the top two operand-stack expressions for DUP-style bytecode operations."
   def insert_top_two(state) do
-    with {:ok, first, first_type, state} <- pop_typed(state),
-         {:ok, second, second_type, state} <- pop_typed(state) do
-      {first_bound, state} = bind(state, Builder.temp_name(state.temp), first)
+    with {:ok, first, first_type, state} <- Emit.pop_typed(state),
+         {:ok, second, second_type, state} <- Emit.pop_typed(state) do
+      {first_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), first)
 
       {:ok,
        %{
@@ -655,10 +592,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Reorders the top three operand-stack expressions for DUP-style bytecode operations."
   def insert_top_three(state) do
-    with {:ok, first, first_type, state} <- pop_typed(state),
-         {:ok, second, second_type, state} <- pop_typed(state),
-         {:ok, third, third_type, state} <- pop_typed(state) do
-      {first_bound, state} = bind(state, Builder.temp_name(state.temp), first)
+    with {:ok, first, first_type, state} <- Emit.pop_typed(state),
+         {:ok, second, second_type, state} <- Emit.pop_typed(state),
+         {:ok, third, third_type, state} <- Emit.pop_typed(state) do
+      {first_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), first)
 
       {:ok,
        %{
@@ -728,17 +665,17 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers assignment to a local slot and returns the assigned value on the stack."
   def assign_slot(state, idx, keep?, wrapper \\ nil) do
-    with {:ok, expr, type, state} <- pop_typed(state) do
+    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       expr =
         if wrapper,
           do: compiler_call(state, wrapper, [expr]),
           else: expr
 
-      {slot_expr, state} = bind(state, Builder.slot_name(idx, state.temp), expr)
+      {slot_expr, state} = Emit.bind(state, Builder.slot_name(idx, state.temp), expr)
 
       state = put_slot(state, idx, slot_expr, type)
       state = Captures.sync_capture_cell(state, idx, slot_expr)
-      state = if keep?, do: push(state, slot_expr, type), else: state
+      state = if keep?, do: Emit.push(state, slot_expr, type), else: state
       {:ok, state}
     end
   end
@@ -753,14 +690,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def update_slot(state, idx, expr, keep?, type) do
     {slot_expr, state} =
       if keep? or not Types.pure_expr?(expr) or Captures.slot_captured?(state, idx) do
-        bind(state, Builder.slot_name(idx, state.temp), expr)
+        Emit.bind(state, Builder.slot_name(idx, state.temp), expr)
       else
         {expr, state}
       end
 
     state = put_slot(state, idx, slot_expr, type)
     state = Captures.sync_capture_cell(state, idx, slot_expr)
-    state = if keep?, do: push(state, slot_expr, type), else: state
+    state = if keep?, do: Emit.push(state, slot_expr, type), else: state
     {:ok, state}
   end
 
@@ -779,12 +716,16 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers postfix increment/decrement of a local slot."
   def post_update(state, fun) do
-    with {:ok, expr, type, state} <- pop_typed(state) do
+    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       if type == :integer do
         op = if fun == :post_inc, do: :+, else: :-
 
         {new_val, state} =
-          bind(state, Builder.temp_name(state.temp), {:op, @line, op, expr, {:integer, @line, 1}})
+          Emit.bind(
+            state,
+            Builder.temp_name(state.temp),
+            {:op, @line, op, expr, {:integer, @line, 1}}
+          )
 
         {:ok,
          %{
@@ -794,7 +735,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
          }}
       else
         {pair, state} =
-          bind(state, Builder.temp_name(state.temp), compiler_call(state, fun, [expr]))
+          Emit.bind(state, Builder.temp_name(state.temp), compiler_call(state, fun, [expr]))
 
         {:ok,
          %{
@@ -811,8 +752,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     do: effectful_push(state, expr, Types.infer_expr_type(expr))
 
   def effectful_push(state, expr, type) do
-    {bound, state} = bind(state, Builder.temp_name(state.temp), expr)
-    {:ok, push(state, bound, type)}
+    {bound, state} = Emit.bind(state, Builder.temp_name(state.temp), expr)
+    {:ok, Emit.push(state, bound, type)}
   end
 
   def apply_effect(state, operation, obj \\ nil) do
@@ -825,54 +766,54 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers a unary operation through a runtime helper."
   def unary_call(state, mod, fun, extra_args \\ []) do
-    with {:ok, expr, _type, state} <- pop_typed(state) do
-      {:ok, push(state, Builder.remote_call(mod, fun, [expr | extra_args]))}
+    with {:ok, expr, _type, state} <- Emit.pop_typed(state) do
+      {:ok, Emit.push(state, Builder.remote_call(mod, fun, [expr | extra_args]))}
     end
   end
 
   def get_length_call(state) do
-    with {:ok, expr, type, state} <- pop_typed(state) do
+    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       {result_expr, result_type} = specialize_get_length(expr, type)
-      {:ok, push(state, result_expr, result_type)}
+      {:ok, Emit.push(state, result_expr, result_type)}
     end
   end
 
   @doc "Lowers a unary operation through a generated local helper."
   def unary_local_call(state, fun) do
-    with {:ok, expr, type, state} <- pop_typed(state) do
+    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       {result_expr, result_type} = specialize_unary(fun, expr, type)
-      {:ok, push(state, result_expr, result_type)}
+      {:ok, Emit.push(state, result_expr, result_type)}
     end
   end
 
   def binary_call(state, mod, fun) do
-    with {:ok, right, _right_type, state} <- pop_typed(state),
-         {:ok, left, _left_type, state} <- pop_typed(state) do
-      {:ok, push(state, Builder.remote_call(mod, fun, [left, right]))}
+    with {:ok, right, _right_type, state} <- Emit.pop_typed(state),
+         {:ok, left, _left_type, state} <- Emit.pop_typed(state) do
+      {:ok, Emit.push(state, Builder.remote_call(mod, fun, [left, right]))}
     end
   end
 
   @doc "Lowers a binary operation through a generated local helper."
   def binary_local_call(state, fun) do
-    with {:ok, right, right_type, state} <- pop_typed(state),
-         {:ok, left, left_type, state} <- pop_typed(state) do
+    with {:ok, right, right_type, state} <- Emit.pop_typed(state),
+         {:ok, left, left_type, state} <- Emit.pop_typed(state) do
       {result_expr, result_type} = specialize_binary(fun, left, left_type, right, right_type)
-      {:ok, push(state, result_expr, result_type)}
+      {:ok, Emit.push(state, result_expr, result_type)}
     end
   end
 
   @doc "Lowers a JavaScript function call."
   def invoke_call(state, argc) do
-    with {:ok, args, arg_types, state} <- pop_n_typed(state, argc),
-         {:ok, fun, fun_type, state} <- pop_typed(state) do
+    with {:ok, args, arg_types, state} <- Emit.pop_n_typed(state, argc),
+         {:ok, fun, fun_type, state} <- Emit.pop_typed(state) do
       invoke_call_expr(state, fun, fun_type, Enum.reverse(args), Enum.reverse(arg_types))
     end
   end
 
   def invoke_constructor_call(state, argc, pc) do
-    with {:ok, args, _arg_types, state} <- pop_n_typed(state, argc),
-         {:ok, new_target, _new_target_type, state} <- pop_typed(state),
-         {:ok, ctor, _ctor_type, state} <- pop_typed(state) do
+    with {:ok, args, _arg_types, state} <- Emit.pop_n_typed(state, argc),
+         {:ok, new_target, _new_target_type, state} <- Emit.pop_typed(state),
+         {:ok, ctor, _ctor_type, state} <- Emit.pop_typed(state) do
       effectful_push(
         state,
         compiler_call(state, :construct_runtime, [
@@ -888,8 +829,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers a tail-position JavaScript function call."
   def invoke_tail_call(state, argc) do
-    with {:ok, args, arg_types, state} <- pop_n_typed(state, argc),
-         {:ok, fun, fun_type, %{stack: [], stack_types: []} = state} <- pop_typed(state) do
+    with {:ok, args, arg_types, state} <- Emit.pop_n_typed(state, argc),
+         {:ok, fun, fun_type, %{stack: [], stack_types: []} = state} <- Emit.pop_typed(state) do
       {:done, tail_call_expr(state, fun, fun_type, Enum.reverse(args), Enum.reverse(arg_types))}
     else
       {:ok, _fun, _fun_type, _state} -> {:error, :stack_not_empty_on_tail_call}
@@ -899,9 +840,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Lowers a JavaScript method call with receiver handling."
   def invoke_method_call(state, argc) do
-    with {:ok, args, _arg_types, state} <- pop_n_typed(state, argc),
-         {:ok, fun, fun_type, state} <- pop_typed(state),
-         {:ok, obj, _obj_type, state} <- pop_typed(state) do
+    with {:ok, args, _arg_types, state} <- Emit.pop_n_typed(state, argc),
+         {:ok, fun, fun_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       expr =
         Builder.remote_call(QuickBEAM.VM.Invocation, :invoke_method_runtime, [
           ctx_expr(state),
@@ -910,7 +851,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
           Builder.list_expr(Enum.reverse(args))
         ])
 
-      {result, state} = bind(state, Builder.temp_name(state.temp), expr)
+      {result, state} = Emit.bind(state, Builder.temp_name(state.temp), expr)
 
       state =
         update_ctx(
@@ -918,15 +859,15 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
           Builder.remote_call(QuickBEAM.VM.GlobalEnv, :refresh, [ctx_expr(state)])
         )
 
-      {:ok, push(state, result, function_return_type(fun_type, state.return_type))}
+      {:ok, Emit.push(state, result, function_return_type(fun_type, state.return_type))}
     end
   end
 
   @doc "Lowers a tail-position JavaScript method call with receiver handling."
   def invoke_tail_method_call(state, argc) do
-    with {:ok, args, _arg_types, state} <- pop_n_typed(state, argc),
-         {:ok, fun, _fun_type, state} <- pop_typed(state),
-         {:ok, obj, _obj_type, %{stack: [], stack_types: []} = state} <- pop_typed(state) do
+    with {:ok, args, _arg_types, state} <- Emit.pop_n_typed(state, argc),
+         {:ok, fun, _fun_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, %{stack: [], stack_types: []} = state} <- Emit.pop_typed(state) do
       expr =
         Builder.remote_call(QuickBEAM.VM.Invocation, :invoke_method_runtime, [
           ctx_expr(state),
@@ -975,13 +916,13 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   @doc "Finishes the current block by returning the stack top."
   def return_top(state) do
-    with {:ok, expr, _state} <- pop(state) do
+    with {:ok, expr, _state} <- Emit.pop(state) do
       {:done, Enum.reverse([expr | state.body])}
     end
   end
 
   def throw_top(state) do
-    with {:ok, expr, _state} <- pop(state) do
+    with {:ok, expr, _state} <- Emit.pop(state) do
       {:done, Enum.reverse([Builder.throw_js(expr) | state.body])}
     end
   end

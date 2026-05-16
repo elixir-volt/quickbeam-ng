@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
 
   import QuickBEAM.VM.OpcodeFamily, only: [is_call: 1]
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, idx, name_args) do
@@ -24,11 +24,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
         State.invoke_tail_method_call(state, argc)
 
       {{:ok, :apply}, [1]} ->
-        with {:ok, arg_array, state} <- State.pop(state),
-             {:ok, new_target, state} <- State.pop(state),
-             {:ok, fun, state} <- State.pop(state) do
+        with {:ok, arg_array, state} <- Emit.pop(state),
+             {:ok, new_target, state} <- Emit.pop(state),
+             {:ok, fun, state} <- Emit.pop(state) do
           {result, state} =
-            State.bind(
+            Emit.bind(
               state,
               Builder.temp_name(state.temp),
               State.compiler_call(state, :apply_super, [
@@ -44,13 +44,13 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
               State.compiler_call(state, :update_this, [result])
             )
 
-          {:ok, State.push(state, result)}
+          {:ok, Emit.push(state, result)}
         end
 
       {{:ok, :apply}, [_magic]} ->
-        with {:ok, arg_array, state} <- State.pop(state),
-             {:ok, this_obj, state} <- State.pop(state),
-             {:ok, fun, state} <- State.pop(state) do
+        with {:ok, arg_array, state} <- Emit.pop(state),
+             {:ok, this_obj, state} <- Emit.pop(state),
+             {:ok, fun, state} <- Emit.pop(state) do
           State.effectful_push(
             state,
             Builder.remote_call(QuickBEAM.VM.Invocation, :invoke_method_runtime, [
@@ -63,8 +63,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
         end
 
       {{:ok, :apply_eval}, [_scope_idx]} ->
-        with {:ok, arg_array, state} <- State.pop(state),
-             {:ok, fun, state} <- State.pop(state) do
+        with {:ok, arg_array, state} <- Emit.pop(state),
+             {:ok, fun, state} <- Emit.pop(state) do
           State.effectful_push(
             state,
             Builder.remote_call(QuickBEAM.VM.Invocation, :invoke_runtime, [
@@ -76,7 +76,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
         end
 
       {{:ok, :eval}, [argc | _scope_args]} ->
-        with {:ok, args, _types, state} <- State.pop_n_typed(state, argc + 1) do
+        with {:ok, args, _types, state} <- Emit.pop_n_typed(state, argc + 1) do
           [eval_ref | call_args] = Enum.reverse(args)
 
           State.effectful_push(
@@ -86,8 +86,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
         end
 
       {{:ok, :import}, []} ->
-        with {:ok, _meta, state} <- State.pop(state),
-             {:ok, specifier, state} <- State.pop(state) do
+        with {:ok, _meta, state} <- Emit.pop(state),
+             {:ok, specifier, state} <- Emit.pop(state) do
           State.effectful_push(
             state,
             State.compiler_call(state, :import_module, [specifier])

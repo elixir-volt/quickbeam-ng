@@ -1,12 +1,12 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Captures do
   @moduledoc "Capture-cell management during lowering: ensures and closes shared cells for captured local variables."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
 
   @doc "Ensures a capture cell exists for a local slot."
   def ensure_capture_cell(state, idx) do
     {bound, state} =
-      State.bind(
+      Emit.bind(
         state,
         Builder.capture_name(idx, state.temp),
         State.compiler_call(state, :ensure_capture_cell, [
@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Captures do
   @doc "Closes a capture cell over the current slot value."
   def close_capture_cell(state, idx) do
     {bound, state} =
-      State.bind(
+      Emit.bind(
         state,
         Builder.capture_name(idx, state.temp),
         State.compiler_call(state, :close_capture_cell, [

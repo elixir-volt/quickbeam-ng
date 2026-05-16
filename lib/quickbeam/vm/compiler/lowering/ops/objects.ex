@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   @moduledoc "Object and array manipulation opcodes: get/put_field, get/put_array_el, define_field, set_name, set_proto, get/put_super, private fields, delete, in, instanceof."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
   alias QuickBEAM.VM.ObjectModel.{Class, Private, Put}
 
@@ -10,13 +10,13 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
     case name_args do
       {{:ok, :object}, []} ->
         {obj, state} =
-          State.bind(
+          Emit.bind(
             state,
             Builder.temp_name(state.temp),
             State.compiler_call(state, :new_object, [])
           )
 
-        {:ok, State.push(state, obj, {:shaped_object, %{}})}
+        {:ok, Emit.push(state, obj, {:shaped_object, %{}})}
 
       {{:ok, :array_from}, [argc]} ->
         State.array_from_call(state, argc)
@@ -26,7 +26,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
 
       {{:ok, :special_object}, [type]} ->
         {:ok,
-         State.push(
+         Emit.push(
            state,
            State.compiler_call(state, :special_object, [Builder.literal(type)]),
            special_object_type(type)
@@ -133,8 +133,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   defp special_object_type(_), do: :unknown
 
   defp lower_set_proto(state) do
-    with {:ok, proto, state} <- State.pop(state),
-         {:ok, obj, _obj_type, state} <- State.pop_typed(state) do
+    with {:ok, proto, state} <- Emit.pop(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       {:ok,
        %{
          state
@@ -146,9 +146,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_get_super_value(state) do
-    with {:ok, key, state} <- State.pop(state),
-         {:ok, proto, state} <- State.pop(state),
-         {:ok, this_obj, state} <- State.pop(state) do
+    with {:ok, key, state} <- Emit.pop(state),
+         {:ok, proto, state} <- Emit.pop(state),
+         {:ok, this_obj, state} <- Emit.pop(state) do
       State.effectful_push(
         state,
         Builder.remote_call(Class, :get_super_value, [proto, this_obj, key])
@@ -157,10 +157,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_put_super_value(state) do
-    with {:ok, val, state} <- State.pop(state),
-         {:ok, key, state} <- State.pop(state),
-         {:ok, proto_obj, state} <- State.pop(state),
-         {:ok, this_obj, state} <- State.pop(state) do
+    with {:ok, val, state} <- Emit.pop(state),
+         {:ok, key, state} <- Emit.pop(state),
+         {:ok, proto_obj, state} <- Emit.pop(state),
+         {:ok, this_obj, state} <- Emit.pop(state) do
       {:ok,
        %{
          state
@@ -173,14 +173,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_to_propkey2(state) do
-    with {:ok, key, _key_type, state} <- State.pop_typed(state),
-         {:ok, obj, obj_type, state} <- State.pop_typed(state) do
+    with {:ok, key, _key_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, obj_type, state} <- Emit.pop_typed(state) do
       state = State.apply_effect(state, :to_property_key, obj)
 
       {:ok,
        state
-       |> State.push(obj, obj_type)
-       |> State.push(
+       |> Emit.push(obj, obj_type)
+       |> Emit.push(
          State.abi_call(state, :to_property_key_for_access, [obj, key]),
          :unknown
        )}
@@ -188,9 +188,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_check_ctor_return(state) do
-    with {:ok, val, state} <- State.pop(state) do
+    with {:ok, val, state} <- Emit.pop(state) do
       {pair, state} =
-        State.bind(
+        Emit.bind(
           state,
           Builder.temp_name(state.temp),
           State.compiler_call(state, :check_ctor_return, [val])
@@ -206,8 +206,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_get_private_field(state) do
-    with {:ok, key, state} <- State.pop(state),
-         {:ok, obj, state} <- State.pop(state) do
+    with {:ok, key, state} <- Emit.pop(state),
+         {:ok, obj, state} <- Emit.pop(state) do
       State.effectful_push(
         state,
         State.compiler_call(state, :get_private_field, [obj, key])
@@ -216,9 +216,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_put_private_field(state) do
-    with {:ok, key, state} <- State.pop(state),
-         {:ok, val, state} <- State.pop(state),
-         {:ok, obj, state} <- State.pop(state) do
+    with {:ok, key, state} <- Emit.pop(state),
+         {:ok, val, state} <- Emit.pop(state),
+         {:ok, obj, state} <- Emit.pop(state) do
       {:ok,
        %{
          state
@@ -228,9 +228,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_define_private_field(state) do
-    with {:ok, val, state} <- State.pop(state),
-         {:ok, key, state} <- State.pop(state),
-         {:ok, obj, _obj_type, state} <- State.pop_typed(state) do
+    with {:ok, val, state} <- Emit.pop(state),
+         {:ok, key, state} <- Emit.pop(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       {:ok,
        %{
          state
@@ -242,10 +242,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   end
 
   defp lower_private_in(state) do
-    with {:ok, key, state} <- State.pop(state),
-         {:ok, obj, state} <- State.pop(state) do
+    with {:ok, key, state} <- Emit.pop(state),
+         {:ok, obj, state} <- Emit.pop(state) do
       {:ok,
-       State.push(
+       Emit.push(
          state,
          Builder.remote_call(Private, :has_field?, [obj, key]),
          :boolean

@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   @moduledoc "Global variable and var-ref opcodes: get_var, put_var, define_var, get_var_ref, make_*_ref, get/put_ref_value."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.GlobalEnv
 
@@ -109,7 +109,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
 
       {{:ok, :delete_var}, [atom_idx]} ->
         {:ok,
-         State.push(
+         Emit.push(
            state,
            State.compiler_call(state, :delete_var, [Builder.literal(atom_idx)]),
            :boolean
@@ -121,7 +121,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   end
 
   defp lower_put_var(state, atom_idx) do
-    with {:ok, val, _type, state} <- State.pop_typed(state) do
+    with {:ok, val, _type, state} <- Emit.pop_typed(state) do
       {:ok,
        State.update_ctx(
          state,
@@ -135,7 +135,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   end
 
   defp lower_put_var_ref(state, idx) do
-    with {:ok, val, _type, state} <- State.pop_typed(state) do
+    with {:ok, val, _type, state} <- Emit.pop_typed(state) do
       {:ok,
        %{
          state
@@ -147,7 +147,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   end
 
   defp lower_set_var_ref(state, idx) do
-    with {:ok, val, _type, state} <- State.pop_typed(state) do
+    with {:ok, val, _type, state} <- Emit.pop_typed(state) do
       State.effectful_push(
         state,
         State.compiler_call(state, :set_var_ref, [Builder.literal(idx), val])
@@ -159,33 +159,33 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
     ref = State.compiler_call(state, :make_loc_ref, [Builder.literal(idx)])
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
-    {:ok, state |> State.push(ref, :unknown) |> State.push(key, :string)}
+    {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}
   end
 
   defp lower_make_arg_ref(state, atom_idx, idx) do
     ref = State.compiler_call(state, :make_arg_ref, [Builder.literal(idx)])
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
-    {:ok, state |> State.push(ref, :unknown) |> State.push(key, :string)}
+    {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}
   end
 
   defp lower_make_var_ref(state, atom_idx) do
     ref = State.compiler_call(state, :make_var_ref, [Builder.literal(atom_idx)])
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
-    {:ok, state |> State.push(ref, :unknown) |> State.push(key, :string)}
+    {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}
   end
 
   defp lower_make_var_ref_ref(state, atom_idx, idx) do
     ref = State.compiler_call(state, :make_var_ref_ref, [Builder.literal(idx)])
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
-    {:ok, state |> State.push(ref, :unknown) |> State.push(key, :string)}
+    {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}
   end
 
   defp lower_get_ref_value(state) do
-    with {:ok, key, key_type, state} <- State.pop_typed(state),
-         {:ok, ref, ref_type, state} <- State.pop_typed(state) do
+    with {:ok, key, key_type, state} <- Emit.pop_typed(state),
+         {:ok, ref, ref_type, state} <- Emit.pop_typed(state) do
       value = State.compiler_call(state, :get_ref_value, [key, ref])
 
       {:ok,
@@ -198,9 +198,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   end
 
   defp lower_put_ref_value(state) do
-    with {:ok, val, state} <- State.pop(state),
-         {:ok, key, state} <- State.pop(state),
-         {:ok, ref, state} <- State.pop(state) do
+    with {:ok, val, state} <- Emit.pop(state),
+         {:ok, key, state} <- Emit.pop(state),
+         {:ok, ref, state} <- Emit.pop(state) do
       {:ok, State.update_ctx(state, State.compiler_call(state, :put_ref_value, [val, key, ref]))}
     end
   end
