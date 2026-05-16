@@ -979,7 +979,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp iterator_direct_record(this) do
     unless object_like?(this), do: JSThrow.type_error!("Iterator receiver must be an object")
-    %{"iterator" => this, "next" => Get.get(this, "next")}
+
+    next = Get.get(this, "next")
+
+    if Builtin.callable?(next) do
+      %{"iterator" => this, "next" => next}
+    else
+      nested_next = if object_like?(next), do: Get.get(next, "next"), else: :undefined
+
+      if Builtin.callable?(nested_next) do
+        %{"iterator" => next, "next" => nested_next}
+      else
+        %{"iterator" => this, "next" => next}
+      end
+    end
   end
 
   defp iterator_next(%{"iterator" => iterator, "next" => next}) do
