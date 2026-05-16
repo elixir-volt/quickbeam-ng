@@ -372,7 +372,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp zip_state(iterables, keys, options) do
     options = zip_options_object(options)
     mode = zip_mode(options)
-    padding = zip_padding_values(options, mode)
+    padding = zip_padding_values(options, mode, keys)
 
     %{
       "kind" => :zip,
@@ -406,15 +406,22 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp zip_padding_values(_options, mode) when mode in [:shortest, :strict], do: []
-  defp zip_padding_values(:undefined, :longest), do: []
+  defp zip_padding_values(_options, mode, _keys) when mode in [:shortest, :strict], do: []
+  defp zip_padding_values(:undefined, :longest, _keys), do: []
 
-  defp zip_padding_values(options, :longest) do
+  defp zip_padding_values(options, :longest, keys) do
     case Get.get(options, "padding") do
       :undefined -> []
       value when is_nil(value) -> JSThrow.type_error!("Iterator.zip padding must be an object")
-      value -> validate_padding_iterable(value)
+      value -> validate_padding(value, keys)
     end
+  end
+
+  defp validate_padding(value, nil), do: validate_padding_iterable(value)
+
+  defp validate_padding(value, keys) do
+    unless object_like?(value), do: JSThrow.type_error!("Iterator.zip padding must be an object")
+    Enum.map(keys, &Get.get(value, &1))
   end
 
   defp validate_padding_iterable(value) do
