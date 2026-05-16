@@ -47,6 +47,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   end
 
   def copy_data_properties({:obj, _} = target, source, exclude) do
+    {source, exclude} = normalize_computed_rest_operands(source, exclude)
     excluded = excluded_keys(exclude)
 
     source
@@ -57,6 +58,45 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   end
 
   def copy_data_properties(_target, _source, _exclude), do: :ok
+
+  defp normalize_computed_rest_operands(source_key, {:obj, _} = source)
+       when is_binary(source_key) or is_symbol(source_key) do
+    exclusions = object_rest_transient_exclusions(source)
+
+    exclusions =
+      if exclusions == [] and is_symbol(source_key),
+        do: following_string_keys(source, source_key),
+        else: exclusions
+
+    {source, Heap.wrap([source_key | exclusions])}
+  end
+
+  defp normalize_computed_rest_operands(source, exclude), do: {source, exclude}
+
+  defp transient_exclusion_key?(key),
+    do: key in [key_order(), proto(), proxy_target(), proxy_handler(), :__internal_proto__]
+
+  defp following_string_keys(source, source_key) do
+    source
+    |> OwnProperty.own_keys()
+    |> Enum.drop_while(&(&1 != source_key))
+    |> case do
+      [_source_key | rest] -> Enum.take_while(rest, &is_binary/1)
+      _ -> []
+    end
+  end
+
+  defp object_rest_transient_exclusions({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) ->
+        map
+        |> Map.reject(fn {key, value} -> transient_exclusion_key?(key) or value != nil end)
+        |> Map.keys()
+
+      _ ->
+        []
+    end
+  end
 
   defp copy_source_keys({:obj, _} = source), do: OwnProperty.own_keys(source)
 
