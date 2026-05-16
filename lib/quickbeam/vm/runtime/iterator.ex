@@ -712,8 +712,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
         if state["kind"] != :done do
           mark_helper_done(state_ref)
 
-          if state["iterator"] != nil do
-            iterator_return(state["iterator"])
+          cond do
+            state["iterator"] != nil -> iterator_return(state["iterator"])
+            state["active"] != nil -> iterator_return(state["active"])
+            true -> :ok
           end
         end
 
