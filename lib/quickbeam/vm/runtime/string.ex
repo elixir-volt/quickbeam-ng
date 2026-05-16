@@ -3,10 +3,10 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   use QuickBEAM.VM.Builtin
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Interpreter.Values.Coercion
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.RegExp
 
@@ -1391,23 +1391,23 @@ defmodule QuickBEAM.VM.Runtime.String do
 
       true ->
         case RegExp.nif_exec(bytecode, s, 0) do
-        nil ->
-          nil
+          nil ->
+            nil
 
-        captures ->
-          strings =
-            Enum.map(captures, fn
-              {start, len} -> regexp_capture_string(s, start, len, flags)
-              nil -> :undefined
-            end)
+          captures ->
+            strings =
+              Enum.map(captures, fn
+                {start, len} -> regexp_capture_string(s, start, len, flags)
+                nil -> :undefined
+              end)
 
-          match_start =
-            case hd(captures) do
-              {start, _} -> start
-              _ -> 0
-            end
+            match_start =
+              case hd(captures) do
+                {start, _} -> start
+                _ -> 0
+              end
 
-          match_result(strings, match_start, s)
+            match_result(strings, match_start, s)
         end
     end
   end
@@ -1570,24 +1570,62 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp replace_with_custom_exec(s, regexp, replacement) do
     exec = Get.get(regexp, "exec")
 
-    case Invocation.invoke_with_receiver(exec, [s], Runtime.gas_budget(), regexp) do
-      nil ->
-        s
+    if Runtime.truthy?(Get.get(regexp, "global")) do
+      Put.put(regexp, "lastIndex", 0)
+      replace_global_with_custom_exec(s, regexp, exec, replacement, 0, [])
+    else
+      case custom_exec_result(exec, s, regexp) do
+        nil -> s
+        {:obj, _} = result -> replace_from_exec_result(s, result, replacement)
+      end
+    end
+  end
 
-      :undefined ->
-        s
+  defp replace_global_with_custom_exec(s, regexp, exec, replacement, next_source_pos, parts) do
+    case custom_exec_result(exec, s, regexp) do
+      nil ->
+        IO.iodata_to_binary(
+          parts ++ [binary_part(s, next_source_pos, byte_size(s) - next_source_pos)]
+        )
 
       {:obj, _} = result ->
-        replace_from_exec_result(s, result, replacement)
+        {matched, index, replacement_text} = exec_result_replacement(s, result, replacement)
+        match_end = index + byte_size(matched)
+        prefix = binary_part(s, next_source_pos, max(index - next_source_pos, 0))
 
-      _ ->
-        throw(
-          {:js_throw, Heap.make_error("RegExp exec method returned a non-object", "TypeError")}
+        if byte_size(matched) == 0 do
+          Put.put(regexp, "lastIndex", Runtime.to_int(Get.get(regexp, "lastIndex")) + 1)
+        end
+
+        replace_global_with_custom_exec(
+          s,
+          regexp,
+          exec,
+          replacement,
+          match_end,
+          parts ++ [prefix, replacement_text]
         )
     end
   end
 
+  defp custom_exec_result(exec, s, regexp) do
+    case Invocation.invoke_with_receiver(exec, [s], Runtime.gas_budget(), regexp) do
+      nil -> nil
+      :undefined -> nil
+      {:obj, _} = result -> result
+      _ -> JSThrow.type_error!("RegExp exec method returned a non-object")
+    end
+  end
+
   defp replace_from_exec_result(s, {:obj, _} = result, replacement) do
+    {matched, index, rep} = exec_result_replacement(s, result, replacement)
+    before = binary_part(s, 0, index)
+    after_offset = index + byte_size(matched)
+    after_str = binary_part(s, after_offset, byte_size(s) - after_offset)
+    before <> rep <> after_str
+  end
+
+  defp exec_result_replacement(s, {:obj, _} = result, replacement) do
     matched = Runtime.stringify(Get.get(result, "0"))
     index = Runtime.to_int(Get.get(result, "index"))
     captures = result |> Heap.to_list() |> Enum.drop(1)
@@ -1599,7 +1637,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     rep =
       object_replacement_text(replacement, matched, before, after_str, captures, index, s, groups)
 
-    before <> rep <> after_str
+    {matched, index, rep}
   end
 
   defp object_replacement_text(
@@ -1850,7 +1888,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     matched = binary_part(s, match_start, match_len)
     after_str = binary_part(s, match_start + match_len, byte_size(s) - match_start - match_len)
     capture_strings = pad_captures(capture_strings(s, captures), length(Regex.names(regex)))
-    named_captures = named_capture_values(regex, capture_strings)
+    named_captures = named_capture_values(regex, capture_strings, s, match_start)
 
     rep =
       replacement_text(
@@ -1878,26 +1916,16 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp pad_captures(captures, count),
     do: captures ++ List.duplicate(:undefined, count - length(captures))
 
-  defp named_capture_values(%Regex{} = regex, capture_strings) when is_list(capture_strings) do
-    regex
-    |> Regex.names()
-    |> Enum.with_index()
-    |> Enum.reduce(%{}, fn {name, index}, acc ->
-      Map.put(acc, name, Enum.at(capture_strings, index, :undefined))
-    end)
+  defp named_capture_values(%Regex{source: source}, capture_strings, _s, _match_start) do
+    named_capture_values(source, capture_strings)
   end
 
   defp named_capture_values(source, capture_strings)
        when is_binary(source) and is_list(capture_strings) do
-    names =
-      ~r/\(\?<([^>]+)>/
-      |> Regex.scan(source, capture: :all_but_first)
-      |> Enum.map(fn [name] -> name end)
-
-    names
-    |> Enum.with_index()
+    source
+    |> named_capture_indices()
     |> Enum.reduce(%{}, fn {name, index}, acc ->
-      Map.put(acc, name, Enum.at(capture_strings, index, :undefined))
+      Map.put(acc, name, Enum.at(capture_strings, index - 1, :undefined))
     end)
   end
 
@@ -1914,6 +1942,63 @@ defmodule QuickBEAM.VM.Runtime.String do
           captures -> Map.new(captures, fn {name, value} -> {name, value || ""} end)
         end
     end
+  end
+
+  defp named_capture_indices(source), do: named_capture_indices(source, 0, 0, [])
+
+  defp named_capture_indices(source, index, _count, acc) when index >= byte_size(source),
+    do: Enum.reverse(acc)
+
+  defp named_capture_indices(source, index, count, acc) do
+    case binary_part(source, index, 1) do
+      "\\" ->
+        named_capture_indices(source, min(index + 2, byte_size(source)), count, acc)
+
+      "[" ->
+        named_capture_indices(source, skip_char_class(source, index + 1), count, acc)
+
+      "(" ->
+        cond do
+          binary_part_safe(source, index, 3) in ["(?:", "(?=", "(?!"] ->
+            named_capture_indices(source, index + 1, count, acc)
+
+          binary_part_safe(source, index, 4) in ["(?<=", "(?<!"] ->
+            named_capture_indices(source, index + 1, count, acc)
+
+          binary_part_safe(source, index, 3) == "(?<" ->
+            name_end = find_next(source, index + 3, ">")
+            name = binary_part(source, index + 3, name_end - index - 3)
+            named_capture_indices(source, index + 1, count + 1, [{name, count + 1} | acc])
+
+          true ->
+            named_capture_indices(source, index + 1, count + 1, acc)
+        end
+
+      _ ->
+        named_capture_indices(source, index + 1, count, acc)
+    end
+  end
+
+  defp skip_char_class(source, index) when index >= byte_size(source), do: index
+
+  defp skip_char_class(source, index) do
+    case binary_part(source, index, 1) do
+      "\\" -> skip_char_class(source, min(index + 2, byte_size(source)))
+      "]" -> index + 1
+      _ -> skip_char_class(source, index + 1)
+    end
+  end
+
+  defp binary_part_safe(source, index, length) do
+    if index + length <= byte_size(source), do: binary_part(source, index, length), else: ""
+  end
+
+  defp find_next(source, index, _needle) when index >= byte_size(source), do: index
+
+  defp find_next(source, index, needle) do
+    if binary_part(source, index, 1) == needle,
+      do: index,
+      else: find_next(source, index + 1, needle)
   end
 
   defp regex_replace_first(s, bytecode, source, replacement) do
@@ -2281,44 +2366,74 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp from_code_point(n) when is_integer(n) and n >= 0 and n <= 0x10FFFF do
-    if n >= 0xD800 and n <= 0xDFFF, do: "", else: <<n::utf8>>
+    encode_code_point(n)
   end
 
   defp from_code_point(n) when is_integer(n) do
-    throw({:js_throw, Heap.make_error("Invalid code point " <> Integer.to_string(n), "RangeError")})
+    throw(
+      {:js_throw, Heap.make_error("Invalid code point " <> Integer.to_string(n), "RangeError")}
+    )
   end
 
   defp from_code_point(n) when is_float(n) and n >= 0.0 and n <= 1_114_111.0 do
     cp = trunc(n)
+
     if n != cp * 1.0 do
-      throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+      throw(
+        {:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
+      )
     end
-    if cp >= 0xD800 and cp <= 0xDFFF, do: "", else: <<cp::utf8>>
+
+    encode_code_point(cp)
   end
 
   defp from_code_point(n) when is_float(n) do
-    throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+    throw(
+      {:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
+    )
   end
 
   defp from_code_point(n) do
     if match?({:symbol, _}, n) or match?({:symbol, _, _}, n) do
-      throw({:js_throw, Heap.make_error("Cannot convert a Symbol value to a number", "TypeError")})
+      throw(
+        {:js_throw, Heap.make_error("Cannot convert a Symbol value to a number", "TypeError")}
+      )
     end
 
     num = Runtime.to_number(n)
+
     cond do
       num in [:nan, :infinity, :neg_infinity] ->
-        throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+        throw(
+          {:js_throw,
+           Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
+        )
+
       is_number(num) and num != trunc(num * 1.0) ->
-        throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+        throw(
+          {:js_throw,
+           Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
+        )
+
       is_number(num) and (num < 0 or num > 0x10FFFF) ->
-        throw({:js_throw, Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")})
+        throw(
+          {:js_throw,
+           Heap.make_error("Invalid code point " <> Runtime.stringify(n), "RangeError")}
+        )
+
       is_number(num) ->
         cp = trunc(num)
-        if cp >= 0xD800 and cp <= 0xDFFF, do: "", else: <<cp::utf8>>
-      true -> ""
+        encode_code_point(cp)
+
+      true ->
+        ""
     end
   end
+
+  defp encode_code_point(cp) when cp >= 0xD800 and cp <= 0xDFFF,
+    do: <<0xF0000 + (cp - 0xD800)::utf8>>
+
+  defp encode_code_point(cp), do: <<cp::utf8>>
 
   static "fromCharCode" do
     Enum.map_join(args, fn n ->

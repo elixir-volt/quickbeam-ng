@@ -212,7 +212,8 @@ defmodule QuickBEAM.VM.Invocation do
 
   def invoke_runtime(
         %Context{} = ctx,
-        {:closure, _, %QuickBEAM.VM.Function{need_home_object: false} = inner} = closure,
+        {:closure, _, %QuickBEAM.VM.Function{need_home_object: false, closure_vars: []} = inner} =
+          closure,
         args
       ) do
     atoms = Heap.get_fn_atoms(inner, ctx.atoms)
@@ -234,7 +235,7 @@ defmodule QuickBEAM.VM.Invocation do
               Map.put(
                 base_ctx.globals,
                 "arguments",
-                Heap.wrap_arguments(args)
+                Heap.wrap_arguments(args, callee: closure)
               ),
             atoms: atoms || base_ctx.atoms,
             pd_synced: false
@@ -612,7 +613,12 @@ defmodule QuickBEAM.VM.Invocation do
     end
   end
 
-  defp invoke_closure(closure, %QuickBEAM.VM.Function{need_home_object: false}, args, ctx) do
+  defp invoke_closure(
+         closure,
+         %QuickBEAM.VM.Function{need_home_object: false, closure_vars: []},
+         args,
+         ctx
+       ) do
     case Runner.invoke(closure, args, ctx) do
       {:ok, value} -> value
       :error -> Interpreter.invoke_closure_fallback(closure, args, ctx.gas, ctx)
@@ -623,7 +629,12 @@ defmodule QuickBEAM.VM.Invocation do
     Interpreter.invoke_closure_fallback(closure, args, ctx.gas, ctx)
   end
 
-  defp compiled_closure_callable?(%QuickBEAM.VM.Function{need_home_object: false}), do: true
+  defp compiled_closure_callable?(%QuickBEAM.VM.Function{
+         need_home_object: false,
+         closure_vars: []
+       }),
+       do: true
+
   defp compiled_closure_callable?(_), do: false
 
   defp compiled_method_callable?(

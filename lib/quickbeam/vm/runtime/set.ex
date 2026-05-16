@@ -107,14 +107,21 @@ defmodule QuickBEAM.VM.Runtime.Set do
   def weak_proto_property(_), do: :undefined
 
   defp set_object(_set_ref, items, instance_proto) do
+    entries = Enum.with_index(items, 1) |> Enum.map(fn {value, id} -> {id, value, true} end)
+
     %{
       set_data() => items,
+      set_entry_data() => entries,
+      set_next_entry_id() => length(items) + 1,
       "size" => length(items),
       proto() => instance_proto
     }
   end
 
   defp data(set_ref), do: Heap.get_obj(set_ref, %{}) |> Map.get(set_data(), [])
+
+  defp set_entry_data, do: "__set_entry_data__"
+  defp set_next_entry_id, do: "__set_next_entry_id__"
 
   defp construct_weak_set_from_iterable({:obj, _} = iterable, set, adder) do
     iterator_method = Get.get(iterable, {:symbol, "Symbol.iterator"})
@@ -165,7 +172,6 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp normalize_set_value(value) when is_float(value) and value == 0.0, do: 0
   defp normalize_set_value(value), do: value
-
 
   defp other_size(other) do
     case Get.get(other, "size") do
@@ -458,10 +464,14 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
     unless value in items do
       new_items = items ++ [value]
+      next_id = Map.get(obj, set_next_entry_id(), length(Map.get(obj, set_entry_data(), [])) + 1)
+      entries = Map.get(obj, set_entry_data(), []) ++ [{next_id, value, true}]
 
       Heap.put_obj(ref, %{
         obj
         | set_data() => new_items,
+          set_entry_data() => entries,
+          set_next_entry_id() => next_id + 1,
           "size" => length(new_items)
       })
     end
@@ -477,10 +487,12 @@ defmodule QuickBEAM.VM.Runtime.Set do
     value = normalize_set_value(value)
     items = Map.get(obj, set_data(), [])
     new_items = List.delete(items, value)
+    entries = Enum.map(Map.get(obj, set_entry_data(), []), &delete_set_entry(&1, value))
 
     Heap.put_obj(ref, %{
       obj
       | set_data() => new_items,
+        set_entry_data() => entries,
         "size" => length(new_items)
     })
 
@@ -545,7 +557,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp make_set_iterator(ref, mode, tag) do
     state_ref = make_ref()
-    Process.put(state_ref, {[], false})
+    Process.put(state_ref, {0, false})
     {:obj, iter_ref} = iter = Heap.wrap(%{})
 
     next_fn =
@@ -604,28 +616,27 @@ defmodule QuickBEAM.VM.Runtime.Set do
     do: JSThrow.type_error!("Set Iterator next called on incompatible receiver")
 
   defp next_set_iterator_value(ref, state_ref, mode) do
-    case Process.get(state_ref, {[], false}) do
-      {_seen, true} ->
+    case Process.get(state_ref, {0, false}) do
+      {_cursor, true} ->
         Heap.wrap(%{"value" => :undefined, "done" => true})
 
-      {seen, false} ->
-        case next_set_iterator_key(ref, seen) do
+      {cursor, false} ->
+        case next_set_iterator_entry(ref, cursor) do
           :done ->
-            Process.put(state_ref, {seen, true})
+            Process.put(state_ref, {cursor, true})
             Heap.wrap(%{"value" => :undefined, "done" => true})
 
-          value ->
-            Process.put(state_ref, {[value | seen], false})
+          {entry_id, value} ->
+            Process.put(state_ref, {entry_id, false})
             Heap.wrap(%{"value" => set_iterator_result(mode, value), "done" => false})
         end
     end
   end
 
-  defp next_set_iterator_key(ref, seen) do
+  defp next_set_iterator_entry(ref, cursor) do
     ref
-    |> Heap.get_obj(%{})
-    |> Map.get(set_data(), [])
-    |> Enum.find(:done, &(&1 not in seen))
+    |> live_set_entries()
+    |> Enum.find(:done, fn {entry_id, _value} -> entry_id > cursor end)
   end
 
   defp set_iterator_result(:entries, value), do: Heap.wrap([value, value])
@@ -639,7 +650,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
     end
 
     this_arg = List.first(rest) || :undefined
-    for_each_live(ref, callback, this_arg, data(ref))
+    for_each_live(ref, callback, this_arg, 0)
   end
 
   defp for_each(_, this) do
@@ -647,26 +658,32 @@ defmodule QuickBEAM.VM.Runtime.Set do
     JSThrow.type_error!("callbackfn is not a function")
   end
 
-  defp for_each_live(_ref, _callback, _this_arg, []), do: :undefined
+  defp for_each_live(ref, callback, this_arg, cursor) when is_integer(cursor) do
+    case next_set_iterator_entry(ref, cursor) do
+      :done ->
+        :undefined
 
-  defp for_each_live(ref, callback, this_arg, [value | _]) do
-    if value in data(ref) do
-      QuickBEAM.VM.Invocation.invoke_with_receiver(
-        callback,
-        [value, value, {:obj, ref}],
-        this_arg
-      )
-    end
+      {entry_id, value} ->
+        QuickBEAM.VM.Invocation.invoke_with_receiver(
+          callback,
+          [value, value, {:obj, ref}],
+          this_arg
+        )
 
-    for_each_live(ref, callback, this_arg, values_after_current(ref, value))
-  end
-
-  defp values_after_current(ref, value) do
-    items = data(ref)
-
-    case Enum.find_index(items, &(&1 == value)) do
-      nil -> items
-      index -> Enum.drop(items, index + 1)
+        for_each_live(ref, callback, this_arg, entry_id)
     end
   end
+
+  defp live_set_entries(ref) do
+    ref
+    |> Heap.get_obj(%{})
+    |> Map.get(set_entry_data(), [])
+    |> Enum.flat_map(fn
+      {entry_id, value, true} -> [{entry_id, value}]
+      _ -> []
+    end)
+  end
+
+  defp delete_set_entry({entry_id, value, true}, value), do: {entry_id, value, false}
+  defp delete_set_entry(entry, _value), do: entry
 end

@@ -442,7 +442,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp pad_capture_indices(captures, target), do: captures ++ List.duplicate(nil, target - length(captures))
 
   defp capture_count(source) do
-    ~r/\((?!\?[:=!<])|\(\?</
+    ~r/\((?!\?[:=!<])|\(\?<[^=!]/
     |> Regex.scan(source)
     |> length()
   end

@@ -523,7 +523,10 @@ defmodule QuickBEAM.VM.Interpreter do
           |> Map.merge(scoped_globals)
           |> Map.put(
             "arguments",
-            Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf), strict: current_strict_mode?(ctx))
+            Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
+              strict: current_strict_mode?(ctx),
+              callee: ctx.current_func
+            )
           )
 
         visible_declared_names =
@@ -1524,7 +1527,7 @@ defmodule QuickBEAM.VM.Interpreter do
                 Map.put(
                   ctx.globals,
                   "arguments",
-                  Heap.wrap_arguments(args, strict: strict_function?(self_ref))
+                  Heap.wrap_arguments(args, strict: strict_function?(self_ref), callee: self_ref)
                 ),
               catch_stack: [],
               atoms: fn_atoms

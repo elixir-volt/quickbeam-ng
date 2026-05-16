@@ -198,7 +198,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
           JSThrow.type_error!("iterator method is not callable")
       end
 
-    if iterator_method != :undefined and iterator_method != nil and iterator == value do
+    if iterator_method != :undefined and iterator_method != nil and iterator == value and
+         iterator_instance?(iterator) do
       iterator
     else
       wrap_iterator(iterator)
@@ -278,25 +279,12 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   def wrap_for_valid_iterator_prototype do
-    proto = Runtime.global_class_proto("Iterator")
-
-    case Process.get(:qb_wrap_for_valid_iterator_prototype) do
-      {:obj, _} = cached ->
-        cached
-
-      _ ->
-        wrapper =
-          Heap.wrap(%{
-            "__proto__" => proto,
-            "next" => {:builtin, "next", fn _args, this -> wrapper_next(this) end},
-            "return" => {:builtin, "return", fn _args, this -> wrapper_return(this) end},
-            {:symbol, "Symbol.iterator"} =>
-              {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-          })
-
-        Process.put(:qb_wrap_for_valid_iterator_prototype, wrapper)
-        wrapper
-    end
+    Heap.wrap(%{
+      "__proto__" => Runtime.global_class_proto("Iterator"),
+      "next" => {:builtin, "next", fn _args, this -> wrapper_next(this) end},
+      "return" => {:builtin, "return", fn _args, this -> wrapper_return(this) end},
+      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
+    })
   end
 
   def drop(args, this) do
@@ -317,7 +305,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     predicate = Builtin.arg(args, 0, :undefined)
 
     unless Builtin.callable?(predicate),
-      do: close_and_type_error(this, "predicate must be callable")
+      do: JSThrow.type_error!("predicate must be callable")
 
     helper_iterator(%{
       "kind" => :filter,
@@ -329,7 +317,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   def map(args, this) do
     mapper = Builtin.arg(args, 0, :undefined)
-    unless Builtin.callable?(mapper), do: close_and_type_error(this, "mapper must be callable")
+    unless Builtin.callable?(mapper), do: JSThrow.type_error!("mapper must be callable")
 
     helper_iterator(%{
       "kind" => :map,
@@ -341,7 +329,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   def flat_map(args, this) do
     mapper = Builtin.arg(args, 0, :undefined)
-    unless Builtin.callable?(mapper), do: close_and_type_error(this, "mapper must be callable")
+    unless Builtin.callable?(mapper), do: JSThrow.type_error!("mapper must be callable")
 
     helper_iterator(%{
       "kind" => :flat_map,
@@ -1415,6 +1403,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp wrapped_iterator_and_next!(_), do: JSThrow.type_error!("Iterator wrapper expected")
+
+  defp iterator_instance?(value),
+    do: prototype_chain_includes?(value, Runtime.global_class_proto("Iterator"))
+
+  defp prototype_chain_includes?(target, target), do: true
+
+  defp prototype_chain_includes?({:obj, ref}, target) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) -> prototype_chain_includes?(Map.get(map, "__proto__"), target)
+      _ -> false
+    end
+  end
+
+  defp prototype_chain_includes?(_, _), do: false
 
   defp object_like?({:obj, _}), do: true
   defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true

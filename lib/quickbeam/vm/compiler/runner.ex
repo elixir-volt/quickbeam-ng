@@ -240,7 +240,10 @@ defmodule QuickBEAM.VM.Compiler.Runner do
           Map.put(
             base_ctx.globals,
             "arguments",
-            Heap.wrap_arguments(args, strict: strict_function?(current_func))
+            Heap.wrap_arguments(args,
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
           ),
         trace_enabled: trace_enabled(base_ctx),
         home_object: home_object,
@@ -268,7 +271,10 @@ defmodule QuickBEAM.VM.Compiler.Runner do
           Map.put(
             base_ctx.globals,
             "arguments",
-            Heap.wrap_arguments(args, strict: strict_function?(current_func))
+            Heap.wrap_arguments(args,
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
           ),
         trace_enabled: trace_enabled(base_ctx),
         home_object: home_object,
@@ -298,7 +304,10 @@ defmodule QuickBEAM.VM.Compiler.Runner do
           Map.put(
             base_ctx.globals,
             "arguments",
-            Heap.wrap_arguments(args, strict: strict_function?(current_func))
+            Heap.wrap_arguments(args,
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
           ),
         trace_enabled: trace_enabled(base_ctx),
         home_object: home_object,
@@ -321,7 +330,10 @@ defmodule QuickBEAM.VM.Compiler.Runner do
           Map.put(
             base_ctx.globals,
             "arguments",
-            Heap.wrap_arguments(args, strict: strict_function?(current_func))
+            Heap.wrap_arguments(args,
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
           ),
         trace_enabled: trace_enabled(base_ctx),
         home_object: home_object,

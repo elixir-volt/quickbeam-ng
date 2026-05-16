@@ -18,7 +18,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
             Map.get(
               ctx.globals,
               "arguments",
-              Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf), strict: current_strict_mode?(ctx))
+              Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
+                strict: current_strict_mode?(ctx),
+                callee: ctx.current_func
+              )
             )
 
           run(pc + 1, frame, [arguments | stack], gas, ctx)
@@ -48,7 +51,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
             Map.get(
               ctx.globals,
               "arguments",
-              Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf), strict: current_strict_mode?(ctx))
+              Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
+                strict: current_strict_mode?(ctx),
+                callee: ctx.current_func
+              )
             )
 
           run(pc + 1, frame, [arguments | stack], gas, ctx)

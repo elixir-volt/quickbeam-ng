@@ -174,7 +174,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
       Map.get(
         context_globals(ctx),
         "arguments",
-        Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf), strict: current_strict_mode?(ctx))
+        Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
+          strict: current_strict_mode?(ctx),
+          callee: context_current_func(ctx)
+        )
       )
 
   def get_var(ctx, name) when is_binary(name), do: fetch_ctx_var(ctx, name)
@@ -367,7 +370,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
       Map.get(
         context_globals(ctx),
         "arguments",
-        Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf), strict: current_strict_mode?(ctx))
+        Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
+          strict: current_strict_mode?(ctx),
+          callee: context_current_func(ctx)
+        )
       )
 
   def get_var_undef(ctx, name) when is_binary(name),
@@ -814,7 +820,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
           |> Map.put(
             "arguments",
             Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
-              strict: current_strict_mode?(ctx)
+              strict: current_strict_mode?(ctx),
+              callee: context_current_func(ctx)
             )
           )
 
@@ -1053,15 +1060,38 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     arg_buf = context_arg_buf(ctx)
 
     case type do
-      0 -> Heap.wrap_arguments(Tuple.to_list(arg_buf), strict: strict_function?(current_func))
-      1 -> Heap.wrap_arguments(Tuple.to_list(arg_buf), strict: strict_function?(current_func))
-      2 -> current_func
-      3 -> context_new_target(ctx)
-      4 -> context_home_object(ctx, current_func)
-      5 -> Heap.wrap(%{})
-      6 -> Heap.wrap(%{})
-      7 -> Heap.wrap(%{"__proto__" => nil})
-      _ -> :undefined
+      0 ->
+        Heap.wrap_arguments(Tuple.to_list(arg_buf),
+          strict: strict_function?(current_func),
+          callee: current_func
+        )
+
+      1 ->
+        Heap.wrap_arguments(Tuple.to_list(arg_buf),
+          strict: strict_function?(current_func),
+          callee: current_func
+        )
+
+      2 ->
+        current_func
+
+      3 ->
+        context_new_target(ctx)
+
+      4 ->
+        context_home_object(ctx, current_func)
+
+      5 ->
+        Heap.wrap(%{})
+
+      6 ->
+        Heap.wrap(%{})
+
+      7 ->
+        Heap.wrap(%{"__proto__" => nil})
+
+      _ ->
+        :undefined
     end
   end
 
@@ -1069,15 +1099,38 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     case InvokeContext.fast_ctx() do
       {_atoms, _globals, current_func, arg_buf, _this, new_target, home_object, _super} ->
         case type do
-          0 -> Heap.wrap_arguments(Tuple.to_list(arg_buf), strict: strict_function?(current_func))
-          1 -> Heap.wrap_arguments(Tuple.to_list(arg_buf), strict: strict_function?(current_func))
-          2 -> current_func
-          3 -> new_target
-          4 -> home_object
-          5 -> Heap.wrap(%{})
-          6 -> Heap.wrap(%{})
-          7 -> Heap.wrap(%{"__proto__" => nil})
-          _ -> :undefined
+          0 ->
+            Heap.wrap_arguments(Tuple.to_list(arg_buf),
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
+
+          1 ->
+            Heap.wrap_arguments(Tuple.to_list(arg_buf),
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
+
+          2 ->
+            current_func
+
+          3 ->
+            new_target
+
+          4 ->
+            home_object
+
+          5 ->
+            Heap.wrap(%{})
+
+          6 ->
+            Heap.wrap(%{})
+
+          7 ->
+            Heap.wrap(%{"__proto__" => nil})
+
+          _ ->
+            :undefined
         end
 
       _ ->
@@ -1085,15 +1138,38 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
         arg_buf = InvokeContext.current_arg_buf()
 
         case type do
-          0 -> Heap.wrap_arguments(Tuple.to_list(arg_buf), strict: strict_function?(current_func))
-          1 -> Heap.wrap_arguments(Tuple.to_list(arg_buf), strict: strict_function?(current_func))
-          2 -> current_func
-          3 -> InvokeContext.current_new_target()
-          4 -> InvokeContext.current_home_object(current_func)
-          5 -> Heap.wrap(%{})
-          6 -> Heap.wrap(%{})
-          7 -> Heap.wrap(%{"__proto__" => nil})
-          _ -> :undefined
+          0 ->
+            Heap.wrap_arguments(Tuple.to_list(arg_buf),
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
+
+          1 ->
+            Heap.wrap_arguments(Tuple.to_list(arg_buf),
+              strict: strict_function?(current_func),
+              callee: current_func
+            )
+
+          2 ->
+            current_func
+
+          3 ->
+            InvokeContext.current_new_target()
+
+          4 ->
+            InvokeContext.current_home_object(current_func)
+
+          5 ->
+            Heap.wrap(%{})
+
+          6 ->
+            Heap.wrap(%{})
+
+          7 ->
+            Heap.wrap(%{"__proto__" => nil})
+
+          _ ->
+            :undefined
         end
     end
   end

@@ -464,19 +464,43 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   end
 
   defp bigint_value({:bigint, n}), do: n
-  defp bigint_value(n) when is_integer(n), do: n
 
-  defp bigint_value(:undefined), do: JSThrow.type_error!("Cannot convert value to BigInt")
-  defp bigint_value(:infinity), do: JSThrow.range_error!("Cannot convert value to BigInt")
-  defp bigint_value(:neg_infinity), do: JSThrow.range_error!("Cannot convert value to BigInt")
+  defp bigint_value(value) when is_binary(value) do
+    value
+    |> String.trim()
+    |> parse_bigint_string()
+    |> case do
+      {:ok, n} -> n
+      :error -> JSThrow.syntax_error!("Cannot convert value to BigInt")
+    end
+  end
 
-  defp bigint_value(value) do
-    case Runtime.to_number(value) do
-      {:bigint, n} -> n
-      n when is_integer(n) -> n
-      n when is_float(n) and n == trunc(n) -> trunc(n)
-      :nan -> JSThrow.range_error!("Cannot convert value to BigInt")
-      _ -> JSThrow.range_error!("Cannot convert value to BigInt")
+  defp bigint_value(_value), do: JSThrow.type_error!("Cannot convert value to BigInt")
+
+  defp parse_bigint_string(""), do: :error
+  defp parse_bigint_string("0x" <> digits), do: parse_bigint_digits(digits, 16)
+  defp parse_bigint_string("0X" <> digits), do: parse_bigint_digits(digits, 16)
+  defp parse_bigint_string("0o" <> digits), do: parse_bigint_digits(digits, 8)
+  defp parse_bigint_string("0O" <> digits), do: parse_bigint_digits(digits, 8)
+  defp parse_bigint_string("0b" <> digits), do: parse_bigint_digits(digits, 2)
+  defp parse_bigint_string("0B" <> digits), do: parse_bigint_digits(digits, 2)
+  defp parse_bigint_string("+" <> digits), do: parse_bigint_digits(digits, 10)
+
+  defp parse_bigint_string("-" <> digits) do
+    case parse_bigint_digits(digits, 10) do
+      {:ok, n} -> {:ok, -n}
+      :error -> :error
+    end
+  end
+
+  defp parse_bigint_string(digits), do: parse_bigint_digits(digits, 10)
+
+  defp parse_bigint_digits("", _base), do: :error
+
+  defp parse_bigint_digits(digits, base) do
+    case Integer.parse(digits, base) do
+      {n, ""} -> {:ok, n}
+      _ -> :error
     end
   end
 

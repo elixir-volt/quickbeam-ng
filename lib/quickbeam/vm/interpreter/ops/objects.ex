@@ -308,11 +308,19 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
           case type do
             0 ->
               args_list = Tuple.to_list(arg_buf)
-              Heap.wrap_arguments(args_list)
+
+              Heap.wrap_arguments(args_list,
+                strict: strict_function?(current_func),
+                callee: current_func
+              )
 
             1 ->
               args_list = Tuple.to_list(arg_buf)
-              Heap.wrap_arguments(args_list)
+
+              Heap.wrap_arguments(args_list,
+                strict: strict_function?(current_func),
+                callee: current_func
+              )
 
             2 ->
               current_func

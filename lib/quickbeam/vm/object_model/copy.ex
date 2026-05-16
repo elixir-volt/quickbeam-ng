@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
 
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.ObjectModel.{Get, Semantics, WrappedPrimitive}
 
@@ -238,11 +238,15 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
         list
 
       map when is_map(map) ->
+        iter_fn = Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})
+
         cond do
-          Builtin.callable?(Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})) ->
-            iter_fn = Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})
+          Builtin.callable?(iter_fn) ->
             iter_obj = Invocation.invoke_with_receiver(iter_fn, [], {:obj, ref})
             collect_iterator_values(iter_obj, [])
+
+          iter_fn not in [nil, :undefined] ->
+            JSThrow.type_error!("object is not iterable")
 
           Map.has_key?(map, set_data()) ->
             Map.get(map, set_data(), [])
@@ -257,11 +261,16 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
       {:shape, _shape_id, _offsets, _vals, _proto} ->
         iter_fn = Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})
 
-        if Builtin.callable?(iter_fn) do
-          iter_obj = Invocation.invoke_with_receiver(iter_fn, [], {:obj, ref})
-          collect_iterator_values(iter_obj, [])
-        else
-          []
+        cond do
+          Builtin.callable?(iter_fn) ->
+            iter_obj = Invocation.invoke_with_receiver(iter_fn, [], {:obj, ref})
+            collect_iterator_values(iter_obj, [])
+
+          iter_fn not in [nil, :undefined] ->
+            JSThrow.type_error!("object is not iterable")
+
+          true ->
+            []
         end
 
       _ ->
@@ -281,7 +290,9 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
     next_fn = Get.get(iter_obj, "next")
     result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
 
-    if Get.get(result, "done") do
+    unless match?({:obj, _}, result), do: JSThrow.type_error!("iterator result is not an object")
+
+    if Runtime.truthy?(Get.get(result, "done")) do
       Enum.reverse(acc)
     else
       collect_iterator_values(iter_obj, [Get.get(result, "value") | acc])

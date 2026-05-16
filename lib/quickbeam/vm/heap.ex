@@ -128,14 +128,25 @@ defmodule QuickBEAM.VM.Heap do
     {:obj, ref} = obj = wrap(args)
     put_array_prop(ref, "__arguments__", true)
 
-    thrower = Keyword.get_lazy(opts, :thrower, &throw_type_error_intrinsic/0)
-    put_array_prop(ref, "callee", {:accessor, thrower, thrower})
+    if Keyword.get(opts, :strict, false) do
+      thrower = Keyword.get_lazy(opts, :thrower, &throw_type_error_intrinsic/0)
+      put_array_prop(ref, "callee", {:accessor, thrower, thrower})
 
-    put_prop_desc(
-      ref,
-      "callee",
-      PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
-    )
+      put_prop_desc(
+        ref,
+        "callee",
+        PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+      )
+    else
+      callee = Keyword.get(opts, :callee, :undefined)
+      put_array_prop(ref, "callee", callee)
+
+      put_prop_desc(
+        ref,
+        "callee",
+        PropertyDescriptor.attrs(writable: true, enumerable: false, configurable: true)
+      )
+    end
 
     obj
   end
