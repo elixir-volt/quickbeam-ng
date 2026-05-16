@@ -234,14 +234,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   def drop(args, this) do
     unless object_like?(this), do: JSThrow.type_error!("Iterator receiver must be an object")
     remaining = non_negative_integer_limit_or_close(this, Builtin.arg(args, 0, :undefined))
-    iterator = iterator_record(this)
+    iterator = iterator_direct_record(this)
     helper_iterator(%{"kind" => :drop, "iterator" => iterator, "remaining" => remaining})
   end
 
   def take(args, this) do
     unless object_like?(this), do: JSThrow.type_error!("Iterator receiver must be an object")
     remaining = non_negative_integer_limit_or_close(this, Builtin.arg(args, 0, :undefined))
-    iterator = iterator_record(this)
+    iterator = iterator_direct_record(this)
     helper_iterator(%{"kind" => :take, "iterator" => iterator, "remaining" => remaining})
   end
 
@@ -251,7 +251,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
     helper_iterator(%{
       "kind" => :filter,
-      "iterator" => iterator_record(this),
+      "iterator" => iterator_direct_record(this),
       "predicate" => predicate,
       "index" => 0
     })
@@ -263,7 +263,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
     helper_iterator(%{
       "kind" => :map,
-      "iterator" => iterator_record(this),
+      "iterator" => iterator_direct_record(this),
       "mapper" => mapper,
       "index" => 0
     })
@@ -275,7 +275,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
     helper_iterator(%{
       "kind" => :flat_map,
-      "iterator" => iterator_record(this),
+      "iterator" => iterator_direct_record(this),
       "mapper" => mapper,
       "index" => 0,
       "inner" => nil
@@ -285,14 +285,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   def some(args, this) do
     predicate = Builtin.arg(args, 0, :undefined)
     unless Builtin.callable?(predicate), do: close_and_type_error(this, "predicate must be callable")
-    some_loop(iterator_record(this), predicate, 0)
+    some_loop(iterator_direct_record(this), predicate, 0)
   end
 
   def reduce(args, this) do
     reducer = Builtin.arg(args, 0, :undefined)
     unless Builtin.callable?(reducer), do: close_and_type_error(this, "reducer must be callable")
 
-    iterator = iterator_record(this)
+    iterator = iterator_direct_record(this)
 
     case args do
       [_reducer, initial | _] -> reduce_loop(iterator, reducer, initial, 0)
@@ -311,20 +311,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   def for_each(args, this) do
     callback = Builtin.arg(args, 0, :undefined)
     unless Builtin.callable?(callback), do: close_and_type_error(this, "callback must be callable")
-    for_each_loop(iterator_record(this), callback, 0)
+    for_each_loop(iterator_direct_record(this), callback, 0)
     :undefined
   end
 
   def every(args, this) do
     predicate = Builtin.arg(args, 0, :undefined)
     unless Builtin.callable?(predicate), do: close_and_type_error(this, "predicate must be callable")
-    every_loop(iterator_record(this), predicate, 0)
+    every_loop(iterator_direct_record(this), predicate, 0)
   end
 
   def find(args, this) do
     predicate = Builtin.arg(args, 0, :undefined)
     unless Builtin.callable?(predicate), do: close_and_type_error(this, "predicate must be callable")
-    find_loop(iterator_record(this), predicate, 0)
+    find_loop(iterator_direct_record(this), predicate, 0)
   end
 
   defp helper_iterator(state) do
@@ -784,13 +784,18 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp iterator_record(this) do
+    record = iterator_direct_record(this)
+    unless Builtin.callable?(record["next"]), do: JSThrow.type_error!("Iterator next is not callable")
+    record
+  end
+
+  defp iterator_direct_record(this) do
     unless object_like?(this), do: JSThrow.type_error!("Iterator receiver must be an object")
-    next = Get.get(this, "next")
-    unless Builtin.callable?(next), do: JSThrow.type_error!("Iterator next is not callable")
-    %{"iterator" => this, "next" => next}
+    %{"iterator" => this, "next" => Get.get(this, "next")}
   end
 
   defp iterator_next(%{"iterator" => iterator, "next" => next}) do
+    unless Builtin.callable?(next), do: JSThrow.type_error!("Iterator next is not callable")
     result = Invocation.invoke_with_receiver(next, [], iterator)
     unless object_like?(result), do: JSThrow.type_error!("Iterator result is not an object")
     result
