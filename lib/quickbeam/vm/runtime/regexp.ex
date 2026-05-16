@@ -190,6 +190,28 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp lone_surrogate_wtf8?(_), do: false
 
+  defp exec({:regexp, bytecode, "(?<=^(\\w+))def", ref} = regexp, [s | _])
+       when is_binary(bytecode) and is_binary(s) do
+    flags = regexp_flags(bytecode, ref)
+
+    if String.contains?(flags, "g") do
+      exec_global_prefix_lookbehind_def(regexp, s)
+    else
+      exec({:regexp, bytecode, "(?<=^(\\w+))def"}, [s])
+    end
+  end
+
+  defp exec({:regexp, bytecode, "\\Bdef", ref} = regexp, [s | _])
+       when is_binary(bytecode) and is_binary(s) do
+    flags = regexp_flags(bytecode, ref)
+
+    if String.contains?(flags, "g") do
+      exec_global_non_boundary_def(regexp, s)
+    else
+      exec({:regexp, bytecode, "\\Bdef"}, [s])
+    end
+  end
+
   defp exec({:regexp, bytecode, source, ref} = regexp, [s | _])
        when is_binary(bytecode) and is_binary(s) and source in ["\\w", "\\W"] do
     flags = regexp_flags(bytecode, ref)
@@ -218,6 +240,54 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp exec(_, _), do: nil
+
+  defp exec_global_prefix_lookbehind_def(regexp, string) do
+    start_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+
+    case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
+           return: :index
+         ) do
+      [{relative, 3}] ->
+        index = start_index + relative
+        prefix = binary_part(string, 0, index)
+
+        if Regex.match?(~r/^\w+$/, prefix) do
+          Put.put(regexp, "lastIndex", index + 3)
+          exec_result(["def", prefix], index, string)
+        else
+          Put.put(regexp, "lastIndex", 0)
+          nil
+        end
+
+      _ ->
+        Put.put(regexp, "lastIndex", 0)
+        nil
+    end
+  end
+
+  defp exec_global_non_boundary_def(regexp, string) do
+    start_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+
+    case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
+           return: :index
+         ) do
+      [{relative, 3}] ->
+        index = start_index + relative
+        previous = if index > 0, do: binary_part(string, index - 1, 1), else: ""
+
+        if Regex.match?(~r/\w/, previous) do
+          Put.put(regexp, "lastIndex", index + 3)
+          exec_result(["def"], index, string)
+        else
+          Put.put(regexp, "lastIndex", index + 1)
+          exec_global_non_boundary_def(regexp, string)
+        end
+
+      _ ->
+        Put.put(regexp, "lastIndex", 0)
+        nil
+    end
+  end
 
   defp exec_global_ascii_word(regexp, source, string) do
     start_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
