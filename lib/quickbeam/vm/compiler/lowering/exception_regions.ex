@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
   @moduledoc "Lowers catch regions and finally/gosub control-flow fragments."
 
   alias QuickBEAM.VM.Compiler.Analysis.CFG
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Driver, Ops, Emit, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Driver, Emit, Ops, Slots, State}
   alias QuickBEAM.VM.OpcodeFamily
 
   require OpcodeFamily
@@ -29,9 +29,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
              target,
              stack_depths,
              State.ctx_expr(state),
-             State.current_slots(state),
+             Slots.current_slots(state),
              [Builder.var("Caught#{idx}") | saved_stack],
-             State.current_capture_cells(state),
+             Slots.current_capture_cells(state),
              state.frame_mode
            ),
          {:ok, try_body} <-

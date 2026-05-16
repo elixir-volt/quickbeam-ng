@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   @moduledoc "Lowering accumulator: tracks the operand stack, slot bindings, and emitted body forms during a block compilation."
 
   alias QuickBEAM.VM.Compiler.Effects
-  alias QuickBEAM.VM.Compiler.Lowering.{Atoms, Builder, Captures, Emit, Literals, Types}
+  alias QuickBEAM.VM.Compiler.Lowering.{Atoms, Builder, Captures, Emit, Literals, Slots, Types}
   alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
   alias QuickBEAM.VM.Operands.CopyDataProperties
 
@@ -143,9 +143,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       target,
       stack_depths,
       ctx_expr(state),
-      current_slots(state),
+      Slots.current_slots(state),
       state.stack,
-      current_capture_cells(state),
+      Slots.current_capture_cells(state),
       state.frame_mode
     )
   end
@@ -197,8 +197,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       {op_expr, result_type} =
         specialize_binary(
           :op_add,
-          slot_expr(state, idx),
-          slot_type(state, idx),
+          Slots.slot_expr(state, idx),
+          Slots.slot_type(state, idx),
           expr,
           expr_type
         )
@@ -213,9 +213,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       update_slot(
         state,
         idx,
-        compiler_call(state, :inc, [slot_expr(state, idx)]),
+        compiler_call(state, :inc, [Slots.slot_expr(state, idx)]),
         false,
-        if(slot_type(state, idx) == :integer, do: :integer, else: :number)
+        if(Slots.slot_type(state, idx) == :integer, do: :integer, else: :number)
       )
 
   @doc "Lowers prefix decrement of a local slot."
@@ -224,9 +224,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       update_slot(
         state,
         idx,
-        compiler_call(state, :dec, [slot_expr(state, idx)]),
+        compiler_call(state, :dec, [Slots.slot_expr(state, idx)]),
         false,
-        if(slot_type(state, idx) == :integer, do: :integer, else: :number)
+        if(Slots.slot_type(state, idx) == :integer, do: :integer, else: :number)
       )
 
   @doc "Lowers property read and applies shaped-object fast paths when possible."
@@ -627,42 +627,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   # ── Slots ──
 
-  @doc "Stores an expression and type in a local slot."
-  def put_slot(state, idx, expr), do: put_slot(state, idx, expr, Types.infer_expr_type(expr))
-
-  def put_slot(state, idx, expr, type) do
-    %{
-      state
-      | slots: Map.put(state.slots, idx, expr),
-        slot_types: Map.put(state.slot_types, idx, type),
-        slot_inits: Map.put(state.slot_inits, idx, true)
-    }
-  end
-
-  @doc "Marks a local slot as temporal-dead-zone uninitialized."
-  def put_uninitialized_slot(state, idx, expr),
-    do: put_uninitialized_slot(state, idx, expr, Types.infer_expr_type(expr))
-
-  def put_uninitialized_slot(state, idx, expr, type) do
-    %{
-      state
-      | slots: Map.put(state.slots, idx, expr),
-        slot_types: Map.put(state.slot_types, idx, type),
-        slot_inits: Map.put(state.slot_inits, idx, false)
-    }
-  end
-
-  @doc "Returns the generated expression currently bound to a local slot."
-  def slot_expr(state, idx), do: Map.get(state.slots, idx, Builder.atom(:undefined))
-  def slot_type(state, idx), do: Map.get(state.slot_types, idx, :unknown)
-  def slot_initialized?(state, idx), do: Map.get(state.slot_inits, idx, false)
-
-  def put_capture_cell(state, idx, expr),
-    do: %{state | capture_cells: Map.put(state.capture_cells, idx, expr)}
-
-  def capture_cell_expr(state, idx),
-    do: Map.get(state.capture_cells, idx, Builder.atom(:undefined))
-
   @doc "Lowers assignment to a local slot and returns the assigned value on the stack."
   def assign_slot(state, idx, keep?, wrapper \\ nil) do
     with {:ok, expr, type, state} <- Emit.pop_typed(state) do
@@ -673,7 +637,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
       {slot_expr, state} = Emit.bind(state, Builder.slot_name(idx, state.temp), expr)
 
-      state = put_slot(state, idx, slot_expr, type)
+      state = Slots.put_slot(state, idx, slot_expr, type)
       state = Captures.sync_capture_cell(state, idx, slot_expr)
       state = if keep?, do: Emit.push(state, slot_expr, type), else: state
       {:ok, state}
@@ -695,15 +659,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
         {expr, state}
       end
 
-    state = put_slot(state, idx, slot_expr, type)
+    state = Slots.put_slot(state, idx, slot_expr, type)
     state = Captures.sync_capture_cell(state, idx, slot_expr)
     state = if keep?, do: Emit.push(state, slot_expr, type), else: state
     {:ok, state}
   end
-
-  @doc "Returns local slot expressions in block-call argument order."
-  def current_slots(state), do: ordered_values(state.slots)
-  def current_capture_cells(state), do: ordered_values(state.capture_cells)
 
   # ── Calls ──
 
@@ -1030,12 +990,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       nil -> nil
       {_local, idx} -> idx
     end
-  end
-
-  defp ordered_values(values) do
-    values
-    |> Enum.sort_by(fn {idx, _expr} -> idx end)
-    |> Enum.map(fn {_idx, expr} -> expr end)
   end
 
   defp invoke_call_expr(%{return_type: return_type} = state, _fun, :self_fun, args, _arg_types) do

@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
   @moduledoc "Generator and async opcodes: initial_yield, yield, yield_star, async_yield_star, await, return_async."
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Slots, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
   @doc "Lowers a VM instruction or function into compiler IR."
@@ -103,9 +103,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
   defp initial_yield_continuation(state, next_entry, stack_depths) do
     arg_var = Builder.var("YieldArg")
     ctx = State.ctx_expr(state)
-    slots = State.current_slots(state)
+    slots = Slots.current_slots(state)
     stack = State.current_stack(state)
-    captures = State.current_capture_cells(state)
+    captures = Slots.current_capture_cells(state)
 
     continuation_fun(arg_var, ctx, slots, stack, captures, next_entry, stack_depths)
   end
@@ -130,9 +130,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
     false_var = Builder.atom(false)
 
     ctx = State.ctx_expr(state)
-    slots = State.current_slots(state)
+    slots = Slots.current_slots(state)
     stack = [false_var, arg_var | State.current_stack(state)]
-    captures = State.current_capture_cells(state)
+    captures = Slots.current_capture_cells(state)
 
     call =
       Builder.local_call(Builder.block_name(next_entry), [
@@ -147,9 +147,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
     false_var = Builder.atom(false)
 
     ctx = State.ctx_expr(state)
-    slots = State.current_slots(state)
+    slots = Slots.current_slots(state)
     stack = [false_var, arg_var | State.current_stack(state)]
-    captures = State.current_capture_cells(state)
+    captures = Slots.current_capture_cells(state)
 
     continuation_fun(arg_var, ctx, slots, stack, captures, next_entry, stack_depths)
   end

@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
   import QuickBEAM.VM.OpcodeFamily, only: [is_small_int_push: 1]
 
   alias QuickBEAM.VM.Compiler.Analysis.CFG
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Literals, Emit, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Literals, Slots, State}
   alias QuickBEAM.VM.OpcodeFamily
 
   @line 1
@@ -133,10 +133,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
         {:ok, Builder.literal(""), true, state}
 
       {:ok, name} when name in [:get_arg, :get_arg0, :get_arg1, :get_arg2, :get_arg3] ->
-        {:ok, State.slot_expr(state, compact_slot_index(name, args)), false, state}
+        {:ok, Slots.slot_expr(state, compact_slot_index(name, args)), false, state}
 
       {:ok, name} when name in [:get_loc, :get_loc0, :get_loc1, :get_loc2, :get_loc3] ->
-        {:ok, State.slot_expr(state, compact_slot_index(name, args)), false, state}
+        {:ok, Slots.slot_expr(state, compact_slot_index(name, args)), false, state}
 
       {:ok, :push_atom_value} ->
         {:ok, State.compiler_call(state, :push_atom_value, [Builder.literal(hd(args))]), false,

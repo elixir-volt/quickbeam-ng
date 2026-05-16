@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
 
   import QuickBEAM.VM.OpcodeFamily, only: [is_get_slot: 1, is_put_slot: 1, is_set_slot: 1]
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Slots, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
   @tdz :__tdz__
@@ -18,10 +18,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
         {:ok,
          %{
            state
-           | stack: [State.slot_expr(state, slot1), State.slot_expr(state, slot0) | state.stack],
+           | stack: [Slots.slot_expr(state, slot1), Slots.slot_expr(state, slot0) | state.stack],
              stack_types: [
-               State.slot_type(state, slot1),
-               State.slot_type(state, slot0) | state.stack_types
+               Slots.slot_type(state, slot1),
+               Slots.slot_type(state, slot0) | state.stack_types
              ]
          }}
 
@@ -29,7 +29,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
         lower_get_loc_check(state, slot_idx)
 
       {{:ok, :set_loc_uninitialized}, [slot_idx]} ->
-        {:ok, State.put_uninitialized_slot(state, slot_idx, Builder.atom(@tdz))}
+        {:ok, Slots.put_uninitialized_slot(state, slot_idx, Builder.atom(@tdz))}
 
       {{:ok, name}, [slot_idx]} when is_put_slot(name) ->
         State.assign_slot(state, slot_idx, false)
@@ -62,13 +62,13 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
   end
 
   defp push_slot(state, slot_idx) do
-    expr = State.slot_expr(state, slot_idx)
-    type = State.slot_type(state, slot_idx)
+    expr = Slots.slot_expr(state, slot_idx)
+    type = Slots.slot_type(state, slot_idx)
 
     value =
       if Captures.slot_captured?(state, slot_idx) do
         Builder.remote_call(RuntimeHelpers, :read_capture_cell, [
-          State.capture_cell_expr(state, slot_idx),
+          Slots.capture_cell_expr(state, slot_idx),
           expr
         ])
       else
@@ -79,11 +79,11 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
   end
 
   defp lower_get_loc_check(state, slot_idx) do
-    slot_expr = State.slot_expr(state, slot_idx)
-    slot_type = State.slot_type(state, slot_idx)
+    slot_expr = Slots.slot_expr(state, slot_idx)
+    slot_type = Slots.slot_type(state, slot_idx)
 
     expr =
-      if State.slot_initialized?(state, slot_idx) do
+      if Slots.slot_initialized?(state, slot_idx) do
         slot_expr
       else
         State.compiler_call(state, :ensure_initialized_local!, [slot_expr])
@@ -92,7 +92,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
     value =
       if Captures.slot_captured?(state, slot_idx) do
         Builder.remote_call(RuntimeHelpers, :read_capture_cell, [
-          State.capture_cell_expr(state, slot_idx),
+          Slots.capture_cell_expr(state, slot_idx),
           expr
         ])
       else
@@ -104,7 +104,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
 
   defp lower_put_loc_check(state, slot_idx) do
     wrapper =
-      if State.slot_initialized?(state, slot_idx) do
+      if Slots.slot_initialized?(state, slot_idx) do
         nil
       else
         :ensure_initialized_local!
