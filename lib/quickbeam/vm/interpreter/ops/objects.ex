@@ -19,7 +19,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       }
 
       alias QuickBEAM.VM.Operands.CopyDataProperties
-      alias QuickBEAM.VM.Semantics.PropertyAccess
+      alias QuickBEAM.VM.Semantics.{Construction, PropertyAccess}
 
       # ── Objects ──
 
@@ -254,20 +254,12 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         do: run(pc + 1, frame, stack, gas, ctx)
 
       defp run({@op_check_ctor_return, []}, pc, frame, [val | rest], gas, ctx) do
-        case Class.check_ctor_return(val) do
-          {replace_with_this?, checked_val} ->
+        case Construction.check_ctor_return(val) do
+          {:ok, replace_with_this?, checked_val} ->
             run(pc + 1, frame, [replace_with_this?, checked_val | rest], gas, ctx)
 
-          :error ->
-            throw_or_catch(
-              frame,
-              Heap.make_error(
-                "Derived constructors may only return object or undefined",
-                "TypeError"
-              ),
-              gas,
-              ctx
-            )
+          {:error, message} ->
+            throw_or_catch(frame, Heap.make_error(message, "TypeError"), gas, ctx)
         end
       end
 
@@ -321,48 +313,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
                ctx
            ) do
         val =
-          case type do
-            0 ->
-              args_list = Tuple.to_list(arg_buf)
-
-              Heap.wrap_arguments(args_list,
-                strict: strict_function?(current_func),
-                callee: current_func
-              )
-
-            1 ->
-              args_list = Tuple.to_list(arg_buf)
-
-              Heap.wrap_arguments(args_list,
-                strict: strict_function?(current_func),
-                callee: current_func
-              )
-
-            2 ->
-              current_func
-
-            3 ->
-              ctx.new_target
-
-            4 ->
-              if home_object == :undefined do
-                Functions.current_home_object(current_func)
-              else
-                home_object
-              end
-
-            5 ->
-              Heap.wrap(%{})
-
-            6 ->
-              Heap.wrap(%{})
-
-            7 ->
-              Heap.wrap(%{"__proto__" => nil})
-
-            _ ->
-              :undefined
-          end
+          Construction.special_object(type, current_func, arg_buf, ctx.new_target, home_object)
 
         run(pc + 1, frame, [val | stack], gas, ctx)
       end

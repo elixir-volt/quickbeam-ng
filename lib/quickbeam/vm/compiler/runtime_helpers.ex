@@ -24,7 +24,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   }
 
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Semantics.{Iterators, PropertyAccess}
+  alias QuickBEAM.VM.Semantics.{Construction, Iterators, PropertyAccess}
 
   # ── Coercion ──
 
@@ -612,11 +612,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     target
   end
 
-  def new_object(_ctx \\ nil) do
-    object_proto = Heap.get_object_prototype()
-    init = if object_proto, do: %{proto() => object_proto}, else: %{}
-    Heap.wrap(init)
-  end
+  def new_object(_ctx \\ nil), do: Construction.new_object()
 
   def regexp_literal(_ctx \\ nil, pattern, flags), do: {:regexp, pattern, flags, make_ref()}
 
@@ -698,20 +694,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     do: Invocation.construct_runtime(ctor, new_target, args)
 
   def check_ctor_return(ctx, val) do
-    case Class.check_ctor_return(val) do
-      {replace_with_this?, checked_val} ->
+    case Construction.check_ctor_return(val) do
+      {:ok, replace_with_this?, checked_val} ->
         {replace_with_this?, checked_val}
 
-      :error ->
-        throw(
-          {:js_throw,
-           make_error_with_ctx(
-             ctx,
-             "Derived constructors may only return object or undefined",
-             "TypeError",
-             ConstructorStack.get()
-           )}
-        )
+      {:error, message} ->
+        throw({:js_throw, make_error_with_ctx(ctx, message, "TypeError", ConstructorStack.get())})
     end
   end
 
@@ -914,10 +902,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   defp current_strict_mode?(_ctx), do: false
 
-  defp strict_function?({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}), do: strict
-  defp strict_function?(%QuickBEAM.VM.Function{is_strict_mode: strict}), do: strict
-  defp strict_function?(_), do: false
-
   defp parse_error_message([%{message: message} | _]), do: message
   defp parse_error_message(_errors), do: "Syntax error"
 
@@ -1067,120 +1051,32 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   @doc "Creates special object forms used by compiled object/class bytecode."
   def special_object(ctx, type) do
     current_func = context_current_func(ctx)
-    arg_buf = context_arg_buf(ctx)
 
-    case type do
-      0 ->
-        Heap.wrap_arguments(Tuple.to_list(arg_buf),
-          strict: strict_function?(current_func),
-          callee: current_func
-        )
-
-      1 ->
-        Heap.wrap_arguments(Tuple.to_list(arg_buf),
-          strict: strict_function?(current_func),
-          callee: current_func
-        )
-
-      2 ->
-        current_func
-
-      3 ->
-        context_new_target(ctx)
-
-      4 ->
-        context_home_object(ctx, current_func)
-
-      5 ->
-        Heap.wrap(%{})
-
-      6 ->
-        Heap.wrap(%{})
-
-      7 ->
-        Heap.wrap(%{"__proto__" => nil})
-
-      _ ->
-        :undefined
-    end
+    Construction.special_object(
+      type,
+      current_func,
+      context_arg_buf(ctx),
+      context_new_target(ctx),
+      context_home_object(ctx, current_func)
+    )
   end
 
   def special_object(type) do
     case InvokeContext.fast_ctx() do
       {_atoms, _globals, current_func, arg_buf, _this, new_target, home_object, _super} ->
-        case type do
-          0 ->
-            Heap.wrap_arguments(Tuple.to_list(arg_buf),
-              strict: strict_function?(current_func),
-              callee: current_func
-            )
-
-          1 ->
-            Heap.wrap_arguments(Tuple.to_list(arg_buf),
-              strict: strict_function?(current_func),
-              callee: current_func
-            )
-
-          2 ->
-            current_func
-
-          3 ->
-            new_target
-
-          4 ->
-            home_object
-
-          5 ->
-            Heap.wrap(%{})
-
-          6 ->
-            Heap.wrap(%{})
-
-          7 ->
-            Heap.wrap(%{"__proto__" => nil})
-
-          _ ->
-            :undefined
-        end
+        Construction.special_object(type, current_func, arg_buf, new_target, home_object)
 
       _ ->
         current_func = InvokeContext.current_func()
         arg_buf = InvokeContext.current_arg_buf()
 
-        case type do
-          0 ->
-            Heap.wrap_arguments(Tuple.to_list(arg_buf),
-              strict: strict_function?(current_func),
-              callee: current_func
-            )
-
-          1 ->
-            Heap.wrap_arguments(Tuple.to_list(arg_buf),
-              strict: strict_function?(current_func),
-              callee: current_func
-            )
-
-          2 ->
-            current_func
-
-          3 ->
-            InvokeContext.current_new_target()
-
-          4 ->
-            InvokeContext.current_home_object(current_func)
-
-          5 ->
-            Heap.wrap(%{})
-
-          6 ->
-            Heap.wrap(%{})
-
-          7 ->
-            Heap.wrap(%{"__proto__" => nil})
-
-          _ ->
-            :undefined
-        end
+        Construction.special_object(
+          type,
+          current_func,
+          arg_buf,
+          InvokeContext.current_new_target(),
+          InvokeContext.current_home_object(current_func)
+        )
     end
   end
 
