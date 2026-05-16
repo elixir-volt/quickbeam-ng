@@ -919,25 +919,6 @@ defmodule QuickBEAM.VM.Interpreter do
     if idx < tuple_size(locals), do: elem(locals, idx), else: :undefined
   end
 
-  defp collect_iterator(iter_obj, acc) do
-    next_fn = Get.get(iter_obj, "next")
-
-    case Runtime.call_callback(next_fn, []) do
-      {:obj, _} = result_obj ->
-        done = Get.get(result_obj, "done")
-
-        if done == true do
-          Enum.reverse(acc)
-        else
-          val = Get.get(result_obj, "value")
-          collect_iterator(iter_obj, [val | acc])
-        end
-
-      _ ->
-        Enum.reverse(acc)
-    end
-  end
-
   defp materialize_constant({:template_object, elems, raw}) when is_list(elems) do
     raw_list =
       case raw do

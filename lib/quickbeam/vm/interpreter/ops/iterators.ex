@@ -48,63 +48,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
       # ── spread / array construction ──
 
       defp run({@op_append, []}, pc, frame, [obj, idx, arr | rest], gas, ctx) do
-        src_list =
-          case obj do
-            {:qb_arr, arr} ->
-              :array.to_list(arr)
-
-            list when is_list(list) ->
-              list
-
-            {:obj, ref} ->
-              stored = Heap.get_obj(ref)
-
-              cond do
-                match?({:qb_arr, _}, stored) ->
-                  Heap.to_list({:obj, ref})
-
-                is_list(stored) ->
-                  stored
-
-                is_map(stored) and Map.has_key?(stored, {:symbol, "Symbol.iterator"}) ->
-                  raw_iter = Map.get(stored, {:symbol, "Symbol.iterator"})
-
-                  iter_fn =
-                    case raw_iter do
-                      {:accessor, getter, _} when getter != nil -> Get.call_getter(getter, obj)
-                      _ -> raw_iter
-                    end
-
-                  iter_obj = Invocation.invoke_callback_or_throw(iter_fn, [], obj)
-
-                  unless is_object(iter_obj) do
-                    throw(
-                      {:js_throw,
-                       Heap.make_error(
-                         "Result of the Symbol.iterator method is not an object",
-                         "TypeError"
-                       )}
-                    )
-                  end
-
-                  collect_iterator(iter_obj, [])
-
-                is_map(stored) and Map.has_key?(stored, set_data()) ->
-                  Map.get(stored, set_data(), [])
-
-                is_map(stored) and Map.has_key?(stored, map_data()) ->
-                  Map.get(stored, map_data(), [])
-
-                true ->
-                  []
-              end
-
-            s when is_binary(s) ->
-              spread_string_codepoints(s)
-
-            _ ->
-              []
-          end
+        src_list = Copy.spread_source_to_list(obj)
 
         arr_list =
           case arr do

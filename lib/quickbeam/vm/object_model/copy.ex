@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
 
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
-  alias QuickBEAM.VM.{Heap, Runtime}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.ObjectModel.{Get, Semantics, WrappedPrimitive}
 
@@ -239,9 +239,9 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
 
       map when is_map(map) ->
         cond do
-          Map.has_key?(map, {:symbol, "Symbol.iterator"}) ->
-            iter_fn = Map.get(map, {:symbol, "Symbol.iterator"})
-            iter_obj = Runtime.call_callback(iter_fn, [])
+          Builtin.callable?(Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})) ->
+            iter_fn = Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})
+            iter_obj = Invocation.invoke_with_receiver(iter_fn, [], {:obj, ref})
             collect_iterator_values(iter_obj, [])
 
           Map.has_key?(map, set_data()) ->
@@ -252,6 +252,16 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
 
           true ->
             []
+        end
+
+      {:shape, _shape_id, _offsets, _vals, _proto} ->
+        iter_fn = Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})
+
+        if Builtin.callable?(iter_fn) do
+          iter_obj = Invocation.invoke_with_receiver(iter_fn, [], {:obj, ref})
+          collect_iterator_values(iter_obj, [])
+        else
+          []
         end
 
       _ ->
@@ -269,7 +279,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
 
   defp collect_iterator_values(iter_obj, acc) do
     next_fn = Get.get(iter_obj, "next")
-    result = Runtime.call_callback(next_fn, [])
+    result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
 
     if Get.get(result, "done") do
       Enum.reverse(acc)
@@ -322,7 +332,9 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   defp enumerable_regexp_keys(ref) do
     own_keys =
       case ref do
-        nil -> []
+        nil ->
+          []
+
         _ ->
           ref
           |> RegexpState.get()
