@@ -607,7 +607,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp zip_flattenable_record(value) when is_list(value),
-    do: value |> from_value() |> iterator_record()
+    do: value |> from_value() |> iterator_direct_record()
 
   defp zip_flattenable_record(value) do
     unless object_like?(value), do: JSThrow.type_error!("Iterator.zip item must be an object")
@@ -631,7 +631,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
           JSThrow.type_error!("iterator method is not callable")
       end
 
-    iterator_record(iterator)
+    iterator_direct_record(iterator)
   end
 
   defp zip_outer_iterator(value) do
@@ -711,13 +711,13 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp zip_keyed_value_record(value) when is_list(value),
-    do: value |> from_value() |> iterator_record()
+    do: value |> from_value() |> iterator_direct_record()
 
   defp zip_keyed_value_record(value) do
     unless object_like?(value),
       do: JSThrow.type_error!("Iterator.zipKeyed item must be an object")
 
-    value |> from_value() |> iterator_record()
+    value |> from_value() |> iterator_direct_record()
   end
 
   defp internal_key?(key) when is_binary(key), do: String.starts_with?(key, "__")
