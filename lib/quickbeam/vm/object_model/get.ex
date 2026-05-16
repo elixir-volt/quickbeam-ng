@@ -1018,14 +1018,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         if Heap.get_array_prop(ref, "__arguments__") == true do
           arguments_proto_property({:obj, ref}, key)
         else
-          array_proto_property(key)
+          array_proto_property({:obj, ref}, key)
         end
 
       list when is_list(list) ->
         if Heap.get_array_prop(ref, "__arguments__") == true do
           arguments_proto_property({:obj, ref}, key)
         else
-          array_proto_property(key)
+          array_proto_property({:obj, ref}, key)
         end
 
       map when is_map(map) ->
@@ -1212,13 +1212,26 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp arguments_proto_property(obj, {:symbol, "Symbol.iterator"}) do
-    case array_proto_property({:symbol, "Symbol.iterator"}) do
+    case array_proto_property(obj, {:symbol, "Symbol.iterator"}) do
       :undefined -> get_default_object_prototype(obj, {:symbol, "Symbol.iterator"})
       val -> val
     end
   end
 
   defp arguments_proto_property(obj, key), do: get_default_object_prototype(obj, key)
+
+  defp array_proto_property({:obj, ref}, key) do
+    case Heap.get_array_proto(ref) do
+      {:obj, _} = proto ->
+        case get(proto, key) do
+          :undefined -> fallback_array_proto_property(proto, key)
+          val -> val
+        end
+
+      _ ->
+        Array.proto_property(key)
+    end
+  end
 
   defp array_proto_property(key) do
     case Heap.get_array_proto() do
