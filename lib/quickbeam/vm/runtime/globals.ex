@@ -5,25 +5,12 @@ defmodule QuickBEAM.VM.Runtime.Globals do
   alias QuickBEAM.VM.Runtime.WebAPIs
 
   alias QuickBEAM.VM.Runtime.{
-    ArrayBufferInstaller,
-    ArrayInstaller,
     CollectionInstaller,
-    Console,
     CoreConstructorInstaller,
-    DateInstaller,
     Errors,
-    FunctionInstaller,
-    GlobalFunctionInstaller,
+    GlobalRegistry,
     GlobalThisInstaller,
-    JSON,
-    Math,
-    NumberInstaller,
     ObjectInstaller,
-    ProxyInstaller,
-    Reflect,
-    RegExpInstaller,
-    StringInstaller,
-    Test262Host,
     TypedArrayInstaller
   }
 
@@ -45,24 +32,5 @@ defmodule QuickBEAM.VM.Runtime.Globals do
 
   # ── Binding map ──
 
-  defp bindings do
-    %{
-      "$262" => Test262Host.object(),
-      "Array" => ArrayInstaller.constructor(),
-      "String" => StringInstaller.constructor(),
-      "Number" => NumberInstaller.constructor(),
-      "Function" => FunctionInstaller.constructor(),
-      "RegExp" => RegExpInstaller.constructor(),
-      "Date" => DateInstaller.constructor(),
-      "ArrayBuffer" => ArrayBufferInstaller.constructor(),
-      "SharedArrayBuffer" => ArrayBufferInstaller.shared_constructor(),
-      "Proxy" => ProxyInstaller.constructor(),
-      "Math" => Math.object() |> Math.install_metadata(),
-      "JSON" => JSON.object() |> JSON.install_metadata(),
-      "Reflect" => Reflect.object() |> Reflect.install_metadata(),
-      "console" => Console.object()
-    }
-    |> Map.merge(GlobalFunctionInstaller.bindings())
-    |> Map.merge(QuickBEAM.VM.Builtin.Discovery.bindings())
-  end
+  defp bindings, do: GlobalRegistry.bindings()
 end
