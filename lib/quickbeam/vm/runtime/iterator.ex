@@ -616,7 +616,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
               end
 
             if desc != :undefined and Get.get(desc, "enumerable") == true do
-              value = Get.get(obj, key)
+              value =
+                try do
+                  Get.get(obj, key)
+                catch
+                  kind, reason ->
+                    close_iterators_ignoring_errors(Enum.reverse(iterators))
+                    :erlang.raise(kind, reason, __STACKTRACE__)
+                end
 
               if value == :undefined do
                 acc
