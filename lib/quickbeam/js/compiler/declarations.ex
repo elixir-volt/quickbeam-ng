@@ -165,6 +165,7 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
   defp declare_pattern(%AST.ObjectPattern{properties: properties}, scope) do
     Enum.reduce(properties, scope, fn
       %AST.Property{value: value}, acc -> declare_pattern(value, acc)
+      %AST.RestElement{argument: argument}, acc -> declare_pattern(argument, acc)
       _property, acc -> acc
     end)
   end
