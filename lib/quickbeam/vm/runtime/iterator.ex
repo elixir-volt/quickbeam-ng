@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Runtime
 
@@ -135,17 +135,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   def zip(args, _this) do
-    iterables = args |> Builtin.arg(0, []) |> Heap.to_list()
+    source = Builtin.arg(args, 0, [])
     options = Builtin.arg(args, 1, :undefined)
-    helper_iterator(zip_state(iterables, nil, options))
+    helper_iterator(zip_state_from_source(source, nil, options))
   end
 
   def zip_keyed(args, _this) do
     source = Builtin.arg(args, 0, [])
-    entries = keyed_iterables(source)
     options = Builtin.arg(args, 1, :undefined)
+    options = zip_options_object(options)
+    mode = zip_mode(options)
+    padding_option = zip_padding_option(options, mode)
+    entries = keyed_iterables(source)
     {keys, iterables} = Enum.unzip(entries)
-    helper_iterator(zip_state(iterables, keys, options))
+    helper_iterator(zip_state(iterables, keys, mode, padding_option))
   end
 
   defp from_value(value) when is_binary(value) do
@@ -467,10 +470,16 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp zip_state(iterables, keys, options) do
+  defp zip_state_from_source(source, keys, options) do
     options = zip_options_object(options)
     mode = zip_mode(options)
-    padding = zip_padding_values(options, mode, keys)
+    padding_option = zip_padding_option(options, mode)
+    iterables = zip_outer_values(source)
+    zip_state(iterables, keys, mode, padding_option)
+  end
+
+  defp zip_state(iterables, keys, mode, padding_option) do
+    padding = zip_padding_values(padding_option, mode, keys)
 
     %{
       "kind" => :zip,
@@ -506,16 +515,21 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp zip_padding_values(_options, mode, _keys) when mode in [:shortest, :strict], do: []
-  defp zip_padding_values(:undefined, :longest, _keys), do: []
+  defp zip_padding_option(_options, mode) when mode in [:shortest, :strict], do: :undefined
+  defp zip_padding_option(:undefined, :longest), do: :undefined
 
-  defp zip_padding_values(options, :longest, keys) do
+  defp zip_padding_option(options, :longest) do
     case Get.get(options, "padding") do
-      :undefined -> []
-      value when is_nil(value) -> JSThrow.type_error!("Iterator.zip padding must be an object")
-      value -> validate_padding(value, keys)
+      nil -> JSThrow.type_error!("Iterator.zip padding must be an object")
+      value -> value
     end
   end
+
+  defp zip_padding_values(_padding_option, mode, _keys) when mode in [:shortest, :strict], do: []
+  defp zip_padding_values(:undefined, :longest, _keys), do: []
+
+  defp zip_padding_values(padding_option, :longest, keys),
+    do: validate_padding(padding_option, keys)
 
   defp validate_padding(value, nil), do: validate_padding_iterable(value)
 
@@ -526,28 +540,44 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp validate_padding_iterable(value) do
     unless object_like?(value), do: JSThrow.type_error!("Iterator.zip padding must be an object")
+    zip_outer_values(value)
+  end
+
+  defp zip_outer_values(value) do
+    unless object_like?(value),
+      do: JSThrow.type_error!("Iterator.zip iterables must be an object")
+
     method = Get.get(value, {:symbol, "Symbol.iterator"})
 
     unless Builtin.callable?(method),
-      do: JSThrow.type_error!("Iterator.zip padding must be iterable")
+      do: JSThrow.type_error!("Iterator.zip iterables must be iterable")
 
-    Heap.to_list(value)
+    iterator = Invocation.invoke_with_receiver(method, [], value)
+    unless object_like?(iterator), do: JSThrow.type_error!("iterator method returned non-object")
+    collect_zip_outer_values(iterator_record(iterator), [])
+  end
+
+  defp collect_zip_outer_values(iterator, acc) do
+    result = iterator_next(iterator)
+
+    if Get.get(result, "done") == true do
+      Enum.reverse(acc)
+    else
+      collect_zip_outer_values(iterator, [Get.get(result, "value") | acc])
+    end
   end
 
   defp keyed_iterables(value) do
-    values = Heap.to_list(value)
+    case value do
+      {:obj, _} = obj ->
+        obj
+        |> OwnProperty.descriptor_keys()
+        |> Enum.reject(&(not is_binary(&1) or String.starts_with?(&1, "__")))
+        |> Enum.map(fn key -> {key, Get.get(obj, key)} end)
 
-    if values != [] do
-      Enum.with_index(values, fn item, index -> {Integer.to_string(index), item} end)
-    else
-      case value do
-        {:obj, ref} ->
-          Heap.get_obj(ref, %{})
-          |> Enum.reject(fn {key, _} -> not is_binary(key) or String.starts_with?(key, "__") end)
-
-        _ ->
-          []
-      end
+      _ ->
+        values = Heap.to_list(value)
+        Enum.with_index(values, fn item, index -> {Integer.to_string(index), item} end)
     end
   end
 
