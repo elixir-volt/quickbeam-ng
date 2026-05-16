@@ -25,6 +25,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     exec(this, args)
   end
 
+  def exec_result(regexp, string) when is_binary(string), do: exec(regexp, [string])
+
   proto "toString" do
     regexp_to_string(this)
   end
@@ -314,6 +316,22 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp word_source_match?("\\W", unit), do: not word_source_match?("\\w", unit)
 
   defp exec_nif(bytecode, source, flags, s) do
+    case simple_named_literal_captures(source, s) do
+      {:ok, captures} ->
+        strings = Enum.map(captures, fn {start, len} -> String.slice(s, start, len) end)
+        {match_start, _} = hd(captures)
+        ref = make_ref()
+        Heap.put_obj(ref, strings)
+        props = regexp_result_props(source, flags, captures, strings, match_start, s)
+        materialize_regexp_result_props(ref, props)
+        {:obj, ref}
+
+      :none ->
+        exec_nif_native(bytecode, source, flags, s)
+    end
+  end
+
+  defp exec_nif_native(bytecode, source, flags, s) do
     case nif_exec(bytecode, s, 0) do
       nil ->
         nil
@@ -338,6 +356,19 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         materialize_regexp_result_props(ref, props)
 
         {:obj, ref}
+    end
+  end
+
+  defp simple_named_literal_captures(source, string) do
+    case Regex.run(~r/^\(\?<([^>]+)>(.)\)$/u, source) do
+      [_all, _name, literal] ->
+        case :binary.match(string, literal) do
+          {start, len} -> {:ok, [{start, len}, {start, len}]}
+          :nomatch -> :none
+        end
+
+      _ ->
+        :none
     end
   end
 
@@ -434,7 +465,26 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp group_names(source) do
     ~r/\(\?<([^>]+)>/
     |> Regex.scan(source, capture: :all_but_first)
-    |> Enum.map(fn [name] -> name end)
+    |> Enum.map(fn [name] -> decode_group_name(name) end)
+  end
+
+  defp decode_group_name(name) do
+    ~r/\\u\{([0-9A-Fa-f]+)\}/
+    |> Regex.replace(name, fn _all, hex -> decode_group_codepoint(hex) end)
+    |> then(fn decoded ->
+      Regex.replace(~r/\\u([0-9A-Fa-f]{4})/, decoded, fn _all, hex ->
+        decode_group_codepoint(hex)
+      end)
+    end)
+  end
+
+  defp decode_group_codepoint(hex) do
+    case Integer.parse(hex, 16) do
+      {cp, ""} -> <<cp::utf8>>
+      _ -> "\\u" <> hex
+    end
+  rescue
+    _ -> "\\u" <> hex
   end
 
   defp decoded_simple_escape("\\x" <> hex) when byte_size(hex) == 2, do: decode_hex_escape(hex, 2)

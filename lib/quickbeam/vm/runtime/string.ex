@@ -1382,10 +1382,15 @@ defmodule QuickBEAM.VM.Runtime.String do
        when is_binary(s) and is_binary(bytecode) do
     flags = Get.regexp_flags(bytecode)
 
-    if String.contains?(flags, "g") do
-      match_all_strings(s, re, 0, [])
-    else
-      case RegExp.nif_exec(bytecode, s, 0) do
+    cond do
+      String.contains?(flags, "g") ->
+        match_all_strings(s, re, 0, [])
+
+      String.contains?(flags, "d") ->
+        RegExp.exec_result(re, s)
+
+      true ->
+        case RegExp.nif_exec(bytecode, s, 0) do
         nil ->
           nil
 
@@ -1403,7 +1408,7 @@ defmodule QuickBEAM.VM.Runtime.String do
             end
 
           match_result(strings, match_start, s)
-      end
+        end
     end
   end
 
