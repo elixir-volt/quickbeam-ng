@@ -688,14 +688,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :shortest} = state) do
     case zip_step_shortest(iterators, [], []) do
       :done -> iter_result(:undefined, true)
-      results -> zip_result(state["keys"], Enum.map(results, &Get.get(&1, "value")))
+      values -> zip_result(state["keys"], values)
     end
   end
 
   defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :strict} = state) do
     case zip_step_strict(iterators, [], [], nil) do
       :done -> iter_result(:undefined, true)
-      results -> zip_result(state["keys"], Enum.map(results, &Get.get(&1, "value")))
+      values -> zip_result(state["keys"], values)
     end
   end
 
@@ -705,18 +705,15 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
        ) do
     results = zip_step_all(iterators)
 
-    if Enum.all?(results, &(Get.get(&1, "done") == true)) do
+    if Enum.all?(results, &(&1 == :done)) do
       iter_result(:undefined, true)
     else
       values =
         results
         |> Enum.with_index()
-        |> Enum.map(fn {result, index} ->
-          if Get.get(result, "done") == true do
-            Enum.at(padding, index, :undefined)
-          else
-            Get.get(result, "value")
-          end
+        |> Enum.map(fn
+          {{:value, value}, _index} -> value
+          {:done, index} -> Enum.at(padding, index, :undefined)
         end)
 
       zip_result(state["keys"], values)
@@ -741,20 +738,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
     cond do
       seen == nil and done? ->
-        zip_step_strict(rest, previous_open, [result | acc], :done)
+        zip_step_strict(rest, previous_open, acc, :done)
 
       seen == nil ->
-        zip_step_strict(rest, [iterator | previous_open], [result | acc], :open)
+        zip_step_strict(rest, [iterator | previous_open], [Get.get(result, "value") | acc], :open)
 
       seen == :open and done? ->
         close_iterators_ignoring_errors(Enum.reverse(previous_open) ++ rest)
         JSThrow.type_error!("Iterator.zip strict mode length mismatch")
 
       seen == :open ->
-        zip_step_strict(rest, [iterator | previous_open], [result | acc], :open)
+        zip_step_strict(rest, [iterator | previous_open], [Get.get(result, "value") | acc], :open)
 
       seen == :done and done? ->
-        zip_step_strict(rest, previous_open, [result | acc], :done)
+        zip_step_strict(rest, previous_open, acc, :done)
 
       seen == :done ->
         close_iterators_ignoring_errors([iterator | rest])
@@ -778,7 +775,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       close_iterators_for_completion(previous ++ rest)
       :done
     else
-      zip_step_shortest(rest, [iterator | previous], [result | acc])
+      zip_step_shortest(rest, [iterator | previous], [Get.get(result, "value") | acc])
     end
   end
 
@@ -796,7 +793,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
           :erlang.raise(kind, reason, __STACKTRACE__)
       end
 
-    zip_step_all(rest, all, [result | acc])
+    item =
+      if Get.get(result, "done") == true do
+        :done
+      else
+        {:value, Get.get(result, "value")}
+      end
+
+    zip_step_all(rest, all, [item | acc])
   end
 
   defp zip_result(nil, values), do: iter_result(Heap.wrap(values), false)
