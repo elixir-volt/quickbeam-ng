@@ -1,7 +1,6 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
   @moduledoc "with-statement opcodes: with_get_var, with_put_var, with_delete_var, with_make_ref, with_get_ref, with_get_ref_undef."
 
-  alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.ObjectModel.{Delete, Get, Put}
 
@@ -20,15 +19,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
       {{:ok, :with_put_var}, [atom_idx, target, _is_with]} ->
         lower_with_put_var(state, next_entry, stack_depths, atom_idx, target)
 
-      {{:ok, :with_delete_var}, [atom_idx, _target, _is_with]} ->
-        with {:ok, obj, state} <- Emit.pop(state) do
-          key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
-
-          LoweringEffects.effectful_push(
-            state,
-            Builder.remote_call(Delete, :delete_property, [obj, key])
-          )
-        end
+      {{:ok, :with_delete_var}, [atom_idx, target, _is_with]} ->
+        lower_with_delete_var(state, next_entry, stack_depths, atom_idx, target)
 
       {{:ok, :with_make_ref}, [atom_idx, target, _is_with]} ->
         lower_with_make_ref(state, next_entry, stack_depths, atom_idx, target)
@@ -79,6 +71,19 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
       target_state = state |> Emit.push(Builder.atom(:undefined), :undefined) |> Emit.push(val)
 
       branch_with_has_property(state, target_state, next_entry, stack_depths, obj, key, target)
+    end
+  end
+
+  defp lower_with_delete_var(state, next_entry, stack_depths, atom_idx, target) do
+    with {:ok, obj, state} <- Emit.pop(state) do
+      key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
+      target_state = Emit.push(state, Builder.atom(true), :boolean)
+      delete = Builder.remote_call(Delete, :delete_property, [obj, key])
+      condition = State.compiler_call(state, :with_has_property, [obj, key])
+      {:ok, target_call} = State.block_jump_call(target_state, target, stack_depths)
+      {:ok, next_call} = State.block_jump_call(state, next_entry, stack_depths)
+      branch = Builder.branch_case(condition, [next_call], [delete, target_call])
+      {:done, Enum.reverse([branch | state.body])}
     end
   end
 

@@ -27,6 +27,8 @@ defmodule QuickBEAM.VM.ObjectModel.Private do
   @doc "Returns whether a target has a private field."
   def has_field?(target, key), do: get_field(target, key) != :missing
 
+  def has_private_or_brand?(target, key), do: has_field?(target, key) or has_brand?(target, key)
+
   def has_brand?(target, brand), do: brand_match?(target, brand)
 
   def put_field!(target, key, val) do

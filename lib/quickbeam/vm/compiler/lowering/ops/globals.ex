@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   @moduledoc "Global variable and var-ref opcodes: get_var, put_var, define_var, get_var_ref, make_*_ref, get/put_ref_value."
 
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Slots, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.GlobalEnv
 
@@ -157,7 +157,12 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   end
 
   defp lower_make_loc_ref(state, atom_idx, idx) do
-    ref = State.compiler_call(state, :make_loc_ref, [Builder.literal(idx)])
+    ref =
+      State.compiler_call(state, :make_loc_ref, [
+        Builder.literal(idx),
+        Slots.slot_expr(state, idx)
+      ])
+
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
     {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}

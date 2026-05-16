@@ -1,0 +1,19 @@
+defmodule QuickBEAM.VM.Compiler.WithScopeTest do
+  use QuickBEAM.VMCase, async: true
+
+  test "with delete falls through when binding is absent", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|function f(){ let obj = {}; let name = "x"; with (obj) { return delete name; } } f()|,
+      false
+    )
+  end
+
+  test "with delete jumps through target when binding exists", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|function f(){ let obj = {x: 1}; with (obj) { return delete x; } } f()|,
+      true
+    )
+  end
+end

@@ -249,7 +249,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
       {:ok,
        Emit.push(
          state,
-         Builder.remote_call(Private, :has_field?, [obj, key]),
+         Builder.remote_call(Private, :has_private_or_brand?, [obj, key]),
          :boolean
        )}
     end

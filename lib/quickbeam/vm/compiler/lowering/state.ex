@@ -369,9 +369,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
         {:ok,
          state
-         |> Emit.emit(
-           Builder.remote_call(QuickBEAM.VM.ObjectModel.Put, :put_field, [obj, key_expr, val])
-         )
+         |> Emit.emit(compiler_call(state, :define_field, [obj, key_expr, val]))
          |> Emit.push(obj, new_type)}
       end
     end

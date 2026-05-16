@@ -14,6 +14,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   alias QuickBEAM.VM.ObjectModel.{
     Class,
     Copy,
+    Define,
     Delete,
     Functions,
     Get,
@@ -438,15 +439,17 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   @doc "Creates a mutable reference cell for a local slot value."
-  def make_loc_ref(_ctx \\ nil, _idx) do
+  def make_loc_ref(ctx \\ nil, idx, value \\ :undefined)
+
+  def make_loc_ref(_ctx, _idx, value) do
     ref = make_ref()
-    Heap.put_cell(ref, :undefined)
+    Heap.put_cell(ref, value)
     {:cell, ref}
   end
 
-  def make_arg_ref(_ctx \\ nil, idx) do
+  def make_arg_ref(ctx \\ nil, idx) do
     ref = make_ref()
-    val = elem(InvokeContext.current_arg_buf(), idx)
+    val = ctx |> context_arg_buf() |> elem(idx)
     Heap.put_cell(ref, val)
     {:cell, ref}
   end
@@ -545,7 +548,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   def define_array_el(_ctx \\ nil, obj, idx, val), do: Put.define_array_el(obj, idx, val)
 
-  def define_field(_ctx, obj, key, val) when is_binary(key), do: define_field(obj, key, val)
+  def define_field(_ctx, obj, key, val) when is_binary(key) or is_number(key),
+    do: define_field(obj, key, val)
 
   def define_field(ctx, obj, atom_idx, val),
     do: define_field(obj, Names.resolve_atom(context_atoms(ctx), atom_idx), val)
@@ -555,13 +559,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     obj
   end
 
-  def define_field(obj, key, val) when is_binary(key) do
-    Put.put(obj, key, val)
-    obj
-  end
-
-  def define_field(obj, atom_idx, val),
+  def define_field(obj, atom_idx, val) when is_tuple(atom_idx),
     do: define_field(obj, Names.resolve_atom(InvokeContext.current_atoms(), atom_idx), val)
+
+  def define_field(obj, key, val) do
+    Define.create_data_property_or_throw(obj, key, val)
+  end
 
   @doc "Writes an existing private class field or throws when absent."
   def put_private_field(_ctx, obj, key, val) do
