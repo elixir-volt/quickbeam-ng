@@ -1,6 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   @moduledoc "Object and array manipulation opcodes: get/put_field, get/put_array_el, define_field, set_name, set_proto, get/put_super, private fields, delete, in, instanceof."
 
+  alias QuickBEAM.VM.Compiler.Lowering.Operators
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
@@ -43,7 +44,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
         State.set_home_object(state)
 
       {{:ok, :get_super}, []} ->
-        State.unary_call(state, RuntimeHelpers, :get_super)
+        Operators.unary_call(state, RuntimeHelpers, :get_super)
 
       {{:ok, :get_super_value}, []} ->
         lower_get_super_value(state)
@@ -64,7 +65,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
         State.define_field_name_call(state, Builder.literal(Builder.atom_name(state, atom_idx)))
 
       {{:ok, :get_array_el}, []} ->
-        State.binary_call(state, Put, :get_element)
+        Operators.binary_call(state, Put, :get_element)
 
       {{:ok, :get_array_el2}, []} ->
         State.get_array_el2(state)
@@ -91,19 +92,19 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
         {:ok, state}
 
       {{:ok, :to_object}, []} ->
-        State.unary_call(state, RuntimeABI, :to_object)
+        Operators.unary_call(state, RuntimeABI, :to_object)
 
       {{:ok, :to_propkey}, []} ->
-        State.unary_call(state, RuntimeABI, :to_property_key)
+        Operators.unary_call(state, RuntimeABI, :to_property_key)
 
       {{:ok, :to_propkey2}, []} ->
         lower_to_propkey2(state)
 
       {{:ok, :get_length}, []} ->
-        State.get_length_call(state)
+        Operators.get_length_call(state)
 
       {{:ok, :instanceof}, []} ->
-        State.binary_call(state, RuntimeHelpers, :instanceof)
+        Operators.binary_call(state, RuntimeHelpers, :instanceof)
 
       {{:ok, :in}, []} ->
         State.in_call(state)

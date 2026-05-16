@@ -1,6 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
   @moduledoc "Arithmetic, bitwise, comparison, and unary opcodes."
 
+  alias QuickBEAM.VM.Compiler.Lowering.Operators
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.Interpreter.Values
@@ -9,31 +10,31 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
   def lower(state, name_args) do
     case name_args do
       {{:ok, :neg}, []} ->
-        State.unary_local_call(state, :op_neg)
+        Operators.unary_local_call(state, :op_neg)
 
       {{:ok, :plus}, []} ->
-        State.unary_local_call(state, :op_plus)
+        Operators.unary_local_call(state, :op_plus)
 
       {{:ok, :not}, []} ->
-        State.unary_call(state, RuntimeHelpers, :bit_not)
+        Operators.unary_call(state, RuntimeHelpers, :bit_not)
 
       {{:ok, :lnot}, []} ->
-        State.unary_call(state, RuntimeHelpers, :lnot)
+        Operators.unary_call(state, RuntimeHelpers, :lnot)
 
       {{:ok, :is_undefined}, []} ->
-        State.unary_call(state, RuntimeHelpers, :undefined?)
+        Operators.unary_call(state, RuntimeHelpers, :undefined?)
 
       {{:ok, :is_null}, []} ->
-        State.unary_call(state, RuntimeHelpers, :null?)
+        Operators.unary_call(state, RuntimeHelpers, :null?)
 
       {{:ok, :is_undefined_or_null}, []} ->
         lower_is_undefined_or_null(state)
 
       {{:ok, :typeof_is_undefined}, []} ->
-        State.unary_call(state, RuntimeHelpers, :typeof_is_undefined)
+        Operators.unary_call(state, RuntimeHelpers, :typeof_is_undefined)
 
       {{:ok, :typeof_is_function}, []} ->
-        State.unary_call(state, RuntimeHelpers, :typeof_is_function)
+        Operators.unary_call(state, RuntimeHelpers, :typeof_is_function)
 
       {{:ok, :typeof}, []} ->
         with {:ok, expr, _type, state} <- Emit.pop_typed(state) do
@@ -47,70 +48,70 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
         lower_inc_dec(state, :-)
 
       {{:ok, :post_inc}, []} ->
-        State.post_update(state, :post_inc)
+        Operators.post_update(state, :post_inc)
 
       {{:ok, :post_dec}, []} ->
-        State.post_update(state, :post_dec)
+        Operators.post_update(state, :post_dec)
 
       {{:ok, :add}, []} ->
-        State.binary_local_call(state, :op_add)
+        Operators.binary_local_call(state, :op_add)
 
       {{:ok, :sub}, []} ->
-        State.binary_local_call(state, :op_sub)
+        Operators.binary_local_call(state, :op_sub)
 
       {{:ok, :mul}, []} ->
-        State.binary_local_call(state, :op_mul)
+        Operators.binary_local_call(state, :op_mul)
 
       {{:ok, :div}, []} ->
-        State.binary_local_call(state, :op_div)
+        Operators.binary_local_call(state, :op_div)
 
       {{:ok, :mod}, []} ->
-        State.binary_local_call(state, :op_mod)
+        Operators.binary_local_call(state, :op_mod)
 
       {{:ok, :pow}, []} ->
-        State.binary_call(state, Values, :pow)
+        Operators.binary_call(state, Values, :pow)
 
       {{:ok, :band}, []} ->
-        State.binary_local_call(state, :op_band)
+        Operators.binary_local_call(state, :op_band)
 
       {{:ok, :bor}, []} ->
-        State.binary_local_call(state, :op_bor)
+        Operators.binary_local_call(state, :op_bor)
 
       {{:ok, :bxor}, []} ->
-        State.binary_local_call(state, :op_bxor)
+        Operators.binary_local_call(state, :op_bxor)
 
       {{:ok, :shl}, []} ->
-        State.binary_local_call(state, :op_shl)
+        Operators.binary_local_call(state, :op_shl)
 
       {{:ok, :sar}, []} ->
-        State.binary_local_call(state, :op_sar)
+        Operators.binary_local_call(state, :op_sar)
 
       {{:ok, :shr}, []} ->
-        State.binary_local_call(state, :op_shr)
+        Operators.binary_local_call(state, :op_shr)
 
       {{:ok, :lt}, []} ->
-        State.binary_local_call(state, :op_lt)
+        Operators.binary_local_call(state, :op_lt)
 
       {{:ok, :lte}, []} ->
-        State.binary_local_call(state, :op_lte)
+        Operators.binary_local_call(state, :op_lte)
 
       {{:ok, :gt}, []} ->
-        State.binary_local_call(state, :op_gt)
+        Operators.binary_local_call(state, :op_gt)
 
       {{:ok, :gte}, []} ->
-        State.binary_local_call(state, :op_gte)
+        Operators.binary_local_call(state, :op_gte)
 
       {{:ok, :eq}, []} ->
-        State.binary_local_call(state, :op_eq)
+        Operators.binary_local_call(state, :op_eq)
 
       {{:ok, :neq}, []} ->
-        State.binary_local_call(state, :op_neq)
+        Operators.binary_local_call(state, :op_neq)
 
       {{:ok, :strict_eq}, []} ->
-        State.binary_local_call(state, :op_strict_eq)
+        Operators.binary_local_call(state, :op_strict_eq)
 
       {{:ok, :strict_neq}, []} ->
-        State.binary_local_call(state, :op_strict_neq)
+        Operators.binary_local_call(state, :op_strict_neq)
 
       _ ->
         :not_handled
