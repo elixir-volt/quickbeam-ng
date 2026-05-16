@@ -1,0 +1,41 @@
+defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
+  @moduledoc "Installs global bindings and post-build global metadata for a runtime realm."
+
+  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.Runtime.WebAPIs
+
+  alias QuickBEAM.VM.Runtime.{
+    CollectionInstaller,
+    CoreConstructorInstaller,
+    Errors,
+    GlobalRegistry,
+    GlobalThisInstaller,
+    ObjectInstaller,
+    TypedArrayInstaller
+  }
+
+  def build do
+    {object_name, object_ctor} = ObjectInstaller.binding()
+
+    GlobalRegistry.bindings()
+    |> Map.put(object_name, object_ctor)
+    |> Map.merge(TypedArrayInstaller.bindings())
+    |> Map.merge(CollectionInstaller.bindings())
+    |> Map.merge(CoreConstructorInstaller.bindings())
+    |> Map.merge(Errors.bindings())
+    |> cache_globals()
+    |> Map.merge(WebAPIs.bindings())
+    |> install_global_this()
+    |> cache_globals()
+  end
+
+  defp cache_globals(bindings) do
+    Heap.put_global_cache(bindings)
+    bindings
+  end
+
+  defp install_global_this(bindings) do
+    GlobalThisInstaller.install(bindings)
+    bindings
+  end
+end
