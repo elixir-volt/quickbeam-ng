@@ -582,7 +582,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
           value = Get.get(outer, "value")
           index = state["index"]
           mapped = invoke_or_close(state["iterator"], state["mapper"], [value, index])
-          inner = iterator_record_from_value(mapped)
+          inner = flattenable_iterator_record_or_close(state["iterator"], mapped)
           Heap.put_obj(state_ref, %{state | "index" => index + 1, "inner" => inner})
           flat_map_next(state_ref, Heap.get_obj(state_ref, %{}))
         end
@@ -601,9 +601,31 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp iterator_record_from_value(value) do
-    wrapped = from_value(value)
-    iterator_record(wrapped)
+  defp flattenable_iterator_record_or_close(iterator, value) do
+    flattenable_iterator_record(value)
+  catch
+    {:js_throw, _} = reason ->
+      close_record_preserving_reason(iterator)
+      throw(reason)
+  end
+
+  defp flattenable_iterator_record(value) do
+    unless object_like?(value), do: JSThrow.type_error!("Iterator mapper result must be an object")
+
+    iterator_method = Get.get(value, {:symbol, "Symbol.iterator"})
+
+    cond do
+      Builtin.callable?(iterator_method) ->
+        result = Invocation.invoke_with_receiver(iterator_method, [], value)
+        unless object_like?(result), do: JSThrow.type_error!("iterator method returned non-object")
+        iterator_record(result)
+
+      iterator_method in [:undefined, nil] ->
+        iterator_record(value)
+
+      true ->
+        JSThrow.type_error!("iterator method is not callable")
+    end
   end
 
   defp for_each_loop(iterator, callback, index) do
