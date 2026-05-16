@@ -16,7 +16,18 @@ defmodule QuickBEAM.VM.Heap do
     - `{:qb_var, name}` — global variable bindings
   """
 
-  alias QuickBEAM.VM.Heap.{Arrays, Async, Caches, Context, GC, Registry, Shapes, Store}
+  alias QuickBEAM.VM.Heap.{
+    Arrays,
+    Async,
+    Caches,
+    Context,
+    GC,
+    ProcessKeys,
+    Registry,
+    Shapes,
+    Store
+  }
+
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
 
   @compile {:inline,
@@ -498,34 +509,12 @@ defmodule QuickBEAM.VM.Heap do
 
   @doc "Clear all heap state. Used in test setup."
   def reset do
-    for key <- Process.get_keys(), heap_process_key?(key) do
+    for key <- Process.get_keys(), ProcessKeys.owned?(key) do
       Process.delete(key)
     end
 
     :ok
   end
-
-  defp heap_process_key?(id) when is_integer(id) and id > 0, do: true
-  defp heap_process_key?(ref) when is_reference(ref), do: true
-
-  defp heap_process_key?(key) when is_atom(key) do
-    key
-    |> Atom.to_string()
-    |> String.starts_with?("Elixir.QuickBEAM.VM.")
-    |> case do
-      true -> false
-      false -> String.starts_with?(Atom.to_string(key), "qb_")
-    end
-  end
-
-  defp heap_process_key?(key) when is_tuple(key) and tuple_size(key) > 0 do
-    case elem(key, 0) do
-      atom when is_atom(atom) -> String.starts_with?(Atom.to_string(atom), "qb_")
-      _ -> false
-    end
-  end
-
-  defp heap_process_key?(_), do: false
 
   @doc "Runs heap garbage collection using the active VM roots plus extra roots."
   defdelegate gc(extra_roots \\ []), to: GC
