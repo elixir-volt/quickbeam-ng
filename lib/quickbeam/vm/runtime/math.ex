@@ -72,7 +72,9 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end)
 
     Enum.each(@constants, fn name ->
-      descriptor = PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+      descriptor =
+        PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+
       Heap.put_prop_desc(math, name, descriptor)
       Heap.put_ctor_prop_desc(math, name, descriptor)
     end)
@@ -126,12 +128,12 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "abs" do
-      case hd(args) do
+      case Runtime.to_number(hd(args)) do
         :infinity -> :infinity
         :neg_infinity -> :infinity
         :nan -> :nan
-        n when is_number(n) -> abs(n)
-        _ -> :nan
+        n when n == 0 -> 0
+        n -> abs(n)
       end
     end
 
@@ -224,9 +226,15 @@ defmodule QuickBEAM.VM.Runtime.Math do
 
     method "fround" do
       case Runtime.to_float(hd(args)) do
-        :infinity -> :infinity
-        :neg_infinity -> :neg_infinity
-        :nan -> :nan
+        :infinity ->
+          :infinity
+
+        :neg_infinity ->
+          :neg_infinity
+
+        :nan ->
+          :nan
+
         f ->
           <<f32::float-32>> = <<f::float-32>>
           f32 * 1.0
@@ -275,10 +283,18 @@ defmodule QuickBEAM.VM.Runtime.Math do
 
     method "cbrt" do
       case Runtime.to_number(hd(args)) do
-        :infinity -> :infinity
-        :neg_infinity -> :neg_infinity
-        :nan -> :nan
-        f when f == 0 -> f
+        :infinity ->
+          :infinity
+
+        :neg_infinity ->
+          :neg_infinity
+
+        :nan ->
+          :nan
+
+        f when f == 0 ->
+          f
+
         f ->
           sign = if f < 0, do: -1, else: 1
           sign * :math.pow(abs(f), 1.0 / 3.0)
@@ -357,8 +373,12 @@ defmodule QuickBEAM.VM.Runtime.Math do
       values = Enum.map(args, &Runtime.to_float/1)
 
       cond do
-        Enum.any?(values, &(&1 in [:infinity, :neg_infinity])) -> :infinity
-        Enum.any?(values, &(&1 == :nan)) -> :nan
+        Enum.any?(values, &(&1 in [:infinity, :neg_infinity])) ->
+          :infinity
+
+        Enum.any?(values, &(&1 == :nan)) ->
+          :nan
+
         true ->
           sum = Enum.reduce(values, 0.0, fn a, acc -> acc + :math.pow(a, 2) end)
           :math.sqrt(sum)
@@ -397,8 +417,10 @@ defmodule QuickBEAM.VM.Runtime.Math do
   defp extremum_value(:max, :neg_infinity, acc), do: acc
   defp extremum_value(:max, _value, :infinity), do: :infinity
   defp extremum_value(:max, value, :neg_infinity), do: value
+
   defp extremum_value(:max, value, acc) when value == 0 and acc == 0,
     do: if(Values.neg_zero?(acc), do: value, else: acc)
+
   defp extremum_value(:max, value, acc) when value > acc, do: value
   defp extremum_value(:max, _value, acc), do: acc
 
@@ -406,8 +428,10 @@ defmodule QuickBEAM.VM.Runtime.Math do
   defp extremum_value(:min, :infinity, acc), do: acc
   defp extremum_value(:min, _value, :neg_infinity), do: :neg_infinity
   defp extremum_value(:min, value, :infinity), do: value
+
   defp extremum_value(:min, value, acc) when value == 0 and acc == 0,
     do: if(Values.neg_zero?(value), do: value, else: acc)
+
   defp extremum_value(:min, value, acc) when value < acc, do: value
   defp extremum_value(:min, _value, acc), do: acc
 
@@ -428,7 +452,10 @@ defmodule QuickBEAM.VM.Runtime.Math do
       true ->
         exponent = floor(:math.log2(abs_value))
         fraction = round_ties_even((abs_value / :math.pow(2, exponent) - 1) * 1024)
-        {exponent, fraction} = if fraction == 1024, do: {exponent + 1, 0}, else: {exponent, fraction}
+
+        {exponent, fraction} =
+          if fraction == 1024, do: {exponent + 1, 0}, else: {exponent, fraction}
+
         rounded = (1 + fraction / 1024) * :math.pow(2, exponent)
         signed_value(sign, rounded)
     end
@@ -537,6 +564,7 @@ defmodule QuickBEAM.VM.Runtime.Math do
   defp math_pow(base, :neg_infinity) when abs(base) > 1, do: 0
   defp math_pow(base, :neg_infinity) when abs(base) < 1, do: :infinity
   defp math_pow(base, :neg_infinity) when abs(base) == 1, do: :nan
+
   defp math_pow(base, exp) do
     try do
       :math.pow(base, exp)
@@ -545,7 +573,10 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
   end
 
-  defp odd_integer?(value), do: is_integer(value) or (is_float(value) and value == trunc(value) and rem(trunc(value), 2) != 0)
+  defp odd_integer?(value),
+    do:
+      is_integer(value) or
+        (is_float(value) and value == trunc(value) and rem(trunc(value), 2) != 0)
 
   defp sum_precise_values({:obj, ref} = iterable) do
     ensure_sum_iterable!(iterable, Heap.get_obj(ref, %{}))
@@ -563,7 +594,9 @@ defmodule QuickBEAM.VM.Runtime.Math do
 
   defp sum_precise_values({:qb_arr, arr}), do: :array.to_list(arr)
   defp sum_precise_values(list) when is_list(list), do: list
-  defp sum_precise_values(_), do: QuickBEAM.VM.JSThrow.type_error!("Math.sumPrecise requires an iterable")
+
+  defp sum_precise_values(_),
+    do: QuickBEAM.VM.JSThrow.type_error!("Math.sumPrecise requires an iterable")
 
   defp ensure_sum_iterable!(_iterable, {:qb_arr, _}), do: :ok
   defp ensure_sum_iterable!(_iterable, list) when is_list(list), do: :ok
@@ -577,7 +610,8 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
   end
 
-  defp ensure_sum_iterable!(_iterable, _), do: QuickBEAM.VM.JSThrow.type_error!("Math.sumPrecise requires an iterable")
+  defp ensure_sum_iterable!(_iterable, _),
+    do: QuickBEAM.VM.JSThrow.type_error!("Math.sumPrecise requires an iterable")
 
   defp collect_sum_values(iter, next_fn, acc) do
     case Iterators.for_of_next(next_fn, iter) do
