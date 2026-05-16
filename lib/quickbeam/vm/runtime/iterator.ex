@@ -146,9 +146,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     options = zip_options_object(options)
     mode = zip_mode(options)
     padding_option = zip_padding_option(options, mode)
-    entries = keyed_iterables(source)
-    {keys, iterables} = Enum.unzip(entries)
-    helper_iterator(zip_state(iterables, keys, mode, padding_option))
+    {keys, iterators} = keyed_iterator_records(source)
+    helper_iterator(zip_state_from_iterators(iterators, keys, mode, padding_option))
   end
 
   defp from_value(value) when is_binary(value) do
@@ -480,10 +479,13 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp zip_state(iterables, keys, mode, padding_option) do
     iterators = Enum.map(iterables, &(from_value(&1) |> iterator_record()))
+    zip_state_from_iterators(iterators, keys, mode, padding_option)
+  end
 
+  defp zip_state_from_iterators(iterators, keys, mode, padding_option) do
     padding =
       try do
-        zip_padding_values(padding_option, mode, keys, length(iterables))
+        zip_padding_values(padding_option, mode, keys, length(iterators))
       catch
         kind, reason ->
           close_iterators_ignoring_errors(iterators)
@@ -595,16 +597,23 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp keyed_iterables(value) do
+  defp keyed_iterator_records(value) do
     case value do
       {:obj, _} = obj ->
         obj
         |> OwnProperty.descriptor_keys()
-        |> Enum.reduce([], fn key, acc ->
+        |> Enum.reduce({[], []}, fn key, {keys, iterators} = acc ->
           if internal_key?(key) do
             acc
           else
-            desc = OwnProperty.descriptor(obj, key)
+            desc =
+              try do
+                OwnProperty.descriptor(obj, key)
+              catch
+                kind, reason ->
+                  close_iterators_ignoring_errors(Enum.reverse(iterators))
+                  :erlang.raise(kind, reason, __STACKTRACE__)
+              end
 
             if desc != :undefined and Get.get(desc, "enumerable") == true do
               value = Get.get(obj, key)
@@ -612,19 +621,45 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
               if value == :undefined do
                 acc
               else
-                [{key, value} | acc]
+                record =
+                  try do
+                    zip_keyed_value_record(value)
+                  catch
+                    kind, reason ->
+                      close_iterators_ignoring_errors(Enum.reverse(iterators))
+                      :erlang.raise(kind, reason, __STACKTRACE__)
+                  end
+
+                {[key | keys], [record | iterators]}
               end
             else
               acc
             end
           end
         end)
-        |> Enum.reverse()
+        |> then(fn {keys, iterators} -> {Enum.reverse(keys), Enum.reverse(iterators)} end)
 
       _ ->
         values = Heap.to_list(value)
-        Enum.with_index(values, fn item, index -> {Integer.to_string(index), item} end)
+
+        keys =
+          values
+          |> Enum.with_index()
+          |> Enum.map(fn {_item, index} -> Integer.to_string(index) end)
+
+        iterators = Enum.map(values, &zip_keyed_value_record/1)
+        {keys, iterators}
     end
+  end
+
+  defp zip_keyed_value_record(value) when is_list(value),
+    do: value |> from_value() |> iterator_record()
+
+  defp zip_keyed_value_record(value) do
+    unless object_like?(value),
+      do: JSThrow.type_error!("Iterator.zipKeyed item must be an object")
+
+    value |> from_value() |> iterator_record()
   end
 
   defp internal_key?(key) when is_binary(key), do: String.starts_with?(key, "__")
