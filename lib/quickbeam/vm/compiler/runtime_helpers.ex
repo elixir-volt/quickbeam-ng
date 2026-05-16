@@ -24,7 +24,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   }
 
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Semantics.{Construction, Iterators, PropertyAccess}
+  alias QuickBEAM.VM.Semantics.{Construction, Eval, Iterators, PropertyAccess}
 
   # ── Coercion ──
 
@@ -850,45 +850,16 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     end
   end
 
-  defp simple_eval_delete_identifier(code, ctx) do
-    case QuickBEAM.JS.Parser.parse(code) do
-      {:ok,
-       %QuickBEAM.JS.Parser.AST.Program{
-         body: [
-           %QuickBEAM.JS.Parser.AST.ExpressionStatement{
-             expression: %QuickBEAM.JS.Parser.AST.UnaryExpression{
-               operator: "delete",
-               argument: %QuickBEAM.JS.Parser.AST.Identifier{name: name}
-             }
-           }
-         ]
-       }} ->
-        {:ok, not Map.has_key?(context_globals(ctx), name)}
-
-      _ ->
-        :error
-    end
-  end
+  defp simple_eval_delete_identifier(code, ctx),
+    do: Eval.simple_delete_identifier(code, context_globals(ctx))
 
   defp reject_eval_lexical_conflicts!(ctx, %QuickBEAM.VM.Function{} = eval_fun) do
     unless current_strict_mode?(ctx) do
-      declared = declared_names(eval_fun)
-      lexical = current_lexical_names(ctx)
-
-      if not MapSet.disjoint?(declared, lexical) do
-        JSThrow.syntax_error!("Identifier has already been declared")
-      end
+      Eval.reject_lexical_conflicts!(ctx, declared_names(eval_fun), false)
     end
   end
 
-  defp declared_names(%QuickBEAM.VM.Function{locals: locals}) do
-    locals
-    |> Enum.map(&Names.resolve_display_name(&1.name))
-    |> Enum.filter(&is_binary/1)
-    |> MapSet.new()
-  end
-
-  defp current_lexical_names(ctx), do: QuickBEAM.VM.EvalLexical.current_lexical_names(ctx)
+  defp declared_names(%QuickBEAM.VM.Function{} = fun), do: Eval.declared_local_names(fun)
 
   defp current_strict_mode?(%Context{
          current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}

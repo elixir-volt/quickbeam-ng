@@ -34,6 +34,7 @@ defmodule QuickBEAM.VM.Interpreter do
   }
 
   alias QuickBEAM.VM.PromiseState, as: Promise
+  alias QuickBEAM.VM.Semantics.Eval, as: EvalSemantics
 
   alias __MODULE__.{
     ClosureBuilder,
@@ -484,7 +485,7 @@ defmodule QuickBEAM.VM.Interpreter do
     case compile_eval_code(ctx.runtime_pid, code) do
       {:ok, parsed} ->
         declared_names = eval_declared_names(parsed.value, parsed.atoms)
-        assigned_names = eval_simple_assigned_names(code)
+        assigned_names = EvalSemantics.simple_assigned_names(code)
         reject_eval_lexical_conflicts!(ctx, declared_names)
         eval_globals = collect_caller_locals(caller_frame, ctx)
         captured_globals = collect_captured_globals(ctx.current_func)
@@ -572,28 +573,6 @@ defmodule QuickBEAM.VM.Interpreter do
         {:undefined, %{}}
     end
   end
-
-  defp eval_simple_assigned_names(code) do
-    case QuickBEAM.JS.Parser.parse(code) do
-      {:ok, %QuickBEAM.JS.Parser.AST.Program{body: body}} ->
-        body
-        |> Enum.flat_map(&eval_simple_assigned_names_from_statement/1)
-        |> MapSet.new()
-
-      _ ->
-        MapSet.new()
-    end
-  end
-
-  defp eval_simple_assigned_names_from_statement(%QuickBEAM.JS.Parser.AST.ExpressionStatement{
-         expression: %QuickBEAM.JS.Parser.AST.AssignmentExpression{
-           operator: "=",
-           left: %QuickBEAM.JS.Parser.AST.Identifier{name: name}
-         }
-       }),
-       do: [name]
-
-  defp eval_simple_assigned_names_from_statement(_), do: []
 
   defp parse_error_message([%{message: message} | _]), do: message
   defp parse_error_message(_errors), do: "Syntax error"
@@ -819,18 +798,8 @@ defmodule QuickBEAM.VM.Interpreter do
   defp eval_declared_names(_, _), do: MapSet.new()
 
   defp reject_eval_lexical_conflicts!(ctx, declared_names) do
-    if not current_strict_mode?(ctx) do
-      conflict? =
-        ctx
-        |> current_lexical_names()
-        |> MapSet.disjoint?(declared_names)
-        |> Kernel.not()
-
-      if conflict?, do: JSThrow.syntax_error!("Identifier has already been declared")
-    end
+    EvalSemantics.reject_lexical_conflicts!(ctx, declared_names, current_strict_mode?(ctx))
   end
-
-  defp current_lexical_names(ctx), do: QuickBEAM.VM.EvalLexical.current_lexical_names(ctx)
 
   defp resolve_declared_atom({:predefined, idx}, _atoms),
     do: PredefinedAtoms.lookup(idx)
