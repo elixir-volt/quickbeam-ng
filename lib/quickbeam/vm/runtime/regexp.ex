@@ -839,7 +839,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_escape(string) do
     string
-    |> String.to_charlist()
+    |> JSString.utf16_code_unit_values()
     |> Enum.with_index()
     |> Enum.map_join(fn {cp, index} -> escape_codepoint(cp, index == 0) end)
   end
