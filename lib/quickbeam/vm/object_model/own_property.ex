@@ -47,23 +47,23 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   end
 
   def present?(list, key) when is_list(list) do
-    case Integer.parse(to_string(key)) do
-      {idx, ""} when idx >= 0 -> idx < length(list)
-      _ -> key == "length"
+    case PropertyKey.array_index(key) do
+      {:ok, idx} -> idx < length(list)
+      :error -> key == "length"
     end
   end
 
   def present?({:qb_arr, arr}, key) do
-    case Integer.parse(to_string(key)) do
-      {idx, ""} when idx >= 0 -> idx < :array.size(arr)
-      _ -> key == "length"
+    case PropertyKey.array_index(key) do
+      {:ok, idx} -> idx < :array.size(arr)
+      :error -> key == "length"
     end
   end
 
   def present?(string, key) when is_binary(string) do
-    case Integer.parse(to_string(key)) do
-      {idx, ""} when idx >= 0 -> idx < Get.string_length(string)
-      _ -> key == "length"
+    case PropertyKey.array_index(key) do
+      {:ok, idx} -> idx < Get.string_length(string)
+      :error -> key == "length"
     end
   end
 
@@ -168,26 +168,22 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     end
   end
 
-  defp typed_array_index_key(key) when is_integer(key) and key >= 0, do: key
-
-  defp typed_array_index_key(key) when is_binary(key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> idx
-      _ -> nil
+  defp typed_array_index_key(key) do
+    case PropertyKey.array_index(key) do
+      {:ok, idx} -> idx
+      :error -> nil
     end
   end
-
-  defp typed_array_index_key(_), do: nil
 
   defp present_array_property?(ref, key) when is_binary(key) or is_integer(key) do
     prop_key = to_string(key)
 
-    case Integer.parse(prop_key) do
-      {idx, ""} when idx >= 0 ->
+    case PropertyKey.array_index(prop_key) do
+      {:ok, idx} ->
         Heap.array_get(ref, idx) != :undefined or Heap.get_array_prop(ref, prop_key) != :undefined or
           Heap.get_prop_desc(ref, prop_key) != nil
 
-      _ ->
+      :error ->
         key == "length" or Heap.get_array_prop(ref, prop_key) != :undefined or
           Heap.get_prop_desc(ref, prop_key) != nil
     end
@@ -532,18 +528,11 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     do: array_prototype_index_length(Map.keys(map))
 
   defp array_prototype_index_length(keys) do
-    Enum.reduce(keys, 0, fn
-      key, length when is_integer(key) and key >= 0 ->
-        max(length, key + 1)
-
-      key, length when is_binary(key) ->
-        case Integer.parse(key) do
-          {index, ""} when index >= 0 -> max(length, index + 1)
-          _ -> length
-        end
-
-      _key, length ->
-        length
+    Enum.reduce(keys, 0, fn key, length ->
+      case PropertyKey.array_index(key) do
+        {:ok, index} -> max(length, index + 1)
+        :error -> length
+      end
     end)
   end
 
@@ -680,7 +669,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp wrapped_string_index_descriptor(data, prop_name) when is_map(data) do
     with {:ok, string} when is_binary(string) <- WrappedPrimitive.value(data, :string),
-         {idx, ""} when idx >= 0 <- Integer.parse(prop_name),
+         {:ok, idx} <- PropertyKey.array_index(prop_name),
          true <- idx < Get.string_length(string) do
       PropertyDescriptor.data_object(
         QuickBEAM.VM.Runtime.String.utf16_code_unit_at(string, idx),

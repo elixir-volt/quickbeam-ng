@@ -102,35 +102,6 @@ defmodule QuickBEAM.VM.Runtime do
   def normalize_index(idx, len) when idx < 0, do: max(len + idx, 0)
   def normalize_index(idx, len), do: min(idx, len)
 
-  @max_array_index 4_294_967_294
-
   @doc "Sorts JavaScript array-index-like keys before ordinary string keys."
-  def sort_numeric_keys(keys) do
-    {numeric, strings} =
-      Enum.split_with(keys, fn
-        k when is_integer(k) and k >= 0 and k <= @max_array_index ->
-          true
-
-        k when is_binary(k) ->
-          case Integer.parse(k) do
-            {n, ""} when n >= 0 and n <= @max_array_index -> true
-            _ -> false
-          end
-
-        _ ->
-          false
-      end)
-
-    sorted =
-      Enum.sort_by(numeric, fn
-        k when is_integer(k) -> k
-        k when is_binary(k) -> elem(Integer.parse(k), 0)
-      end)
-      |> Enum.map(fn
-        k when is_integer(k) -> Integer.to_string(k)
-        k -> k
-      end)
-
-    sorted ++ Enum.filter(strings, &is_binary/1)
-  end
+  def sort_numeric_keys(keys), do: QuickBEAM.VM.ObjectModel.PropertyKey.sort_own_keys(keys)
 end

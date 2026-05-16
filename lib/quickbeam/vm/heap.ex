@@ -375,6 +375,7 @@ defmodule QuickBEAM.VM.Heap do
   defdelegate put_obj_raw(ref, value), to: Store
   defdelegate put_obj_key(ref, key, value), to: Store
   defdelegate put_obj_key(ref, map, key, value), to: Store
+  defdelegate put_shape_proto(ref, proto), to: Store
   defdelegate update_obj(ref, default, fun), to: Store
 
   # ── Array helpers ──

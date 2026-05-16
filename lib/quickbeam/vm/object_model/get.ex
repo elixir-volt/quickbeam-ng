@@ -119,16 +119,12 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end)
   end
 
-  defp array_index_key(key) when is_integer(key) and key >= 0, do: key
-
-  defp array_index_key(key) when is_binary(key) do
-    case Integer.parse(key) do
-      {index, ""} when index >= 0 -> index
-      _ -> nil
+  defp array_index_key(key) do
+    case PropertyKey.array_index(key) do
+      {:ok, index} -> index
+      :error -> nil
     end
   end
-
-  defp array_index_key(_), do: nil
 
   defp function_prototype_has_own?(key) do
     case Heap.get_func_proto() do

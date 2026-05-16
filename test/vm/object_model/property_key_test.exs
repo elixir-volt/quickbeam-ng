@@ -1,6 +1,29 @@
 defmodule QuickBEAM.VM.ObjectModel.PropertyKeyTest do
   use QuickBEAM.VMCase, async: true
 
+  alias QuickBEAM.VM.ObjectModel.PropertyKey
+
+  test "array index classification follows canonical array-index strings" do
+    assert PropertyKey.array_index("0") == {:ok, 0}
+    assert PropertyKey.array_index("01") == :error
+    assert PropertyKey.array_index("4294967294") == {:ok, 4_294_967_294}
+    assert PropertyKey.array_index("4294967295") == :error
+    assert PropertyKey.array_index(-0.0) == {:ok, 0}
+  end
+
+  test "own key sorting preserves string and symbol order after indexes" do
+    sym = {:symbol, "s"}
+
+    assert PropertyKey.sort_own_keys(["b", "2", sym, "1", "01", "a"]) == [
+             "1",
+             "2",
+             "b",
+             "01",
+             "a",
+             sym
+           ]
+  end
+
   test "computed property reads convert key once before property access", %{rt: rt} do
     assert_modes(
       rt,

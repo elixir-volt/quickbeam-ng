@@ -30,18 +30,20 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKey do
   @doc "Check if a key is a symbol."
   defguard is_symbol_key(k) when is_symbol(k)
 
-  @doc "Try to parse a key as an array index."
-  def array_index(k) when is_integer(k) and k >= 0 and k <= 4_294_967_294, do: {:ok, k}
+  @max_array_index 4_294_967_294
+
+  @doc "Try to parse a key as an ECMAScript array index."
+  def array_index(k) when is_integer(k) and k >= 0 and k <= @max_array_index, do: {:ok, k}
   def array_index(k) when is_integer(k) and k >= 0, do: :error
 
-  def array_index(k) when is_float(k) and k >= 0 and k <= 4_294_967_294 and k == trunc(k),
+  def array_index(k) when is_float(k) and k >= 0 and k <= @max_array_index and k == trunc(k),
     do: {:ok, trunc(k)}
 
   def array_index(k) when is_float(k) and k >= 0, do: :error
 
   def array_index(k) when is_binary(k) do
     case Integer.parse(k) do
-      {idx, ""} when idx >= 0 and idx <= 4_294_967_294 ->
+      {idx, ""} when idx >= 0 and idx <= @max_array_index ->
         if Integer.to_string(idx) == k, do: {:ok, idx}, else: :error
 
       _ ->
@@ -50,4 +52,34 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKey do
   end
 
   def array_index(_), do: :error
+
+  def array_index?(key), do: match?({:ok, _}, array_index(key))
+  def canonical_array_index?(key), do: array_index?(key)
+  def integer_index?(key) when is_integer(key), do: key >= 0
+
+  def integer_index?(key) when is_binary(key) do
+    case Integer.parse(key) do
+      {idx, ""} -> idx >= 0
+      _ -> false
+    end
+  end
+
+  def integer_index?(_), do: false
+
+  @doc "Sorts own property keys in ECMAScript order while preserving string/symbol order."
+  def sort_own_keys(keys) do
+    {indexes, rest} = Enum.split_with(keys, &array_index?/1)
+    {strings, symbols} = Enum.split_with(rest, &is_binary/1)
+
+    Enum.sort_by(indexes, fn key ->
+      {:ok, idx} = array_index(key)
+      idx
+    end)
+    |> Enum.map(fn
+      key when is_integer(key) -> Integer.to_string(key)
+      key -> key
+    end)
+    |> Kernel.++(strings)
+    |> Kernel.++(symbols)
+  end
 end

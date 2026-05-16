@@ -40,6 +40,18 @@ defmodule QuickBEAM.VM.Heap.Store do
   @doc "Writes one key into object storage while preserving shape metadata when possible."
   def put_obj_key(ref, key, val), do: put_obj_key(ref, get_obj_raw(ref), key, val)
 
+  @doc "Updates the prototype slot of a shape-backed object."
+  def put_shape_proto(ref, proto) do
+    case get_obj_raw(ref) do
+      {:shape, shape_id, offsets, vals, _old_proto} ->
+        Process.put(ref, {:shape, shape_id, offsets, vals, proto})
+        :ok
+
+      _ ->
+        :error
+    end
+  end
+
   def put_obj_key(ref, {:shape, shape_id, offsets, vals, proto}, key, val) do
     case Map.fetch(offsets, key) do
       {:ok, offset} ->

@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
 
   import QuickBEAM.VM.Heap.Keys
 
+  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
@@ -44,7 +45,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     if match?(%{configurable: false}, Heap.get_prop_desc(ref, key)) do
       false
     else
-      Process.put(QuickBEAM.VM.Execution.RegexpState.key(ref), Map.delete(QuickBEAM.VM.Execution.RegexpState.get(ref), key))
+      RegexpState.delete(ref, key)
       Heap.delete_prop_desc(ref, key)
       true
     end

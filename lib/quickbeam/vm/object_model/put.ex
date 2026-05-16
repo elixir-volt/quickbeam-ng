@@ -24,34 +24,15 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   @max_array_length 4_294_967_295
 
-  defp shape_put(ref, shape_id, offsets, vals, proto, key, val) do
-    case Map.fetch(offsets, key) do
-      {:ok, offset} when offset < tuple_size(vals) ->
-        Process.put(ref, {:shape, shape_id, offsets, put_elem(vals, offset, val), proto})
-
-      {:ok, offset} ->
-        Process.put(
-          ref,
-          {:shape, shape_id, offsets, Heap.Shapes.put_val(vals, offset, val), proto}
-        )
-
-      :error ->
-        {new_shape_id, new_offsets, offset} = Heap.Shapes.transition(shape_id, key)
-
-        new_vals =
-          if offset == tuple_size(vals),
-            do: :erlang.append_element(vals, val),
-            else: Heap.Shapes.put_val(vals, offset, val)
-
-        Process.put(ref, {:shape, new_shape_id, new_offsets, new_vals, proto})
-    end
+  defp shape_put(ref, _shape_id, _offsets, _vals, _proto, key, val) do
+    Heap.put_obj_key(ref, key, val)
   end
 
   @doc "Writes a field using the fast shape path when possible."
   def put_field({:obj, ref}, key, val) do
     key = normalize_key(key)
 
-    case Process.get(ref) do
+    case Heap.get_obj_raw(ref) do
       {:shape, shape_id, offsets, vals, proto} ->
         shape_put(ref, shape_id, offsets, vals, proto, key, val)
 
@@ -237,7 +218,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
             :ok
 
           key == "__proto__" ->
-            Heap.put_obj_raw(ref, {:shape, shape_id, offsets, vals, val})
+            Heap.put_shape_proto(ref, val)
 
           wrapped_shape_string_virtual_readonly?(offsets, vals, key) ->
             :ok

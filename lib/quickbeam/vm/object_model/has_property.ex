@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty}
+  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyKey}
 
   def has_property?({:obj, ref} = obj, key) do
     case Heap.get_obj(ref, %{}) do
@@ -48,9 +48,9 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
     do: key >= 0 and key < :array.size(arr)
 
   def has_property?({:qb_arr, arr}, key) when is_binary(key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> idx < :array.size(arr)
-      _ -> false
+    case PropertyKey.array_index(key) do
+      {:ok, idx} -> idx < :array.size(arr)
+      :error -> false
     end
   end
 
@@ -58,9 +58,9 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
     do: key >= 0 and key < length(list)
 
   def has_property?(list, key) when is_list(list) and is_binary(key) do
-    case Integer.parse(key) do
-      {idx, ""} when idx >= 0 -> idx < length(list)
-      _ -> false
+    case PropertyKey.array_index(key) do
+      {:ok, idx} -> idx < length(list)
+      :error -> false
     end
   end
 

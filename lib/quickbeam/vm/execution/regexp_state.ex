@@ -10,6 +10,11 @@ defmodule QuickBEAM.VM.Execution.RegexpState do
     :ok
   end
 
+  def delete(ref, property) do
+    Process.put(key(ref), Map.delete(get(ref), property))
+    :ok
+  end
+
   def has_property?(ref, property), do: Map.has_key?(get(ref), property)
 
   @doc "Returns the process dictionary key for a RegExp property side table."
