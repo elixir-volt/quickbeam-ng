@@ -30,4 +30,20 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def get_field(_ctx, obj, key), do: RuntimeHelpers.get_field(obj, key)
 
   def put_field(ctx, obj, key, value), do: RuntimeHelpers.put_field(ctx, obj, key, value)
+
+  def for_of_start(ctx, obj), do: RuntimeHelpers.for_of_start(ctx, obj)
+
+  def for_of_next(ctx, next_fn, iter_obj), do: RuntimeHelpers.for_of_next(ctx, next_fn, iter_obj)
+
+  def iterator_next_result(ctx, next_fn, iter_obj, value),
+    do: RuntimeHelpers.iterator_next_result(ctx, next_fn, iter_obj, value)
+
+  def for_in_start(ctx, obj), do: RuntimeHelpers.for_in_start(ctx, obj)
+
+  def for_in_next(ctx, iter), do: RuntimeHelpers.for_in_next(ctx, iter)
+
+  def iterator_close(ctx, iter_obj), do: RuntimeHelpers.iterator_close(ctx, iter_obj)
+
+  def collect_iterator(ctx, iter, next_fn),
+    do: RuntimeHelpers.collect_iterator(ctx, iter, next_fn)
 end

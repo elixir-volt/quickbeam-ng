@@ -50,7 +50,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
 
       {{:ok, :iterator_call}, [_method]} ->
         with {:ok, iter, state} <- Emit.pop(state) do
-          {:ok, Emit.emit(state, State.compiler_call(state, :iterator_close, [iter]))}
+          {:ok, Emit.emit(state, State.abi_call(state, :iterator_close, [iter]))}
         end
 
       {{:ok, :rest}, [start_idx]} ->
@@ -75,7 +75,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
       Emit.bind(
         state,
         Builder.temp_name(state.temp),
-        State.compiler_call(state, :iterator_next_result, [next_fn, iter_obj, val])
+        State.abi_call(state, :iterator_next_result, [next_fn, iter_obj, val])
       )
 
     {:ok,
@@ -115,7 +115,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          State.compiler_call(state, :for_of_start, [obj])
+          State.abi_call(state, :for_of_start, [obj])
         )
 
       {:ok,
@@ -133,7 +133,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
 
   defp lower_for_in_start(state) do
     with {:ok, obj, _type, state} <- Emit.pop_typed(state) do
-      {:ok, Emit.push(state, State.compiler_call(state, :for_in_start, [obj]), :unknown)}
+      {:ok, Emit.push(state, State.abi_call(state, :for_in_start, [obj]), :unknown)}
     end
   end
 
@@ -144,7 +144,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
           Emit.bind(
             state,
             Builder.temp_name(state.temp),
-            State.compiler_call(state, :for_in_next, [iter])
+            State.abi_call(state, :for_in_next, [iter])
           )
 
         state = %{
@@ -168,7 +168,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          State.compiler_call(state, :for_of_start, [obj])
+          State.abi_call(state, :for_of_start, [obj])
         )
 
       state = Emit.push(state, Builder.tuple_element(pair, 1), :object)
@@ -185,7 +185,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          State.compiler_call(state, :for_of_next, [next_fn, iter_obj])
+          State.abi_call(state, :for_of_next, [next_fn, iter_obj])
         )
 
       state = %{
@@ -206,7 +206,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
     with {:ok, _catch_offset, _catch_type, state} <- Emit.pop_typed(state),
          {:ok, _next_fn, _next_type, state} <- Emit.pop_typed(state),
          {:ok, iter_obj, _iter_type, state} <- Emit.pop_typed(state) do
-      {:ok, Emit.emit(state, State.compiler_call(state, :iterator_close, [iter_obj]))}
+      {:ok, Emit.emit(state, State.abi_call(state, :iterator_close, [iter_obj]))}
     end
   end
 end
