@@ -103,6 +103,16 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     single_dot_match?(s, Get.regexp_flags(bytecode))
   end
 
+  defp test({:regexp, _bytecode, "^[$_a-zA-Z][$_a-zA-Z0-9]*$", _ref}, [s | _])
+       when is_binary(s) do
+    ascii_identifier?(s)
+  end
+
+  defp test({:regexp, _bytecode, "^[$_a-zA-Z][$_a-zA-Z0-9]*$"}, [s | _])
+       when is_binary(s) do
+    ascii_identifier?(s)
+  end
+
   defp test({:regexp, bytecode, _source}, [s | _]) when is_binary(bytecode) and is_binary(s) do
     nif_exec(bytecode, s, 0) != nil
   end
@@ -113,6 +123,23 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp test(_, _), do: false
+
+  defp ascii_identifier?(<<first::utf8, rest::binary>>) do
+    ascii_identifier_start?(first) and ascii_identifier_rest?(rest)
+  end
+
+  defp ascii_identifier?(""), do: false
+
+  defp ascii_identifier_rest?(<<>>), do: true
+
+  defp ascii_identifier_rest?(<<char::utf8, rest::binary>>) do
+    ascii_identifier_part?(char) and ascii_identifier_rest?(rest)
+  end
+
+  defp ascii_identifier_start?(char),
+    do: char in ?a..?z or char in ?A..?Z or char in [?$, ?_]
+
+  defp ascii_identifier_part?(char), do: ascii_identifier_start?(char) or char in ?0..?9
 
   defp all_ecma_whitespace?(string) do
     string

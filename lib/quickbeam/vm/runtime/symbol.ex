@@ -49,8 +49,11 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
 
   static "keyFor" do
     case hd(args) do
-      {:symbol, key} -> key
-      _ -> :undefined
+      {:symbol, key} = symbol ->
+        if Heap.get_symbol(key) == symbol, do: key, else: :undefined
+
+      _ ->
+        :undefined
     end
   end
 end
