@@ -190,6 +190,17 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp lone_surrogate_wtf8?(_), do: false
 
+  defp exec({:regexp, bytecode, source, ref} = regexp, [s | _])
+       when is_binary(bytecode) and is_binary(s) and source in ["\\w", "\\W"] do
+    flags = regexp_flags(bytecode, ref)
+
+    if String.contains?(flags, "g") do
+      exec_global_ascii_word(regexp, source, s)
+    else
+      exec({:regexp, bytecode, source}, [s])
+    end
+  end
+
   defp exec({:regexp, bytecode, source, _ref}, args),
     do: exec({:regexp, bytecode, source}, args)
 
@@ -207,6 +218,30 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp exec(_, _), do: nil
+
+  defp exec_global_ascii_word(regexp, source, string) do
+    start_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+
+    string
+    |> JSString.utf16_code_unit_values()
+    |> Enum.with_index()
+    |> Enum.drop_while(fn {_unit, index} -> index < start_index end)
+    |> Enum.find(fn {unit, _index} -> word_source_match?(source, unit) end)
+    |> case do
+      nil ->
+        Put.put(regexp, "lastIndex", 0)
+        nil
+
+      {unit, index} ->
+        Put.put(regexp, "lastIndex", index + 1)
+        exec_result([<<unit::utf8>>], index, string)
+    end
+  end
+
+  defp word_source_match?("\\w", unit),
+    do: unit == ?_ or unit in ?0..?9 or unit in ?A..?Z or unit in ?a..?z
+
+  defp word_source_match?("\\W", unit), do: not word_source_match?("\\w", unit)
 
   defp exec_nif(bytecode, source, flags, s) do
     case nif_exec(bytecode, s, 0) do
