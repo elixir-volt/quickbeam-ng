@@ -693,13 +693,9 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :strict} = state) do
-    results = zip_step_all(iterators)
-    done_count = Enum.count(results, &(Get.get(&1, "done") == true))
-
-    cond do
-      done_count == 0 -> zip_result(state["keys"], Enum.map(results, &Get.get(&1, "value")))
-      done_count == length(results) -> iter_result(:undefined, true)
-      true -> JSThrow.type_error!("Iterator.zip strict mode length mismatch")
+    case zip_step_strict(iterators, [], [], nil) do
+      :done -> iter_result(:undefined, true)
+      results -> zip_result(state["keys"], Enum.map(results, &Get.get(&1, "value")))
     end
   end
 
@@ -724,6 +720,44 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
         end)
 
       zip_result(state["keys"], values)
+    end
+  end
+
+  defp zip_step_strict([], _previous_open, acc, nil), do: Enum.reverse(acc)
+  defp zip_step_strict([], _previous_open, _acc, :done), do: :done
+
+  defp zip_step_strict([iterator | rest], previous_open, acc, seen) do
+    result =
+      try do
+        iterator_next(iterator)
+      catch
+        kind, reason ->
+          close_iterators_ignoring_errors(rest)
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
+
+    done? = Get.get(result, "done") == true
+
+    cond do
+      seen == nil and done? ->
+        zip_step_strict(rest, previous_open, [result | acc], :done)
+
+      seen == nil ->
+        zip_step_strict(rest, [iterator | previous_open], [result | acc], :open)
+
+      seen == :open and done? ->
+        close_iterators_ignoring_errors(Enum.reverse(previous_open) ++ rest)
+        JSThrow.type_error!("Iterator.zip strict mode length mismatch")
+
+      seen == :open ->
+        zip_step_strict(rest, [iterator | previous_open], [result | acc], :open)
+
+      seen == :done and done? ->
+        zip_step_strict(rest, previous_open, [result | acc], :done)
+
+      seen == :done ->
+        close_iterators_ignoring_errors([iterator | rest])
+        JSThrow.type_error!("Iterator.zip strict mode length mismatch")
     end
   end
 
