@@ -211,10 +211,12 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp wrap_iterator(iterator) do
     proto = wrap_for_valid_iterator_prototype()
+    next = Get.get(iterator, "next")
 
     Heap.wrap(%{
       "__proto__" => proto,
       "__wrapped_iterator__" => iterator,
+      "__wrapped_next__" => next,
       "next" => {:builtin, "next", fn _args, this -> wrapper_next(this) end},
       "return" => {:builtin, "return", fn _args, this -> wrapper_return(this) end},
       {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
@@ -974,7 +976,13 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp wrapper_next(this), do: call_wrapped(this, "next", [])
+  defp wrapper_next(this) do
+    {iterator, next} = wrapped_iterator_and_next!(this)
+    unless Builtin.callable?(next), do: JSThrow.type_error!("Iterator next is not callable")
+    result = Invocation.invoke_with_receiver(next, [], iterator)
+    unless object_like?(result), do: JSThrow.type_error!("Iterator result is not an object")
+    result
+  end
 
   defp wrapper_return(this) do
     iterator = wrapped_iterator!(this)
@@ -987,15 +995,6 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp call_wrapped(this, name, args) do
-    iterator = wrapped_iterator!(this)
-    method = Get.get(iterator, name)
-    unless Builtin.callable?(method), do: JSThrow.type_error!("Iterator method is not callable")
-    result = Invocation.invoke_with_receiver(method, args, iterator)
-    unless object_like?(result), do: JSThrow.type_error!("Iterator result is not an object")
-    result
-  end
-
   defp wrapped_iterator!({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
       %{"__wrapped_iterator__" => iterator} -> iterator
@@ -1004,6 +1003,15 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp wrapped_iterator!(_), do: JSThrow.type_error!("Iterator wrapper expected")
+
+  defp wrapped_iterator_and_next!({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{"__wrapped_iterator__" => iterator, "__wrapped_next__" => next} -> {iterator, next}
+      _ -> JSThrow.type_error!("Iterator wrapper expected")
+    end
+  end
+
+  defp wrapped_iterator_and_next!(_), do: JSThrow.type_error!("Iterator wrapper expected")
 
   defp object_like?({:obj, _}), do: true
   defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
