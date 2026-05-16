@@ -892,7 +892,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       number == :infinity -> :infinity
       number in [:nan, :neg_infinity] -> JSThrow.range_error!("invalid limit")
       not is_number(number) -> JSThrow.range_error!("invalid limit")
-      number < 0 -> JSThrow.range_error!("invalid limit")
+      trunc(number) < 0 -> JSThrow.range_error!("invalid limit")
       true -> trunc(number)
     end
   end
