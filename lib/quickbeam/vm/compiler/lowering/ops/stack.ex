@@ -72,28 +72,28 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
          )}
 
       {{:ok, :dup}, []} ->
-        State.duplicate_top(state)
+        Emit.duplicate_top(state)
 
       {{:ok, :dup1}, []} ->
         lower_dup1(state)
 
       {{:ok, :dup2}, []} ->
-        State.duplicate_top_two(state)
+        Emit.duplicate_top_two(state)
 
       {{:ok, :dup3}, []} ->
         lower_dup3(state)
 
       {{:ok, :insert2}, []} ->
-        State.insert_top_two(state)
+        Emit.insert_top_two(state)
 
       {{:ok, :insert3}, []} ->
-        State.insert_top_three(state)
+        Emit.insert_top_three(state)
 
       {{:ok, :insert4}, []} ->
         lower_insert4(state)
 
       {{:ok, :drop}, []} ->
-        State.drop_top(state)
+        Emit.drop_top(state)
 
       {{:ok, :nip}, []} ->
         lower_nip(state)
@@ -102,7 +102,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
         lower_nip1(state)
 
       {{:ok, :swap}, []} ->
-        State.swap_top(state)
+        Emit.swap_top(state)
 
       {{:ok, :swap2}, []} ->
         lower_swap2(state)
@@ -120,7 +120,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
         lower_rot5l(state)
 
       {{:ok, :perm3}, []} ->
-        State.permute_top_three(state)
+        Emit.permute_top_three(state)
 
       {{:ok, :perm4}, []} ->
         lower_perm4(state)

@@ -28,7 +28,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Control do
         lower_goto(state, target, stack_depths, inline_targets)
 
       {{:ok, :nip_catch}, []} ->
-        State.nip_catch(state)
+        Emit.nip_catch(state)
 
       {{:ok, :throw}, []} ->
         State.throw_top(state)

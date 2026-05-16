@@ -539,101 +539,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     end
   end
 
-  # ── Stack ──
-
-  @doc "Binds every current stack entry so catch/finally continuations evaluate values once."
-  def freeze_stack(%{stack: []} = state), do: {[], state}
-
-  def freeze_stack(state) do
-    state =
-      Enum.reduce(0..(length(state.stack) - 1), state, fn idx, state ->
-        {:ok, state, _bound} = Emit.bind_stack_entry(state, idx)
-        state
-      end)
-
-    {state.stack, state}
-  end
-
-  @doc "Duplicates the top operand-stack expression."
-  def duplicate_top(state) do
-    with {:ok, expr, type, state} <- Emit.pop_typed(state) do
-      {bound, state} = Emit.bind(state, Builder.temp_name(state.temp), expr)
-
-      {:ok,
-       %{
-         state
-         | stack: [bound, bound | state.stack],
-           stack_types: [type, type | state.stack_types]
-       }}
-    end
-  end
-
-  @doc "Duplicates the top two operand-stack expressions."
-  def duplicate_top_two(state) do
-    with {:ok, first, first_type, state} <- Emit.pop_typed(state),
-         {:ok, second, second_type, state} <- Emit.pop_typed(state) do
-      {second_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), second)
-      {first_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), first)
-
-      {:ok,
-       %{
-         state
-         | stack: [first_bound, second_bound, first_bound, second_bound | state.stack],
-           stack_types: [first_type, second_type, first_type, second_type | state.stack_types]
-       }}
-    end
-  end
-
-  @doc "Reorders the top two operand-stack expressions for DUP-style bytecode operations."
-  def insert_top_two(state) do
-    with {:ok, first, first_type, state} <- Emit.pop_typed(state),
-         {:ok, second, second_type, state} <- Emit.pop_typed(state) do
-      {first_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), first)
-
-      {:ok,
-       %{
-         state
-         | stack: [first_bound, second, first_bound | state.stack],
-           stack_types: [first_type, second_type, first_type | state.stack_types]
-       }}
-    end
-  end
-
-  @doc "Reorders the top three operand-stack expressions for DUP-style bytecode operations."
-  def insert_top_three(state) do
-    with {:ok, first, first_type, state} <- Emit.pop_typed(state),
-         {:ok, second, second_type, state} <- Emit.pop_typed(state),
-         {:ok, third, third_type, state} <- Emit.pop_typed(state) do
-      {first_bound, state} = Emit.bind(state, Builder.temp_name(state.temp), first)
-
-      {:ok,
-       %{
-         state
-         | stack: [first_bound, second, third, first_bound | state.stack],
-           stack_types: [first_type, second_type, third_type, first_type | state.stack_types]
-       }}
-    end
-  end
-
-  @doc "Drops the top operand-stack expression."
-  def drop_top(%{stack: [_ | rest], stack_types: [_ | type_rest]} = state),
-    do: {:ok, %{state | stack: rest, stack_types: type_rest}}
-
-  def drop_top(_state), do: {:error, :stack_underflow}
-
-  def swap_top(%{stack: [a, b | rest], stack_types: [ta, tb | type_rest]} = state),
-    do: {:ok, %{state | stack: [b, a | rest], stack_types: [tb, ta | type_rest]}}
-
-  def swap_top(_state), do: {:error, :stack_underflow}
-
-  @doc "Permutes the top three operand-stack expressions."
-  def permute_top_three(
-        %{stack: [a, b, c | rest], stack_types: [ta, tb, tc | type_rest]} = state
-      ),
-      do: {:ok, %{state | stack: [a, c, b | rest], stack_types: [ta, tc, tb | type_rest]}}
-
-  def permute_top_three(_state), do: {:error, :stack_underflow}
-
   # ── Slots ──
 
   @doc "Lowers assignment to a local slot and returns the assigned value on the stack."
@@ -675,13 +580,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   end
 
   # ── Calls ──
-
-  def nip_catch(
-        %{stack: [val, _catch_offset | rest], stack_types: [type, _ | type_rest]} = state
-      ),
-      do: {:ok, %{state | stack: [val | rest], stack_types: [type | type_rest]}}
-
-  def nip_catch(_state), do: {:error, :stack_underflow}
 
   @doc "Lowers postfix increment/decrement of a local slot."
   def post_update(state, fun) do

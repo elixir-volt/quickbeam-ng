@@ -23,7 +23,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
         callbacks
       ) do
     with :ok <- ensure_catch_region_supported(instructions, idx, target),
-         {saved_stack, state} <- State.freeze_stack(state),
+         {saved_stack, state} <- Emit.freeze_stack(state),
          {:ok, handler_call} <-
            State.block_jump_call_values(
              target,
@@ -256,7 +256,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
          callbacks
        ) do
     with :ok <- ensure_catch_region_supported(instructions, idx, target),
-         {saved_stack, state} <- State.freeze_stack(state),
+         {saved_stack, state} <- Emit.freeze_stack(state),
          {:ok, try_body} <-
            lower_finally_body(
              instructions,
