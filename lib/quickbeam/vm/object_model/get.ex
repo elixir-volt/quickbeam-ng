@@ -75,37 +75,25 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   def get(_, _), do: :undefined
 
-  defp array_prototype_shape?(offsets) do
-    Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
-      Map.has_key?(offsets, "pop")
+  defp array_prototype_raw?(raw) do
+    keys = if Heap.shape?(raw), do: Heap.shape_offsets(raw), else: raw
+
+    is_map(keys) and Map.has_key?(keys, "constructor") and Map.has_key?(keys, "push") and
+      Map.has_key?(keys, "pop")
   end
 
-  defp array_prototype_map?(map) do
-    Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
-  end
+  defp raw_keys(raw) when is_map(raw), do: Map.keys(raw)
+  defp raw_keys(raw), do: raw |> Heap.shape_offsets() |> Map.keys()
 
   defp array_prototype_length(ref) do
     stored_length = Heap.get_array_prop(ref, "length")
 
-    case Heap.get_obj_raw(ref) do
-      {:shape, _, offsets, _, _} ->
-        if array_prototype_shape?(offsets),
-          do:
-            if(is_integer(stored_length),
-              do: stored_length,
-              else: array_prototype_index_length(Map.keys(offsets))
-            )
+    raw = Heap.get_obj_raw(ref)
 
-      map when is_map(map) ->
-        if array_prototype_map?(map),
-          do:
-            if(is_integer(stored_length),
-              do: stored_length,
-              else: array_prototype_index_length(Map.keys(map))
-            )
-
-      _ ->
-        nil
+    if array_prototype_raw?(raw) do
+      if is_integer(stored_length),
+        do: stored_length,
+        else: array_prototype_index_length(raw_keys(raw))
     end
   end
 
@@ -129,10 +117,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp function_prototype_has_own?(key) do
     case Heap.get_func_proto() do
       {:obj, ref} ->
-        case Heap.get_obj_raw(ref) do
-          map when is_map(map) -> Map.has_key?(map, key)
-          _ -> false
-        end
+        match?({:ok, _}, Heap.raw_fetch(Heap.get_obj_raw(ref), key))
 
       _ ->
         false
@@ -223,24 +208,24 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     case obj do
       {:obj, ref} ->
         case Heap.get_obj_raw(ref) do
-          {:shape, _, offsets, vals, _} ->
-            if array_prototype_shape?(offsets) do
-              array_prototype_length(ref) || 0
-            else
-              case Map.fetch(offsets, "length") do
-                {:ok, off} ->
-                  shape_value(elem(vals, off), {:obj, ref})
-
-                :error ->
-                  inherited_or_wrapped_length({:obj, ref}, wrapped_shape_length(offsets, vals))
-              end
-            end
-
           {:qb_arr, arr} ->
             array_prototype_length(ref) || virtual_array_length(ref) || :array.size(arr)
 
           list when is_list(list) ->
             array_prototype_length(ref) || virtual_array_length(ref) || length(list)
+
+          raw when is_tuple(raw) ->
+            if array_prototype_raw?(raw) do
+              array_prototype_length(ref) || 0
+            else
+              case Heap.raw_fetch(raw, "length") do
+                {:ok, value} ->
+                  shape_value(value, {:obj, ref})
+
+                :error ->
+                  inherited_or_wrapped_length({:obj, ref}, wrapped_raw_length(raw))
+              end
+            end
 
           %{typed_array() => true} ->
             obj = {:obj, ref}
@@ -250,7 +235,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
               else: TypedArray.element_count(obj)
 
           map when is_map(map) ->
-            if array_prototype_map?(map) do
+            if array_prototype_raw?(map) do
               array_prototype_length(ref) || 0
             else
               case Map.fetch(map, "length") do
@@ -308,10 +293,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp wrapped_shape_length(offsets, vals) do
-    case Map.fetch(offsets, WrappedPrimitive.slot(:string)) do
-      {:ok, off} -> string_length(elem(vals, off))
-      :error -> :undefined
+  defp wrapped_raw_length(raw) do
+    case Heap.raw_fetch(raw, WrappedPrimitive.slot(:string)) do
+      {:ok, value} when is_binary(value) -> string_length(value)
+      _ -> :undefined
     end
   end
 
@@ -322,16 +307,16 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp wrapped_shape_proto_property(offsets, vals, key) do
+  defp wrapped_raw_proto_property(raw, key) do
     cond do
-      Map.has_key?(offsets, WrappedPrimitive.slot(:number)) ->
+      match?({:ok, _}, Heap.raw_fetch(raw, WrappedPrimitive.slot(:number))) ->
         number_proto_property(key)
 
-      Map.has_key?(offsets, WrappedPrimitive.slot(:string)) ->
-        offset = Map.fetch!(offsets, WrappedPrimitive.slot(:string))
-        wrapped_string_property(elem(vals, offset), key)
+      match?({:ok, _}, Heap.raw_fetch(raw, WrappedPrimitive.slot(:string))) ->
+        {:ok, string} = Heap.raw_fetch(raw, WrappedPrimitive.slot(:string))
+        wrapped_string_property(string, key)
 
-      Map.has_key?(offsets, WrappedPrimitive.slot(:boolean)) ->
+      match?({:ok, _}, Heap.raw_fetch(raw, WrappedPrimitive.slot(:boolean))) ->
         Boolean.proto_property(key)
 
       true ->
@@ -449,20 +434,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_own({:obj, ref}, key) do
     case Heap.get_obj_raw(ref) do
-      {:shape, _shape_id, _offsets, _vals, proto} when key == "__proto__" ->
-        if proto, do: proto, else: :undefined
-
-      {:shape, _shape_id, offsets, vals, _proto} ->
-        if key == "length" and Map.has_key?(offsets, "constructor") and
-             Map.has_key?(offsets, "push") and Map.has_key?(offsets, "pop") do
-          array_prototype_length(ref) || 0
-        else
-          case Map.fetch(offsets, key) do
-            {:ok, offset} -> elem(vals, offset)
-            :error -> wrapped_shape_proto_property(offsets, vals, key)
-          end
-        end
-
       nil ->
         :undefined
 
@@ -493,6 +464,24 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         case Heap.get_regexp_result(ref) do
           %{^key => val} -> val
           _ -> array_own_property(ref, list, key)
+        end
+
+      raw when is_tuple(raw) ->
+        cond do
+          Heap.shape?(raw) and key == "__proto__" ->
+            Heap.shape_proto(raw) || :undefined
+
+          Heap.shape?(raw) and key == "length" and array_prototype_raw?(raw) ->
+            array_prototype_length(ref) || 0
+
+          Heap.shape?(raw) ->
+            case Heap.raw_fetch(raw, key) do
+              {:ok, value} -> value
+              :error -> wrapped_raw_proto_property(raw, key)
+            end
+
+          true ->
+            :undefined
         end
 
       %{date_ms() => _} = map ->
@@ -905,34 +894,26 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_prototype_raw({:obj, ref}, key) do
     case Heap.get_obj_raw(ref) do
-      {:shape, _shape_id, _offsets, _vals, proto} ->
-        case proto do
-          {:obj, pref} ->
-            case Heap.get_obj_raw(pref) do
-              {:shape, _proto_shape_id, proto_offsets, proto_vals, _proto_next} ->
-                case Map.fetch(proto_offsets, key) do
-                  {:ok, offset} -> elem(proto_vals, offset)
-                  :error -> get_prototype_raw(proto, key)
-                end
+      raw when is_tuple(raw) ->
+        if Heap.shape?(raw) do
+          case Heap.shape_proto(raw) do
+            {:obj, _pref} = proto ->
+              case Heap.raw_fetch(Heap.get_obj_raw(elem(proto, 1)), key) do
+                {:ok, val} -> val
+                :error -> get_prototype_raw(proto, key)
+              end
 
-              pmap when is_map(pmap) ->
-                case Map.fetch(pmap, key) do
-                  {:ok, val} -> val
-                  :error -> get_prototype_raw(proto, key)
-                end
+            nil ->
+              get_default_object_prototype({:obj, ref}, key)
 
-              _ ->
-                get_prototype_raw(proto, key)
-            end
+            :null_proto ->
+              :undefined
 
-          nil ->
-            get_default_object_prototype({:obj, ref}, key)
-
-          :null_proto ->
-            :undefined
-
-          _ ->
-            get_from_prototype(proto, key)
+            proto ->
+              get_from_prototype(proto, key)
+          end
+        else
+          get_from_prototype({:obj, ref}, key)
         end
 
       map when is_map(map) and is_map_key(map, proto()) ->
@@ -1017,10 +998,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp explicit_undefined_own?({:obj, ref}, key) do
     case Heap.get_obj_raw(ref) do
-      {:shape, _shape_id, offsets, _vals, _proto} -> Map.has_key?(offsets, key)
-      map when is_map(map) -> not Map.has_key?(map, proxy_target()) and Map.has_key?(map, key)
-      data when is_list(data) -> Heap.get_prop_desc(ref, key) != nil
       {:qb_arr, _} -> Heap.get_prop_desc(ref, key) != nil
+      data when is_list(data) -> Heap.get_prop_desc(ref, key) != nil
+      raw when is_tuple(raw) -> Heap.shape?(raw) and match?({:ok, _}, Heap.raw_fetch(raw, key))
+      map when is_map(map) -> not Map.has_key?(map, proxy_target()) and Map.has_key?(map, key)
       _ -> false
     end
   end
@@ -1210,18 +1191,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp raw_proto_property(ref, key) do
-    case Heap.get_obj_raw(ref) do
-      {:shape, _shape_id, offsets, vals, _proto} ->
-        case Map.fetch(offsets, key) do
-          {:ok, offset} -> elem(vals, offset)
-          :error -> :undefined
-        end
-
-      map when is_map(map) ->
-        Map.get(map, key, :undefined)
-
-      _ ->
-        :undefined
+    case Heap.raw_fetch(Heap.get_obj_raw(ref), key) do
+      {:ok, value} -> value
+      :error -> :undefined
     end
   end
 
