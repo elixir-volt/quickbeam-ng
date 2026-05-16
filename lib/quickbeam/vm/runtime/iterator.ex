@@ -135,19 +135,25 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   def zip(args, _this) do
-    source = Builtin.arg(args, 0, [])
+    source = Builtin.arg(args, 0, :undefined)
+    validate_zip_source!(source, "Iterator.zip iterables must be an object")
     options = Builtin.arg(args, 1, :undefined)
     helper_iterator(zip_state_from_source(source, nil, options))
   end
 
   def zip_keyed(args, _this) do
-    source = Builtin.arg(args, 0, [])
+    source = Builtin.arg(args, 0, :undefined)
+    validate_zip_source!(source, "Iterator.zipKeyed iterables must be an object")
     options = Builtin.arg(args, 1, :undefined)
     options = zip_options_object(options)
     mode = zip_mode(options)
     padding_option = zip_padding_option(options, mode)
     {keys, iterators} = keyed_iterator_records(source)
     helper_iterator(zip_state_from_iterators(iterators, keys, mode, padding_option))
+  end
+
+  defp validate_zip_source!(source, message) do
+    unless object_like?(source) or is_list(source), do: JSThrow.type_error!(message)
   end
 
   defp from_value(value) when is_binary(value) do
