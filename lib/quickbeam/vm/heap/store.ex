@@ -10,6 +10,33 @@ defmodule QuickBEAM.VM.Heap.Store do
   def get_obj_raw(ref), do: Process.get(ref)
   def put_obj_raw(ref, val), do: Process.put(ref, val)
 
+  def shape?({:shape, _shape_id, _offsets, _vals, _proto}), do: true
+  def shape?(_), do: false
+
+  def shape_offsets({:shape, _shape_id, offsets, _vals, _proto}), do: offsets
+  def shape_offsets(_), do: %{}
+
+  def shape_proto({:shape, _shape_id, _offsets, _vals, proto}), do: proto
+  def shape_proto(_), do: nil
+
+  def shape_keys({:shape, shape_id, _offsets, _vals, _proto}), do: Shapes.keys(shape_id)
+  def shape_keys(_), do: []
+
+  def shape_to_map({:shape, shape_id, _offsets, vals, proto}),
+    do: Shapes.to_map(shape_id, vals, proto)
+
+  def shape_to_map(other), do: other
+
+  def raw_fetch({:shape, _shape_id, offsets, vals, _proto}, key) do
+    case Map.fetch(offsets, key) do
+      {:ok, offset} -> {:ok, elem(vals, offset)}
+      :error -> :error
+    end
+  end
+
+  def raw_fetch(map, key) when is_map(map), do: Map.fetch(map, key)
+  def raw_fetch(_raw, _key), do: :error
+
   # ── Object access (map-compatible, reconstructs shapes) ──
 
   def get_obj(ref) do

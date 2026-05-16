@@ -496,16 +496,22 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   def descriptor(_target, _key), do: :undefined
 
-  defp array_prototype_object?({:shape, _shape_id, offsets, _vals, _proto}) do
-    Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
-      Map.has_key?(offsets, "pop")
-  end
+  defp array_prototype_object?(raw) do
+    cond do
+      Heap.shape?(raw) ->
+        offsets = Heap.shape_offsets(raw)
 
-  defp array_prototype_object?(map) when is_map(map) do
-    Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
-  end
+        Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
+          Map.has_key?(offsets, "pop")
 
-  defp array_prototype_object?(_), do: false
+      is_map(raw) ->
+        Map.has_key?(raw, "constructor") and Map.has_key?(raw, "push") and
+          Map.has_key?(raw, "pop")
+
+      true ->
+        false
+    end
+  end
 
   defp array_prototype_length_descriptor(ref, data) do
     value =
@@ -521,8 +527,8 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     PropertyDescriptor.data_object(value, desc)
   end
 
-  defp array_prototype_index_length({:shape, _shape_id, offsets, _vals, _proto}),
-    do: array_prototype_index_length(Map.keys(offsets))
+  defp array_prototype_index_length(raw) when is_tuple(raw),
+    do: array_prototype_index_length(Map.keys(Heap.shape_offsets(raw)))
 
   defp array_prototype_index_length(map) when is_map(map),
     do: array_prototype_index_length(Map.keys(map))

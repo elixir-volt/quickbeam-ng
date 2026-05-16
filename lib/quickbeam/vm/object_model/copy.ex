@@ -132,16 +132,21 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   @doc "Returns enumerable own string and symbol properties as a map of property names to values."
   def enumerable_string_props({:obj, ref} = source_obj) do
     case Heap.get_obj_raw(ref) do
-      {:shape, shape_id, _offsets, vals, _proto} ->
-        map = shape_enumerable_map(shape_id, vals)
-        resolve_accessors(map, source_obj)
-
       {:qb_arr, arr} ->
         arr
         |> :array.sparse_to_orddict()
         |> Enum.reduce(%{}, fn {i, _value}, acc ->
           Map.put(acc, Integer.to_string(i), Get.get(source_obj, Integer.to_string(i)))
         end)
+
+      raw when is_tuple(raw) ->
+        if Heap.shape?(raw) do
+          raw
+          |> shape_enumerable_map()
+          |> resolve_accessors(source_obj)
+        else
+          %{}
+        end
 
       list when is_list(list) ->
         Enum.reduce(0..max(length(list) - 1, 0), %{}, fn i, acc ->
@@ -200,9 +205,9 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
     end)
   end
 
-  defp shape_enumerable_map(shape_id, vals) do
-    shape_id
-    |> Heap.Shapes.to_map(vals, nil)
+  defp shape_enumerable_map(raw) do
+    raw
+    |> Heap.shape_to_map()
     |> Map.delete(key_order())
   end
 
@@ -216,13 +221,17 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   @doc "Returns enumerable property keys in JavaScript enumeration order."
   def enumerable_keys({:obj, ref} = obj) do
     case Heap.get_obj_raw(ref) do
-      {:shape, shape_id, offsets, vals, proto} ->
-        own_keys =
-          shape_virtual_string_keys(offsets, vals) ++
-            (Heap.Shapes.keys(shape_id) |> Enum.filter(&enumerable_key_candidate?/1))
+      raw when is_tuple(raw) ->
+        if Heap.shape?(raw) do
+          own_keys =
+            shape_virtual_string_keys(raw) ++
+              (Heap.shape_keys(raw) |> Enum.filter(&enumerable_key_candidate?/1))
 
-        proto_keys = enumerable_proto_keys(proto)
-        Runtime.sort_numeric_keys(own_keys ++ Enum.reject(proto_keys, &(&1 in own_keys)))
+          proto_keys = enumerable_proto_keys(Heap.shape_proto(raw))
+          Runtime.sort_numeric_keys(own_keys ++ Enum.reject(proto_keys, &(&1 in own_keys)))
+        else
+          enumerable_keys_from_raw(obj, ref, raw)
+        end
 
       raw ->
         enumerable_keys_from_raw(obj, ref, raw)
@@ -325,13 +334,10 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
     end
   end
 
-  defp shape_virtual_string_keys(offsets, vals) do
-    case Map.fetch(offsets, WrappedPrimitive.slot(:string)) do
-      {:ok, offset} when offset < tuple_size(vals) and is_binary(elem(vals, offset)) ->
-        numeric_index_keys(Get.string_length(elem(vals, offset)))
-
-      _ ->
-        []
+  defp shape_virtual_string_keys(raw) do
+    case Heap.raw_fetch(raw, WrappedPrimitive.slot(:string)) do
+      {:ok, string} when is_binary(string) -> numeric_index_keys(Get.string_length(string))
+      _ -> []
     end
   end
 

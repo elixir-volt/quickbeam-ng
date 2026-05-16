@@ -96,16 +96,22 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     end
   end
 
-  defp array_prototype_object?({:shape, _shape_id, offsets, _vals, _proto}) do
-    Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
-      Map.has_key?(offsets, "pop")
-  end
+  defp array_prototype_object?(raw) do
+    cond do
+      Heap.shape?(raw) ->
+        offsets = Heap.shape_offsets(raw)
 
-  defp array_prototype_object?(map) when is_map(map) do
-    Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
-  end
+        Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
+          Map.has_key?(offsets, "pop")
 
-  defp array_prototype_object?(_), do: false
+      is_map(raw) ->
+        Map.has_key?(raw, "constructor") and Map.has_key?(raw, "push") and
+          Map.has_key?(raw, "pop")
+
+      true ->
+        false
+    end
+  end
 
   defp wrapped_string_virtual_non_configurable?(map, "length") do
     match?({:ok, string} when is_binary(string), WrappedPrimitive.value(map, :string))

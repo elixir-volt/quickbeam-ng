@@ -1173,21 +1173,9 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp target_has_own?(ref, key), do: target_own_value(ref, key) != :missing
 
   defp target_own_value(ref, key) do
-    case Heap.get_obj_raw(ref) do
-      {:shape, _shape_id, offsets, vals, _proto} ->
-        case Map.fetch(offsets, key) do
-          {:ok, offset} -> elem(vals, offset)
-          :error -> :missing
-        end
-
-      map when is_map(map) ->
-        case Map.fetch(map, key) do
-          {:ok, value} -> value
-          :error -> :missing
-        end
-
-      _ ->
-        :missing
+    case Heap.raw_fetch(Heap.get_obj_raw(ref), key) do
+      {:ok, value} -> value
+      :error -> :missing
     end
   end
 

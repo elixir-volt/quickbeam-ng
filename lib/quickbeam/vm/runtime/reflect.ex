@@ -226,21 +226,9 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   end
 
   defp reflect_get_object(obj, raw, key, receiver) do
-    case raw do
-      {:shape, _shape_id, offsets, vals, _proto} ->
-        case Map.fetch(offsets, key) do
-          {:ok, offset} -> reflect_get_value(elem(vals, offset), receiver)
-          :error -> reflect_get_from_prototype(Prototype.get(obj), key, receiver)
-        end
-
-      map when is_map(map) ->
-        case Map.fetch(map, key) do
-          {:ok, value} -> reflect_get_value(value, receiver)
-          :error -> reflect_get_from_prototype(Prototype.get(obj), key, receiver)
-        end
-
-      _ ->
-        Get.get(obj, key)
+    case Heap.raw_fetch(raw, key) do
+      {:ok, value} -> reflect_get_value(value, receiver)
+      :error -> reflect_get_from_prototype(Prototype.get(obj), key, receiver)
     end
   end
 
