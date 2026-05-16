@@ -8,6 +8,7 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
   """
 
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.PromiseState, as: Promise
 
   @doc "Builds the runtime value represented by this module."
@@ -26,7 +27,12 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
          [], _this -> do_return(gen_ref, :undefined)
        end}
 
-    Heap.wrap(%{"next" => next_fn, "return" => return_fn})
+    Heap.wrap(%{
+      "__proto__" => Runtime.global_class_proto("Iterator"),
+      "next" => next_fn,
+      "return" => return_fn,
+      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
+    })
   end
 
   @doc "Builds async data for iterator protocol for compiled generator functions."
@@ -45,7 +51,12 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
          [], _this -> Promise.resolved(do_return(gen_ref, :undefined))
        end}
 
-    Heap.wrap(%{"next" => next_fn, "return" => return_fn})
+    Heap.wrap(%{
+      "__proto__" => Runtime.global_class_proto("Iterator"),
+      "next" => next_fn,
+      "return" => return_fn,
+      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
+    })
   end
 
   defp do_next(gen_ref, arg) do
