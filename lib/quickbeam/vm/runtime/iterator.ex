@@ -496,6 +496,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     %{
       "kind" => :zip,
       "iterators" => iterators,
+      "open_iterators" => iterators,
       "keys" => keys,
       "mode" => mode,
       "padding" => padding
@@ -685,25 +686,45 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp zip_next(_state_ref, %{"iterators" => []}), do: iter_result(:undefined, true)
 
-  defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :shortest} = state) do
+  defp zip_next(state_ref, %{"iterators" => iterators, "mode" => :shortest} = state) do
     case zip_step_shortest(iterators, [], []) do
-      :done -> iter_result(:undefined, true)
-      values -> zip_result(state["keys"], values)
+      :done ->
+        Heap.put_obj(state_ref, %{state | "open_iterators" => []})
+        iter_result(:undefined, true)
+
+      values ->
+        Heap.put_obj(state_ref, %{state | "open_iterators" => iterators})
+        zip_result(state["keys"], values)
     end
   end
 
-  defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :strict} = state) do
+  defp zip_next(state_ref, %{"iterators" => iterators, "mode" => :strict} = state) do
     case zip_step_strict(iterators, [], [], nil) do
-      :done -> iter_result(:undefined, true)
-      values -> zip_result(state["keys"], values)
+      :done ->
+        Heap.put_obj(state_ref, %{state | "open_iterators" => []})
+        iter_result(:undefined, true)
+
+      values ->
+        Heap.put_obj(state_ref, %{state | "open_iterators" => iterators})
+        zip_result(state["keys"], values)
     end
   end
 
   defp zip_next(
-         _state_ref,
+         state_ref,
          %{"iterators" => iterators, "mode" => :longest, "padding" => padding} = state
        ) do
     results = zip_step_all(iterators)
+
+    open_iterators =
+      iterators
+      |> Enum.zip(results)
+      |> Enum.flat_map(fn
+        {iterator, {:value, _value}} -> [iterator]
+        {_iterator, :done} -> []
+      end)
+
+    Heap.put_obj(state_ref, %{state | "open_iterators" => open_iterators})
 
     if Enum.all?(results, &(&1 == :done)) do
       iter_result(:undefined, true)
@@ -1108,6 +1129,9 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
             state["kind"] == :flat_map and state["inner"] != nil ->
               iterator_return(state["inner"])
               iterator_return(state["iterator"])
+
+            state["open_iterators"] != nil ->
+              close_iterators_for_completion(state["open_iterators"])
 
             state["iterator"] != nil ->
               iterator_return(state["iterator"])
