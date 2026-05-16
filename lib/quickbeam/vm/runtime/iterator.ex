@@ -685,7 +685,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp zip_next(_state_ref, %{"iterators" => []}), do: iter_result(:undefined, true)
 
   defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :shortest} = state) do
-    results = Enum.map(iterators, &iterator_next/1)
+    results = zip_step_all(iterators)
 
     if Enum.any?(results, &(Get.get(&1, "done") == true)) do
       iter_result(:undefined, true)
@@ -695,7 +695,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :strict} = state) do
-    results = Enum.map(iterators, &iterator_next/1)
+    results = zip_step_all(iterators)
     done_count = Enum.count(results, &(Get.get(&1, "done") == true))
 
     cond do
@@ -709,7 +709,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
          _state_ref,
          %{"iterators" => iterators, "mode" => :longest, "padding" => padding} = state
        ) do
-    results = Enum.map(iterators, &iterator_next/1)
+    results = zip_step_all(iterators)
 
     if Enum.all?(results, &(Get.get(&1, "done") == true)) do
       iter_result(:undefined, true)
@@ -727,6 +727,23 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
       zip_result(state["keys"], values)
     end
+  end
+
+  defp zip_step_all(iterators), do: zip_step_all(iterators, iterators, [])
+
+  defp zip_step_all([], _all, acc), do: Enum.reverse(acc)
+
+  defp zip_step_all([iterator | rest], all, acc) do
+    result =
+      try do
+        iterator_next(iterator)
+      catch
+        kind, reason ->
+          close_iterators_ignoring_errors(rest)
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
+
+    zip_step_all(rest, all, [result | acc])
   end
 
   defp zip_result(nil, values), do: iter_result(Heap.wrap(values), false)
