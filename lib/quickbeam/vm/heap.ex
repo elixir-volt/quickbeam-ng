@@ -509,7 +509,7 @@ defmodule QuickBEAM.VM.Heap do
 
   @doc "Clear all heap state. Used in test setup."
   def reset do
-    for key <- Process.get_keys(), ProcessKeys.owned?(key) do
+    for key <- Process.get_keys(), ProcessKeys.owned_entry?(key, Process.get(key)) do
       Process.delete(key)
     end
 

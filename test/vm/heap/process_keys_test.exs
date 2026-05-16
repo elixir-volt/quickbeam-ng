@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Heap.ProcessKeysTest do
 
   test "owned? classifies heap process dictionary keys" do
     assert ProcessKeys.owned?(1)
-    assert ProcessKeys.owned?(make_ref())
+    refute ProcessKeys.owned?(make_ref())
     assert ProcessKeys.owned?(:qb_ctx)
     assert ProcessKeys.owned?({:qb_prop_desc, 1, "a"})
 
@@ -17,9 +17,14 @@ defmodule QuickBEAM.VM.Heap.ProcessKeysTest do
   end
 
   test "Heap.reset removes registered heap keys only" do
+    heap_ref = make_ref()
+    external_ref = make_ref()
+
     Process.put(:qb_ctx, :ctx)
     Process.put({:qb_prop_desc, 1, "a"}, :desc)
     Process.put(123, :object)
+    Process.put(heap_ref, %{"heap" => true})
+    Process.put(external_ref, true)
     Process.put(:not_quickbeam, :keep)
 
     assert Heap.reset() == :ok
@@ -27,6 +32,8 @@ defmodule QuickBEAM.VM.Heap.ProcessKeysTest do
     refute Process.get(:qb_ctx)
     refute Process.get({:qb_prop_desc, 1, "a"})
     refute Process.get(123)
+    refute Process.get(heap_ref)
+    assert Process.get(external_ref) == true
     assert Process.get(:not_quickbeam) == :keep
   after
     Process.delete(:not_quickbeam)
