@@ -13,6 +13,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
   alias QuickBEAM.VM.Runtime.FinalizationRegistry, as: JSFinalizationRegistry
   alias QuickBEAM.VM.Runtime.Globals.Constructors
   alias QuickBEAM.VM.Runtime.Globals.Functions
+  alias QuickBEAM.VM.Runtime.Iterator, as: JSIterator
   alias QuickBEAM.VM.Runtime.Map, as: JSMap
   alias QuickBEAM.VM.Runtime.PromiseBuiltins
   alias QuickBEAM.VM.Runtime.RegExp, as: JSRegExp
@@ -92,6 +93,29 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
     map_ctor = realm_constructor("Map", JSMap.constructor(), map_proto)
     Heap.put_obj_key(elem(map_proto, 1), "constructor", map_ctor)
 
+    iterator_proto = Heap.wrap(%{"__proto__" => object_proto})
+    iterator_ctor = realm_constructor("Iterator", JSIterator.constructor(), iterator_proto)
+
+    Heap.put_obj_key(
+      elem(iterator_proto, 1),
+      "constructor",
+      JSIterator.proto_property("constructor")
+    )
+
+    Heap.put_prop_desc(elem(iterator_proto, 1), "constructor", %{
+      writable: false,
+      enumerable: false,
+      configurable: true
+    })
+
+    Heap.put_obj_key(
+      elem(iterator_proto, 1),
+      {:symbol, "Symbol.toStringTag"},
+      JSIterator.proto_property({:symbol, "Symbol.toStringTag"})
+    )
+
+    Heap.put_obj_key(elem(iterator_proto, 1), "constructor", iterator_ctor)
+
     set_proto = Heap.wrap(%{"__proto__" => object_proto})
     set_ctor = realm_constructor("Set", JSSet.constructor(), set_proto)
     Heap.put_obj_key(elem(set_proto, 1), "constructor", set_ctor)
@@ -153,6 +177,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         date_proto,
         data_view_proto,
         map_proto,
+        iterator_proto,
         set_proto,
         promise_proto,
         weak_map_proto,
@@ -178,6 +203,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         "Date" => date_ctor,
         "DataView" => data_view_ctor,
         "Map" => map_ctor,
+        "Iterator" => iterator_ctor,
         "Set" => set_ctor,
         "Promise" => promise_ctor,
         "WeakMap" => weak_map_ctor,
@@ -234,6 +260,9 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
 
       %{map_proto: map_proto} when intrinsic == :map ->
         map_proto
+
+      %{iterator_proto: iterator_proto} when intrinsic == :iterator ->
+        iterator_proto
 
       %{set_proto: set_proto} when intrinsic == :set ->
         set_proto
@@ -378,6 +407,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          date_proto,
          data_view_proto,
          map_proto,
+         iterator_proto,
          set_proto,
          promise_proto,
          weak_map_proto,
@@ -426,6 +456,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
           date_proto,
           data_view_proto,
           map_proto,
+          iterator_proto,
           set_proto,
           promise_proto,
           weak_map_proto,
@@ -456,6 +487,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
         date_proto,
         data_view_proto,
         map_proto,
+        iterator_proto,
         set_proto,
         promise_proto,
         weak_map_proto,
@@ -516,6 +548,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
          date_proto,
          data_view_proto,
          map_proto,
+         iterator_proto,
          set_proto,
          promise_proto,
          weak_map_proto,
@@ -536,6 +569,7 @@ defmodule QuickBEAM.VM.Runtime.Test262Host do
       date_proto: date_proto,
       data_view_proto: data_view_proto,
       map_proto: map_proto,
+      iterator_proto: iterator_proto,
       set_proto: set_proto,
       promise_proto: promise_proto,
       weak_map_proto: weak_map_proto,

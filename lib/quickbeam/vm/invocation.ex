@@ -780,6 +780,9 @@ defmodule QuickBEAM.VM.Invocation do
   defp realm_default_prototype({:builtin, "Map", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :map)
 
+  defp realm_default_prototype({:builtin, "Iterator", _}, new_target),
+    do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :iterator)
+
   defp realm_default_prototype({:builtin, "Set", _}, new_target),
     do: QuickBEAM.VM.Runtime.Test262Host.realm_intrinsic(new_target, :set)
 
