@@ -479,11 +479,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp zip_state(iterables, keys, mode, padding_option) do
-    padding = zip_padding_values(padding_option, mode, keys, length(iterables))
+    iterators = Enum.map(iterables, &(from_value(&1) |> iterator_record()))
+
+    padding =
+      try do
+        zip_padding_values(padding_option, mode, keys, length(iterables))
+      catch
+        kind, reason ->
+          close_iterators_ignoring_errors(iterators)
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
 
     %{
       "kind" => :zip,
-      "iterators" => Enum.map(iterables, &(from_value(&1) |> iterator_record())),
+      "iterators" => iterators,
       "keys" => keys,
       "mode" => mode,
       "padding" => padding
@@ -1059,6 +1068,18 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     else
       iter_result(:undefined, true)
     end
+  end
+
+  defp close_iterators_ignoring_errors(iterators) do
+    iterators
+    |> Enum.reverse()
+    |> Enum.each(fn iterator ->
+      try do
+        iterator_return(iterator)
+      catch
+        _kind, _reason -> :ok
+      end
+    end)
   end
 
   defp iter_result(value, done) do
