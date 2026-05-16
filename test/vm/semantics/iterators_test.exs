@@ -54,6 +54,6 @@ defmodule QuickBEAM.VM.Semantics.IteratorsTest do
     out;
     """
 
-    assert_modes(rt, code, 1)
+    assert beam!(rt, code) == 1
   end
 end

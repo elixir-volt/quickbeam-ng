@@ -12,11 +12,8 @@ defmodule QuickBEAM.VM.Heap.GC do
 
   def mark_and_sweep(roots) do
     marked = mark(roots, MapSet.new())
-    sweep_heap(marked)
-    live_count = MapSet.size(marked)
-    Process.put(:qb_alloc_count, live_count)
-    Process.put(:qb_gc_threshold, live_count + max(live_count, @gc_initial_threshold))
-    Process.delete(:qb_gc_needed)
+    sweep(marked)
+    reset_gc_accounting(marked)
   end
 
   @doc "Helper for mark-and-sweep garbage collector for the js object heap."
@@ -25,8 +22,9 @@ defmodule QuickBEAM.VM.Heap.GC do
     persistent_roots = Context.get_persistent_globals() |> Map.values()
     all_roots = List.wrap(extra_roots) ++ module_roots ++ persistent_roots
 
-    marked = if all_roots == [], do: nil, else: mark(all_roots, MapSet.new())
-    sweep_all(marked)
+    marked = mark(all_roots, MapSet.new())
+    sweep(marked)
+    reset_gc_accounting(marked)
   end
 
   # ── Mark phase ──
@@ -36,19 +34,19 @@ defmodule QuickBEAM.VM.Heap.GC do
   defp mark([{:obj, ref} | rest], visited) do
     mark_ref(ref, rest, visited, fn
       {:shape, _shape_id, _offsets, vals, proto} ->
-        Tuple.to_list(vals) ++ [proto]
+        Tuple.to_list(vals) ++ [proto] ++ object_side_children(ref)
 
       map when is_map(map) ->
-        Map.values(map) ++ Map.keys(map)
+        Map.values(map) ++ Map.keys(map) ++ object_side_children(ref)
 
       {:qb_arr, arr} ->
-        :array.sparse_to_list(arr)
+        :array.sparse_to_list(arr) ++ object_side_children(ref)
 
       list when is_list(list) ->
-        list
+        list ++ object_side_children(ref)
 
       _ ->
-        []
+        object_side_children(ref)
     end)
   end
 
@@ -70,7 +68,11 @@ defmodule QuickBEAM.VM.Heap.GC do
       statics =
         Map.values(Store.get_ctor_statics(closure)) ++ Map.values(Store.get_ctor_statics(fun))
 
-      Map.values(captured) ++ related ++ statics
+      Map.values(captured) ++
+        related ++
+        statics ++
+        callable_side_children(closure) ++
+        callable_side_children(fun)
     end)
   end
 
@@ -78,7 +80,7 @@ defmodule QuickBEAM.VM.Heap.GC do
     mark_callable({:builtin, :erlang.phash2(builtin)}, rest, visited, fn ->
       related = [Store.get_class_proto(builtin), Store.get_parent_ctor(builtin)]
       statics = Map.values(Store.get_ctor_statics(builtin))
-      related ++ statics
+      related ++ statics ++ callable_side_children(builtin)
     end)
   end
 
@@ -95,7 +97,7 @@ defmodule QuickBEAM.VM.Heap.GC do
     mark_callable({:function, fun.id}, rest, visited, fn ->
       related = [Store.get_class_proto(fun), Store.get_parent_ctor(fun)]
       statics = Map.values(Store.get_ctor_statics(fun))
-      Map.values(Map.from_struct(fun)) ++ related ++ statics
+      Map.values(Map.from_struct(fun)) ++ related ++ statics ++ callable_side_children(fun)
     end)
   end
 
@@ -131,25 +133,52 @@ defmodule QuickBEAM.VM.Heap.GC do
     end
   end
 
-  # ── Sweep phase ──
-
-  defp sweep_heap(marked) do
-    for key <- Process.get_keys(), sweepable_heap_key?(key), not MapSet.member?(marked, key) do
-      Process.delete(key)
-    end
+  defp object_side_children(ref) do
+    Process.get({:qb_array_props, ref}, %{})
+    |> Map.values()
+    |> Kernel.++(descriptor_values(ref))
   end
 
-  defp sweep_all(marked) do
+  defp descriptor_values(ref) do
+    Process.get_keys()
+    |> Enum.flat_map(fn
+      {:qb_prop_desc, ^ref, _key} = desc_key ->
+        case Process.get(desc_key) do
+          desc when is_map(desc) -> Map.values(desc)
+          value -> [value]
+        end
+
+      _ ->
+        []
+    end)
+  end
+
+  defp callable_side_children(callable) do
+    owner = ctor_key(callable)
+
+    Process.get_keys()
+    |> Enum.flat_map(fn
+      {:qb_ctor_prop_desc, ^owner, _key} = desc_key ->
+        case Process.get(desc_key) do
+          desc when is_map(desc) -> Map.values(desc)
+          value -> [value]
+        end
+
+      _ ->
+        []
+    end)
+  end
+
+  # ── Sweep phase ──
+
+  defp sweep(marked) do
     for key <- Process.get_keys() do
       cond do
-        heap_key?(key) ->
-          unless marked && MapSet.member?(marked, key), do: Process.delete(key)
+        heap_key?(key) or regexp_state_key?(key) ->
+          unless MapSet.member?(marked, key), do: Process.delete(key)
 
-        regexp_state_key?(key) ->
-          unless marked && MapSet.member?(marked, key), do: Process.delete(key)
-
-        ephemeral_key?(key) ->
-          Process.delete(key)
+        owner_side_table_key?(key) ->
+          unless side_table_owner_marked?(key, marked), do: Process.delete(key)
 
         true ->
           :ok
@@ -157,18 +186,53 @@ defmodule QuickBEAM.VM.Heap.GC do
     end
   end
 
+  defp reset_gc_accounting(marked) do
+    live_count = MapSet.size(marked)
+    Process.put(:qb_alloc_count, live_count)
+    Process.put(:qb_gc_threshold, live_count + max(live_count, @gc_initial_threshold))
+    Process.delete(:qb_gc_needed)
+  end
+
   defp heap_key?(key) when is_integer(key) and key > 0, do: true
   defp heap_key?({:qb_cell, _}), do: true
   defp heap_key?(_), do: false
 
-  defp sweepable_heap_key?(key), do: heap_key?(key) or regexp_state_key?(key)
-
   defp regexp_state_key?(key), do: RegexpState.key?(key)
 
-  defp ephemeral_key?({:qb_prop_desc, _, _}), do: true
-  defp ephemeral_key?({:qb_frozen, _}), do: true
-  defp ephemeral_key?({:qb_non_extensible, _}), do: true
-  defp ephemeral_key?({:qb_var, _}), do: true
-  defp ephemeral_key?({:qb_key_order, _}), do: true
-  defp ephemeral_key?(_), do: false
+  defp owner_side_table_key?({:qb_prop_desc, _, _}), do: true
+  defp owner_side_table_key?({:qb_array_props, _}), do: true
+  defp owner_side_table_key?({:qb_frozen, _}), do: true
+  defp owner_side_table_key?({:qb_non_extensible, _}), do: true
+  defp owner_side_table_key?({:qb_key_order, _}), do: true
+  defp owner_side_table_key?({:qb_ctor_prop_desc, _, _}), do: true
+  defp owner_side_table_key?({:qb_ctor_statics, _}), do: true
+  defp owner_side_table_key?({:qb_class_proto, _}), do: true
+  defp owner_side_table_key?({:qb_parent_ctor, _}), do: true
+  defp owner_side_table_key?(_), do: false
+
+  defp side_table_owner_marked?({:qb_prop_desc, ref, _}, marked), do: MapSet.member?(marked, ref)
+  defp side_table_owner_marked?({:qb_array_props, ref}, marked), do: MapSet.member?(marked, ref)
+  defp side_table_owner_marked?({:qb_frozen, ref}, marked), do: MapSet.member?(marked, ref)
+
+  defp side_table_owner_marked?({:qb_non_extensible, ref}, marked),
+    do: MapSet.member?(marked, ref)
+
+  defp side_table_owner_marked?({:qb_key_order, ref}, marked), do: MapSet.member?(marked, ref)
+
+  defp side_table_owner_marked?({:qb_ctor_prop_desc, owner, _}, marked),
+    do: MapSet.member?(marked, owner)
+
+  defp side_table_owner_marked?({:qb_ctor_statics, owner}, marked),
+    do: MapSet.member?(marked, owner)
+
+  defp side_table_owner_marked?({:qb_class_proto, owner}, marked),
+    do: MapSet.member?(marked, owner)
+
+  defp side_table_owner_marked?({:qb_parent_ctor, owner}, marked),
+    do: MapSet.member?(marked, owner)
+
+  defp ctor_key({:closure, _captured, %QuickBEAM.VM.Function{} = fun}), do: ctor_key(fun)
+  defp ctor_key(%QuickBEAM.VM.Function{id: id}) when is_integer(id), do: {:function, id}
+  defp ctor_key(%QuickBEAM.VM.Function{} = fun), do: {:function, :erlang.phash2(fun)}
+  defp ctor_key(ctor), do: ctor
 end
