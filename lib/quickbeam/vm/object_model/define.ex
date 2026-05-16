@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   alias QuickBEAM.VM.{Heap, Invocation}
   alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor, Semantics}
+  alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor, PropertyKey, Semantics}
   alias QuickBEAM.VM.Runtime.TypedArray
 
   def property({:obj, ref} = obj, key, desc_obj, raw_desc) do
@@ -40,6 +40,50 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
     obj
   catch
     {:early_return, val} -> val
+  end
+
+  def create_data_property({:obj, ref} = obj, key, value) do
+    prop_name = PropertyKey.normalize(key)
+    existing = Heap.get_obj(ref, %{})
+
+    cond do
+      is_map(existing) and Map.has_key?(existing, proxy_target()) ->
+        desc = data_property_descriptor(value)
+        property(obj, prop_name, desc, Heap.get_obj(elem(desc, 1), %{}))
+        true
+
+      not Heap.extensible?(ref) and not property_present?(existing, prop_name) ->
+        false
+
+      is_map(existing) ->
+        Heap.put_obj_key(ref, prop_name, value)
+        Heap.put_prop_desc(ref, prop_name, PropertyDescriptor.enumerable_data())
+        true
+
+      true ->
+        desc = data_property_descriptor(value)
+        property(obj, prop_name, desc, Heap.get_obj(elem(desc, 1), %{}))
+        true
+    end
+  end
+
+  def create_data_property(_, _key, _value), do: false
+
+  def create_data_property_or_throw(obj, key, value) do
+    if create_data_property(obj, key, value) do
+      obj
+    else
+      throw({:js_throw, Heap.make_error("Cannot create property", "TypeError")})
+    end
+  end
+
+  defp data_property_descriptor(value) do
+    Heap.wrap(%{
+      "value" => value,
+      "writable" => true,
+      "enumerable" => true,
+      "configurable" => true
+    })
   end
 
   defp property_name(key) do

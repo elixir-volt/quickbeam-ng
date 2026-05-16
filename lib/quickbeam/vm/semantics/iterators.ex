@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
 
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
-  alias QuickBEAM.VM.{Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.ObjectModel.{Copy, Get, HasProperty}
@@ -51,6 +51,9 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
     next_iter = if Get.get(result, "done") == true, do: :undefined, else: iter_obj
     {result, next_iter}
   end
+
+  @doc "Collects values from an iterable according to ECMAScript iterator protocol."
+  def iterable_to_list(value), do: collect_iterable_values(value)
 
   @doc "Creates key iteration state for a JavaScript `for...in` loop."
   def for_in_start(_ctx \\ nil, obj), do: {:for_in_iterator, Copy.enumerable_keys(obj), obj}
@@ -121,6 +124,90 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp start_for_of(_ctx, other) do
     throw({:js_throw, Heap.make_error("#{Values.stringify(other)} is not iterable", "TypeError")})
   end
+
+  defp collect_iterable_values(list) when is_list(list), do: list
+  defp collect_iterable_values({:qb_arr, arr}), do: :array.to_list(arr)
+  defp collect_iterable_values(value) when is_binary(value), do: String.codepoints(value)
+
+  defp collect_iterable_values({:obj, ref} = obj) do
+    case Heap.get_obj(ref) do
+      {:qb_arr, arr} ->
+        collect_array_like_values(obj, :array.to_list(arr))
+
+      list when is_list(list) ->
+        collect_array_like_values(obj, list)
+
+      map when is_map(map) ->
+        collect_object_iterable_values(obj, map)
+
+      _ ->
+        not_iterable!()
+    end
+  end
+
+  defp collect_iterable_values(_), do: not_iterable!()
+
+  defp collect_array_like_values(obj, default_values) do
+    case Collections.array_proto_iterator_status() do
+      :default -> default_values
+      :deleted -> not_iterable!()
+      iter_fn -> collect_custom_iterator(obj, iter_fn)
+    end
+  end
+
+  defp collect_object_iterable_values(obj, map) do
+    iter_fn = Get.get(obj, {:symbol, "Symbol.iterator"})
+
+    cond do
+      Builtin.callable?(iter_fn) ->
+        collect_custom_iterator(obj, iter_fn)
+
+      iter_fn not in [nil, :undefined] ->
+        not_iterable!()
+
+      Map.has_key?(map, "__set_data__") ->
+        Map.get(map, "__set_data__", [])
+
+      Map.has_key?(map, "__map_data__") ->
+        Map.get(map, "__map_data__", [])
+
+      true ->
+        not_iterable!()
+    end
+  end
+
+  defp collect_custom_iterator(obj, iter_fn) do
+    iterator = Invocation.invoke_with_receiver(iter_fn, [], Runtime.gas_budget(), obj)
+
+    unless is_object(iterator), do: not_iterable!()
+
+    next_fn = Get.get(iterator, "next")
+    unless Builtin.callable?(next_fn), do: not_iterable!()
+
+    do_collect_iterator_values(iterator, next_fn, [])
+  end
+
+  defp do_collect_iterator_values(iterator, next_fn, acc) do
+    try do
+      result = Invocation.invoke_with_receiver(next_fn, [], iterator)
+      unless is_object(result), do: iterator_type_error!("iterator result is not an object")
+
+      if Runtime.truthy?(Get.get(result, "done")) do
+        Enum.reverse(acc)
+      else
+        do_collect_iterator_values(iterator, next_fn, [Get.get(result, "value") | acc])
+      end
+    catch
+      {:js_throw, _} = reason ->
+        close_iterator(nil, iterator)
+        throw(reason)
+    end
+  end
+
+  defp not_iterable!, do: iterator_type_error!("object is not iterable")
+
+  defp iterator_type_error!(message),
+    do: throw({:js_throw, Heap.make_error(message, "TypeError")})
 
   defp array_like_for_of(ctx, obj_ref, values) do
     case Collections.array_proto_iterator_status() do

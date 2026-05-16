@@ -62,7 +62,9 @@ defmodule QuickBEAM.VM.Heap.Store do
   end
 
   def put_property_preserving_order(map, key, val) do
-    if not Map.has_key?(map, key) and (is_binary(key) or is_integer(key)) do
+    if not Map.has_key?(map, key) and
+         (is_binary(key) or is_integer(key) or match?({:symbol, _}, key) or
+            match?({:symbol, _, _}, key)) do
       order = Map.get(map, key_order(), [])
       Map.put(Map.put(map, key, val), key_order(), [key | order])
     else

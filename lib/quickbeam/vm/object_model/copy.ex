@@ -2,13 +2,21 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   @moduledoc "Object spread and property copying: `append_spread`, `copy_data_properties`, and array/iterator flattening."
 
   import QuickBEAM.VM.Heap.Keys,
-    only: [key_order: 0, map_data: 0, proto: 0, proxy_handler: 0, proxy_target: 0, set_data: 0]
+    only: [key_order: 0, proto: 0, proxy_handler: 0, proxy_target: 0]
 
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
+  alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.ObjectModel.{Get, Semantics, WrappedPrimitive}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    Define,
+    Get,
+    OwnProperty,
+    PropertyKey,
+    Semantics,
+    WrappedPrimitive
+  }
 
   @doc "Appends values from a spread source into an array-like target and returns the next index."
   def append_spread(arr, idx, obj) do
@@ -30,51 +38,96 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
     {new_idx, merged_obj}
   end
 
-  @doc "Copies enumerable string properties from a source object to a target object."
-  def copy_data_properties(target, source, exclude \\ nil) do
-    src_props = enumerable_string_props(source)
+  @doc "Copies enumerable own string and symbol properties from a source object to a target object."
+  def copy_data_properties(target, source, exclude \\ nil)
 
-    src_props =
-      case exclude do
-        {:obj, eref} ->
-          exclude_keys =
-            case Heap.get_obj(eref) do
-              {:qb_arr, arr} -> :array.to_list(arr) |> Enum.map(&property_key/1)
-              list when is_list(list) -> Enum.map(list, &property_key/1)
-              map when is_map(map) -> enumerable_copy_keys(map) |> Enum.map(&property_key/1)
-              _ -> []
-            end
+  def copy_data_properties({:obj, _}, source, exclude) when source in [nil, :undefined] do
+    excluded_keys(exclude)
+    :ok
+  end
 
-          Map.drop(src_props, exclude_keys)
+  def copy_data_properties({:obj, _} = target, source, exclude) do
+    excluded = excluded_keys(exclude)
 
-        _ ->
-          src_props
-      end
-
-    case target do
-      {:obj, ref} ->
-        existing = Heap.get_obj(ref, %{})
-        existing = if is_map(existing), do: existing, else: %{}
-        merged = Map.merge(existing, src_props)
-
-        merged =
-          case Map.get(merged, key_order()) do
-            order when is_list(order) ->
-              new_keys = Map.keys(src_props) -- order
-              Map.put(merged, key_order(), Enum.reverse(new_keys) ++ order)
-
-            _ ->
-              merged
-          end
-
-        Heap.put_obj(ref, merged)
-
-      _ ->
-        :ok
-    end
+    source
+    |> copy_source_keys()
+    |> Enum.each(fn key -> copy_data_property(target, source, key, excluded) end)
 
     :ok
   end
+
+  def copy_data_properties(_target, _source, _exclude), do: :ok
+
+  defp copy_source_keys({:obj, _} = source), do: OwnProperty.descriptor_keys(source)
+
+  defp copy_source_keys(source) when is_binary(source) do
+    source
+    |> Get.string_length()
+    |> numeric_index_keys()
+  end
+
+  defp copy_source_keys(source) when is_map(source), do: enumerable_copy_keys(source)
+
+  defp copy_source_keys(_source), do: []
+
+  defp copy_data_property(target, source, key, excluded) do
+    prop_key = PropertyKey.normalize(key)
+
+    if property_key?(prop_key) and prop_key not in excluded do
+      descriptor = own_descriptor(source, prop_key)
+
+      if descriptor != :undefined and Runtime.truthy?(Get.get(descriptor, "enumerable")) do
+        Define.create_data_property_or_throw(target, prop_key, Get.get(source, prop_key))
+      end
+    end
+  end
+
+  defp own_descriptor({:obj, _} = source, key), do: OwnProperty.descriptor(source, key)
+
+  defp own_descriptor(source, key) when is_binary(source) do
+    if key in numeric_index_keys(Get.string_length(source)) do
+      QuickBEAM.VM.ObjectModel.PropertyDescriptor.data_object(
+        Get.get(source, key),
+        QuickBEAM.VM.ObjectModel.PropertyDescriptor.attrs(
+          writable: false,
+          enumerable: true,
+          configurable: false
+        )
+      )
+    else
+      :undefined
+    end
+  end
+
+  defp own_descriptor(source, key) when is_map(source) do
+    if Map.has_key?(source, key) do
+      QuickBEAM.VM.ObjectModel.PropertyDescriptor.data_object(
+        Map.get(source, key),
+        QuickBEAM.VM.ObjectModel.PropertyDescriptor.attrs(
+          writable: true,
+          enumerable: true,
+          configurable: true
+        )
+      )
+    else
+      :undefined
+    end
+  end
+
+  defp own_descriptor(_source, _key), do: :undefined
+
+  defp excluded_keys(nil), do: []
+
+  defp excluded_keys({:obj, eref}) do
+    case Heap.get_obj(eref) do
+      {:qb_arr, arr} -> :array.to_list(arr) |> Enum.map(&property_key/1)
+      list when is_list(list) -> Enum.map(list, &property_key/1)
+      map when is_map(map) -> enumerable_copy_keys(map) |> Enum.map(&property_key/1)
+      _ -> []
+    end
+  end
+
+  defp excluded_keys(_), do: []
 
   @doc "Returns enumerable own string and symbol properties as a map of property names to values."
   def enumerable_string_props({:obj, ref} = source_obj) do
@@ -229,75 +282,17 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   def spread_source_to_list(list) when is_list(list), do: list
   def spread_source_to_list(string) when is_binary(string), do: String.codepoints(string)
 
-  def spread_source_to_list({:obj, ref}) do
-    case Heap.get_obj(ref) do
-      {:qb_arr, arr} ->
-        :array.to_list(arr)
-
-      list when is_list(list) ->
-        list
-
-      map when is_map(map) ->
-        iter_fn = Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})
-
-        cond do
-          Builtin.callable?(iter_fn) ->
-            iter_obj = Invocation.invoke_with_receiver(iter_fn, [], {:obj, ref})
-            collect_iterator_values(iter_obj, [])
-
-          iter_fn not in [nil, :undefined] ->
-            JSThrow.type_error!("object is not iterable")
-
-          Map.has_key?(map, set_data()) ->
-            Map.get(map, set_data(), [])
-
-          Map.has_key?(map, map_data()) ->
-            Map.get(map, map_data(), [])
-
-          true ->
-            []
-        end
-
-      {:shape, _shape_id, _offsets, _vals, _proto} ->
-        iter_fn = Get.get({:obj, ref}, {:symbol, "Symbol.iterator"})
-
-        cond do
-          Builtin.callable?(iter_fn) ->
-            iter_obj = Invocation.invoke_with_receiver(iter_fn, [], {:obj, ref})
-            collect_iterator_values(iter_obj, [])
-
-          iter_fn not in [nil, :undefined] ->
-            JSThrow.type_error!("object is not iterable")
-
-          true ->
-            []
-        end
-
-      _ ->
-        []
-    end
+  def spread_source_to_list({:obj, _} = obj) do
+    QuickBEAM.VM.Semantics.Iterators.iterable_to_list(obj)
   end
 
-  def spread_source_to_list(_), do: []
+  def spread_source_to_list(value), do: QuickBEAM.VM.Semantics.Iterators.iterable_to_list(value)
 
   @doc "Converts a spread target value into its current list representation."
   def spread_target_to_list({:qb_arr, arr}), do: :array.to_list(arr)
   def spread_target_to_list(list) when is_list(list), do: list
   def spread_target_to_list({:obj, _} = obj), do: Heap.to_list(obj)
   def spread_target_to_list(_), do: []
-
-  defp collect_iterator_values(iter_obj, acc) do
-    next_fn = Get.get(iter_obj, "next")
-    result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
-
-    unless match?({:obj, _}, result), do: JSThrow.type_error!("iterator result is not an object")
-
-    if Runtime.truthy?(Get.get(result, "done")) do
-      Enum.reverse(acc)
-    else
-      collect_iterator_values(iter_obj, [Get.get(result, "value") | acc])
-    end
-  end
 
   defp array_prop_keys(ref) do
     ref
@@ -405,8 +400,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
 
   defp property_key?(key), do: is_binary(key) or is_symbol(key)
 
-  defp property_key(key) when is_symbol(key), do: key
-  defp property_key(key), do: to_string(key)
+  defp property_key(key), do: PropertyKey.normalize(key)
 
   defp enumerable_copy_keys(map) do
     string_keys =
