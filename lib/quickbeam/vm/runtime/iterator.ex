@@ -123,8 +123,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   def concat(args, _this) do
-    iterators = Enum.map(args, &(from_value(&1) |> iterator_record()))
-    helper_iterator(%{"kind" => :concat, "iterators" => iterators, "index" => 0})
+    iterables = Enum.map(args, &concat_iterable_record/1)
+    helper_iterator(%{"kind" => :concat, "iterables" => iterables, "index" => 0, "active" => nil})
   end
 
   def zip(args, _this) do
@@ -398,6 +398,13 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp padding_values(nil), do: []
   defp padding_values(value), do: Heap.to_list(value)
 
+  defp concat_iterable_record(item) do
+    unless object_like?(item), do: JSThrow.type_error!("Iterator.concat item must be an object")
+    method = Get.get(item, {:symbol, "Symbol.iterator"})
+    unless Builtin.callable?(method), do: JSThrow.type_error!("Iterator.concat item is not iterable")
+    %{"iterable" => item, "method" => method}
+  end
+
   defp zip_next(_state_ref, %{"iterators" => []}), do: iter_result(:undefined, true)
 
   defp zip_next(_state_ref, %{"iterators" => iterators, "mode" => :shortest} = state) do
@@ -447,16 +454,26 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     iter_result(Heap.wrap(object), false)
   end
 
-  defp concat_next(_state_ref, %{"iterators" => iterators, "index" => index})
-       when index >= length(iterators),
-       do: iter_result(:undefined, true)
+  defp concat_next(state_ref, %{"iterables" => iterables, "index" => index})
+       when index >= length(iterables) do
+    mark_helper_done(state_ref)
+    iter_result(:undefined, true)
+  end
 
-  defp concat_next(state_ref, %{"iterators" => iterators, "index" => index} = state) do
-    iterator = Enum.at(iterators, index)
+  defp concat_next(state_ref, %{"active" => nil, "iterables" => iterables, "index" => index} = state) do
+    %{"iterable" => iterable, "method" => method} = Enum.at(iterables, index)
+    iterator = Invocation.invoke_with_receiver(method, [], iterable)
+    unless object_like?(iterator), do: JSThrow.type_error!("iterator method returned non-object")
+    record = iterator_record(iterator)
+    Heap.put_obj(state_ref, %{state | "active" => record})
+    concat_next(state_ref, Heap.get_obj(state_ref, %{}))
+  end
+
+  defp concat_next(state_ref, %{"active" => iterator, "index" => index} = state) do
     result = iterator_next(iterator)
 
     if Get.get(result, "done") == true do
-      Heap.put_obj(state_ref, %{state | "index" => index + 1})
+      Heap.put_obj(state_ref, %{state | "index" => index + 1, "active" => nil})
       concat_next(state_ref, Heap.get_obj(state_ref, %{}))
     else
       iter_result(Get.get(result, "value"), false)
