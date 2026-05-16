@@ -19,13 +19,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     Get,
     Methods,
     Private,
-    PropertyKey,
     Put,
     Static
   }
 
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Semantics.Iterators
+  alias QuickBEAM.VM.Semantics.{Iterators, PropertyAccess}
 
   # ── Coercion ──
 
@@ -58,8 +57,11 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     val
   end
 
-  def to_property_key(value), do: PropertyKey.to_property_key(value)
-  def to_property_key(_ctx, value), do: PropertyKey.to_property_key(value)
+  def to_property_key(value), do: PropertyAccess.to_property_key(value)
+  def to_property_key(_ctx, value), do: PropertyAccess.to_property_key(value)
+
+  def to_property_key_for_access(_ctx, receiver, key),
+    do: PropertyAccess.to_property_key_for_access(receiver, key)
 
   def to_object(:undefined), do: JSThrow.type_error!("Cannot convert undefined to object")
   def to_object(nil), do: JSThrow.type_error!("Cannot convert null to object")
@@ -485,12 +487,16 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   # ── Objects ──
 
   @doc "Reads a JavaScript property value."
-  def get_field(obj, key) when is_binary(key), do: Get.get(obj, key)
+  def get_field(obj, key) when is_binary(key), do: PropertyAccess.get_property(obj, key)
 
   def get_field(obj, atom_idx),
-    do: Get.get(obj, Names.resolve_atom(InvokeContext.current_atoms(), atom_idx))
+    do:
+      PropertyAccess.get_property(
+        obj,
+        Names.resolve_atom(InvokeContext.current_atoms(), atom_idx)
+      )
 
-  def get_array_el2(_ctx \\ nil, obj, idx), do: {Get.get(obj, idx), obj}
+  def get_array_el2(ctx \\ nil, obj, idx), do: {PropertyAccess.get_property(ctx, obj, idx), obj}
 
   def get_private_field(_ctx, obj, key) do
     case Private.get_field(obj, key) do
@@ -519,7 +525,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     do: put_field(obj, Names.resolve_atom(context_atoms(ctx), atom_idx), val)
 
   def put_field(obj, key, val) when is_binary(key) do
-    Put.put(obj, key, val)
+    PropertyAccess.set_property(obj, key, val)
     :ok
   end
 
@@ -528,7 +534,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   @doc "Writes a JavaScript array element."
   def put_array_el(ctx \\ nil, obj, idx, val) do
-    with_runtime_ctx(ctx, fn -> Put.put_element(obj, idx, val) end)
+    with_runtime_ctx(ctx, fn -> PropertyAccess.set_property(ctx, obj, idx, val) end)
     :ok
   end
 

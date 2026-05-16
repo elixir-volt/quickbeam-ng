@@ -362,17 +362,29 @@ defmodule QuickBEAM.VM.Compiler.Forms do
                   [key, offsets]},
                  [
                    {:clause, @line, [{:tuple, @line, [{:atom, @line, :ok}, off]}], [],
-                    [remote_call(QuickBEAM.VM.ObjectModel.Get, :get, [obj_tuple, key])]},
+                    [
+                      remote_call(QuickBEAM.VM.Semantics.PropertyAccess, :get_property, [
+                        obj_tuple,
+                        key
+                      ])
+                    ]},
                    {:clause, @line, [{:atom, @line, :error}], [],
-                    [remote_call(QuickBEAM.VM.ObjectModel.Get, :get, [obj_tuple, key])]}
+                    [
+                      remote_call(QuickBEAM.VM.Semantics.PropertyAccess, :get_property, [
+                        obj_tuple,
+                        key
+                      ])
+                    ]}
                  ]}
               ]},
              {:clause, @line, [wild], [],
-              [remote_call(QuickBEAM.VM.ObjectModel.Get, :get, [obj_tuple, key])]}
+              [
+                remote_call(QuickBEAM.VM.Semantics.PropertyAccess, :get_property, [obj_tuple, key])
+              ]}
            ]}
         ]},
        {:clause, @line, [obj2, key2], [],
-        [remote_call(QuickBEAM.VM.ObjectModel.Get, :get, [obj2, key2])]}
+        [remote_call(QuickBEAM.VM.Semantics.PropertyAccess, :get_property, [obj2, key2])]}
      ]}
   end
 

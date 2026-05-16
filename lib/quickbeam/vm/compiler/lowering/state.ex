@@ -331,8 +331,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
          {:ok, obj, _obj_type, state} <- pop_typed(state) do
       state = invalidate_shaped_aliases(state, obj)
 
-      {:ok,
-       emit(state, Builder.remote_call(QuickBEAM.VM.ObjectModel.Put, :put, [obj, key_expr, val]))}
+      {:ok, emit(state, compiler_call(state, :put_field, [obj, key_expr, val]))}
     end
   end
 

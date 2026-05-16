@@ -1,0 +1,46 @@
+defmodule QuickBEAM.VM.Semantics.PropertyAccess do
+  @moduledoc "Shared JavaScript property-access boundary for nullish checks and key conversion."
+
+  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, Put}
+
+  def require_object_for_property!(nil, key),
+    do: nullish_property_error!("null", key)
+
+  def require_object_for_property!(:undefined, key),
+    do: nullish_property_error!("undefined", key)
+
+  def require_object_for_property!(value, _key), do: value
+
+  def to_property_key(value), do: PropertyKey.to_property_key(value)
+
+  def to_property_key_for_access(receiver, key) do
+    require_object_for_property!(receiver, key)
+    to_property_key(key)
+  end
+
+  def get_property(_ctx \\ nil, receiver, key) do
+    prop_key = to_property_key_for_access(receiver, key)
+    Get.get(receiver, prop_key)
+  end
+
+  def set_property(_ctx \\ nil, receiver, key, value) do
+    prop_key = to_property_key_for_access(receiver, key)
+    Put.put_element(receiver, prop_key, value)
+  end
+
+  defp nullish_property_error!(nullish, key) do
+    throw(
+      {:js_throw,
+       Heap.make_error(
+         "Cannot read properties of #{nullish} (reading '#{format_key(key)}')",
+         "TypeError"
+       )}
+    )
+  end
+
+  defp format_key({:symbol, name}), do: name
+  defp format_key({:symbol, name, _ref}), do: name
+  defp format_key(key) when is_binary(key), do: key
+  defp format_key(key), do: QuickBEAM.VM.Interpreter.Values.stringify(key)
+end

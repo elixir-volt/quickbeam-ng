@@ -19,6 +19,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       }
 
       alias QuickBEAM.VM.Operands.CopyDataProperties
+      alias QuickBEAM.VM.Semantics.PropertyAccess
 
       # ── Objects ──
 
@@ -50,7 +51,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
 
         result =
           try do
-            Put.put(obj, name, val)
+            PropertyAccess.set_property(obj, name, val)
             :ok
           catch
             {:js_throw, error} -> {:throw, error}
@@ -85,7 +86,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
 
       defp run({@op_get_array_el, []}, pc, frame, [idx, obj | rest], gas, ctx) do
         try do
-          run(pc + 1, frame, [Put.get_element(obj, idx) | rest], gas, ctx)
+          run(pc + 1, frame, [PropertyAccess.get_property(obj, idx) | rest], gas, ctx)
         catch
           {:js_throw, error} ->
             ctx = Heap.get_ctx() || ctx
@@ -95,7 +96,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
 
       defp run({@op_put_array_el, []}, pc, frame, [val, idx, obj | rest], gas, ctx) do
         try do
-          Put.put_element(obj, idx, val)
+          PropertyAccess.set_property(obj, idx, val)
 
           ctx =
             case Heap.get_persistent_globals() do
@@ -235,21 +236,15 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         end
       end
 
-      defp run({@op_to_propkey2, []}, _pc, frame, [_key, obj | _rest], gas, ctx)
-           when obj == nil or obj == :undefined do
-        nullish = if obj == nil, do: "null", else: "undefined"
-
-        throw_or_catch(
-          frame,
-          Heap.make_error("Cannot read properties of #{nullish}", "TypeError"),
-          gas,
-          ctx
-        )
-      end
-
       defp run({@op_to_propkey2, []}, pc, frame, [key, obj | rest], gas, ctx) do
         try do
-          run(pc + 1, frame, [PropertyKey.to_property_key(key), obj | rest], gas, ctx)
+          run(
+            pc + 1,
+            frame,
+            [PropertyAccess.to_property_key_for_access(obj, key), obj | rest],
+            gas,
+            ctx
+          )
         catch
           {:js_throw, error} -> throw_or_catch(frame, error, gas, ctx)
         end

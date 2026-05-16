@@ -178,7 +178,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
       {:ok,
        state
        |> State.push(obj, obj_type)
-       |> State.push(State.compiler_call(state, :to_property_key, [key]), :unknown)}
+       |> State.push(
+         State.compiler_call(state, :to_property_key_for_access, [obj, key]),
+         :unknown
+       )}
     end
   end
 
