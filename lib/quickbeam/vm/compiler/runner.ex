@@ -164,7 +164,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
       apply_compiled(compiled, ctx, args)
     catch
       {:generator_yield, _val, continuation} ->
-        Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation})
+        Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation, mode: :initial})
     end
 
     GeneratorIterator.build(gen_ref)
@@ -190,7 +190,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
       apply_compiled(compiled, ctx, args)
     catch
       {:generator_yield, _val, continuation} ->
-        Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation})
+        Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation, mode: :initial})
     end
 
     GeneratorIterator.build_async(gen_ref)

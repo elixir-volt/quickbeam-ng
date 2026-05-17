@@ -115,7 +115,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
 
   defp return_value(gen_ref, val) do
     case Heap.get_obj(gen_ref) do
-      %{state: :suspended, mode: :yield_star} ->
+      %{state: :suspended, mode: mode} when mode in [:initial, :yield_star] ->
         complete(gen_ref)
         done_result(val)
 
@@ -160,7 +160,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
     Interpreter.run_frame(frame, [], gas, ctx)
   catch
     {:generator_yield, _val, sp, sf, ss, sg, sc} ->
-      save_suspended(gen_ref, sp, sf, ss, sg, sc)
+      save_suspended(gen_ref, sp, sf, ss, sg, sc, :initial)
 
     {:generator_yield_star, _val, sp, sf, ss, sg, sc} ->
       save_suspended(gen_ref, sp, sf, ss, sg, sc, :yield_star)

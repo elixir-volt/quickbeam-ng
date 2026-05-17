@@ -17,6 +17,14 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
     )
   end
 
+  test "closing a suspended-start generator does not execute its body", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|var iterations = 0; var iter = function*() { iterations += 1; }(); for (const [] of [iter]) {} iterations|,
+      0
+    )
+  end
+
   test "for-of closes active iterator on thrown body", %{rt: rt} do
     assert_modes(
       rt,
