@@ -4,7 +4,6 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
   @doc "Installs the For-in, for-of, iterator_*, spread, and array construction opcodes helpers into the caller module."
   defmacro __using__(_opts) do
     quote location: :keep do
-      import Bitwise, only: [band: 2]
       alias QuickBEAM.VM.{Heap, Invocation, Runtime}
       alias QuickBEAM.VM.Interpreter.Context
       alias QuickBEAM.VM.ObjectModel.{Copy, Get, Put}
@@ -207,23 +206,35 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
       end
 
       defp run({@op_iterator_call, [flags]}, pc, frame, stack, gas, ctx) do
-        [_val, _catch_offset, _next_fn, iter_obj | _] = stack
-        method_name = if band(flags, 1) == 1, do: "throw", else: "return"
-        method = Get.get(iter_obj, method_name)
+        [val, catch_offset, next_fn, iter_obj | rest] = stack
 
-        if method == :undefined or method == nil do
-          run(pc + 1, frame, [true | stack], gas, ctx)
-        else
-          result =
-            if band(flags, 2) == 2 do
-              Runtime.call_callback(method, [])
-            else
-              [val | _] = stack
-              Runtime.call_callback(method, [val])
-            end
+        result =
+          try do
+            {:ok,
+             QuickBEAM.VM.Compiler.RuntimeHelpers.iterator_call(
+               ctx,
+               flags,
+               val,
+               catch_offset,
+               next_fn,
+               iter_obj
+             )}
+          catch
+            {:js_throw, error} -> {:throw, error}
+          end
 
-          [_ | rest] = stack
-          run(pc + 1, frame, [false, result | rest], gas, ctx)
+        case result do
+          {:ok, {missing?, value, catch_offset, next_fn, iter_obj}} ->
+            run(
+              pc + 1,
+              frame,
+              [missing?, value, catch_offset, next_fn, iter_obj | rest],
+              gas,
+              ctx
+            )
+
+          {:throw, error} ->
+            throw_or_catch(frame, error, gas, ctx)
         end
       end
 

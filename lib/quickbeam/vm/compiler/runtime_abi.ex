@@ -45,6 +45,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def iterator_check_object(ctx, value), do: RuntimeHelpers.iterator_check_object(ctx, value)
 
+  def iterator_call(ctx, flags, value, catch_offset, next_fn, iter_obj),
+    do: RuntimeHelpers.iterator_call(ctx, flags, value, catch_offset, next_fn, iter_obj)
+
   def for_in_start(ctx, obj), do: RuntimeHelpers.for_in_start(ctx, obj)
 
   def for_in_next(ctx, iter), do: RuntimeHelpers.for_in_next(ctx, iter)

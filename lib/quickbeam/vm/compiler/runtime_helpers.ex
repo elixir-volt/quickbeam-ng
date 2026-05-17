@@ -1338,6 +1338,20 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     value
   end
 
+  def iterator_call(_ctx, flags, val, catch_offset, next_fn, iter_obj) do
+    method_name = if Bitwise.band(flags, 1) == 1, do: "throw", else: "return"
+    method = QuickBEAM.VM.ObjectModel.Get.get(iter_obj, method_name)
+
+    if method == :undefined or method == nil do
+      {true, val, catch_offset, next_fn, iter_obj}
+    else
+      args = if Bitwise.band(flags, 2) == 2, do: [], else: [val]
+
+      {false, QuickBEAM.VM.Invocation.invoke_with_receiver(method, args, iter_obj), catch_offset,
+       next_fn, iter_obj}
+    end
+  end
+
   @doc "Creates key iteration state for a JavaScript `for...in` loop."
   defdelegate for_in_start(ctx \\ nil, obj), to: Iterators
   defdelegate for_in_next(ctx \\ nil, iter), to: Iterators

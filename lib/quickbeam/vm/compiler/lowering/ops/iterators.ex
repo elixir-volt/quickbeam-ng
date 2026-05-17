@@ -49,10 +49,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
       {{:ok, :iterator_next}, []} ->
         lower_iterator_next(state)
 
-      {{:ok, :iterator_call}, [_method]} ->
-        with {:ok, iter, state} <- Emit.pop(state) do
-          {:ok, Emit.emit(state, State.abi_call(state, :iterator_close, [iter]))}
-        end
+      {{:ok, :iterator_call}, [flags]} ->
+        lower_iterator_call(state, flags)
 
       {{:ok, :rest}, [start_idx]} ->
         LoweringEffects.effectful_push(
@@ -65,6 +63,42 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
         :not_handled
     end
   end
+
+  defp lower_iterator_call(
+         %{
+           stack: [val, catch_offset, next_fn, iter_obj | rest],
+           stack_types: [val_type, catch_type, next_type, iter_type | type_rest]
+         } = state,
+         flags
+       ) do
+    {tuple, state} =
+      Emit.bind(
+        state,
+        Builder.temp_name(state.temp),
+        State.abi_call(state, :iterator_call, [
+          Builder.literal(flags),
+          val,
+          catch_offset,
+          next_fn,
+          iter_obj
+        ])
+      )
+
+    {:ok,
+     %{
+       state
+       | stack: [
+           Builder.tuple_element(tuple, 1),
+           Builder.tuple_element(tuple, 2),
+           Builder.tuple_element(tuple, 3),
+           Builder.tuple_element(tuple, 4),
+           Builder.tuple_element(tuple, 5) | rest
+         ],
+         stack_types: [:boolean, val_type, catch_type, next_type, iter_type | type_rest]
+     }}
+  end
+
+  defp lower_iterator_call(_state, _flags), do: {:error, :iterator_call_state_missing}
 
   defp lower_iterator_check_object(state) do
     with {:ok, value, type, state} <- Emit.pop_typed(state) do
