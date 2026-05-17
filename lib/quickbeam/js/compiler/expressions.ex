@@ -2167,6 +2167,41 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
   end
 
   defp compile_object_property(
+         %AST.Property{computed: true, key: key, value: value, kind: kind},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       )
+       when kind in [:get, :set] do
+    flags = if(kind == :get, do: 1, else: 2) + 4
+
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(key, scope, instructions, constants),
+         instructions = instructions ++ [:to_propkey],
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(value, scope, instructions, constants) do
+      {:ok, instructions ++ [{:define_method_computed, flags}], constants}
+    end
+  end
+
+  defp compile_object_property(
+         %AST.Property{computed: true, key: key, value: value, method: true},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(key, scope, instructions, constants),
+         instructions = instructions ++ [:to_propkey],
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(value, scope, instructions, constants) do
+      {:ok, instructions ++ [{:define_method_computed, 4}], constants}
+    end
+  end
+
+  defp compile_object_property(
          %AST.Property{computed: true, key: key, value: value},
          scope,
          instructions,
@@ -2239,6 +2274,24 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(value, scope, instructions, constants) do
       {:ok, instructions ++ [{:define_method, name, flags}], constants}
+    end
+  end
+
+  defp compile_object_property(
+         %AST.Property{
+           computed: false,
+           method: true,
+           key: %AST.Identifier{name: name},
+           value: value
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(value, scope, instructions, constants) do
+      {:ok, instructions ++ [{:define_method, name, 4}], constants}
     end
   end
 

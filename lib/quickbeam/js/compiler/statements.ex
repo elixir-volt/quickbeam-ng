@@ -1411,7 +1411,9 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          super_name
        ) do
     with {:ok, f} <- cb.compile_function.(rewrite_static_super(v, super_name), n),
-         do: {:ok, i ++ [{:get_loc, l}, {:closure, length(c)}, {:put_field, n}], [f | c]}
+         do:
+           {:ok, i ++ [{:get_loc, l}, {:closure, length(c)}, {:define_method, n, 0}, :drop],
+            [f | c]}
   end
 
   defp emit_define_static(
@@ -1426,7 +1428,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
        ) do
     with {:ok, i, c} <- cb.compile_expression.(key, s, i ++ [{:get_loc, l}], c),
          {:ok, f} <- cb.compile_function.(rewrite_static_super(v, super_name), nil) do
-      {:ok, i ++ [{:closure, length(c)}, :define_array_el, :drop], [f | c]}
+      {:ok, i ++ [:to_propkey, {:closure, length(c)}, {:define_method_computed, 0}, :drop],
+       [f | c]}
     end
   end
 
@@ -1498,7 +1501,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          [
            {:get_var, class_name},
            {:closure, length(constants)},
-           {:define_static_method, method_name}
+           {:define_method, method_name, 0},
+           :drop
          ], [function | constants]}
     end
   end
@@ -1549,7 +1553,9 @@ defmodule QuickBEAM.JS.Compiler.Statements do
              constants
            ),
          {:ok, function} <- callbacks.compile_function.(value, nil) do
-      {:ok, instructions ++ [{:closure, length(constants)}, :define_array_el, :drop],
+      {:ok,
+       instructions ++
+         [:to_propkey, {:closure, length(constants)}, {:define_method_computed, 0}, :drop],
        [function | constants]}
     end
   end

@@ -305,6 +305,20 @@ defmodule QuickBEAM.JS.CompilerTest do
       assert_compiles_to(~S|globalThis.compiledGlobal = 1; compiledGlobal|, 1)
     end
 
+    test "object methods and accessors use method descriptors" do
+      assert_compiles_to(
+        ~S/let k = "x"; let obj = { [k]() { return 1; }, get ["y"]() { return 2; } }; [obj.x(), obj.y, Object.getOwnPropertyDescriptor(obj, "x").enumerable].join("|")/,
+        "1|2|true"
+      )
+    end
+
+    test "static class methods use method descriptors" do
+      assert_compiles_to(
+        ~S/class C { static name() {} static ["x"]() {} } [typeof C.name, Object.getOwnPropertyDescriptor(C, "x").enumerable, typeof C.x].join("|")/,
+        "function|false|function"
+      )
+    end
+
     test "preserves object property order in compiled mode" do
       assert_compiles_to(
         ~S|let a = { get: 2, set: 3, async: 4, get a(){ return this.get } }; JSON.stringify(a)|,
