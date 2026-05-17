@@ -46,7 +46,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
     do: {Heap.wrap(%{"done" => true, "value" => :undefined}), :undefined}
 
   def iterator_next_result(_ctx, next_fn, iter_obj, val) do
-    result = Invocation.invoke_callback_or_throw(next_fn, [val])
+    result = Invocation.invoke_with_receiver(next_fn, [val], iter_obj)
     unless is_object(result), do: iterator_type_error!("iterator result is not an object")
     next_iter = if Runtime.truthy?(Get.get(result, "done")), do: :undefined, else: iter_obj
     {result, next_iter}
@@ -199,7 +199,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
       end
     catch
       {:js_throw, _} = reason ->
-        close_iterator(nil, iterator)
+        close_iterator_for_throw(iterator)
         throw(reason)
     end
   end
@@ -236,8 +236,14 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
         {obj_ref, Get.get(obj_ref, "next")}
 
       true ->
-        {{:list_iter, []}, :undefined}
+        throw({:js_throw, Heap.make_error("object is not iterable", "TypeError")})
     end
+  end
+
+  defp close_iterator_for_throw(iter_obj) do
+    close_iterator(nil, iter_obj)
+  catch
+    {:js_throw, _error} -> :ok
   end
 
   defp close_iterator(_ctx, :undefined), do: :ok

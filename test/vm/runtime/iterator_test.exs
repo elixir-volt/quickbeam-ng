@@ -22,6 +22,11 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
              rt,
              ~S|let closed = 0; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done: false }; }, return() { closed++; return {}; } }; let target = { set value(_) { throw new Error("boom"); } }; try { for (target.value of iter) {} } catch (_) {} closed|
            ) == 1
+
+    assert beam!(
+             rt,
+             ~S|let closed = 0; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done: false }; }, return() { closed++; return {}; } }; let key = "value"; let target = new Proxy({}, { set() { throw new Error("boom"); } }); try { for (target[key] of iter) {} } catch (_) {} closed|
+           ) == 1
   end
 
   test "for-of validates iterator result objects and done truthiness", %{rt: rt} do
@@ -33,9 +38,32 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
 
     assert_modes(
       rt,
+      ~S|let caught = false; let iter = { [Symbol.iterator]() { return this; }, next() { return 1; } }; try { for (let x of iter) {} } catch (e) { caught = e.name === "TypeError"; } caught|,
+      true
+    )
+
+    assert_modes(
+      rt,
       ~S|let count = 0; let done = 1; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done }; } }; for (let x of iter) count++; count|,
       0
     )
+  end
+
+  test "iterator next uses iterator receiver", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S"""
+      let iter = { value: 7, [Symbol.iterator]() { return this; }, next(v) { return { value: this.value + (v || 0), done: false }; }, return() { return {}; } };
+      function* g() { yield* iter; }
+      let gen = g();
+      [gen.next(1).value, gen.return().done].join(",")
+      """,
+      "7,true"
+    )
+  end
+
+  test "for-of rejects non-iterable ordinary objects", %{rt: rt} do
+    assert_beam_error(rt, ~S|for (let x of {}) {}|, "TypeError")
   end
 
   test "for-of advances built-in list iterators", %{rt: rt} do

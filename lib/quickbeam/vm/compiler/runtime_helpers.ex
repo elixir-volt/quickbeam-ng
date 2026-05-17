@@ -1317,6 +1317,14 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   defdelegate iterator_next_result(ctx \\ nil, next_fn, iter_obj, val), to: Iterators
 
+  def iterator_check_object(_ctx, value) do
+    unless QuickBEAM.VM.Value.is_object(value) do
+      throw({:js_throw, Heap.make_error("iterator result is not an object", "TypeError")})
+    end
+
+    value
+  end
+
   @doc "Creates key iteration state for a JavaScript `for...in` loop."
   defdelegate for_in_start(ctx \\ nil, obj), to: Iterators
   defdelegate for_in_next(ctx \\ nil, iter), to: Iterators

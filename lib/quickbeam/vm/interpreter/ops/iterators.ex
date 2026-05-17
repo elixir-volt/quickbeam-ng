@@ -98,21 +98,26 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
         iter_obj = Enum.at(stack, offset - 1)
         next_fn = Enum.at(stack, offset - 2)
 
-        {done?, value, next_iter} = Iterators.for_of_next(ctx, next_fn, iter_obj)
-
-        ctx =
-          case Heap.get_persistent_globals() do
-            nil -> ctx
-            p when map_size(p) == 0 -> ctx
-            p -> Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, p)})
+        result =
+          try do
+            {:ok, Iterators.for_of_next(ctx, next_fn, iter_obj)}
+          catch
+            {:js_throw, error} -> {:throw, error}
           end
 
-        updated_stack = List.replace_at(stack, offset - 1, next_iter)
+        case result do
+          {:ok, {done?, value, next_iter}} ->
+            ctx = refresh_persistent_iterator_globals(ctx)
+            updated_stack = List.replace_at(stack, offset - 1, next_iter)
 
-        if done? do
-          run(pc + 1, frame, [true, :undefined | updated_stack], gas, ctx)
-        else
-          run(pc + 1, frame, [false, value | updated_stack], gas, ctx)
+            if done? do
+              run(pc + 1, frame, [true, :undefined | updated_stack], gas, ctx)
+            else
+              run(pc + 1, frame, [false, value | updated_stack], gas, ctx)
+            end
+
+          {:throw, error} ->
+            throw_or_catch(frame, error, gas, ctx)
         end
       end
 
@@ -124,20 +129,40 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
              gas,
              ctx
            ) do
-        {result, next_iter} = Iterators.iterator_next_result(ctx, next_fn, iter_obj, val)
-        persistent = Heap.get_persistent_globals() || %{}
-        ctx = Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, persistent)})
-        run(pc + 1, frame, [result, catch_offset, next_fn, next_iter | rest], gas, ctx)
+        result =
+          try do
+            {:ok, Iterators.iterator_next_result(ctx, next_fn, iter_obj, val)}
+          catch
+            {:js_throw, error} -> {:throw, error}
+          end
+
+        case result do
+          {:ok, {result, next_iter}} ->
+            ctx = refresh_persistent_iterator_globals(ctx)
+            run(pc + 1, frame, [result, catch_offset, next_fn, next_iter | rest], gas, ctx)
+
+          {:throw, error} ->
+            throw_or_catch(frame, error, gas, ctx)
+        end
       end
 
       defp run({@op_iterator_get_value_done, []}, pc, frame, [result | rest], gas, ctx) do
-        done = Get.get(result, "done")
-        value = Get.get(result, "value")
+        next =
+          try do
+            done = Get.get(result, "done")
 
-        if done == true do
-          run(pc + 1, frame, [true, :undefined | rest], gas, ctx)
-        else
-          run(pc + 1, frame, [false, value | rest], gas, ctx)
+            if Runtime.truthy?(done) do
+              {:ok, [true, :undefined | rest]}
+            else
+              {:ok, [false, Get.get(result, "value") | rest]}
+            end
+          catch
+            {:js_throw, error} -> {:throw, error}
+          end
+
+        case next do
+          {:ok, stack} -> run(pc + 1, frame, stack, gas, ctx)
+          {:throw, error} -> throw_or_catch(frame, error, gas, ctx)
         end
       end
 
@@ -168,8 +193,18 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
         end
       end
 
-      defp run({@op_iterator_check_object, []}, pc, frame, stack, gas, ctx),
-        do: run(pc + 1, frame, stack, gas, ctx)
+      defp run({@op_iterator_check_object, []}, pc, frame, [value | _] = stack, gas, ctx) do
+        if QuickBEAM.VM.Value.is_object(value) do
+          run(pc + 1, frame, stack, gas, ctx)
+        else
+          throw_or_catch(
+            frame,
+            Heap.make_error("iterator result is not an object", "TypeError"),
+            gas,
+            ctx
+          )
+        end
+      end
 
       defp run({@op_iterator_call, [flags]}, pc, frame, stack, gas, ctx) do
         [_val, _catch_offset, _next_fn, iter_obj | _] = stack
@@ -194,6 +229,14 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
 
       defp run({@op_iterator_call, []}, pc, frame, stack, gas, ctx),
         do: run(pc + 1, frame, stack, gas, ctx)
+
+      defp refresh_persistent_iterator_globals(ctx) do
+        case Heap.get_persistent_globals() do
+          nil -> ctx
+          p when map_size(p) == 0 -> ctx
+          p -> Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, p)})
+        end
+      end
 
       # ── for-await-of ──
 

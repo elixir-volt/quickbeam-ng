@@ -60,9 +60,11 @@ defmodule QuickBEAM.JS.Compiler do
     previous_top_level_function_names = Process.get(:compiler_top_level_function_names)
     previous_block_scopes = Process.get(:compiler_block_scopes)
     previous_block_scope_id = Process.get(:compiler_block_scope_declaration_id)
+    previous_var_refs = Process.get(:compiler_var_refs)
     Process.put(:compiler_top_level_function_names, top_level_function_names(body))
     Process.put(:compiler_block_scopes, [])
     Process.put(:compiler_block_scope_declaration_id, 0)
+    Process.put(:compiler_var_refs, %{})
 
     try do
       with {:ok, scope} <- Declarations.declare_program_locals(body, scope),
@@ -99,6 +101,7 @@ defmodule QuickBEAM.JS.Compiler do
       restore_process_value(:compiler_top_level_function_names, previous_top_level_function_names)
       restore_process_value(:compiler_block_scopes, previous_block_scopes)
       restore_process_value(:compiler_block_scope_declaration_id, previous_block_scope_id)
+      restore_process_value(:compiler_var_refs, previous_var_refs)
     end
   end
 

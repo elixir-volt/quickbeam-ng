@@ -27,7 +27,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
         lower_iterator_close(state)
 
       {{:ok, :iterator_check_object}, []} ->
-        {:ok, state}
+        lower_iterator_check_object(state)
 
       {{:ok, :iterator_get_value_done}, []} ->
         with {:ok, result, state} <- Emit.pop(state) do
@@ -63,6 +63,20 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
 
       _ ->
         :not_handled
+    end
+  end
+
+  defp lower_iterator_check_object(state) do
+    with {:ok, value, type, state} <- Emit.pop_typed(state) do
+      if type == :object do
+        {:ok, Emit.push(state, value, type)}
+      else
+        LoweringEffects.effectful_push(
+          state,
+          State.abi_call(state, :iterator_check_object, [value]),
+          :object
+        )
+      end
     end
   end
 

@@ -106,7 +106,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         catch
           {:js_throw, error} ->
             ctx = Heap.get_ctx() || ctx
-            throw_or_catch(frame, error, gas, ctx)
+            throw_or_catch(frame, error, gas, close_active_iterators_on_abrupt(rest, ctx))
         end
       end
 
