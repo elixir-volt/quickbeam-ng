@@ -271,7 +271,8 @@ defmodule QuickBEAM.VM.Runtime.Set do
     call_with_this(has_fn, [normalize_set_value(value)], other) == true
   end
 
-  defp other_data_from_record(%{object: {:obj, ref}} = record) do
+  defp other_data_from_record(%{keys: {:builtin, name, _}, object: {:obj, ref}} = record)
+       when name in ["keys", "values"] do
     case Heap.get_obj(ref, %{}) do
       map when is_map(map) ->
         case Map.get(map, set_data()) do
@@ -283,6 +284,8 @@ defmodule QuickBEAM.VM.Runtime.Set do
         iterate_setlike(record.keys, record.object)
     end
   end
+
+  defp other_data_from_record(record), do: iterate_setlike(record.keys, record.object)
 
   defp iterate_setlike(keys_fn, _other) when keys_fn in [:undefined, nil], do: []
 
@@ -380,19 +383,24 @@ defmodule QuickBEAM.VM.Runtime.Set do
     record = validate_set_like!(other)
     items = data(set_ref)
 
+    other_items = other_data_from_record(record)
+    current_items = data(set_ref)
+
     result =
-      record
-      |> other_data_from_record()
-      |> Enum.reduce(items, &toggle_symmetric_difference_value(&2, &1, items))
+      other_items
+      |> Enum.reduce(items, &toggle_symmetric_difference_value(&2, &1, items, current_items))
       |> Enum.reject(&is_nil/1)
 
     create_set_result(result)
   end
 
-  defp toggle_symmetric_difference_value(result, value, original_items) do
+  defp toggle_symmetric_difference_value(result, value, original_items, current_items) do
     cond do
       value in result ->
         List.replace_at(result, Enum.find_index(result, &(&1 == value)), nil)
+
+      value in original_items and value in current_items ->
+        result ++ [value]
 
       value in original_items ->
         List.replace_at(result, Enum.find_index(original_items, &(&1 == value)), value)

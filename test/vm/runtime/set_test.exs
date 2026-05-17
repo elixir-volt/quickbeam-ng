@@ -94,6 +94,20 @@ defmodule QuickBEAM.VM.Runtime.SetTest do
       ~S|let base = new Set(["a", "b", "c", "d", "e"]); let other = { size: 4, get has() { base.add("q"); return function() { throw new Error("unused"); }; }, keys() { let values = ["x", "b", "c", "c"]; let index = 0; return { next() { if (index === 0) { base.delete("b"); base.delete("c"); base.add("b"); base.add("d"); } return { done: index >= values.length, value: values[index++] }; } }; } }; let combined = base.symmetricDifference(other); [[...combined].join(","), [...base].join(",")].join(";")|,
       "a,c,d,e,q,x;a,d,e,q,b"
     )
+
+    assert_modes(
+      rt,
+      ~S|let other = { size: 2, has() { return false; }, keys() { let values = [2, 2]; let i = 0; return { next() { return { done: i >= values.length, value: values[i++] }; } }; } }; [...new Set([1, 2, 3]).symmetricDifference(other)].join(",")|,
+      "1,3,2"
+    )
+  end
+
+  test "set composition uses observed keys method", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let other = new Set([2]); other.keys = function() { return [3].values(); }; [...new Set([1]).union(other)].join(",")|,
+      "1,3"
+    )
   end
 
   test "set composition calls has with receiver and propagates errors", %{rt: rt} do
