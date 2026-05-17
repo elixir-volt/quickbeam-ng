@@ -1495,8 +1495,11 @@ defmodule QuickBEAM.JS.Compiler.Statements do
     with {:ok, function} <- callbacks.compile_function.(value, method_name) do
       {:ok,
        instructions ++
-         [{:get_var, class_name}, {:closure, length(constants)}, {:put_field, method_name}],
-       [function | constants]}
+         [
+           {:get_var, class_name},
+           {:closure, length(constants)},
+           {:define_static_method, method_name}
+         ], [function | constants]}
     end
   end
 
