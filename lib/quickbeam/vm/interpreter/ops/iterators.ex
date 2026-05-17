@@ -61,6 +61,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
       end
 
       defp run({@op_define_array_el, []}, pc, frame, [val, idx, obj | rest], gas, ctx) do
+        idx = QuickBEAM.VM.ObjectModel.PropertyKey.to_property_key(idx)
+        ctx = QuickBEAM.VM.GlobalEnv.refresh(Heap.get_ctx() || ctx)
+        val = resolve_delayed_define_value(val, ctx)
         {_idx, obj2} = Put.define_array_el(obj, idx, val)
         run(pc + 1, frame, [idx, obj2 | rest], gas, ctx)
       end

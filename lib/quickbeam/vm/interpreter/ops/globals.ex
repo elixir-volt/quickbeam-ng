@@ -46,6 +46,14 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
       end
 
       defp run({@op_get_var, [atom_idx]}, pc, frame, stack, gas, ctx) do
+        if delay_object_define_value?(pc, frame, stack) do
+          run(pc + 1, frame, [{:qb_delayed_get_var, atom_idx} | stack], gas, ctx)
+        else
+          run_get_var(atom_idx, pc, frame, stack, gas, ctx)
+        end
+      end
+
+      defp run_get_var(atom_idx, pc, frame, stack, gas, ctx) do
         if Names.resolve_atom(ctx, atom_idx) == "arguments" do
           arguments =
             Map.get(
@@ -93,6 +101,26 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
           end
         end
       end
+
+      defp delay_object_define_value?(pc, frame, [_key, {:obj, _} | _]) do
+        instructions = elem(frame, Frame.insns())
+
+        case pc + 1 < tuple_size(instructions) && elem(instructions, pc + 1) do
+          {@op_define_array_el, []} -> true
+          _ -> false
+        end
+      end
+
+      defp delay_object_define_value?(_pc, _frame, _stack), do: false
+
+      defp resolve_delayed_define_value({:qb_delayed_get_var, atom_idx}, ctx) do
+        case GlobalEnv.fetch(ctx, atom_idx) do
+          {:found, val} -> val
+          :not_found -> :undefined
+        end
+      end
+
+      defp resolve_delayed_define_value(value, _ctx), do: value
 
       defp run({op, [atom_idx]}, pc, frame, [val | rest], gas, ctx)
            when op in [@op_put_var, @op_put_var_init] do

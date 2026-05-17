@@ -9,4 +9,12 @@ defmodule QuickBEAM.VM.ObjectModel.DefineTest do
       1
     )
   end
+
+  test "computed object literal keys are coerced before value evaluation", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let value = "bad"; let key = { toString() { value = "ok"; return "p"; } }; let obj = { [key]: value }; obj.p|,
+      "ok"
+    )
+  end
 end

@@ -14,6 +14,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   }
 
   alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
+  alias QuickBEAM.VM.GlobalEnv
+  alias QuickBEAM.VM.ObjectModel.PropertyKey
   alias QuickBEAM.VM.Operands.CopyDataProperties
 
   defstruct [
@@ -451,22 +453,58 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   @doc "Lowers array element definition with descriptor metadata."
   def define_array_el_call(state) do
     with {:ok, val, _val_type, state} <- Emit.pop_typed(state),
-         {:ok, idx, idx_type, state} <- Emit.pop_typed(state),
+         {:ok, idx, _idx_type, state} <- Emit.pop_typed(state),
          {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
+      {val_expr, state} = extract_bound_expr(state, val)
+
+      {prop_key, state} =
+        Emit.bind(
+          state,
+          Builder.temp_name(state.temp),
+          Builder.remote_call(PropertyKey, :to_property_key, [idx])
+        )
+
+      state = update_ctx(state, Builder.remote_call(GlobalEnv, :refresh, [ctx_expr(state)]))
+      val_expr = refresh_define_value_expr(state, val_expr)
+      {val, state} = Emit.bind(state, Builder.temp_name(state.temp), val_expr)
+
       {pair, state} =
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          compiler_call(state, :define_array_el, [obj, idx, val])
+          compiler_call(state, :define_array_el, [obj, prop_key, val])
         )
 
       {:ok,
        %{
          state
          | stack: [Builder.tuple_element(pair, 1), Builder.tuple_element(pair, 2) | state.stack],
-           stack_types: [idx_type, :object | state.stack_types]
+           stack_types: [:unknown, :object | state.stack_types]
        }}
     end
+  end
+
+  defp extract_bound_expr(%{body: [{:match, _line, var, expr} | body]} = state, var),
+    do: {expr, %{state | body: body}}
+
+  defp extract_bound_expr(state, expr), do: {expr, state}
+
+  defp refresh_define_value_expr(state, {:call, line, remote, [globals_expr, name]}) do
+    case globals_expr do
+      {:call, _, {:remote, _, {:atom, _, :erlang}, {:atom, _, :map_get}},
+       [{:atom, _, :globals}, _old_ctx]} ->
+        {:call, line, remote, [context_globals_expr(state), name]}
+
+      _ ->
+        {:call, line, remote, [globals_expr, name]}
+    end
+  end
+
+  defp refresh_define_value_expr(_state, expr), do: expr
+
+  defp context_globals_expr(state) do
+    {:call, 1, {:remote, 1, {:atom, 1, :erlang}, {:atom, 1, :map_get}},
+     [{:atom, 1, :globals}, ctx_expr(state)]}
   end
 
   @doc "Lowers conversion of an iterable or array-like value into an array object."
