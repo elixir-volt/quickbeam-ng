@@ -96,6 +96,20 @@ defmodule QuickBEAM.VM.Runtime.SetTest do
     )
   end
 
+  test "set composition calls has with receiver and propagates errors", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let other = { marker: 2, size: 3, has(v) { return this.marker === v; }, keys() { return [].values(); } }; [...new Set([1, 2]).difference(other)].join(",")|,
+      "1"
+    )
+
+    assert_beam_error(
+      rt,
+      ~S|let other = { size: 2, has() { throw new TypeError("boom"); }, keys() { return [].values(); } }; new Set([1]).difference(other)|,
+      "TypeError"
+    )
+  end
+
   test "set composition accepts array-backed set-like keys", %{rt: rt} do
     assert_modes(
       rt,

@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   alias QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Interpreter
+  alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
@@ -267,12 +268,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   defp validate_set_like!(_), do: JSThrow.type_error!("set-like object must be an object")
 
   defp other_has_with(has_fn, other, value) do
-    value = normalize_set_value(value)
-
-    case has_fn do
-      {:builtin, _, fun} when is_function(fun) -> fun.([value], other) == true
-      fun -> Runtime.call_callback(fun, [value]) == true
-    end
+    call_with_this(has_fn, [normalize_set_value(value)], other) == true
   end
 
   defp other_data_from_record(%{object: {:obj, ref}} = record) do
@@ -323,7 +319,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
         Interpreter.invoke_with_receiver(closure, args, Runtime.gas_budget(), this)
 
       _ ->
-        Runtime.call_callback(fun, args)
+        Invocation.invoke_with_receiver(fun, args, this)
     end
   end
 
@@ -453,7 +449,22 @@ defmodule QuickBEAM.VM.Runtime.Set do
       iterator = call_with_this(record.keys, [], record.object)
       iterate_check_none(iterator, items)
     else
-      not Enum.any?(items, fn value -> other_has_with(record.has, record.object, value) end)
+      live_disjoint?(set_ref, record, 0)
+    end
+  end
+
+  defp live_disjoint?(set_ref, record, index) do
+    items = data(set_ref)
+
+    cond do
+      index >= length(items) ->
+        true
+
+      other_has_with(record.has, record.object, Enum.at(items, index)) ->
+        false
+
+      true ->
+        live_disjoint?(set_ref, record, index + 1)
     end
   end
 
