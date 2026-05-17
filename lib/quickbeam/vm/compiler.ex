@@ -4,6 +4,7 @@ defmodule QuickBEAM.VM.Compiler do
   import QuickBEAM.VM.Heap.Keys, only: [promise_state: 0, promise_value: 0]
 
   alias QuickBEAM.VM.Compiler.{Forms, Lowering, Optimizer, Runner}
+  alias QuickBEAM.VM.Compiler.Analysis.CFG
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.PromiseState
 
@@ -122,6 +123,7 @@ defmodule QuickBEAM.VM.Compiler do
     ctx_entry = ctx_entry_name()
 
     with :ok <- reject_mapped_arguments(fun),
+         :ok <- reject_generator_yield_in_finally(fun),
          {:instructions, {:ok, instructions}} <- {:instructions, instructions(fun)},
          optimized = Optimizer.optimize(instructions, fun.constants),
          {:lower, {:ok, {slot_count, block_forms}}} <- {:lower, Lowering.lower(fun, optimized)},
@@ -139,6 +141,7 @@ defmodule QuickBEAM.VM.Compiler do
       {:ok, module, ctx_entry, binary}
     else
       {:error, :mapped_arguments} -> {:error, :mapped_arguments}
+      {:error, :generator_yield_in_finally} -> {:error, :generator_yield_in_finally}
       {:instructions, {:error, reason}} -> {:error, {:decode_failed, reason}}
       {:lower, {:error, reason}} -> {:error, reason}
       {:forms, {:error, reason}} -> {:error, {:beam_compile_failed, reason}}
@@ -151,6 +154,41 @@ defmodule QuickBEAM.VM.Compiler do
   end
 
   defp reject_mapped_arguments(_fun), do: :ok
+
+  defp reject_generator_yield_in_finally(%QuickBEAM.VM.Function{func_kind: 1} = fun) do
+    instructions = fun |> instructions() |> elem(1)
+
+    if generator_yield_in_finally?(instructions),
+      do: {:error, :generator_yield_in_finally},
+      else: :ok
+  end
+
+  defp reject_generator_yield_in_finally(_fun), do: :ok
+
+  defp generator_yield_in_finally?(instructions) do
+    instructions
+    |> Enum.with_index()
+    |> Enum.any?(fn
+      {{op, [target]}, _idx} ->
+        match?({:ok, :gosub}, CFG.opcode_name(op)) and
+          finally_region_has_yield?(instructions, target)
+
+      _ ->
+        false
+    end)
+  end
+
+  defp finally_region_has_yield?(instructions, target) do
+    instructions
+    |> Enum.drop(target)
+    |> Enum.reduce_while(false, fn {op, _args}, _seen ->
+      case CFG.opcode_name(op) do
+        {:ok, :ret} -> {:halt, false}
+        {:ok, name} when name in [:yield, :yield_star, :async_yield_star] -> {:halt, true}
+        _ -> {:cont, false}
+      end
+    end)
+  end
 
   defp instructions(fun), do: QuickBEAM.VM.Compiler.FunctionInfo.instructions(fun)
 

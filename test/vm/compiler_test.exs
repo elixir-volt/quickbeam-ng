@@ -135,6 +135,31 @@ defmodule QuickBEAM.VM.CompilerTest do
                )
     end
 
+    test "falls back for generators that yield from finally", %{rt: rt} do
+      source = ~S"""
+      function* values() { yield 1; yield 1; }
+      var dataIterator = values();
+      var controlIterator = (function*() {
+        for (var x of dataIterator) {
+          try {} finally { i++; yield; j++; }
+          k++;
+        }
+        l++;
+      })();
+      var i = 0, j = 0, k = 0, l = 0;
+      controlIterator.next();
+      var a = [i, j, k, l].join(',');
+      controlIterator.next();
+      var b = [i, j, k, l].join(',');
+      controlIterator.next();
+      var c = [i, j, k, l].join(',');
+      a + '|' + b + '|' + c
+      """
+
+      assert {:ok, "1,0,0,0|2,1,1,0|2,2,2,1"} =
+               QuickBEAM.eval(rt, source, mode: :beam_compiler)
+    end
+
     test "lowers QuickJS with_get_ref_undef branch semantics" do
       atoms = {"<synthetic>", "f"}
 
