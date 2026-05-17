@@ -2,18 +2,9 @@ defmodule QuickBEAM.JS.Parser.Validation.Strict do
   @moduledoc "Strict-mode binding and expression validation."
 
   alias QuickBEAM.JS.Parser.AST
-  alias QuickBEAM.JS.Parser.Validation.Strict.{AnnexB, Params}
+  alias QuickBEAM.JS.Parser.Validation.Strict.AnnexB
   import QuickBEAM.JS.Parser.Validation.Helpers, only: [add_error: 3, current: 1]
   import QuickBEAM.JS.Parser.Validation.Strict.Helpers
-
-  defdelegate validate_async_body_bindings(state, async?, body), to: Params
-  defdelegate validate_async_function_name(state, async?, id), to: Params
-  defdelegate validate_async_generator_function_name(state, async_generator?, id), to: Params
-  defdelegate validate_async_params(state, async?, params), to: Params
-  defdelegate validate_generator_body_bindings(state, generator?, body), to: Params
-  defdelegate validate_generator_function_name(state, generator?, id), to: Params
-  defdelegate validate_generator_params(state, generator?, params), to: Params
-  defdelegate validate_unique_params(state, params), to: Params
 
   def validate_strict_function_name(
         state,

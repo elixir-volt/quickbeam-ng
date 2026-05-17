@@ -8,17 +8,22 @@ defmodule QuickBEAM.JS.Parser.Validation do
   defdelegate validate_duplicate_block_bindings(state, body), to: Validation.Bindings
   defdelegate validate_restricted_global_lexical_bindings(state, body), to: Validation.Bindings
   defdelegate validate_control_flow(state, body), to: Validation.ControlFlow
-  defdelegate validate_async_body_bindings(state, async?, body), to: Validation.Strict
-  defdelegate validate_async_function_name(state, async?, id), to: Validation.Strict
+  defdelegate validate_async_body_bindings(state, async?, body), to: Validation.Strict.Params
+  defdelegate validate_async_function_name(state, async?, id), to: Validation.Strict.Params
 
   defdelegate validate_async_generator_function_name(state, async_generator?, id),
-    to: Validation.Strict
+    to: Validation.Strict.Params
 
-  defdelegate validate_async_params(state, async?, params), to: Validation.Strict
-  defdelegate validate_generator_body_bindings(state, generator?, body), to: Validation.Strict
-  defdelegate validate_generator_function_name(state, generator?, id), to: Validation.Strict
-  defdelegate validate_generator_params(state, generator?, params), to: Validation.Strict
-  defdelegate validate_unique_params(state, params), to: Validation.Strict
+  defdelegate validate_async_params(state, async?, params), to: Validation.Strict.Params
+
+  defdelegate validate_generator_body_bindings(state, generator?, body),
+    to: Validation.Strict.Params
+
+  defdelegate validate_generator_function_name(state, generator?, id),
+    to: Validation.Strict.Params
+
+  defdelegate validate_generator_params(state, generator?, params), to: Validation.Strict.Params
+  defdelegate validate_unique_params(state, params), to: Validation.Strict.Params
   defdelegate validate_strict_function_name(state, id, body), to: Validation.Strict
   defdelegate validate_strict_program_bindings(state, body), to: Validation.Strict
   defdelegate validate_arrow_params(state, params, body), to: Validation.Strict
