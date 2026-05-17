@@ -52,6 +52,20 @@ defmodule QuickBEAM.VM.Runtime.RegExpTest do
     )
   end
 
+  test "stateful exec uses UTF-16 lastIndex", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let r = /a/y; r.lastIndex = 2; let result = r.exec("😀a"); [result.index, r.lastIndex].join(",")|,
+      "2,3"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let r = /a/g; r.lastIndex = 2; let result = r.exec("😀a"); [result.index, r.lastIndex].join(",")|,
+      "2,3"
+    )
+  end
+
   test "stateful exec throws when lastIndex cannot be written", %{rt: rt} do
     assert_modes(
       rt,

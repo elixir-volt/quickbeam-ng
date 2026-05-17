@@ -361,42 +361,94 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec_stateful(regexp, string, flags) do
     last_index = regexp_last_index(regexp)
 
-    if last_index == :out_of_range do
+    if last_index == :out_of_range or last_index > JSString.utf16_length(string) do
       set_last_index!(regexp, 0)
       nil
     else
-      case exec_at_index(regexp, string, flags, last_index) do
+      byte_offset = utf16_index_to_byte_offset(string, last_index)
+
+      case exec_at_index(regexp, string, flags, last_index, byte_offset) do
         nil ->
           set_last_index!(regexp, 0)
           nil
 
-        result ->
-          index = Get.get(result, "index")
+        {result, index_units} ->
+          raw_index = Get.get(result, "index")
 
-          if String.contains?(flags, "y") and index != last_index do
+          utf16_index =
+            case index_units do
+              :byte -> byte_offset_to_utf16_index(string, raw_index)
+              :utf16 -> raw_index
+            end
+
+          if String.contains?(flags, "y") and utf16_index != last_index do
             set_last_index!(regexp, 0)
             nil
           else
             match = Values.stringify(Get.get(result, "0"))
-            set_last_index!(regexp, index + Get.string_length(match))
+            set_regexp_result_index(result, utf16_index)
+            set_last_index!(regexp, utf16_index + Get.string_length(match))
             result
           end
       end
     end
   end
 
-  defp exec_at_index({:regexp, bytecode, source, _ref}, string, flags, last_index)
-       when is_binary(bytecode) do
-    case decoded_simple_escape(source) do
-      literal when is_binary(literal) -> literal_exec_decoded_from(string, literal, last_index)
-      :error -> exec_nif(bytecode, source, flags, string, last_index)
+  defp set_regexp_result_index({:obj, ref}, index) do
+    props = Heap.get_regexp_result(ref) || %{}
+    Heap.put_regexp_result(ref, Map.put(props, "index", index))
+    Heap.put_array_prop(ref, "index", index)
+  end
+
+  defp utf16_index_to_byte_offset(string, index), do: utf16_index_to_byte_offset(string, index, 0)
+
+  defp utf16_index_to_byte_offset(_string, index, byte_offset) when index <= 0, do: byte_offset
+  defp utf16_index_to_byte_offset(<<>>, _index, byte_offset), do: byte_offset
+
+  defp utf16_index_to_byte_offset(<<cp::utf8, rest::binary>>, index, byte_offset) do
+    units = if cp >= 0x10000, do: 2, else: 1
+
+    if index <= units do
+      byte_offset + if(index == units, do: byte_size(<<cp::utf8>>), else: 0)
+    else
+      utf16_index_to_byte_offset(rest, index - units, byte_offset + byte_size(<<cp::utf8>>))
     end
   end
 
-  defp exec_at_index({:regexp, nil, source, _ref}, string, _flags, last_index) do
-    case literal_exec_from(string, source, last_index) do
+  defp utf16_index_to_byte_offset(<<_byte, rest::binary>>, index, byte_offset),
+    do: utf16_index_to_byte_offset(rest, index - 1, byte_offset + 1)
+
+  defp byte_offset_to_utf16_index(string, byte_offset),
+    do: string |> binary_part(0, byte_offset) |> JSString.utf16_length()
+
+  defp exec_at_index({:regexp, bytecode, source, _ref}, string, flags, last_index, byte_offset)
+       when is_binary(bytecode) do
+    case stateful_literal_source(source) do
+      literal when is_binary(literal) ->
+        case literal_exec_decoded_from(string, literal, byte_offset) do
+          nil -> nil
+          result -> {result, :byte}
+        end
+
+      :error ->
+        case exec_nif(bytecode, source, flags, string, last_index) do
+          nil -> nil
+          result -> {result, :utf16}
+        end
+    end
+  end
+
+  defp exec_at_index({:regexp, nil, source, _ref}, string, _flags, _last_index, byte_offset) do
+    case literal_exec_from(string, source, byte_offset) do
       nil -> nil
-      {result, _next_offset} -> result
+      {result, _next_offset} -> {result, :byte}
+    end
+  end
+
+  defp stateful_literal_source(source) do
+    case decoded_simple_escape(source) do
+      literal when is_binary(literal) -> literal
+      :error -> if Regex.match?(~r/^[A-Za-z0-9]$/u, source), do: source, else: :error
     end
   end
 
