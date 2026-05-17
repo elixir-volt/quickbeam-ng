@@ -74,6 +74,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Control do
         )
       end
 
+      defp run({@op_nip_catch, []}, pc, frame, [a, _catch_offset | rest], gas, ctx) do
+        run(pc + 1, frame, [a | rest], gas, ctx)
+      end
+
       # ── gosub/ret (finally blocks) ──
 
       defp run({@op_gosub, [target]}, pc, frame, stack, gas, %{catch_stack: []} = ctx) do

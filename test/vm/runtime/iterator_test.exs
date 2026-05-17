@@ -1,6 +1,14 @@
 defmodule QuickBEAM.VM.Runtime.IteratorTest do
   use QuickBEAM.VMCase, async: true
 
+  test "for-of returns through finally cleanup stack", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|function* values() { yield 1; throw new Error("unreachable"); } var iterator = values(); var i = 0; var result = (function() { for (var x of iterator) { i++; return 34; } return 0; })(); [result, i].join(",")|,
+      "34,1"
+    )
+  end
+
   test "for-of closes active iterator on thrown body", %{rt: rt} do
     assert_modes(
       rt,
