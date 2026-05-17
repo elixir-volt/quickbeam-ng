@@ -113,7 +113,27 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
       let gen = g();
       [gen.next(1).value, gen.return().done].join(",")
       """,
-      "7,true"
+      "7,"
+    )
+  end
+
+  test "generator return resumes yield-star cleanup", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S"""
+      let closed = false;
+      const inner = {
+        [Symbol.iterator]() { return this; },
+        next() { return { value: 1, done: false }; },
+        return() { closed = true; return { done: true }; }
+      };
+      function* g() { try { yield* inner; } finally { closed = true; } }
+      const it = g();
+      it.next();
+      it.return();
+      closed
+      """,
+      true
     )
   end
 

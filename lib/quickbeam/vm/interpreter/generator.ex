@@ -115,7 +115,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
 
   defp return_value(gen_ref, val) do
     case Heap.get_obj(gen_ref) do
-      %{state: :suspended, mode: mode} when mode in [:initial, :yield_star] ->
+      %{state: :suspended, mode: :initial} ->
         complete(gen_ref)
         done_result(val)
 

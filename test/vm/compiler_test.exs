@@ -2309,7 +2309,7 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, 2} = Compiler.invoke(astral, [])
       assert {:ok, 2} = Compiler.invoke(sent, [])
       assert {:ok, 9} = Compiler.invoke(returned_early, [])
-      assert {:ok, 7} = Compiler.invoke(custom_return, [])
+      assert {:ok, 9} = Compiler.invoke(custom_return, [])
     end
 
     test "returns resolved values from compiled async functions", %{rt: rt} do
