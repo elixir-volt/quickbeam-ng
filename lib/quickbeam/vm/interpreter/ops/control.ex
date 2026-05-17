@@ -5,6 +5,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Control do
   defmacro __using__(_opts) do
     quote location: :keep do
       alias QuickBEAM.VM.Interpreter.{Context, Values}
+      alias QuickBEAM.VM.Semantics.Iterators
 
       # ── Control flow ──
 
@@ -94,9 +95,37 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Control do
 
       # ── throw ──
 
-      defp run({@op_throw, []}, _pc, frame, [val | _], gas, ctx) do
+      defp run({@op_throw, []}, _pc, frame, [val | rest], gas, ctx) do
+        ctx = close_active_iterators_on_abrupt(rest, ctx)
         throw_or_catch(frame, val, gas, ctx)
       end
+
+      defp close_active_iterators_on_abrupt(stack, ctx) do
+        stack
+        |> active_iterators_from_stack([])
+        |> Enum.reduce(ctx, fn iter_obj, acc_ctx ->
+          Iterators.iterator_close(acc_ctx, iter_obj)
+          persistent = QuickBEAM.VM.Heap.get_persistent_globals() || %{}
+
+          if map_size(persistent) == 0 do
+            acc_ctx
+          else
+            Context.mark_dirty(%{acc_ctx | globals: Map.merge(acc_ctx.globals, persistent)})
+          end
+        end)
+      catch
+        {:js_throw, _close_error} -> ctx
+      end
+
+      defp active_iterators_from_stack([_index, next_fn, iter_obj | rest], acc)
+           when next_fn != nil and iter_obj != :undefined do
+        active_iterators_from_stack(rest, [iter_obj | acc])
+      end
+
+      defp active_iterators_from_stack([_ | rest], acc),
+        do: active_iterators_from_stack(rest, acc)
+
+      defp active_iterators_from_stack([], acc), do: Enum.reverse(acc)
     end
   end
 end

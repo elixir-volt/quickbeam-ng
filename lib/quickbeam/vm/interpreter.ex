@@ -185,15 +185,21 @@ defmodule QuickBEAM.VM.Interpreter do
       refreshed_ctx = refresh_call_arg_buf(refreshed_ctx)
 
       case call_result do
-        {:ok, result} -> run(pc + 1, frame, [result | rest], gas, refreshed_ctx)
-        {:throw, val} -> throw_or_catch(frame, val, gas, refreshed_ctx)
+        {:ok, result} ->
+          run(pc + 1, frame, [result | rest], gas, refreshed_ctx)
+
+        {:throw, val} ->
+          throw_or_catch(frame, val, gas, close_active_iterators_on_abrupt(rest, refreshed_ctx))
       end
     else
       updated_ctx = refresh_call_arg_buf(ctx)
 
       case call_result do
-        {:ok, result} -> run(pc + 1, frame, [result | rest], gas, updated_ctx)
-        {:throw, val} -> throw_or_catch(frame, val, gas, updated_ctx)
+        {:ok, result} ->
+          run(pc + 1, frame, [result | rest], gas, updated_ctx)
+
+        {:throw, val} ->
+          throw_or_catch(frame, val, gas, close_active_iterators_on_abrupt(rest, updated_ctx))
       end
     end
   end
