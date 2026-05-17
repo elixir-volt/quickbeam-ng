@@ -43,6 +43,36 @@ defmodule QuickBEAM.VM.Runtime.SetTest do
            ) == true
   end
 
+  test "constructor closes iterator when done or value access throws", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|let closed = false; let iterable = { [Symbol.iterator]() { return { next() { return { get done() { throw new Error("boom"); } }; }, return() { closed = true; return {}; } }; } }; try { new Set(iterable); } catch (_) {} closed|
+           ) == true
+
+    assert run_beam_isolated!(
+             ~S|let closedValue = false; let iterableValue = { [Symbol.iterator]() { return { next() { return { done: false, get value() { throw new Error("boom"); } }; }, return() { closedValue = true; return {}; } }; } }; try { new Set(iterableValue); } catch (_) {} closedValue|
+           ) == true
+  end
+
+  test "WeakSet constructor closes iterator when done or value access throws", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|let weakClosedDone = false; let weakIterableDone = { [Symbol.iterator]() { return { next() { return { get done() { throw new Error("boom"); } }; }, return() { weakClosedDone = true; return {}; } }; } }; try { new WeakSet(weakIterableDone); } catch (_) {} weakClosedDone|
+           ) == true
+
+    assert run_beam_isolated!(
+             ~S|let weakClosedValue = false; let weakIterableValue = { [Symbol.iterator]() { return { next() { return { done: false, get value() { throw new Error("boom"); } }; }, return() { weakClosedValue = true; return {}; } }; } }; try { new WeakSet(weakIterableValue); } catch (_) {} weakClosedValue|
+           ) == true
+  end
+
+  defp run_beam_isolated!(code) do
+    Task.async(fn ->
+      {:ok, rt} = QuickBEAM.start()
+      beam!(rt, code)
+    end)
+    |> Task.await()
+  end
+
   test "clear tombstones entries for live iterators", %{rt: rt} do
     assert_modes(
       rt,

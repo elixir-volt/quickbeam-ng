@@ -30,6 +30,14 @@ defmodule QuickBEAM.VM.Runtime.RegExpTest do
     )
   end
 
+  test "global exec treats infinite lastIndex as out of range", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let r = /a/g; r.lastIndex = Infinity; let result = r.exec("a"); [result, r.lastIndex].join(",")|,
+      ",0"
+    )
+  end
+
   test "sticky exec requires a match at lastIndex", %{rt: rt} do
     assert_modes(
       rt,

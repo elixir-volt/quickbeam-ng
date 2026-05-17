@@ -335,10 +335,24 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp stateful_regexp?(flags), do: String.contains?(flags, "g") or String.contains?(flags, "y")
 
-  defp exec_stateful(regexp, string, flags) do
-    last_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+  defp regexp_last_index(regexp) do
+    case Runtime.to_number(Get.get(regexp, "lastIndex")) do
+      {:bigint, _} -> JSThrow.type_error!("Cannot convert a BigInt value to a number")
+      :infinity -> :out_of_range
+      :neg_infinity -> 0
+      :nan -> 0
+      n when is_integer(n) and n >= 0 -> n
+      n when is_integer(n) -> 0
+      n when is_float(n) and n >= 0 -> trunc(n)
+      n when is_float(n) -> 0
+      _ -> 0
+    end
+  end
 
-    if last_index > Get.string_length(string) do
+  defp exec_stateful(regexp, string, flags) do
+    last_index = regexp_last_index(regexp)
+
+    if last_index == :out_of_range do
       Put.put(regexp, "lastIndex", 0)
       nil
     else
@@ -378,69 +392,84 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp exec_global_prefix_lookbehind_def(regexp, string) do
-    start_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+    start_index = regexp_last_index(regexp)
 
-    case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
-           return: :index
-         ) do
-      [{relative, 3}] ->
-        index = start_index + relative
-        prefix = binary_part(string, 0, index)
+    if start_index == :out_of_range do
+      Put.put(regexp, "lastIndex", 0)
+      nil
+    else
+      case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
+             return: :index
+           ) do
+        [{relative, 3}] ->
+          index = start_index + relative
+          prefix = binary_part(string, 0, index)
 
-        if Regex.match?(~r/^\w+$/, prefix) do
-          Put.put(regexp, "lastIndex", index + 3)
-          exec_result(["def", prefix], index, string)
-        else
+          if Regex.match?(~r/^\w+$/, prefix) do
+            Put.put(regexp, "lastIndex", index + 3)
+            exec_result(["def", prefix], index, string)
+          else
+            Put.put(regexp, "lastIndex", 0)
+            nil
+          end
+
+        _ ->
           Put.put(regexp, "lastIndex", 0)
           nil
-        end
-
-      _ ->
-        Put.put(regexp, "lastIndex", 0)
-        nil
+      end
     end
   end
 
   defp exec_global_non_boundary_def(regexp, string) do
-    start_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+    start_index = regexp_last_index(regexp)
 
-    case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
-           return: :index
-         ) do
-      [{relative, 3}] ->
-        index = start_index + relative
-        previous = if index > 0, do: binary_part(string, index - 1, 1), else: ""
+    if start_index == :out_of_range do
+      Put.put(regexp, "lastIndex", 0)
+      nil
+    else
+      case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
+             return: :index
+           ) do
+        [{relative, 3}] ->
+          index = start_index + relative
+          previous = if index > 0, do: binary_part(string, index - 1, 1), else: ""
 
-        if Regex.match?(~r/\w/, previous) do
-          Put.put(regexp, "lastIndex", index + 3)
-          exec_result(["def"], index, string)
-        else
-          Put.put(regexp, "lastIndex", index + 1)
-          exec_global_non_boundary_def(regexp, string)
-        end
+          if Regex.match?(~r/\w/, previous) do
+            Put.put(regexp, "lastIndex", index + 3)
+            exec_result(["def"], index, string)
+          else
+            Put.put(regexp, "lastIndex", index + 1)
+            exec_global_non_boundary_def(regexp, string)
+          end
 
-      _ ->
-        Put.put(regexp, "lastIndex", 0)
-        nil
+        _ ->
+          Put.put(regexp, "lastIndex", 0)
+          nil
+      end
     end
   end
 
   defp exec_global_ascii_word(regexp, source, string) do
-    start_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+    start_index = regexp_last_index(regexp)
 
-    string
-    |> JSString.utf16_code_unit_values()
-    |> Enum.with_index()
-    |> Enum.drop_while(fn {_unit, index} -> index < start_index end)
-    |> Enum.find(fn {unit, _index} -> word_source_match?(source, unit) end)
-    |> case do
-      nil ->
-        Put.put(regexp, "lastIndex", 0)
-        nil
+    if start_index == :out_of_range do
+      Put.put(regexp, "lastIndex", 0)
+      nil
+    else
+      string
+      |> JSString.utf16_code_unit_values()
+      |> Enum.with_index()
+      |> Enum.drop_while(fn {_unit, index} -> index < start_index end)
+      |> Enum.find(fn {unit, _index} -> word_source_match?(source, unit) end)
+      |> case do
+        nil ->
+          Put.put(regexp, "lastIndex", 0)
+          nil
 
-      {unit, index} ->
-        Put.put(regexp, "lastIndex", index + 1)
-        exec_result([<<unit::utf8>>], index, string)
+        {unit, index} ->
+          Put.put(regexp, "lastIndex", index + 1)
+          exec_result([<<unit::utf8>>], index, string)
+      end
     end
   end
 

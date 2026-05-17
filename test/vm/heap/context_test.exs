@@ -24,6 +24,29 @@ defmodule QuickBEAM.VM.Heap.ContextTest do
     assert InvokeContext.fast_ctx() == :__qb_missing__
   end
 
+  test "fast context preserves full interpreter state when reconstructed" do
+    ctx = %Context{
+      globals: %{"g" => 1},
+      catch_stack: [{12, [:marker]}],
+      runtime_pid: self(),
+      gas: 123,
+      trace_enabled: true
+    }
+
+    InvokeContext.put_fast_ctx(ctx)
+
+    assert %Context{
+             globals: %{"g" => 1},
+             catch_stack: [{12, [:marker]}],
+             runtime_pid: pid,
+             gas: 123,
+             trace_enabled: true,
+             pd_synced: true
+           } = Heap.get_ctx()
+
+    assert pid == self()
+  end
+
   test "persistent globals invalidate base globals cache" do
     Heap.put_global_cache(%{"builtin" => 1})
     assert GlobalEnv.base_globals()["user"] == nil

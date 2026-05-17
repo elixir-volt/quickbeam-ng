@@ -18,6 +18,13 @@ defmodule QuickBEAM.VM.Invocation.Context do
     current_func = Map.get(ctx, :current_func, :undefined)
     home_object = Functions.current_home_object(current_func)
 
+    super = current_super(home_object)
+
+    full_ctx =
+      ctx
+      |> Map.merge(%{home_object: home_object, super: super})
+      |> Context.mark_synced()
+
     Process.put(
       @fast_ctx_key,
       {
@@ -28,7 +35,8 @@ defmodule QuickBEAM.VM.Invocation.Context do
         Map.get(ctx, :this, :undefined),
         Map.get(ctx, :new_target, :undefined),
         home_object,
-        current_super(home_object)
+        super,
+        full_ctx
       }
     )
   end
@@ -58,7 +66,7 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns the active atom table from fast context, full context, or heap fallback."
   def current_atoms do
     case fast_ctx() do
-      {atoms, _globals, _current_func, _arg_buf, _this, _new_target, _home_object, _super} ->
+      {atoms, _globals, _current_func, _arg_buf, _this, _new_target, _home_object, _super, _ctx} ->
         atoms
 
       _ ->
@@ -72,7 +80,7 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns active globals from fast context, full context, or runtime fallback."
   def current_globals do
     case fast_ctx() do
-      {_atoms, globals, _current_func, _arg_buf, _this, _new_target, _home_object, _super} ->
+      {_atoms, globals, _current_func, _arg_buf, _this, _new_target, _home_object, _super, _ctx} ->
         globals
 
       _ ->
@@ -86,7 +94,7 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns the currently executing function value."
   def current_func do
     case fast_ctx() do
-      {_atoms, _globals, current_func, _arg_buf, _this, _new_target, _home_object, _super} ->
+      {_atoms, _globals, current_func, _arg_buf, _this, _new_target, _home_object, _super, _ctx} ->
         current_func
 
       _ ->
@@ -100,7 +108,7 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns the current argument tuple used by compiled functions."
   def current_arg_buf do
     case fast_ctx() do
-      {_atoms, _globals, _current_func, arg_buf, _this, _new_target, _home_object, _super} ->
+      {_atoms, _globals, _current_func, arg_buf, _this, _new_target, _home_object, _super, _ctx} ->
         arg_buf
 
       _ ->
@@ -114,7 +122,7 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns the active JavaScript `this` value."
   def current_this do
     case fast_ctx() do
-      {_atoms, _globals, _current_func, _arg_buf, this, _new_target, _home_object, _super} ->
+      {_atoms, _globals, _current_func, _arg_buf, this, _new_target, _home_object, _super, _ctx} ->
         this
 
       _ ->
@@ -128,7 +136,7 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns the active JavaScript `new.target` value."
   def current_new_target do
     case fast_ctx() do
-      {_atoms, _globals, _current_func, _arg_buf, _this, new_target, _home_object, _super} ->
+      {_atoms, _globals, _current_func, _arg_buf, _this, new_target, _home_object, _super, _ctx} ->
         new_target
 
       _ ->
@@ -149,7 +157,7 @@ defmodule QuickBEAM.VM.Invocation.Context do
 
   def current_home_object(current_func) do
     case fast_ctx() do
-      {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, home_object, _super} ->
+      {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, home_object, _super, _ctx} ->
         home_object
 
       _ ->
@@ -164,7 +172,8 @@ defmodule QuickBEAM.VM.Invocation.Context do
 
   def current_super(home_object) do
     case fast_ctx() do
-      {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, cached_home_object, super}
+      {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, cached_home_object, super,
+       _ctx}
       when cached_home_object == home_object ->
         super
 

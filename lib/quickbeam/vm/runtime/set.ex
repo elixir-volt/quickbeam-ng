@@ -78,13 +78,12 @@ defmodule QuickBEAM.VM.Runtime.Set do
           set
 
         [source | _] ->
-          prototype_adder = Get.get(Runtime.global_class_proto("WeakSet"), "add")
+          adder = Get.get(set, "add")
 
-          unless Builtin.callable?(prototype_adder) do
+          unless Builtin.callable?(adder) do
             JSThrow.type_error!("WeakSet.prototype.add is not callable")
           end
 
-          adder = Get.get(set, "add")
           construct_weak_set_from_iterable(source, set, adder)
           set
       end
@@ -165,23 +164,20 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
     result = call_with_this(next_fn, [], iterator)
 
-    unless match?({:obj, _}, result) or is_map(result) do
-      call_iterator_return(iterator)
-      JSThrow.type_error!("Iterator result is not an object")
-    end
-
-    unless Get.get(result, "done") == true do
-      value = Get.get(result, "value")
-
-      try do
-        call_with_this(adder, [value], set)
-      catch
-        {:js_throw, _} = thrown ->
-          call_iterator_return(iterator)
-          throw(thrown)
+    try do
+      unless match?({:obj, _}, result) or is_map(result) do
+        JSThrow.type_error!("Iterator result is not an object")
       end
 
-      construct_set_from_iterator(iterator, set, adder)
+      unless Get.get(result, "done") == true do
+        value = Get.get(result, "value")
+        call_with_this(adder, [value], set)
+        construct_set_from_iterator(iterator, set, adder)
+      end
+    catch
+      {:js_throw, _} = thrown ->
+        call_iterator_return(iterator)
+        throw(thrown)
     end
   end
 
@@ -212,23 +208,20 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
     result = call_with_this(next_fn, [], iterator)
 
-    unless match?({:obj, _}, result) or is_map(result) do
-      call_iterator_return(iterator)
-      JSThrow.type_error!("Iterator result is not an object")
-    end
-
-    unless Get.get(result, "done") == true do
-      value = Get.get(result, "value")
-
-      try do
-        call_with_this(adder, [value], set)
-      catch
-        {:js_throw, _} = thrown ->
-          call_iterator_return(iterator)
-          throw(thrown)
+    try do
+      unless match?({:obj, _}, result) or is_map(result) do
+        JSThrow.type_error!("Iterator result is not an object")
       end
 
-      construct_weak_set_from_iterator(iterator, set, adder)
+      unless Get.get(result, "done") == true do
+        value = Get.get(result, "value")
+        call_with_this(adder, [value], set)
+        construct_weak_set_from_iterator(iterator, set, adder)
+      end
+    catch
+      {:js_throw, _} = thrown ->
+        call_iterator_return(iterator)
+        throw(thrown)
     end
   end
 

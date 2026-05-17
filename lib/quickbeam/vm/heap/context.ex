@@ -8,6 +8,10 @@ defmodule QuickBEAM.VM.Heap.Context do
     case Process.get(:qb_ctx, :__qb_missing__) do
       :__qb_missing__ ->
         case Process.get(:qb_fast_ctx, :__qb_missing__) do
+          {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, _home_object, _super,
+           %Context{} = ctx} ->
+            ctx
+
           {atoms, globals, current_func, arg_buf, this, new_target, home_object, super} ->
             %Context{
               atoms: atoms,

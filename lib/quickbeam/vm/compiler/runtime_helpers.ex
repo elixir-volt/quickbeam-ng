@@ -604,7 +604,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   def get_super(func) do
     case InvokeContext.fast_ctx() do
-      {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, ^func, super} ->
+      {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, ^func, super, _ctx} ->
         super
 
       _ ->
@@ -1042,7 +1042,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   def special_object(type) do
     case InvokeContext.fast_ctx() do
-      {_atoms, _globals, current_func, arg_buf, _this, new_target, home_object, _super} ->
+      {_atoms, _globals, current_func, arg_buf, _this, new_target, home_object, _super, _ctx} ->
         Construction.special_object(type, current_func, arg_buf, new_target, home_object)
 
       _ ->
