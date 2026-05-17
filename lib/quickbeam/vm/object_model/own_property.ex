@@ -108,6 +108,8 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp has_prototype?(%QuickBEAM.VM.Function{has_prototype: true}), do: true
   defp has_prototype?({:closure, _, %QuickBEAM.VM.Function{has_prototype: true}}), do: true
+  defp has_prototype?(%QuickBEAM.VM.Function{func_kind: 1}), do: true
+  defp has_prototype?({:closure, _, %QuickBEAM.VM.Function{func_kind: 1}}), do: true
   defp has_prototype?(_), do: false
 
   defp deleted_static?(target, key),

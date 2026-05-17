@@ -81,12 +81,7 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   end
 
   defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 1}, _callable) do
-    Heap.wrap(%{
-      "constructor" =>
-        {:builtin, "GeneratorFunction",
-         &QuickBEAM.VM.Runtime.Globals.Constructors.generator_function/2},
-      proto() => Heap.get_func_proto()
-    })
+    generator_function_prototype()
   end
 
   defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 2}, _callable) do
@@ -107,6 +102,48 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   end
 
   defp function_kind_prototype(_function, callable), do: callable_prototype(callable)
+
+  defp generator_prototype_object do
+    case Process.get(:qb_generator_prototype_object) do
+      {:obj, _} = proto ->
+        proto
+
+      _ ->
+        proto = Heap.wrap(%{proto() => Heap.get_object_prototype()})
+        Process.put(:qb_generator_prototype_object, proto)
+        proto
+    end
+  end
+
+  defp generator_function_prototype do
+    case Process.get(:qb_generator_function_prototype) do
+      {:obj, _} = proto ->
+        proto
+
+      _ ->
+        generator_proto = generator_prototype_object()
+
+        proto =
+          Heap.wrap(%{
+            "constructor" =>
+              {:builtin, "GeneratorFunction",
+               &QuickBEAM.VM.Runtime.Globals.Constructors.generator_function/2},
+            "prototype" => generator_proto,
+            proto() => Heap.get_func_proto()
+          })
+
+        Heap.put_prop_desc(proto_ref(proto), "prototype", %{
+          writable: false,
+          enumerable: false,
+          configurable: false
+        })
+
+        Process.put(:qb_generator_function_prototype, proto)
+        proto
+    end
+  end
+
+  defp proto_ref({:obj, ref}), do: ref
 
   defp callable_prototype(callable) do
     case Map.get(Heap.get_ctor_statics(callable), "__proto__") do

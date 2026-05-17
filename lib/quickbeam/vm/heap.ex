@@ -345,7 +345,7 @@ defmodule QuickBEAM.VM.Heap do
 
         case Process.get(key) do
           nil ->
-            obj_proto = get_object_prototype()
+            obj_proto = function_prototype_parent(ctor)
             proto_map = %{"constructor" => ctor}
 
             proto_map =
@@ -372,6 +372,26 @@ defmodule QuickBEAM.VM.Heap do
   end
 
   # ── Objects ──
+
+  defp function_prototype_parent({:closure, _, %QuickBEAM.VM.Function{func_kind: 1}}),
+    do: generator_prototype_object()
+
+  defp function_prototype_parent(%QuickBEAM.VM.Function{func_kind: 1}),
+    do: generator_prototype_object()
+
+  defp function_prototype_parent(_ctor), do: get_object_prototype()
+
+  defp generator_prototype_object do
+    case Process.get(:qb_generator_prototype_object) do
+      {:obj, _} = proto ->
+        proto
+
+      _ ->
+        proto = wrap(%{"__proto__" => get_object_prototype()})
+        Process.put(:qb_generator_prototype_object, proto)
+        proto
+    end
+  end
 
   defp proto_cache_key({:closure, _, %QuickBEAM.VM.Function{} = fun}), do: proto_cache_key(fun)
   defp proto_cache_key(%QuickBEAM.VM.Function{id: id}) when is_integer(id), do: {:function, id}
