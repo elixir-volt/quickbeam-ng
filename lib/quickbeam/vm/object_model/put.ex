@@ -673,7 +673,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     own? = Map.has_key?(statics, key)
 
     cond do
-      key in ["length", "name"] and (not own? or Map.get(statics, key) == :deleted) ->
+      key in ["length", "name"] and (not own? or Map.get(statics, key) == :deleted) and
+          not static_class_method_definition?(callable, key) ->
         reject_failed_write!()
 
       key in ["caller", "arguments"] and restricted_function_property?(callable) ->
@@ -702,6 +703,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   defp callable_prop_desc(callable, key),
     do: Heap.get_prop_desc(callable, key) || Heap.get_ctor_prop_desc(callable, key)
+
+  defp static_class_method_definition?(callable, _key),
+    do: Process.get({:qb_define_static_method, callable}) == true
 
   defp inherited_object_property_readonly?(callable, key) do
     own? = Map.has_key?(Heap.get_ctor_statics(callable), key)

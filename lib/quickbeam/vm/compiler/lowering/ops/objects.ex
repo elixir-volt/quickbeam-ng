@@ -61,6 +61,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
       {{:ok, :put_field}, [atom_idx]} ->
         State.put_field_call(state, Builder.literal(Builder.atom_name(state, atom_idx)))
 
+      {{:ok, :define_static_method}, [atom_idx]} ->
+        define_static_method_call(state, Builder.literal(Builder.atom_name(state, atom_idx)))
+
       {{:ok, :define_field}, [atom_idx]} ->
         State.define_field_name_call(state, Builder.literal(Builder.atom_name(state, atom_idx)))
 
@@ -204,6 +207,17 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
          | stack: [Builder.tuple_element(pair, 1), Builder.tuple_element(pair, 2) | state.stack],
            stack_types: [:unknown, :unknown | state.stack_types]
        }}
+    end
+  end
+
+  defp define_static_method_call(state, key_expr) do
+    with {:ok, method, _method_type, state} <- Emit.pop_typed(state),
+         {:ok, ctor, _ctor_type, state} <- Emit.pop_typed(state) do
+      {:ok,
+       Emit.emit(
+         state,
+         State.compiler_call(state, :define_static_method, [ctor, key_expr, method])
+       )}
     end
   end
 

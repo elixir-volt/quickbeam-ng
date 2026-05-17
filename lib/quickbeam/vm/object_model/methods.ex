@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.Methods do
   import Bitwise, only: [band: 2]
 
   alias QuickBEAM.VM.{Heap, Names}
-  alias QuickBEAM.VM.ObjectModel.{Functions, Put}
+  alias QuickBEAM.VM.ObjectModel.{Functions, PropertyDescriptor, Put}
 
   @doc "Defines a named method, getter, or setter on a target object."
   def define_method(target, method, name, flags) when is_binary(name) do
@@ -26,7 +26,7 @@ defmodule QuickBEAM.VM.ObjectModel.Methods do
     case method_type do
       1 -> Put.put_getter(target, name, named_method, enumerable)
       2 -> Put.put_setter(target, name, named_method, enumerable)
-      _ -> Put.put(target, name, named_method, enumerable)
+      _ -> put_method(target, name, named_method, enumerable)
     end
 
     target
@@ -60,10 +60,32 @@ defmodule QuickBEAM.VM.ObjectModel.Methods do
     case method_type do
       1 -> Put.put_getter(target, property_key, named_method, enumerable)
       2 -> Put.put_setter(target, property_key, named_method, enumerable)
-      _ -> Put.put(target, property_key, named_method, enumerable)
+      _ -> put_method(target, property_key, named_method, enumerable)
     end
 
     target
+  end
+
+  defp put_method(target, key, method, enumerable) do
+    define_static_key = {:qb_define_static_method, target}
+    if match?({:obj, _}, target), do: :ok, else: Process.put(define_static_key, true)
+
+    try do
+      Put.put(target, key, method, enumerable)
+    after
+      Process.delete(define_static_key)
+    end
+
+    unless match?({:obj, _}, target) do
+      Heap.put_ctor_prop_desc(
+        target,
+        key,
+        if(enumerable,
+          do: PropertyDescriptor.enumerable_data(),
+          else: PropertyDescriptor.method()
+        )
+      )
+    end
   end
 
   @doc "Records the home object used by a method for `super` lookups."

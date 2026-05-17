@@ -66,6 +66,8 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
   def default_derived_constructor?(_), do: false
 
   def define_class(ctor_closure, parent_ctor, class_name \\ nil) do
+    original_ctor = ctor_closure
+
     ctor_closure =
       if is_binary(class_name) and class_name != "" do
         Functions.rename(ctor_closure, class_name)
@@ -91,11 +93,19 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
     proto_obj = {:obj, proto_ref}
     Heap.put_class_proto(raw, proto_obj)
 
+    existing_statics = Heap.get_ctor_statics(ctor_closure)
+
     ctor_statics =
       if parent_ctor != :undefined do
-        %{"prototype" => proto_obj, "__proto__" => parent_ctor}
+        Map.merge(existing_statics, %{"prototype" => proto_obj, "__proto__" => parent_ctor})
       else
-        %{"prototype" => proto_obj}
+        Map.merge(existing_statics, %{"prototype" => proto_obj})
+      end
+
+    ctor_statics =
+      case Heap.get_ctor_statics(original_ctor) do
+        %{"name" => value} -> Map.put(ctor_statics, "name", value)
+        _ -> ctor_statics
       end
 
     Heap.put_ctor_statics(ctor_closure, ctor_statics)

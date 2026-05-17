@@ -15,6 +15,7 @@ defmodule QuickBEAM.VM.Instructions do
       {:get_field, name} -> [name]
       {:get_field2, name} -> [name]
       {:put_field, name} -> [name]
+      {:define_static_method, name} -> [name]
       {:set_name, name} -> [name]
       {:define_method, name, _flags} -> [name]
       {:define_class, name, _flags} -> [name]
@@ -115,6 +116,7 @@ defmodule QuickBEAM.VM.Instructions do
               :get_field,
               :get_field2,
               :put_field,
+              :define_static_method,
               :define_field,
               :set_name,
               :private_symbol
@@ -177,6 +179,7 @@ defmodule QuickBEAM.VM.Instructions do
   defp stack_effect({:get_field, _name}), do: {1, 1}
   defp stack_effect({:get_field2, _name}), do: {1, 2}
   defp stack_effect({:put_field, _name}), do: {2, 0}
+  defp stack_effect({:define_static_method, _name}), do: {2, 0}
   defp stack_effect({:set_name, _name}), do: {1, 1}
   defp stack_effect({:define_method, _name, _flags}), do: {2, 1}
   defp stack_effect({:define_class, _name, _flags}), do: {2, 2}

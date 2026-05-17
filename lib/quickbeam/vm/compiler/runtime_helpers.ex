@@ -566,6 +566,17 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     Define.create_data_property_or_throw(obj, key, val)
   end
 
+  def define_static_method(ctx, ctor, atom_idx, method)
+      when is_integer(atom_idx) or is_tuple(atom_idx),
+      do:
+        define_static_method(ctx, ctor, Names.resolve_atom(context_atoms(ctx), atom_idx), method)
+
+  def define_static_method(_ctx, ctor, key, method) do
+    Put.put_field(ctor, key, method)
+    Heap.put_ctor_prop_desc(ctor, key, %{writable: true, enumerable: false, configurable: true})
+    :ok
+  end
+
   @doc "Writes an existing private class field or throws when absent."
   def put_private_field(_ctx, obj, key, val) do
     case Private.put_field!(obj, key, val) do
@@ -934,7 +945,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   @doc "Defines a method, getter, or setter from compiled code."
   def define_method(_ctx, target, method, name, flags) when is_binary(name),
-    do: define_method(target, method, name, flags)
+    do: Methods.define_method(target, method, name, flags)
 
   def define_method(_ctx, target, method, {:tagged_int, _} = atom_idx, flags),
     do:

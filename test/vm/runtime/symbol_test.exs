@@ -20,4 +20,12 @@ defmodule QuickBEAM.VM.Runtime.SymbolTest do
       "[x]"
     )
   end
+
+  test "static class methods override inferred constructor name", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let C = class { static name() {} }; [typeof C.name, Object.getOwnPropertyDescriptor(C, "name").enumerable].join(",")|,
+      "function,false"
+    )
+  end
 end
