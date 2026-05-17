@@ -132,6 +132,12 @@ defmodule QuickBEAM.VM.Runtime.Set do
     }
   end
 
+  defp create_set_result(items) do
+    ref = make_ref()
+    Heap.put_obj(ref, set_object(ref, Enum.uniq(items), Runtime.global_class_proto("Set")))
+    {:obj, ref}
+  end
+
   defp data(set_ref), do: Heap.get_obj(set_ref, %{}) |> Map.get(set_data(), [])
 
   defp set_entry_data, do: "__set_entry_data__"
@@ -270,11 +276,15 @@ defmodule QuickBEAM.VM.Runtime.Set do
   end
 
   defp other_data_from_record(%{object: {:obj, ref}} = record) do
-    map = Heap.get_obj(ref, %{})
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) ->
+        case Map.get(map, set_data()) do
+          items when is_list(items) -> items
+          _ -> iterate_setlike(record.keys, record.object)
+        end
 
-    case Map.get(map, set_data()) do
-      items when is_list(items) -> items
-      _ -> iterate_setlike(record.keys, record.object)
+      _other ->
+        iterate_setlike(record.keys, record.object)
     end
   end
 
@@ -333,7 +343,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
         items -- other_data_from_record(record)
       end
 
-    constructor().([result], nil)
+    create_set_result(result)
   end
 
   defp intersection([other | _], this),
@@ -354,7 +364,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
         |> Enum.filter(&(&1 in items))
       end
 
-    constructor().([result], nil)
+    create_set_result(result)
   end
 
   defp union([other | _], this), do: this |> require_strong_set_ref!() |> set_union(other)
@@ -362,7 +372,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   defp set_union(set_ref, other) do
     record = validate_set_like!(other)
-    constructor().([Enum.uniq(data(set_ref) ++ other_data_from_record(record))], nil)
+    create_set_result(Enum.uniq(data(set_ref) ++ other_data_from_record(record)))
   end
 
   defp symmetric_difference([other | _], this),
@@ -373,8 +383,27 @@ defmodule QuickBEAM.VM.Runtime.Set do
   defp set_symmetric_difference(set_ref, other) do
     record = validate_set_like!(other)
     items = data(set_ref)
-    other_items = other_data_from_record(record)
-    constructor().([(items -- other_items) ++ (other_items -- items)], nil)
+
+    result =
+      record
+      |> other_data_from_record()
+      |> Enum.reduce(items, &toggle_symmetric_difference_value(&2, &1, items))
+      |> Enum.reject(&is_nil/1)
+
+    create_set_result(result)
+  end
+
+  defp toggle_symmetric_difference_value(result, value, original_items) do
+    cond do
+      value in result ->
+        List.replace_at(result, Enum.find_index(result, &(&1 == value)), nil)
+
+      value in original_items ->
+        List.replace_at(result, Enum.find_index(original_items, &(&1 == value)), value)
+
+      true ->
+        result ++ [value]
+    end
   end
 
   defp subset?([other | _], this), do: this |> require_strong_set_ref!() |> set_subset?(other)

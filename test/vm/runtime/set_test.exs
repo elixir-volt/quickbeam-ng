@@ -80,6 +80,33 @@ defmodule QuickBEAM.VM.Runtime.SetTest do
     |> Task.await()
   end
 
+  test "set composition creates results without calling add", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let s1 = new Set([1, 2]); let s2 = new Set([2, 3]); let proto = Object.getPrototypeOf(s1); let original = proto.add; let count = 0; proto.add = function(v) { count++; return original.call(this, v); }; let result = s1.union(s2); proto.add = original; [[...result].join(","), count].join(";")|,
+      "1,2,3;0"
+    )
+  end
+
+  test "symmetricDifference preserves receiver order for toggled set-like duplicates", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let base = new Set(["a", "b", "c", "d", "e"]); let other = { size: 4, get has() { base.add("q"); return function() { throw new Error("unused"); }; }, keys() { let values = ["x", "b", "c", "c"]; let index = 0; return { next() { if (index === 0) { base.delete("b"); base.delete("c"); base.add("b"); base.add("d"); } return { done: index >= values.length, value: values[index++] }; } }; } }; let combined = base.symmetricDifference(other); [[...combined].join(","), [...base].join(",")].join(";")|,
+      "a,c,d,e,q,x;a,d,e,q,b"
+    )
+  end
+
+  test "set composition accepts array-backed set-like keys", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S"""
+      let setLike = { size: 2, has(v) { return v === 5 || v === 6; }, keys() { return [5, 6].values(); } };
+      [...new Set([1]).union(setLike)].join(",")
+      """,
+      "1,5,6"
+    )
+  end
+
   test "clear tombstones entries for live iterators", %{rt: rt} do
     assert_modes(
       rt,
