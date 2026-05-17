@@ -8,4 +8,12 @@ defmodule QuickBEAM.VM.Heap.ArgumentsTest do
            })();
            """) == "function"
   end
+
+  test "sloppy arguments indices alias formal parameter bindings", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|(function(a, b, c) { a = b; b = c; c = 1; return [arguments[0], arguments[1], arguments[2]].join(","); })(1, 2, 3)|,
+      "2,3,1"
+    )
+  end
 end

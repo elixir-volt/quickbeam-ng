@@ -14,15 +14,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
       defp run({@op_get_var_undef, [atom_idx]}, pc, frame, stack, gas, ctx) do
         if Names.resolve_atom(ctx, atom_idx) == "arguments" do
-          arguments =
-            Map.get(
-              ctx.globals,
-              "arguments",
-              Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
-                strict: current_strict_mode?(ctx),
-                callee: ctx.current_func
-              )
-            )
+          arguments = Map.get(ctx.globals, "arguments", make_arguments_object(ctx, frame))
 
           run(pc + 1, frame, [arguments | stack], gas, ctx)
         else
@@ -55,15 +47,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
       defp run_get_var(atom_idx, pc, frame, stack, gas, ctx) do
         if Names.resolve_atom(ctx, atom_idx) == "arguments" do
-          arguments =
-            Map.get(
-              ctx.globals,
-              "arguments",
-              Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
-                strict: current_strict_mode?(ctx),
-                callee: ctx.current_func
-              )
-            )
+          arguments = Map.get(ctx.globals, "arguments", make_arguments_object(ctx, frame))
 
           run(pc + 1, frame, [arguments | stack], gas, ctx)
         else
@@ -109,6 +93,67 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
                   )
               end
           end
+        end
+      end
+
+      defp make_arguments_object(ctx, frame) do
+        Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
+          strict: current_strict_mode?(ctx),
+          callee: ctx.current_func,
+          mapped: mapped_argument_cells(ctx, frame)
+        )
+      end
+
+      defp mapped_argument_cells(ctx, frame) do
+        if mapped_arguments_object?(ctx) do
+          locals = function_locals(ctx)
+          var_refs = elem(frame, Frame.var_refs())
+          count = min(tuple_size(ctx.arg_buf), length(locals))
+
+          mapped =
+            if count == 0 do
+              %{}
+            else
+              0..(count - 1)//1
+              |> Enum.reduce(%{}, fn index, acc ->
+                case Enum.at(locals, index) do
+                  %{var_ref_idx: ref_idx}
+                  when is_integer(ref_idx) and ref_idx < tuple_size(var_refs) ->
+                    case elem(var_refs, ref_idx) do
+                      {:cell, _} = cell -> Map.put(acc, index, cell)
+                      _ -> acc
+                    end
+
+                  _ ->
+                    acc
+                end
+              end)
+            end
+
+          mapped
+        else
+          %{}
+        end
+      end
+
+      defp mapped_arguments_object?(ctx) do
+        case ctx.current_func do
+          {:closure, _, %QuickBEAM.VM.Function{} = fun} ->
+            not fun.is_strict_mode and fun.has_simple_parameter_list
+
+          %QuickBEAM.VM.Function{} = fun ->
+            not fun.is_strict_mode and fun.has_simple_parameter_list
+
+          _ ->
+            false
+        end
+      end
+
+      defp function_locals(ctx) do
+        case ctx.current_func do
+          {:closure, _, %QuickBEAM.VM.Function{locals: locals}} -> locals
+          %QuickBEAM.VM.Function{locals: locals} -> locals
+          _ -> []
         end
       end
 

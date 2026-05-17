@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.Interpreter.Closures
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Runtime
 
@@ -891,19 +892,35 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       :undefined
     else
       _ ->
-        case Heap.get_array_prop(ref, key) do
-          :undefined ->
-            own_value = get_own(array_data, key)
-
-            if own_value == :undefined and Heap.get_prop_desc(ref, key) == nil do
-              get_from_prototype({:obj, ref}, key)
-            else
-              own_value
-            end
-
-          value ->
+        case mapped_argument_value(ref, key) do
+          {:mapped, value} ->
             value
+
+          :not_mapped ->
+            case Heap.get_array_prop(ref, key) do
+              :undefined ->
+                own_value = get_own(array_data, key)
+
+                if own_value == :undefined and Heap.get_prop_desc(ref, key) == nil do
+                  get_from_prototype({:obj, ref}, key)
+                else
+                  own_value
+                end
+
+              value ->
+                value
+            end
         end
+    end
+  end
+
+  defp mapped_argument_value(ref, key) do
+    with {:ok, idx} <- PropertyKey.array_index(key),
+         mapped when is_map(mapped) <- Heap.get_array_prop(ref, "__mapped_arguments__"),
+         {:cell, _} = cell <- Map.get(mapped, idx) do
+      {:mapped, Closures.read_cell(cell)}
+    else
+      _ -> :not_mapped
     end
   end
 

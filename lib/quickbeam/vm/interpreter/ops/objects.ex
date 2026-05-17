@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
   defmacro __using__(_opts) do
     quote location: :keep do
       alias QuickBEAM.VM.{Builtin, GlobalEnv, Heap, Invocation, Names, Runtime}
-      alias QuickBEAM.VM.Interpreter.{Context, Values}
+      alias QuickBEAM.VM.Interpreter.{Context, Frame, Values}
 
       alias QuickBEAM.VM.ObjectModel.{
         Class,
@@ -318,9 +318,75 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
                ctx
            ) do
         val =
-          Construction.special_object(type, current_func, arg_buf, ctx.new_target, home_object)
+          case type do
+            type when type in [0, 1] ->
+              Heap.wrap_arguments(Tuple.to_list(arg_buf),
+                strict: current_strict_mode?(ctx),
+                callee: current_func,
+                mapped: special_object_mapped_argument_cells(ctx, frame)
+              )
+
+            _ ->
+              Construction.special_object(
+                type,
+                current_func,
+                arg_buf,
+                ctx.new_target,
+                home_object
+              )
+          end
 
         run(pc + 1, frame, [val | stack], gas, ctx)
+      end
+
+      defp special_object_mapped_argument_cells(ctx, frame) do
+        if special_object_mapped_arguments?(ctx) do
+          locals = special_object_function_locals(ctx)
+          var_refs = elem(frame, Frame.var_refs())
+          count = min(tuple_size(ctx.arg_buf), length(locals))
+
+          if count == 0 do
+            %{}
+          else
+            0..(count - 1)//1
+            |> Enum.reduce(%{}, fn index, acc ->
+              case Enum.at(locals, index) do
+                %{var_ref_idx: ref_idx}
+                when is_integer(ref_idx) and ref_idx < tuple_size(var_refs) ->
+                  case elem(var_refs, ref_idx) do
+                    {:cell, _} = cell -> Map.put(acc, index, cell)
+                    _ -> acc
+                  end
+
+                _ ->
+                  acc
+              end
+            end)
+          end
+        else
+          %{}
+        end
+      end
+
+      defp special_object_mapped_arguments?(ctx) do
+        case ctx.current_func do
+          {:closure, _, %QuickBEAM.VM.Function{} = fun} ->
+            not fun.is_strict_mode and fun.has_simple_parameter_list
+
+          %QuickBEAM.VM.Function{} = fun ->
+            not fun.is_strict_mode and fun.has_simple_parameter_list
+
+          _ ->
+            false
+        end
+      end
+
+      defp special_object_function_locals(ctx) do
+        case ctx.current_func do
+          {:closure, _, %QuickBEAM.VM.Function{locals: locals}} -> locals
+          %QuickBEAM.VM.Function{locals: locals} -> locals
+          _ -> []
+        end
       end
 
       defp run({@op_rest, [start_idx]}, pc, frame, stack, gas, %Context{arg_buf: arg_buf} = ctx) do

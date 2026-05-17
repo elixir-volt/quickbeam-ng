@@ -139,6 +139,14 @@ defmodule QuickBEAM.VM.Heap do
     {:obj, ref} = obj = wrap(args)
     put_array_prop(ref, "__arguments__", true)
 
+    case Keyword.get(opts, :mapped) do
+      mapped when is_map(mapped) and map_size(mapped) > 0 ->
+        put_array_prop(ref, "__mapped_arguments__", mapped)
+
+      _ ->
+        :ok
+    end
+
     if Keyword.get(opts, :strict, false) do
       thrower = Keyword.get_lazy(opts, :thrower, &throw_type_error_intrinsic/0)
       put_array_prop(ref, "callee", {:accessor, thrower, thrower})

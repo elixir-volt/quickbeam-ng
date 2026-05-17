@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   alias QuickBEAM.VM.Execution.{RegexpState, SetterState}
   alias QuickBEAM.VM.{Heap, Runtime}
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Interpreter.{Closures, Values}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
 
@@ -1296,10 +1296,30 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
               max(virtual_array_length(ref) || :array.size(arr), i + 1)
             )
 
+          mapped_argument_write(ref, i, val) ->
+            :ok
+
           true ->
             Heap.array_set(ref, i, val)
             mark_undefined_array_write(ref, key, val)
         end
+    end
+  end
+
+  defp mapped_argument_write(ref, index, val) do
+    case Heap.get_array_prop(ref, "__mapped_arguments__") do
+      mapped when is_map(mapped) ->
+        case Map.get(mapped, index) do
+          {:cell, _} = cell ->
+            Closures.write_cell(cell, val)
+            true
+
+          _ ->
+            false
+        end
+
+      _ ->
+        false
     end
   end
 
@@ -1328,6 +1348,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           proto_has_setter?(i) ->
             invoke_proto_setter(obj, i, val)
+
+          mapped_argument_write(ref, i, val) ->
+            :ok
 
           i < length(list) ->
             Heap.put_obj(ref, List.replace_at(list, i, val))
