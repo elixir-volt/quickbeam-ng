@@ -922,6 +922,16 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     )
   end
 
+  def define_class_computed(_ctx, ctor, parent_ctor, computed_name) do
+    ctor_closure =
+      case ctor do
+        %QuickBEAM.VM.Function{} = fun -> {:closure, %{}, fun}
+        other -> other
+      end
+
+    Class.define_class(ctor_closure, parent_ctor, Functions.function_name(computed_name))
+  end
+
   @doc "Defines a method, getter, or setter from compiled code."
   def define_method(_ctx, target, method, name, flags) when is_binary(name),
     do: define_method(target, method, name, flags)

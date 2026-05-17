@@ -63,17 +63,10 @@ defmodule QuickBEAM.VM.Names do
   end
 
   @doc "Returns a function-like value with updated name metadata."
-  def rename_function({:closure, captured, %QuickBEAM.VM.Function{} = fun}, name) do
-    renamed = {:closure, captured, %{fun | name: name}}
-    Heap.put_ctor_static(renamed, "name", name)
-    renamed
-  end
+  def rename_function({:closure, captured, %QuickBEAM.VM.Function{} = fun}, name),
+    do: {:closure, captured, %{fun | name: name}}
 
-  def rename_function(%QuickBEAM.VM.Function{} = fun, name) do
-    renamed = %{fun | name: name}
-    Heap.put_ctor_static(renamed, "name", name)
-    renamed
-  end
+  def rename_function(%QuickBEAM.VM.Function{} = fun, name), do: %{fun | name: name}
 
   def rename_function({:builtin, _, cb}, name), do: {:builtin, name, cb}
 

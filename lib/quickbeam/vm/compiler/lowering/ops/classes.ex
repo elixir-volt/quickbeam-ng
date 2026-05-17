@@ -44,7 +44,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
     end
   end
 
-  defp lower_define_class_computed(state, atom_idx) do
+  defp lower_define_class_computed(state, _atom_idx) do
     with {:ok, ctor, state} <- Emit.pop(state),
          {:ok, parent_ctor, state} <- Emit.pop(state),
          {:ok, computed_name, state} <- Emit.pop(state) do
@@ -52,10 +52,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          State.compiler_call(state, :define_class, [
+          State.compiler_call(state, :define_class_computed, [
             ctor,
             parent_ctor,
-            Builder.literal(atom_idx)
+            computed_name
           ])
         )
 

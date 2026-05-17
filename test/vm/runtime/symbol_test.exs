@@ -12,4 +12,12 @@ defmodule QuickBEAM.VM.Runtime.SymbolTest do
       "get "
     )
   end
+
+  test "computed class property uses symbol description for inferred name", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let sym = Symbol("x"); let obj = { [sym]: class {} }; obj[sym].name|,
+      "[x]"
+    )
+  end
 end

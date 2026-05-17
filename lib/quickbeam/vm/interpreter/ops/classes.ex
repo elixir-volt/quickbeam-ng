@@ -53,21 +53,31 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Classes do
       end
 
       defp run(
-             {@op_define_class_computed, [atom_idx, flags]},
+             {@op_define_class_computed, [_atom_idx, _flags]},
              pc,
              frame,
-             [ctor, parent_ctor, _computed_name | rest],
+             [ctor, parent_ctor, computed_name | rest],
              gas,
              ctx
            ) do
-        run(
-          {@op_define_class, [atom_idx, flags]},
-          pc,
-          frame,
-          [ctor, parent_ctor | rest],
-          gas,
-          ctx
-        )
+        locals = elem(frame, Frame.locals())
+        vrefs = elem(frame, Frame.var_refs())
+        l2v = elem(frame, Frame.l2v())
+
+        ctor_closure =
+          case ctor do
+            %QuickBEAM.VM.Function{} = f ->
+              base = build_closure(f, locals, vrefs, l2v, ctx)
+              inherit_parent_vrefs(base, vrefs)
+
+            already_closure ->
+              already_closure
+          end
+
+        class_name = QuickBEAM.VM.ObjectModel.Functions.function_name(computed_name)
+        {proto, ctor_closure} = Class.define_class(ctor_closure, parent_ctor, class_name)
+
+        run(pc + 1, frame, [proto, ctor_closure, computed_name | rest], gas, ctx)
       end
 
       defp run(
