@@ -756,6 +756,19 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   end
 
   defp active_iterator_close_calls(
+         [
+           {_catch_marker, :integer},
+           {_counter, :integer},
+           {_next_fn, next_type},
+           {_iter_obj, iter_type} | _rest
+         ],
+         acc
+       )
+       when next_type in [:function, :unknown] and iter_type in [:object, :unknown] do
+    acc
+  end
+
+  defp active_iterator_close_calls(
          [{_counter, :integer}, {_next_fn, next_type}, {iter_obj, iter_type} | rest],
          acc
        )

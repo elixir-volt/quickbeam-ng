@@ -84,6 +84,11 @@ defmodule QuickBEAM.JS.CompilerTest do
     test "compiles loop break and continue" do
       assert_compiles_to("let x=0; while (x < 5) { x=x+1; break; } x", 1)
       assert_compiles_to("let x=0; let y=0; while (x < 3) { x=x+1; continue; y=9; } x+y", 3)
+
+      assert_compiles_to(
+        "let out=0; for (let x of [1,2]) { try { throw x } catch (err) { out = out + err; continue; } } out",
+        3
+      )
     end
 
     test "compiles do while loops" do

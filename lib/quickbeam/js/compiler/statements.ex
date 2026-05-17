@@ -471,7 +471,7 @@ defmodule QuickBEAM.JS.Compiler.Statements do
              scope,
              instructions ++ [{:catch, catch_label}],
              constants,
-             [tail?: false],
+             non_tail_control_opts(opts),
              callbacks
            ),
          {:ok, catch_instructions, constants} <-
@@ -505,7 +505,7 @@ defmodule QuickBEAM.JS.Compiler.Statements do
              scope,
              instructions ++ [{:catch, catch_label}],
              constants,
-             [tail?: false, finally_label: finally_label],
+             opts |> non_tail_control_opts() |> Keyword.put(:finally_label, finally_label),
              callbacks
            ),
          {:ok, catch_instructions, constants} <-
@@ -2051,6 +2051,18 @@ defmodule QuickBEAM.JS.Compiler.Statements do
     else
       :error -> {:error, {:unsupported, :for_of_binding}}
     end
+  end
+
+  defp non_tail_control_opts(opts) do
+    opts
+    |> Keyword.take([
+      :break_labels,
+      :continue_labels,
+      :break_label,
+      :continue_label,
+      :preserve_completion?
+    ])
+    |> Keyword.put(:tail?, false)
   end
 
   defp loop_opts(opts, tail?, break_label, continue_label, label \\ nil) do

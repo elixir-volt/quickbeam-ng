@@ -9,6 +9,14 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
     )
   end
 
+  test "for-of keeps iterators open for locally caught throws", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let closed=0; let count=0; let i=0; let it={ [Symbol.iterator](){return this}, next(){ i++; return {value:i, done:i>2}; }, return(){closed++; return {}; } }; for (let x of it) { try { throw new Error("x"); } catch(e) { count++; continue; } } [count, closed].join(",")|,
+      "2,0"
+    )
+  end
+
   test "for-of closes active iterator when assignment head throws", %{rt: rt} do
     assert beam!(
              rt,

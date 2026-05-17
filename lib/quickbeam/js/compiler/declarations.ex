@@ -61,30 +61,10 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
   end
 
   defp declare_statements(
-         [
-           %AST.ForOfStatement{
-             left: %AST.VariableDeclaration{kind: kind, declarations: declarations}
-           }
-           | rest
-         ],
+         [%AST.ForOfStatement{} = statement | rest],
          scope
        ) do
-    scope =
-      Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc, kind) end)
-
-    scope = Scope.declare_local(scope, "<for_of_array>")
-    scope = Scope.declare_local(scope, "<for_of_index>")
-    scope = Scope.declare_local(scope, "<for_of_value>")
-    declare_statements(rest, scope)
-  end
-
-  defp declare_statements(
-         [%AST.ForOfStatement{} | rest],
-         scope
-       ) do
-    scope = Scope.declare_local(scope, "<for_of_array>")
-    scope = Scope.declare_local(scope, "<for_of_index>")
-    scope = Scope.declare_local(scope, "<for_of_value>")
+    scope = declare_nested_var_bindings(statement, scope)
     declare_statements(rest, scope)
   end
 
@@ -182,6 +162,21 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
   defp declare_nested_var_bindings(%AST.LabeledStatement{body: body}, scope),
     do: declare_nested_var_bindings_from(scope, body)
 
+  defp declare_nested_var_bindings(
+         %AST.TryStatement{
+           block: block,
+           handler: %AST.CatchClause{param: param, body: body},
+           finalizer: finalizer
+         },
+         scope
+       ) do
+    scope
+    |> declare_nested_var_bindings_from(block)
+    |> declare_catch_param(param)
+    |> declare_nested_var_bindings_from(body)
+    |> declare_nested_var_bindings_from(finalizer)
+  end
+
   defp declare_nested_var_bindings(%AST.WhileStatement{body: body}, scope),
     do: declare_nested_var_bindings_from(scope, body)
 
@@ -194,6 +189,11 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
 
   defp declare_nested_var_bindings_from(scope, statement),
     do: declare_nested_var_bindings(statement, scope)
+
+  defp declare_catch_param(scope, %AST.Identifier{name: name}),
+    do: Scope.declare_local(scope, name, :catch)
+
+  defp declare_catch_param(scope, _param), do: scope
 
   defp declare_var_statements([], scope), do: scope
 
