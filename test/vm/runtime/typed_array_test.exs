@@ -17,6 +17,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayTest do
     )
   end
 
+  test "TypedArray.prototype.at reads relative elements", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|[new Uint8Array([1, 2, 3]).at(-1), new Float64Array([0, , 2]).at(1)].join(",")|,
+      "3,NaN"
+    )
+  end
+
   test "defineProperty treats integer-index keys beyond array-index range as typed-array indexes",
        %{
          rt: rt

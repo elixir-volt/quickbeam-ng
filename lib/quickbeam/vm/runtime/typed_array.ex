@@ -6,6 +6,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.Invocation
+  alias QuickBEAM.VM.JSThrow
+  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
 
@@ -41,6 +44,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   def elem_size(:bigint64), do: 8
   def elem_size(:biguint64), do: 8
 
+  @doc "Returns generic properties for typed-array constructor prototype objects."
+  def prototype_properties do
+    %{
+      "at" => {:builtin, "at", fn args, this -> at(this, args) end}
+    }
+  end
+
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor(type) do
     fn args, _this ->
@@ -51,6 +61,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         object heap: false do
           method("set", do: set(ref, args))
           method("subarray", do: subarray(ref, args))
+          method("at", do: at({:obj, ref}, args))
           method("join", do: join(ref, args))
           method("forEach", do: for_each(ref, args, this))
           method("map", do: map(ref, args, this))
@@ -289,6 +300,47 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   # ── Method implementations ──
+
+  defp at(nil, _args),
+    do: JSThrow.type_error!("TypedArray.prototype.at called on incompatible receiver")
+
+  defp at(:undefined, _args),
+    do: JSThrow.type_error!("TypedArray.prototype.at called on incompatible receiver")
+
+  defp at({:obj, ref} = obj, args) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} ->
+        if out_of_bounds?(obj) do
+          JSThrow.type_error!("TypedArray is out of bounds")
+        end
+
+        len = element_count(obj)
+        relative_index = args |> Enum.at(0, :undefined) |> to_integer_or_infinity()
+
+        case relative_index do
+          :infinity ->
+            :undefined
+
+          :neg_infinity ->
+            :undefined
+
+          index ->
+            idx = if index < 0, do: len + index, else: index
+
+            if idx < 0 or idx >= len do
+              :undefined
+            else
+              get_element(obj, idx)
+            end
+        end
+
+      _ ->
+        JSThrow.type_error!("TypedArray.prototype.at called on incompatible receiver")
+    end
+  end
+
+  defp at(_, _args),
+    do: JSThrow.type_error!("TypedArray.prototype.at called on incompatible receiver")
 
   defp set(ref, args) do
     {source, offset} =
@@ -620,7 +672,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             {bin, off, len, buf_obj, length_tracking?}
 
           true ->
-            {<<>>, 0, 0, nil, false}
+            list = object_source_to_list(buf_obj)
+            {list_to_buffer(list, type), 0, length(list), nil, false}
         end
 
       [n | _] when is_integer(n) ->
@@ -635,6 +688,52 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
       _ ->
         {<<>>, 0, 0, nil, false}
+    end
+  end
+
+  defp object_source_to_list(obj) do
+    iterator_method = Get.get(obj, {:symbol, "Symbol.iterator"})
+
+    cond do
+      QuickBEAM.VM.Builtin.callable?(iterator_method) ->
+        iterator = Invocation.invoke_with_receiver(iterator_method, [], obj)
+        iterator_to_list(iterator, [])
+
+      iterator_method not in [nil, :undefined] ->
+        JSThrow.type_error!("object is not iterable")
+
+      true ->
+        array_like_to_list(obj)
+    end
+  end
+
+  defp iterator_to_list(iterator, acc) do
+    next_fn = Get.get(iterator, "next")
+
+    unless QuickBEAM.VM.Builtin.callable?(next_fn) do
+      JSThrow.type_error!("Iterator next is not callable")
+    end
+
+    result = Invocation.invoke_with_receiver(next_fn, [], iterator)
+
+    unless match?({:obj, _}, result) or is_map(result) do
+      JSThrow.type_error!("Iterator result is not an object")
+    end
+
+    if Get.get(result, "done") == true do
+      Enum.reverse(acc)
+    else
+      iterator_to_list(iterator, [Get.get(result, "value") | acc])
+    end
+  end
+
+  defp array_like_to_list(obj) do
+    len = max(Runtime.to_int(Get.get(obj, "length")), 0)
+
+    if len == 0 do
+      []
+    else
+      for idx <- 0..(len - 1), do: Get.get(obj, Integer.to_string(idx))
     end
   end
 
@@ -725,6 +824,11 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
        do: :nan
 
   defp float64_special(_), do: nil
+
+  defp write_element(buf, pos, :undefined, type) when type in [:float16, :float32, :float64],
+    do: write_element(buf, pos, :nan, type)
+
+  defp write_element(buf, pos, :undefined, type), do: write_element(buf, pos, 0, type)
 
   defp write_element(buf, pos, val, :uint8_clamped) when pos < byte_size(buf) do
     v = max(0, min(255, bankers_round(val || 0)))
@@ -824,6 +928,16 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     list
     |> Enum.with_index()
     |> Enum.reduce(buf, fn {val, i}, acc -> write_element(acc, i, val, type) end)
+  end
+
+  defp to_integer_or_infinity(value) do
+    case Runtime.to_number(value) do
+      :infinity -> :infinity
+      :neg_infinity -> :neg_infinity
+      :nan -> 0
+      number when is_number(number) -> trunc(number)
+      _ -> 0
+    end
   end
 
   defp make_buffer_ref(buffer_data) do
