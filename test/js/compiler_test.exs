@@ -333,6 +333,16 @@ defmodule QuickBEAM.JS.CompilerTest do
       )
 
       assert_compiles_to(
+        ~S|let iter={ closed:0, [Symbol.iterator]() { return this; }, next() { return {value:1, done:false}; }, return() { this.closed++; return {}; } }; function f(){ for (let x of iter) { throw new Error("boom"); } } try { f(); } catch (_) {} iter.closed|,
+        1
+      )
+
+      assert_compiles_to(
+        ~S|let iter={ closed:0, [Symbol.iterator]() { return this; }, next() { return {value:1, done:false}; }, return() { this.closed++; return {}; } }; outer: do { for (let x of iter) { continue outer; } } while(false); iter.closed|,
+        1
+      )
+
+      assert_compiles_to(
         ~S|let iter={ closed:0, count:0, [Symbol.iterator]() { return this; }, next() { this.count++; return {value:this.count, done:this.count > 2}; }, return() { this.closed++; return {}; } }; for (let x of iter) { try { throw new Error("boom"); } catch (_) { continue; } } iter.closed|,
         0
       )
