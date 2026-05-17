@@ -72,12 +72,15 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
 
   defp do_return(gen_ref, val) do
     case Heap.get_obj(gen_ref) do
-      %{state: :suspended, mode: :initial} ->
+      %{state: :suspended, mode: :yield_star, continuation: cont} when is_function(cont, 1) ->
+        resume(gen_ref, cont, RuntimeHelpers.generator_return_resume(val))
+
+      %{state: :suspended, mode: :yield_cleanup, continuation: cont} when is_function(cont, 1) ->
+        resume(gen_ref, cont, RuntimeHelpers.generator_return_resume(val))
+
+      %{state: :suspended} ->
         Heap.put_obj(gen_ref, %{state: :completed})
         done(val)
-
-      %{state: :suspended, continuation: cont} when is_function(cont, 1) ->
-        resume(gen_ref, cont, RuntimeHelpers.generator_return_resume(val))
 
       _ ->
         Heap.put_obj(gen_ref, %{state: :completed})
