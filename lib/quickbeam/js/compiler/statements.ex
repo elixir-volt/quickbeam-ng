@@ -471,7 +471,7 @@ defmodule QuickBEAM.JS.Compiler.Statements do
              scope,
              instructions ++ [{:catch, catch_label}],
              constants,
-             non_tail_control_opts(opts),
+             opts |> non_tail_control_opts() |> Keyword.delete(:iterator_close_loc),
              callbacks
            ),
          {:ok, catch_instructions, constants} <-
@@ -505,7 +505,10 @@ defmodule QuickBEAM.JS.Compiler.Statements do
              scope,
              instructions ++ [{:catch, catch_label}],
              constants,
-             opts |> non_tail_control_opts() |> Keyword.put(:finally_label, finally_label),
+             opts
+             |> non_tail_control_opts()
+             |> Keyword.delete(:iterator_close_loc)
+             |> Keyword.put(:finally_label, finally_label),
              callbacks
            ),
          {:ok, catch_instructions, constants} <-
@@ -860,12 +863,12 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         scope,
         instructions,
         constants,
-        _opts,
+        opts,
         callbacks
       ) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(argument, scope, instructions, constants) do
-      {:ok, instructions ++ [:throw], constants}
+      {:ok, instructions ++ iterator_close_ops(opts) ++ [:throw], constants}
     end
   end
 
@@ -2934,12 +2937,14 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          opts,
          _callbacks
        ) do
+    instructions = instructions ++ [:undefined] ++ iterator_close_ops(opts)
+
     case Keyword.get(opts, :finally_label) do
       nil ->
-        {:ok, instructions ++ [:undefined, :return], constants}
+        {:ok, instructions ++ [:return], constants}
 
       label ->
-        {:ok, instructions ++ [:undefined, :nip_catch, {:gosub, label}, :return], constants}
+        {:ok, instructions ++ [:nip_catch, {:gosub, label}, :return], constants}
     end
   end
 
@@ -2970,6 +2975,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         else
           [:return]
         end
+
+      instructions = instructions ++ iterator_close_ops(opts)
 
       case Keyword.get(opts, :finally_label) do
         nil -> {:ok, instructions ++ ret_ops, constants}
