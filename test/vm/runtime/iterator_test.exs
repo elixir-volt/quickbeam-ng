@@ -141,6 +141,20 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
     assert_beam_error(rt, ~S|for (let x of {}) {}|, "TypeError")
   end
 
+  test "array for-of honors own iterator methods", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|var customArray = new Array(1, 2); var out = []; customArray[Symbol.iterator] = function* () { yield 9; }; for (let x of customArray) out.push(x); out.join(",")|
+           ) == "9"
+  end
+
+  test "array for-of rejects non-callable own iterator", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|var nonCallableArray = new Array(1); nonCallableArray[Symbol.iterator] = 1; try { for (let x of nonCallableArray) {} "no"; } catch(e) { e.name; }|
+           ) == "TypeError"
+  end
+
   test "array for-of reads elements through property access", %{rt: rt} do
     assert_modes(
       rt,

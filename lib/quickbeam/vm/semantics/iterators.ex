@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.ObjectModel.{Copy, Get, HasProperty}
+  alias QuickBEAM.VM.ObjectModel.{Copy, Get, HasProperty, OwnProperty}
   alias QuickBEAM.VM.Runtime.Collections
 
   @doc "Creates iterator state for a JavaScript `for...of` loop."
@@ -170,10 +170,18 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp collect_iterable_values(_), do: not_iterable!()
 
   defp collect_array_like_values(obj, default_values) do
-    case Collections.array_proto_iterator_status() do
-      :default -> default_values
-      :deleted -> not_iterable!()
-      iter_fn -> collect_custom_iterator(obj, iter_fn)
+    case own_array_iterator_method(obj) do
+      :missing ->
+        case Collections.array_proto_iterator_status() do
+          :default -> default_values
+          :deleted -> not_iterable!()
+          iter_fn -> collect_custom_iterator(obj, iter_fn)
+        end
+
+      iter_fn ->
+        if Builtin.callable?(iter_fn),
+          do: collect_custom_iterator(obj, iter_fn),
+          else: not_iterable!()
     end
   end
 
@@ -242,15 +250,36 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
     do: throw({:js_throw, Heap.make_error(message, "TypeError")})
 
   defp array_like_for_of(ctx, obj_ref, _values) do
-    case Collections.array_proto_iterator_status() do
-      :default ->
-        {{:array_iter, obj_ref, 0}, :undefined}
+    case own_array_iterator_method(obj_ref) do
+      :missing ->
+        case Collections.array_proto_iterator_status() do
+          :default ->
+            {{:array_iter, obj_ref, 0}, :undefined}
 
-      :deleted ->
-        throw({:js_throw, Heap.make_error("[Symbol.iterator] is not a function", "TypeError")})
+          :deleted ->
+            throw(
+              {:js_throw, Heap.make_error("[Symbol.iterator] is not a function", "TypeError")}
+            )
 
-      custom_fn ->
-        invoke_custom_iter(ctx, custom_fn, obj_ref)
+          custom_fn ->
+            invoke_custom_iter(ctx, custom_fn, obj_ref)
+        end
+
+      iter_fn ->
+        if Builtin.callable?(iter_fn) do
+          invoke_custom_iter(ctx, iter_fn, obj_ref)
+        else
+          throw({:js_throw, Heap.make_error("[Symbol.iterator] is not a function", "TypeError")})
+        end
+    end
+  end
+
+  defp own_array_iterator_method(obj) do
+    symbol = {:symbol, "Symbol.iterator"}
+
+    case OwnProperty.descriptor(obj, symbol) do
+      :undefined -> :missing
+      desc -> Get.get(desc, "value")
     end
   end
 
