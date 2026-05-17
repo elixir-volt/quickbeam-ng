@@ -284,6 +284,7 @@ defmodule QuickBEAM.JS.CompilerTest do
     test "literal direct eval var declarations do not write lexical slots" do
       assert_compiles_error_name(~S|let x; eval("var x = 1"); x|, "SyntaxError")
       assert_compiles_to(~S|var x; eval("var x = 1"); x|, 1)
+      assert_compiles_to(~S|var x = 1; eval("var x;"); x|, 1)
     end
 
     test "throws SyntaxError for direct eval parse errors" do

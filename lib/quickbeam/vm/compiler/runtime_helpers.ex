@@ -882,25 +882,31 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   defp compile_eval_program(%{runtime_pid: runtime_pid}, code)
        when is_pid(runtime_pid) do
-    with {:ok, bytecode} <- QuickBEAM.Runtime.compile(runtime_pid, code, "<eval>"),
-         {:ok, program} <- QuickBEAM.VM.BytecodeParser.decode(bytecode) do
-      {:ok, program}
-    else
-      _ -> compile_source_eval_program(code)
-    end
+    compile_native_eval_program(runtime_pid, code)
   end
 
   defp compile_eval_program(%{runtime_pid: runtime_pid}, code)
        when is_atom(runtime_pid) and not is_nil(runtime_pid) do
-    with {:ok, bytecode} <- QuickBEAM.Runtime.compile(runtime_pid, code, "<eval>"),
-         {:ok, program} <- QuickBEAM.VM.BytecodeParser.decode(bytecode) do
-      {:ok, program}
-    else
-      _ -> compile_source_eval_program(code)
-    end
+    compile_native_eval_program(runtime_pid, code)
   end
 
   defp compile_eval_program(_ctx, code), do: compile_source_eval_program(code)
+
+  defp compile_native_eval_program(runtime_pid, code) do
+    case QuickBEAM.Runtime.compile(runtime_pid, code, "<eval>") do
+      {:ok, bytecode} ->
+        case QuickBEAM.VM.BytecodeParser.decode(bytecode) do
+          {:ok, program} -> {:ok, program}
+          {:error, _decode_reason} -> compile_source_eval_program(code)
+        end
+
+      {:error, %QuickBEAM.JS.Error{} = error} ->
+        throw({:js_throw, error})
+
+      {:error, reason} ->
+        throw({:js_throw, Heap.make_error(inspect(reason), "SyntaxError")})
+    end
+  end
 
   defp compile_source_eval_program(code) do
     case QuickBEAM.JS.Compiler.compile(code) do

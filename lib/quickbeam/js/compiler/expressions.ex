@@ -1558,20 +1558,18 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
        ) do
     slot = Scope.resolve(scope, name)
 
-    instructions =
-      if init == nil,
-        do: instructions ++ [:undefined],
-        else: instructions
-
     with {:ok, instructions, constants} <-
            if(init == nil,
              do: {:ok, instructions, constants},
              else: callbacks.compile_expression.(init, scope, instructions, constants)
            ) do
-      case slot do
-        :error -> {:ok, instructions ++ [{:put_var, name}], constants}
-        {:global, _} -> {:ok, instructions ++ [{:put_var, name}], constants}
-        slot -> {:ok, instructions ++ [Slots.put(slot)], constants}
+      case {init, slot} do
+        {nil, :error} -> {:ok, instructions ++ [:undefined, {:put_var, name}], constants}
+        {nil, {:global, _}} -> {:ok, instructions, constants}
+        {nil, _slot} -> {:ok, instructions, constants}
+        {_init, :error} -> {:ok, instructions ++ [{:put_var, name}], constants}
+        {_init, {:global, _}} -> {:ok, instructions ++ [{:put_var, name}], constants}
+        {_init, slot} -> {:ok, instructions ++ [Slots.put(slot)], constants}
       end
     end
   end
