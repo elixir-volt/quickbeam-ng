@@ -54,17 +54,27 @@ defmodule QuickBEAM.VM.Names do
     case name_val do
       s when is_binary(s) -> s
       n when is_number(n) -> Values.stringify(n)
+      {:symbol, :undefined, _} -> ""
       {:symbol, desc, _} -> "[" <> desc <> "]"
+      {:symbol, :undefined} -> ""
       {:symbol, desc} -> "[" <> desc <> "]"
       _ -> ""
     end
   end
 
   @doc "Returns a function-like value with updated name metadata."
-  def rename_function({:closure, captured, %QuickBEAM.VM.Function{} = fun}, name),
-    do: {:closure, captured, %{fun | name: name}}
+  def rename_function({:closure, captured, %QuickBEAM.VM.Function{} = fun}, name) do
+    renamed = {:closure, captured, %{fun | name: name}}
+    Heap.put_ctor_static(renamed, "name", name)
+    renamed
+  end
 
-  def rename_function(%QuickBEAM.VM.Function{} = fun, name), do: %{fun | name: name}
+  def rename_function(%QuickBEAM.VM.Function{} = fun, name) do
+    renamed = %{fun | name: name}
+    Heap.put_ctor_static(renamed, "name", name)
+    renamed
+  end
+
   def rename_function({:builtin, _, cb}, name), do: {:builtin, name, cb}
 
   def rename_function({:obj, ref} = obj, name) do

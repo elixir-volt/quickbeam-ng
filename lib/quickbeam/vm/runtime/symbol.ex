@@ -10,8 +10,11 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
     fn args, _this ->
       desc =
         case args do
+          [] -> :undefined
+          [nil | _] -> :undefined
+          [:undefined | _] -> :undefined
           [s | _] when is_binary(s) -> s
-          _ -> ""
+          [value | _] -> QuickBEAM.VM.Interpreter.Values.stringify(value)
         end
 
       {:symbol, desc, make_ref()}

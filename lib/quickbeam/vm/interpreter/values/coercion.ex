@@ -168,6 +168,8 @@ defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
   def to_string_val(n) when is_float(n) and n == 0.0, do: "0"
   def to_string_val(n) when is_float(n), do: format_float(n)
   def to_string_val({:bigint, n}), do: Integer.to_string(n)
+  def to_string_val({:symbol, :undefined}), do: "Symbol()"
+  def to_string_val({:symbol, :undefined, _ref}), do: "Symbol()"
   def to_string_val({:symbol, desc}), do: "Symbol(#{desc})"
   def to_string_val({:symbol, desc, _ref}), do: "Symbol(#{desc})"
   def to_string_val(s) when is_binary(s), do: s
