@@ -323,6 +323,11 @@ defmodule QuickBEAM.JS.CompilerTest do
       assert_compiles_to(~S|let x; for (x of [0]) { 3; break }|, 3)
     end
 
+    test "block lexical scopes stay aligned through nested blocks and with" do
+      assert_compiles_to(~S|{ { let x = 1; } } typeof x|, "undefined")
+      assert_compiles_to(~S|let outer = 1; with ({}) { let outer = 2; } outer|, 1)
+    end
+
     test "block lexical patterns keep coercion checks without leaking bindings" do
       assert_compiles_error_name(~S|{ let { a } = null; } "unreachable"|, "TypeError")
       assert_compiles_error_name(~S|{ let [a] = undefined; } "unreachable"|, "TypeError")

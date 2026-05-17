@@ -833,13 +833,7 @@ defmodule QuickBEAM.JS.Compiler.Statements do
       Process.put(:compiler_with_loc, with_loc)
 
       try do
-        case body do
-          %AST.BlockStatement{body: stmts} ->
-            compile_non_tail(stmts, scope, instructions, constants, opts, callbacks)
-
-          stmt ->
-            compile(stmt, scope, instructions, constants, opts, callbacks)
-        end
+        compile(body, scope, instructions, constants, opts, callbacks)
       after
         restore_process_value(:compiler_with_loc, prev_with)
       end

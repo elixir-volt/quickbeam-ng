@@ -307,8 +307,6 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
   defp hidden_block_local_name(block_id, index, name),
     do: "<block:#{block_id}:#{index}:#{name}>"
 
-  defp register_block_scope(%{bindings: []}), do: :ok
-
   defp register_block_scope(descriptor) do
     scopes = Process.get(:compiler_block_scopes, [])
     Process.put(:compiler_block_scopes, scopes ++ [descriptor])
