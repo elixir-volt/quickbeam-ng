@@ -125,6 +125,18 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Control do
 
       # ── gosub/ret (finally blocks) ──
 
+      defp run(
+             {@op_gosub, [target]},
+             pc,
+             frame,
+             [completion | stack],
+             gas,
+             %Context{catch_stack: [{_catch_target, stack} | rest_catch]} = ctx
+           ) do
+        ctx = Context.mark_dirty(%{ctx | catch_stack: rest_catch})
+        run(target, frame, [{:return_addr, pc + 1, rest_catch}, completion | stack], gas, ctx)
+      end
+
       defp run({@op_gosub, [target]}, pc, frame, stack, gas, %{catch_stack: []} = ctx) do
         run(target, frame, [{:return_addr, pc + 1} | stack], gas, ctx)
       end

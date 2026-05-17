@@ -117,6 +117,24 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
     )
   end
 
+  test "for-of finally throw stops outer iteration", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S"""
+             function* values() { yield 1; throw "unreachable"; }
+             var iterator = values();
+             var i = 0;
+             var error = {};
+             try {
+               for (var x of iterator) {
+                 try {} finally { i++; throw error; }
+               }
+             } catch (e) {}
+             i
+             """
+           ) == 1
+  end
+
   test "generator return resumes yield-star cleanup", %{rt: rt} do
     assert_modes(
       rt,
