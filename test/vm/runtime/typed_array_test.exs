@@ -9,6 +9,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayTest do
     )
   end
 
+  test "typed-array views observe writes through shared resizable buffers", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|var rab = new ArrayBuffer(10, { maxByteLength: 20 }); var ta = new Uint8Array(rab); for (var i = 0; i < 10; i++) ta[i] = i; var fixed = new Uint8Array(rab, 0, 3); var offset = new Uint8Array(rab, 2, 3); [fixed[1], offset[0]].join(",")|,
+      "1,2"
+    )
+  end
+
   test "defineProperty treats integer-index keys beyond array-index range as typed-array indexes",
        %{
          rt: rt

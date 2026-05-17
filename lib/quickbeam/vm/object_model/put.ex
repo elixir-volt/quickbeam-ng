@@ -1214,8 +1214,11 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   def put_element({:obj, ref} = obj, key, val) do
     case Heap.get_obj(ref) do
-      %{typed_array() => true} when is_integer(key) ->
-        Runtime.TypedArray.set_element(obj, key, val)
+      %{typed_array() => true} ->
+        case PropertyKey.array_index(key) do
+          {:ok, idx} -> Runtime.TypedArray.set_element(obj, idx, val)
+          :error -> :ok
+        end
 
       {:qb_arr, arr} ->
         case PropertyKey.array_index(key) do

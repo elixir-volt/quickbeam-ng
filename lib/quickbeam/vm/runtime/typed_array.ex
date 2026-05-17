@@ -183,6 +183,35 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       t = Map.get(ta, type_key(), :uint8)
       new_buf = write_element(buf(ref) || <<>>, idx, val, t)
       update_buffer(ref, new_buf)
+      delete_shadowed_views(ref, idx)
+    end
+  end
+
+  defp delete_shadowed_views(ref, idx) do
+    case Heap.get_obj(ref, %{}) do
+      %{"buffer" => {:obj, buf_ref}} ->
+        case Heap.get_obj(buf_ref, %{}) do
+          %{"__views__" => views} when is_list(views) ->
+            Enum.each(views, fn view_ref ->
+              view = Heap.get_obj(view_ref, %{})
+              offset = Map.get(view, "byteOffset", 0)
+              elem_size = Map.get(view, "BYTES_PER_ELEMENT", 1)
+
+              if rem(offset, elem_size) == 0 do
+                view_idx = idx - div(offset, elem_size)
+
+                if view_idx >= 0 do
+                  Heap.delete_array_prop(view_ref, Integer.to_string(view_idx))
+                end
+              end
+            end)
+
+          _ ->
+            :ok
+        end
+
+      _ ->
+        :ok
     end
   end
 
