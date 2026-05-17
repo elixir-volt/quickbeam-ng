@@ -60,7 +60,7 @@ defmodule QuickBEAM.JS.Compiler do
     previous_top_level_function_names = Process.get(:compiler_top_level_function_names)
     Process.put(:compiler_top_level_function_names, top_level_function_names(body))
 
-    result =
+    try do
       with {:ok, scope} <- Declarations.declare_program_locals(body, scope),
            {:ok, instructions, constants} <-
              compile_statements(body, scope, [], [], top_level_globals(scope)) do
@@ -91,9 +91,9 @@ defmodule QuickBEAM.JS.Compiler do
 
         {:ok, FunctionBuilder.build(build_opts)}
       end
-
-    Process.put(:compiler_top_level_function_names, previous_top_level_function_names)
-    result
+    after
+      restore_process_value(:compiler_top_level_function_names, previous_top_level_function_names)
+    end
   end
 
   defp top_level_function_names(body) do
@@ -215,80 +215,87 @@ defmodule QuickBEAM.JS.Compiler do
 
     Process.put(:compiler_current_self_bindings, current_self_bindings)
 
-    body =
-      if strict_self_binding?,
-        do: protect_strict_self_assignments(function.body.body, self_binding_name),
-        else: protect_self_assignments(function.body.body, self_binding_name)
+    try do
+      body =
+        if strict_self_binding?,
+          do: protect_strict_self_assignments(function.body.body, self_binding_name),
+          else: protect_self_assignments(function.body.body, self_binding_name)
 
-    with {:ok, scope} <- Declarations.declare_program_locals(body, scope),
-         {:ok, instructions, constants} <- compile_param_patterns(pattern_params, scope, [], []),
-         {:ok, instructions, constants} <- compile_rest_param(rest_param, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_self_binding_prologue(self_binding_name, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_arguments_prologue(uses_arguments_object?, scope, instructions, constants),
-         {:ok, instructions, constants} <-
-           compile_param_defaults(defaults, scope, instructions, constants, globals),
-         {:ok, instructions, constants} <-
-           compile_function_body(body, scope, instructions, constants, globals) do
-      instructions =
-        instructions
-        |> ensure_function_return()
-        |> ensure_derived_constructor_return()
+      with {:ok, scope} <- Declarations.declare_program_locals(body, scope),
+           {:ok, instructions, constants} <- compile_param_patterns(pattern_params, scope, [], []),
+           {:ok, instructions, constants} <-
+             compile_rest_param(rest_param, instructions, constants),
+           {:ok, instructions, constants} <-
+             compile_self_binding_prologue(self_binding_name, scope, instructions, constants),
+           {:ok, instructions, constants} <-
+             compile_arguments_prologue(uses_arguments_object?, scope, instructions, constants),
+           {:ok, instructions, constants} <-
+             compile_param_defaults(defaults, scope, instructions, constants, globals),
+           {:ok, instructions, constants} <-
+             compile_function_body(body, scope, instructions, constants, globals) do
+        instructions =
+          instructions
+          |> ensure_function_return()
+          |> ensure_derived_constructor_return()
 
-      var_refs = Process.get(:compiler_var_refs, %{})
-      Process.put(:compiler_var_refs, prev_var_refs)
-      restore_current_self_bindings(prev_self_bindings)
-      restore_strict_self_bindings(prev_strict_self_bindings)
-
-      {local_defs, var_ref_count} =
-        build_local_defs(params ++ scope.local_names, var_refs)
-
-      priv_closure_vars =
-        if class_priv do
-          {_refs, locs} = class_priv
-
-          priv_refs
-          |> Enum.sort_by(&elem(&1, 1))
-          |> Enum.map(fn {vn, _idx} ->
-            ploc = Enum.at(locs, Map.get(priv_refs, vn, 0))
-
-            %QuickBEAM.VM.ClosureVar{
-              name: vn,
-              var_idx: ploc,
-              closure_type: 0,
-              is_const: true,
-              is_lexical: true,
-              var_kind: 0
-            }
-          end)
-        else
-          []
-        end
-
-      {:ok,
-       FunctionBuilder.build(
-         name: name,
-         args: params,
-         locals: scope.local_names,
-         local_defs: local_defs,
-         closure_vars: priv_closure_vars,
-         var_ref_count: var_ref_count,
-         constants: Enum.reverse(constants),
-         instructions: instructions,
-         defined_arg_count: defined_arg_count(params, defaults, rest_param),
-         has_prototype: true,
-         has_simple_parameter_list: defaults == [] and rest_param == nil,
-         new_target_allowed: true,
-         func_kind: function_kind(function),
-         source: ""
-       )}
-    else
-      error ->
+        var_refs = Process.get(:compiler_var_refs, %{})
         Process.put(:compiler_var_refs, prev_var_refs)
         restore_current_self_bindings(prev_self_bindings)
         restore_strict_self_bindings(prev_strict_self_bindings)
-        error
+
+        {local_defs, var_ref_count} =
+          build_local_defs(params ++ scope.local_names, var_refs)
+
+        priv_closure_vars =
+          if class_priv do
+            {_refs, locs} = class_priv
+
+            priv_refs
+            |> Enum.sort_by(&elem(&1, 1))
+            |> Enum.map(fn {vn, _idx} ->
+              ploc = Enum.at(locs, Map.get(priv_refs, vn, 0))
+
+              %QuickBEAM.VM.ClosureVar{
+                name: vn,
+                var_idx: ploc,
+                closure_type: 0,
+                is_const: true,
+                is_lexical: true,
+                var_kind: 0
+              }
+            end)
+          else
+            []
+          end
+
+        {:ok,
+         FunctionBuilder.build(
+           name: name,
+           args: params,
+           locals: scope.local_names,
+           local_defs: local_defs,
+           closure_vars: priv_closure_vars,
+           var_ref_count: var_ref_count,
+           constants: Enum.reverse(constants),
+           instructions: instructions,
+           defined_arg_count: defined_arg_count(params, defaults, rest_param),
+           has_prototype: true,
+           has_simple_parameter_list: defaults == [] and rest_param == nil,
+           new_target_allowed: true,
+           func_kind: function_kind(function),
+           source: ""
+         )}
+      else
+        error ->
+          Process.put(:compiler_var_refs, prev_var_refs)
+          restore_current_self_bindings(prev_self_bindings)
+          restore_strict_self_bindings(prev_strict_self_bindings)
+          error
+      end
+    after
+      restore_process_value(:compiler_var_refs, prev_var_refs)
+      restore_current_self_bindings(prev_self_bindings)
+      restore_strict_self_bindings(prev_strict_self_bindings)
     end
   end
 
@@ -335,6 +342,9 @@ defmodule QuickBEAM.JS.Compiler do
        source: ""
      )}
   end
+
+  defp restore_process_value(key, nil), do: Process.delete(key)
+  defp restore_process_value(key, value), do: Process.put(key, value)
 
   defp restore_current_self_bindings(nil), do: Process.delete(:compiler_current_self_bindings)
 

@@ -1396,13 +1396,24 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
     else
       case simple_eval_var_declarations(code) do
         {:ok, declarations} ->
-          compile_simple_eval_var_declarations(
-            declarations,
-            scope,
-            instructions,
-            constants,
-            callbacks
-          )
+          if simple_eval_var_conflicts_with_lexical?(declarations, scope) do
+            {:ok,
+             instructions ++
+               [
+                 {:get_var, "SyntaxError"},
+                 {:get_var, "SyntaxError"},
+                 {:call_constructor, 0},
+                 :throw
+               ], constants}
+          else
+            compile_simple_eval_var_declarations(
+              declarations,
+              scope,
+              instructions,
+              constants,
+              callbacks
+            )
+          end
 
         :error ->
           case simple_eval_expression(code) do
@@ -1498,6 +1509,16 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
     end
   end
 
+  defp simple_eval_var_conflicts_with_lexical?(declarations, scope) do
+    Enum.any?(declarations, fn
+      %AST.VariableDeclarator{id: %AST.Identifier{name: name}} ->
+        Scope.local_kind(scope, name) in [:let, :const]
+
+      _ ->
+        true
+    end)
+  end
+
   defp compile_simple_eval_var_declarations(
          declarations,
          scope,
@@ -1561,19 +1582,38 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
        ),
        do: :error
 
-  defp compile_destructuring_assignment([], _scope, instructions, constants, _callbacks),
-    do: {:ok, instructions, constants}
+  defp compile_destructuring_assignment(properties, scope, instructions, constants, callbacks),
+    do:
+      compile_destructuring_assignment(properties, scope, instructions, constants, callbacks, [])
+
+  defp compile_destructuring_assignment(
+         [],
+         _scope,
+         instructions,
+         constants,
+         _callbacks,
+         _excluded
+       ),
+       do: {:ok, instructions, constants}
 
   defp compile_destructuring_assignment(
          [%AST.Property{computed: false, key: %AST.Identifier{name: key}, value: target} | rest],
          scope,
          instructions,
          constants,
-         callbacks
+         callbacks,
+         excluded
        ) do
     with {:ok, instructions, constants} <-
            compile_destructuring_target(key, target, scope, instructions, constants, callbacks) do
-      compile_destructuring_assignment(rest, scope, instructions, constants, callbacks)
+      compile_destructuring_assignment(
+        rest,
+        scope,
+        instructions,
+        constants,
+        callbacks,
+        excluded ++ [key]
+      )
     end
   end
 
@@ -1585,7 +1625,8 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
          scope,
          instructions,
          constants,
-         callbacks
+         callbacks,
+         excluded
        ) do
     with {:ok, instructions, constants} <-
            compile_computed_destructuring_target(
@@ -1596,7 +1637,51 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
              constants,
              callbacks
            ) do
-      compile_destructuring_assignment(rest, scope, instructions, constants, callbacks)
+      compile_destructuring_assignment(
+        rest,
+        scope,
+        instructions,
+        constants,
+        callbacks,
+        excluded ++ [{:computed, computed_key}]
+      )
+    end
+  end
+
+  defp compile_destructuring_assignment(
+         [%AST.RestElement{argument: %AST.Identifier{name: name}}],
+         scope,
+         instructions,
+         constants,
+         callbacks,
+         excluded
+       ) do
+    case callbacks.resolve.(scope, name) do
+      {:loc, loc} ->
+        with {:ok, instructions, constants} <-
+               compile_object_assignment_rest_excluded_keys(
+                 excluded,
+                 scope,
+                 instructions ++ [:dup],
+                 constants,
+                 callbacks
+               ) do
+          {:ok,
+           instructions ++
+             [
+               {:array_from, length(excluded)},
+               :object,
+               :rot3r,
+               {:copy_data_properties, 6},
+               :drop,
+               :swap,
+               {:put_loc, loc},
+               :drop
+             ], constants}
+        end
+
+      :error ->
+        {:error, {:unsupported, {:unresolved_identifier, name}}}
     end
   end
 
@@ -1605,9 +1690,68 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
          _scope,
          _instructions,
          _constants,
-         _callbacks
+         _callbacks,
+         _excluded
        ),
        do: {:error, {:unsupported, :assignment_expression}}
+
+  defp compile_object_assignment_rest_excluded_keys(
+         [],
+         _scope,
+         instructions,
+         constants,
+         _callbacks
+       ),
+       do: {:ok, instructions, constants}
+
+  defp compile_object_assignment_rest_excluded_keys(
+         [key | rest],
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           compile_object_assignment_rest_excluded_key(
+             key,
+             scope,
+             instructions,
+             constants,
+             callbacks
+           ) do
+      compile_object_assignment_rest_excluded_keys(
+        rest,
+        scope,
+        instructions,
+        constants,
+        callbacks
+      )
+    end
+  end
+
+  defp compile_object_assignment_rest_excluded_key(
+         {:computed, expression},
+         scope,
+         instructions,
+         constants,
+         callbacks
+       ) do
+    with {:ok, instructions, constants} <-
+           callbacks.compile_expression.(expression, scope, instructions, constants) do
+      {:ok, instructions ++ [:to_propkey], constants}
+    end
+  end
+
+  defp compile_object_assignment_rest_excluded_key(
+         key,
+         _scope,
+         instructions,
+         constants,
+         _callbacks
+       ) do
+    {key_instr, constants} = add_constant(key, constants)
+    {:ok, instructions ++ [key_instr], constants}
+  end
 
   defp compile_destructuring_target(
          key,

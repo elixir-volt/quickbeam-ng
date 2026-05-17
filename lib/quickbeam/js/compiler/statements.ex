@@ -736,7 +736,7 @@ defmodule QuickBEAM.JS.Compiler.Statements do
       prev_with = Process.get(:compiler_with_loc)
       Process.put(:compiler_with_loc, with_loc)
 
-      result =
+      try do
         case body do
           %AST.BlockStatement{body: stmts} ->
             compile_non_tail(stmts, scope, instructions, constants, opts, callbacks)
@@ -744,9 +744,9 @@ defmodule QuickBEAM.JS.Compiler.Statements do
           stmt ->
             compile(stmt, scope, instructions, constants, opts, callbacks)
         end
-
-      Process.put(:compiler_with_loc, prev_with)
-      result
+      after
+        restore_process_value(:compiler_with_loc, prev_with)
+      end
     else
       :error -> {:error, {:unsupported, :with_statement}}
       {:error, _} = error -> error
@@ -2628,6 +2628,54 @@ defmodule QuickBEAM.JS.Compiler.Statements do
   end
 
   defp compile_object_pattern_property(
+         %AST.Property{
+           computed: false,
+           key: %AST.Identifier{name: key},
+           value: %AST.ObjectPattern{properties: nested}
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks,
+         keep_object?,
+         _excluded_key
+       ) do
+    prefix = if keep_object?, do: [:dup], else: []
+
+    compile_object_pattern(
+      nested,
+      scope,
+      instructions ++ prefix ++ [{:get_field, key}, :to_object],
+      constants,
+      callbacks
+    )
+  end
+
+  defp compile_object_pattern_property(
+         %AST.Property{
+           computed: false,
+           key: %AST.Identifier{name: key},
+           value: %AST.ArrayPattern{elements: nested}
+         },
+         scope,
+         instructions,
+         constants,
+         callbacks,
+         keep_object?,
+         _excluded_key
+       ) do
+    prefix = if keep_object?, do: [:dup], else: []
+
+    compile_array_pattern(
+      nested,
+      scope,
+      instructions ++ prefix ++ [{:get_field, key}],
+      constants,
+      callbacks
+    )
+  end
+
+  defp compile_object_pattern_property(
          %AST.Property{} = property,
          _scope,
          _instructions,
@@ -2728,6 +2776,9 @@ defmodule QuickBEAM.JS.Compiler.Statements do
       end
     end
   end
+
+  defp restore_process_value(key, nil), do: Process.delete(key)
+  defp restore_process_value(key, value), do: Process.put(key, value)
 
   defp for_of_iterator_setup(start_label, end_label, value_loc, iter_loc, result_loc) do
     init = [

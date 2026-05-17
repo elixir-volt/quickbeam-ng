@@ -276,6 +276,11 @@ defmodule QuickBEAM.JS.CompilerTest do
       assert_compiles_to("function f(){ return eval('arguments[0]') } f(7)", 7)
     end
 
+    test "literal direct eval var declarations do not write lexical slots" do
+      assert_compiles_error_name(~S|let x; eval("var x = 1"); x|, "SyntaxError")
+      assert_compiles_to(~S|var x; eval("var x = 1"); x|, 1)
+    end
+
     test "throws SyntaxError for direct eval parse errors" do
       assert_compiles_to(
         ~S|let ex; try { eval('(function({await}) { "use strict"; return 1; })({})') } catch (err) { ex = err } ex instanceof SyntaxError|,
@@ -292,6 +297,16 @@ defmodule QuickBEAM.JS.CompilerTest do
         ~S/let i = 0; let keys = ["a", "b"]; let { [keys[i++]]: v, ...rest } = { a: 1, b: 2 }; [i, v, rest.a, rest.b].join("|")/,
         "1|1||2"
       )
+    end
+
+    test "compiles object rest assignment destructuring" do
+      assert_compiles_to(~S|let r; ({ ...r } = { a: 1 }); r.a|, 1)
+      assert_compiles_to(~S|let r, _; ({ a: _, ...r } = { a: 1, b: 2 }); r.b|, 2)
+    end
+
+    test "compiles nested object binding patterns" do
+      assert_compiles_to(~S|let { a: { b }, ...rest } = { a: { b: 1 }, c: 2 }; b + rest.c|, 3)
+      assert_compiles_to(~S|let { a: [b], ...rest } = { a: [1], c: 2 }; b + rest.c|, 3)
     end
 
     test "computed property reads perform ToPropertyKey" do

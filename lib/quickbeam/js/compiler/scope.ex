@@ -4,6 +4,7 @@ defmodule QuickBEAM.JS.Compiler.Scope do
   defstruct args: %{},
             globals: MapSet.new(),
             locals: %{},
+            local_kinds: %{},
             local_names: [],
             var_refs: %{},
             arguments_alias: nil,
@@ -25,7 +26,7 @@ defmodule QuickBEAM.JS.Compiler.Scope do
 
   def self_binding?(%__MODULE__{} = scope, name), do: MapSet.member?(scope.self_bindings, name)
 
-  def declare_local(%__MODULE__{} = scope, name) when is_binary(name) do
+  def declare_local(%__MODULE__{} = scope, name, kind \\ :var) when is_binary(name) do
     if Map.has_key?(scope.locals, name) do
       scope
     else
@@ -34,10 +35,13 @@ defmodule QuickBEAM.JS.Compiler.Scope do
       %{
         scope
         | locals: Map.put(scope.locals, name, index),
+          local_kinds: Map.put(scope.local_kinds, name, kind),
           local_names: scope.local_names ++ [name]
       }
     end
   end
+
+  def local_kind(%__MODULE__{} = scope, name), do: Map.get(scope.local_kinds, name)
 
   def names(%__MODULE__{} = scope) do
     aliases = if Map.has_key?(scope.locals, "<arguments>"), do: ["arguments"], else: []

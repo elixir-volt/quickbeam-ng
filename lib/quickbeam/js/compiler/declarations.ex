@@ -8,8 +8,13 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
 
   defp declare_statements([], scope), do: {:ok, scope}
 
-  defp declare_statements([%AST.VariableDeclaration{declarations: declarations} | rest], scope) do
-    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+  defp declare_statements(
+         [%AST.VariableDeclaration{kind: kind, declarations: declarations} | rest],
+         scope
+       ) do
+    scope =
+      Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc, kind) end)
+
     declare_statements(rest, scope)
   end
 
@@ -48,7 +53,9 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
          ],
          scope
        ) do
-    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    scope =
+      Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc, :var) end)
+
     scope = declare_nested_var_bindings_from(scope, body)
     declare_statements(rest, scope)
   end
@@ -56,13 +63,15 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
   defp declare_statements(
          [
            %AST.ForOfStatement{
-             left: %AST.VariableDeclaration{declarations: declarations}
+             left: %AST.VariableDeclaration{kind: kind, declarations: declarations}
            }
            | rest
          ],
          scope
        ) do
-    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    scope =
+      Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc, kind) end)
+
     scope = Scope.declare_local(scope, "<for_of_array>")
     scope = Scope.declare_local(scope, "<for_of_index>")
     scope = Scope.declare_local(scope, "<for_of_value>")
@@ -72,13 +81,15 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
   defp declare_statements(
          [
            %AST.ForInStatement{
-             left: %AST.VariableDeclaration{declarations: declarations}
+             left: %AST.VariableDeclaration{kind: kind, declarations: declarations}
            }
            | rest
          ],
          scope
        ) do
-    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    scope =
+      Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc, kind) end)
+
     scope = Scope.declare_local(scope, "<for_in_keys>")
     scope = Scope.declare_local(scope, "<for_in_index>")
     declare_statements(rest, scope)
@@ -125,7 +136,7 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
          scope
        ) do
     declarations
-    |> Enum.reduce(scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    |> Enum.reduce(scope, fn %{id: id}, acc -> declare_pattern(id, acc, :var) end)
     |> declare_nested_var_bindings_from(body)
   end
 
@@ -151,7 +162,9 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
          [%AST.VariableDeclaration{kind: :var, declarations: declarations} | rest],
          scope
        ) do
-    scope = Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc) end)
+    scope =
+      Enum.reduce(declarations, scope, fn %{id: id}, acc -> declare_pattern(id, acc, :var) end)
+
     declare_var_statements(rest, scope)
   end
 
@@ -160,13 +173,14 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
     declare_var_statements(rest, scope)
   end
 
-  defp declare_pattern(%AST.Identifier{name: name}, scope), do: Scope.declare_local(scope, name)
+  defp declare_pattern(%AST.Identifier{name: name}, scope, kind),
+    do: Scope.declare_local(scope, name, kind)
 
-  defp declare_pattern(%AST.ObjectPattern{properties: properties}, scope) do
+  defp declare_pattern(%AST.ObjectPattern{properties: properties}, scope, kind) do
     scope =
       Enum.reduce(properties, scope, fn
-        %AST.Property{value: value}, acc -> declare_pattern(value, acc)
-        %AST.RestElement{argument: argument}, acc -> declare_pattern(argument, acc)
+        %AST.Property{value: value}, acc -> declare_pattern(value, acc, kind)
+        %AST.RestElement{argument: argument}, acc -> declare_pattern(argument, acc, kind)
         _property, acc -> acc
       end)
 
@@ -175,21 +189,21 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
     |> Enum.reduce(scope, &Scope.declare_local(&2, &1))
   end
 
-  defp declare_pattern(%AST.ArrayPattern{elements: elements}, scope) do
+  defp declare_pattern(%AST.ArrayPattern{elements: elements}, scope, kind) do
     elements
     |> Enum.reject(&is_nil/1)
-    |> Enum.reduce(scope, &declare_pattern/2)
+    |> Enum.reduce(scope, &declare_pattern(&1, &2, kind))
   end
 
-  defp declare_pattern(%AST.AssignmentPattern{left: left}, scope) do
-    declare_pattern(left, scope)
+  defp declare_pattern(%AST.AssignmentPattern{left: left}, scope, kind) do
+    declare_pattern(left, scope, kind)
   end
 
-  defp declare_pattern(%AST.RestElement{argument: argument}, scope) do
-    declare_pattern(argument, scope)
+  defp declare_pattern(%AST.RestElement{argument: argument}, scope, kind) do
+    declare_pattern(argument, scope, kind)
   end
 
-  defp declare_pattern(_pattern, scope), do: scope
+  defp declare_pattern(_pattern, scope, _kind), do: scope
 
   defp object_rest_computed_key_temps(properties) do
     {temps, _index, _has_rest?} =
