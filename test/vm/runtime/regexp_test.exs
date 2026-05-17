@@ -38,6 +38,14 @@ defmodule QuickBEAM.VM.Runtime.RegExpTest do
     )
   end
 
+  test "stateful exec throws when lastIndex cannot be written", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let r = /b/g; Object.defineProperty(r, "lastIndex", { writable: false }); try { r.exec("a"); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
   test "sticky exec requires a match at lastIndex", %{rt: rt} do
     assert_modes(
       rt,

@@ -1,6 +1,24 @@
 defmodule QuickBEAM.VM.Compiler.DestructuringTest do
   use QuickBEAM.VMCase, async: true
 
+  test "object binding requires object coercible source", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|try { var {a} = null; "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+
+    assert_modes(
+      rt,
+      ~S|try { ({a} = undefined); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
+  test "object binding permits primitive coercible source", %{rt: rt} do
+    assert_modes(rt, ~S|var {length} = "abc"; length|, 3)
+  end
+
   test "object rest binding copies non-excluded properties", %{rt: rt} do
     assert_modes(
       rt,

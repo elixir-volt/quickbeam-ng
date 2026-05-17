@@ -335,6 +335,15 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp stateful_regexp?(flags), do: String.contains?(flags, "g") or String.contains?(flags, "y")
 
+  defp set_last_index!({:regexp, _, _, ref} = regexp, value) do
+    case Heap.get_prop_desc(ref, "lastIndex") do
+      %{writable: false} -> JSThrow.type_error!("Cannot assign to read only property")
+      _ -> Put.put(regexp, "lastIndex", value)
+    end
+  end
+
+  defp set_last_index!(regexp, value), do: Put.put(regexp, "lastIndex", value)
+
   defp regexp_last_index(regexp) do
     case Runtime.to_number(Get.get(regexp, "lastIndex")) do
       {:bigint, _} -> JSThrow.type_error!("Cannot convert a BigInt value to a number")
@@ -353,23 +362,23 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     last_index = regexp_last_index(regexp)
 
     if last_index == :out_of_range do
-      Put.put(regexp, "lastIndex", 0)
+      set_last_index!(regexp, 0)
       nil
     else
       case exec_at_index(regexp, string, flags, last_index) do
         nil ->
-          Put.put(regexp, "lastIndex", 0)
+          set_last_index!(regexp, 0)
           nil
 
         result ->
           index = Get.get(result, "index")
 
           if String.contains?(flags, "y") and index != last_index do
-            Put.put(regexp, "lastIndex", 0)
+            set_last_index!(regexp, 0)
             nil
           else
             match = Values.stringify(Get.get(result, "0"))
-            Put.put(regexp, "lastIndex", index + Get.string_length(match))
+            set_last_index!(regexp, index + Get.string_length(match))
             result
           end
       end
@@ -395,7 +404,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     start_index = regexp_last_index(regexp)
 
     if start_index == :out_of_range do
-      Put.put(regexp, "lastIndex", 0)
+      set_last_index!(regexp, 0)
       nil
     else
       case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
@@ -406,15 +415,15 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
           prefix = binary_part(string, 0, index)
 
           if Regex.match?(~r/^\w+$/, prefix) do
-            Put.put(regexp, "lastIndex", index + 3)
+            set_last_index!(regexp, index + 3)
             exec_result(["def", prefix], index, string)
           else
-            Put.put(regexp, "lastIndex", 0)
+            set_last_index!(regexp, 0)
             nil
           end
 
         _ ->
-          Put.put(regexp, "lastIndex", 0)
+          set_last_index!(regexp, 0)
           nil
       end
     end
@@ -424,7 +433,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     start_index = regexp_last_index(regexp)
 
     if start_index == :out_of_range do
-      Put.put(regexp, "lastIndex", 0)
+      set_last_index!(regexp, 0)
       nil
     else
       case Regex.run(~r/def/, binary_part(string, start_index, byte_size(string) - start_index),
@@ -435,15 +444,15 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
           previous = if index > 0, do: binary_part(string, index - 1, 1), else: ""
 
           if Regex.match?(~r/\w/, previous) do
-            Put.put(regexp, "lastIndex", index + 3)
+            set_last_index!(regexp, index + 3)
             exec_result(["def"], index, string)
           else
-            Put.put(regexp, "lastIndex", index + 1)
+            set_last_index!(regexp, index + 1)
             exec_global_non_boundary_def(regexp, string)
           end
 
         _ ->
-          Put.put(regexp, "lastIndex", 0)
+          set_last_index!(regexp, 0)
           nil
       end
     end
@@ -453,7 +462,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     start_index = regexp_last_index(regexp)
 
     if start_index == :out_of_range do
-      Put.put(regexp, "lastIndex", 0)
+      set_last_index!(regexp, 0)
       nil
     else
       string
@@ -463,11 +472,11 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       |> Enum.find(fn {unit, _index} -> word_source_match?(source, unit) end)
       |> case do
         nil ->
-          Put.put(regexp, "lastIndex", 0)
+          set_last_index!(regexp, 0)
           nil
 
         {unit, index} ->
-          Put.put(regexp, "lastIndex", index + 1)
+          set_last_index!(regexp, index + 1)
           exec_result([<<unit::utf8>>], index, string)
       end
     end
@@ -1015,9 +1024,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     if Values.stringify(Get.get(match, "0")) == "" do
       this_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
 
-      Put.put(
+      set_last_index!(
         regexp,
-        "lastIndex",
         advance_string_index(string, this_index, regexp_match_all_unicode?(regexp))
       )
     end

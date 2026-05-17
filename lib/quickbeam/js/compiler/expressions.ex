@@ -741,7 +741,13 @@ defmodule QuickBEAM.JS.Compiler.Expressions do
       ) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(right, scope, instructions, constants) do
-      compile_destructuring_assignment(properties, scope, instructions, constants, callbacks)
+      compile_destructuring_assignment(
+        properties,
+        scope,
+        instructions ++ [:to_object],
+        constants,
+        callbacks
+      )
     end
   end
 

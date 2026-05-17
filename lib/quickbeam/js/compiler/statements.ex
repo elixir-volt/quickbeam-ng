@@ -2258,7 +2258,13 @@ defmodule QuickBEAM.JS.Compiler.Statements do
        ) do
     with {:ok, instructions, constants} <-
            callbacks.compile_expression.(init, scope, instructions, constants) do
-      compile_object_pattern(properties, scope, instructions, constants, callbacks)
+      compile_object_pattern(
+        properties,
+        scope,
+        instructions ++ [:to_object],
+        constants,
+        callbacks
+      )
     end
   end
 
