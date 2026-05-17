@@ -18,15 +18,25 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
   end
 
   test "for-of closes active iterator when assignment head throws", %{rt: rt} do
-    assert beam!(
-             rt,
-             ~S|let closed = 0; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done: false }; }, return() { closed++; return {}; } }; let target = { set value(_) { throw new Error("boom"); } }; try { for (target.value of iter) {} } catch (_) {} closed|
-           ) == 1
+    assert_modes(
+      rt,
+      ~S|let closed = 0; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done: false }; }, return() { closed++; return {}; } }; let target = { set value(_) { throw new Error("boom"); } }; try { for (target.value of iter) {} } catch (_) {} closed|,
+      1
+    )
 
-    assert beam!(
-             rt,
-             ~S|let closed = 0; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done: false }; }, return() { closed++; return {}; } }; let key = "value"; let target = new Proxy({}, { set() { throw new Error("boom"); } }); try { for (target[key] of iter) {} } catch (_) {} closed|
-           ) == 1
+    assert_modes(
+      rt,
+      ~S|let closed = 0; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done: false }; }, return() { closed++; return {}; } }; let key = "value"; let target = new Proxy({}, { set() { throw new Error("boom"); } }); try { for (target[key] of iter) {} } catch (_) {} closed|,
+      1
+    )
+  end
+
+  test "for-of keeps iterators open for locally caught assignment throws", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let closed = 0; let count = 0; let iter = { i: 0, [Symbol.iterator]() { return this; }, next() { this.i++; return { value: this.i, done: this.i > 2 }; }, return() { closed++; return {}; } }; let target = { set value(_) { throw new Error("boom"); } }; for (let x of iter) { try { target.value = x; } catch (_) { count++; continue; } } [count, closed].join(",")|,
+      "2,0"
+    )
   end
 
   test "for-of validates iterator result objects and done truthiness", %{rt: rt} do

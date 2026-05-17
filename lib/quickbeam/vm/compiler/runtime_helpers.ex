@@ -566,6 +566,19 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     :ok
   end
 
+  def assignment_with_iterator_close(ctx, fun, iterators, obj, key, val) do
+    try do
+      case fun do
+        :put_field -> put_field(ctx, obj, key, val)
+        :put_array_el -> put_array_el(ctx, obj, key, val)
+      end
+    catch
+      {:js_throw, error} ->
+        Enum.each(iterators, &iterator_close_for_throw(ctx, &1))
+        throw({:js_throw, error})
+    end
+  end
+
   def define_array_el(_ctx \\ nil, obj, idx, val), do: Put.define_array_el(obj, idx, val)
 
   def define_field(_ctx, obj, key, val) when is_binary(key) or is_number(key),

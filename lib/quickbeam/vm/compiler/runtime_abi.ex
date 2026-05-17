@@ -33,6 +33,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def put_field(ctx, obj, key, value), do: RuntimeHelpers.put_field(ctx, obj, key, value)
 
+  def assignment_with_iterator_close(ctx, fun, iterators, obj, key, value),
+    do: RuntimeHelpers.assignment_with_iterator_close(ctx, fun, iterators, obj, key, value)
+
   def for_of_start(ctx, obj), do: RuntimeHelpers.for_of_start(ctx, obj)
 
   def for_of_next(ctx, next_fn, iter_obj), do: RuntimeHelpers.for_of_next(ctx, next_fn, iter_obj)

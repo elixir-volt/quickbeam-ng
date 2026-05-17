@@ -348,8 +348,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     with {:ok, val, _val_type, state} <- Emit.pop_typed(state),
          {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       state = Effects.invalidate_shaped_aliases(state, obj)
+      call = assignment_call_with_iterator_close(state, :put_field, [obj, key_expr, val])
 
-      {:ok, Emit.emit(state, abi_call(state, :put_field, [obj, key_expr, val]))}
+      {:ok, Emit.emit(state, call)}
     end
   end
 
@@ -453,7 +454,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
          {:ok, idx, _idx_type, state} <- Emit.pop_typed(state),
          {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
       state = Effects.invalidate_shaped_aliases(state, obj)
-      {:ok, Emit.emit(state, abi_call(state, :put_array_el, [obj, idx, val]))}
+      call = assignment_call_with_iterator_close(state, :put_array_el, [obj, idx, val])
+      {:ok, Emit.emit(state, call)}
     end
   end
 
@@ -748,6 +750,49 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       {:done, Enum.reverse([Builder.throw_js(expr) | close_calls ++ state.body])}
     end
   end
+
+  defp assignment_call_with_iterator_close(state, fun, args) do
+    case active_iterator_exprs(state) do
+      [] ->
+        abi_call(state, fun, args)
+
+      iterators ->
+        abi_call(state, :assignment_with_iterator_close, [
+          Builder.literal(fun),
+          Builder.list_expr(iterators) | args
+        ])
+    end
+  end
+
+  defp active_iterator_exprs(state) do
+    state.stack
+    |> Enum.zip(state.stack_types)
+    |> active_iterator_exprs([])
+  end
+
+  defp active_iterator_exprs(
+         [
+           {_catch_marker, :integer},
+           {_counter, :integer},
+           {_next_fn, next_type},
+           {_iter_obj, iter_type} | _rest
+         ],
+         acc
+       )
+       when next_type in [:function, :unknown] and iter_type in [:object, :unknown] do
+    acc
+  end
+
+  defp active_iterator_exprs(
+         [{_counter, :integer}, {_next_fn, next_type}, {iter_obj, iter_type} | rest],
+         acc
+       )
+       when next_type in [:function, :unknown] and iter_type in [:object, :unknown] do
+    active_iterator_exprs(rest, [iter_obj | acc])
+  end
+
+  defp active_iterator_exprs([_entry | rest], acc), do: active_iterator_exprs(rest, acc)
+  defp active_iterator_exprs([], acc), do: Enum.reverse(acc)
 
   defp active_iterator_close_calls(state) do
     state.stack
