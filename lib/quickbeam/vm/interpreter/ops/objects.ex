@@ -65,7 +65,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
             run(pc + 1, frame, rest, gas, ctx)
 
           {:throw, error} ->
-            throw_or_catch(frame, error, gas, ctx)
+            throw_or_catch(frame, error, gas, close_active_iterators_on_abrupt(rest, ctx))
         end
       end
 

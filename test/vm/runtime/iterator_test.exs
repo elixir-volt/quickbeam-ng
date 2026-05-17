@@ -8,6 +8,13 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
            ) == 1
   end
 
+  test "for-of closes active iterator when assignment head throws", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|let closed = 0; let iter = { [Symbol.iterator]() { return this; }, next() { return { value: 1, done: false }; }, return() { closed++; return {}; } }; let target = { set value(_) { throw new Error("boom"); } }; try { for (target.value of iter) {} } catch (_) {} closed|
+           ) == 1
+  end
+
   test "Iterator.from wraps arbitrary self-iterables before helper validation", %{rt: rt} do
     assert beam!(rt, """
            let closed = 0;
