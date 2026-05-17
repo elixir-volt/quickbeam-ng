@@ -38,6 +38,20 @@ defmodule QuickBEAM.VM.Runtime.RegExpTest do
     )
   end
 
+  test "special global exec paths reset large lastIndex", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let r = /\Bdef/g; r.lastIndex = 99; let result = r.exec("abcdef"); [result, r.lastIndex].join(",")|,
+      ",0"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let r = /(?<=^(\w+))def/g; r.lastIndex = 99; let result = r.exec("abcdef"); [result, r.lastIndex].join(",")|,
+      ",0"
+    )
+  end
+
   test "stateful exec throws when lastIndex cannot be written", %{rt: rt} do
     assert_modes(
       rt,

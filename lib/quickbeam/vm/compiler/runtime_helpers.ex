@@ -557,6 +557,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   defp sync_global_field_write(_ctx, _obj, _key, _val), do: :ok
 
+  def get_array_el(ctx \\ nil, obj, idx),
+    do: with_runtime_ctx(ctx, fn -> PropertyAccess.get_property(ctx, obj, idx) end)
+
   @doc "Writes a JavaScript array element."
   def put_array_el(ctx \\ nil, obj, idx, val) do
     with_runtime_ctx(ctx, fn -> PropertyAccess.set_property(ctx, obj, idx, val) end)

@@ -22,6 +22,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def special_object(ctx, type), do: RuntimeHelpers.special_object(ctx, type)
 
+  def get_array_el(ctx, obj, index), do: RuntimeHelpers.get_array_el(ctx, obj, index)
+
   def get_array_el2(ctx, obj, index), do: RuntimeHelpers.get_array_el2(ctx, obj, index)
 
   def put_array_el(ctx, obj, index, value),

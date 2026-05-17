@@ -403,7 +403,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec_global_prefix_lookbehind_def(regexp, string) do
     start_index = regexp_last_index(regexp)
 
-    if start_index == :out_of_range do
+    if regexp_start_out_of_range?(start_index, string) do
       set_last_index!(regexp, 0)
       nil
     else
@@ -432,7 +432,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec_global_non_boundary_def(regexp, string) do
     start_index = regexp_last_index(regexp)
 
-    if start_index == :out_of_range do
+    if regexp_start_out_of_range?(start_index, string) do
       set_last_index!(regexp, 0)
       nil
     else
@@ -458,10 +458,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
+  defp regexp_start_out_of_range?(:out_of_range, _string), do: true
+  defp regexp_start_out_of_range?(start_index, string), do: start_index > byte_size(string)
+
   defp exec_global_ascii_word(regexp, source, string) do
     start_index = regexp_last_index(regexp)
 
-    if start_index == :out_of_range do
+    if regexp_start_out_of_range?(start_index, string) do
       set_last_index!(regexp, 0)
       nil
     else

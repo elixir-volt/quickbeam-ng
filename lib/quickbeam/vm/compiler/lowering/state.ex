@@ -272,6 +272,13 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     end
   end
 
+  def get_array_el(state) do
+    with {:ok, idx, _idx_type, state} <- Emit.pop_typed(state),
+         {:ok, obj, _obj_type, state} <- Emit.pop_typed(state) do
+      {:ok, Emit.push(state, abi_call(state, :get_array_el, [obj, idx]))}
+    end
+  end
+
   @doc "Lowers array element read while preserving receiver and element result on the stack."
   def get_array_el2(state) do
     with {:ok, idx, _idx_type, state} <- Emit.pop_typed(state),

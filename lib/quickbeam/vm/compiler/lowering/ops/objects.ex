@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.ObjectModel.{Class, Private, Put}
+  alias QuickBEAM.VM.ObjectModel.{Class, Private}
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, name_args) do
@@ -68,7 +68,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
         State.define_field_name_call(state, Builder.literal(Builder.atom_name(state, atom_idx)))
 
       {{:ok, :get_array_el}, []} ->
-        Operators.binary_call(state, Put, :get_element)
+        State.get_array_el(state)
 
       {{:ok, :get_array_el2}, []} ->
         State.get_array_el2(state)
