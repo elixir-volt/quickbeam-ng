@@ -79,6 +79,16 @@ defmodule QuickBEAM.JS.Compiler.Declarations do
   end
 
   defp declare_statements(
+         [%AST.ForOfStatement{} | rest],
+         scope
+       ) do
+    scope = Scope.declare_local(scope, "<for_of_array>")
+    scope = Scope.declare_local(scope, "<for_of_index>")
+    scope = Scope.declare_local(scope, "<for_of_value>")
+    declare_statements(rest, scope)
+  end
+
+  defp declare_statements(
          [
            %AST.ForInStatement{
              left: %AST.VariableDeclaration{kind: kind, declarations: declarations}

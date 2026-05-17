@@ -618,9 +618,11 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         scope,
         instructions,
         constants,
-        _opts,
+        opts,
         callbacks
       ) do
+    instructions = maybe_reset_loop_completion(instructions, Keyword.fetch!(opts, :tail?))
+
     with {:loc, value_loc} <- callbacks.resolve.(scope, name),
          {:ok, instructions, constants} <-
            callbacks.compile_expression.(right, scope, instructions, constants) do
@@ -630,7 +632,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         scope,
         instructions,
         constants,
-        callbacks
+        callbacks,
+        Keyword.fetch!(opts, :tail?)
       )
     else
       :error -> {:error, {:unsupported, :for_of_binding}}
@@ -652,9 +655,11 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         scope,
         instructions,
         constants,
-        _opts,
+        opts,
         callbacks
       ) do
+    instructions = maybe_reset_loop_completion(instructions, Keyword.fetch!(opts, :tail?))
+
     with {:loc, value_loc} <- callbacks.resolve.(scope, "<for_of_value>"),
          {:ok, instructions, constants} <-
            callbacks.compile_expression.(right, scope, instructions, constants) do
@@ -665,11 +670,63 @@ defmodule QuickBEAM.JS.Compiler.Statements do
         scope,
         instructions,
         constants,
-        callbacks
+        callbacks,
+        Keyword.fetch!(opts, :tail?)
       )
     else
       :error -> {:error, {:unsupported, :for_of_binding}}
       {:error, _} = error -> error
+    end
+  end
+
+  def compile(
+        %AST.ForOfStatement{
+          left: %AST.Identifier{name: name},
+          right: right,
+          body: body,
+          await: false
+        },
+        scope,
+        instructions,
+        constants,
+        opts,
+        callbacks
+      ) do
+    instructions = maybe_reset_loop_completion(instructions, Keyword.fetch!(opts, :tail?))
+
+    case callbacks.resolve.(scope, name) do
+      {:loc, value_loc} ->
+        with {:ok, instructions, constants} <-
+               callbacks.compile_expression.(right, scope, instructions, constants) do
+          compile_iterator_for_of(
+            body,
+            value_loc,
+            scope,
+            instructions,
+            constants,
+            callbacks,
+            Keyword.fetch!(opts, :tail?)
+          )
+        end
+
+      {:global, ^name} ->
+        with {:loc, value_loc} <- callbacks.resolve.(scope, "<for_of_value>"),
+             {:ok, instructions, constants} <-
+               callbacks.compile_expression.(right, scope, instructions, constants) do
+          compile_iterator_for_of(
+            body,
+            value_loc,
+            scope,
+            instructions,
+            constants,
+            callbacks,
+            Keyword.fetch!(opts, :tail?),
+            [{:get_loc, value_loc}, {:put_var, name}]
+          )
+        end
+
+      :error ->
+        {:error, {:unsupported, :for_of_binding}}
     end
   end
 
@@ -1873,7 +1930,9 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          scope,
          instructions,
          constants,
-         callbacks
+         callbacks,
+         tail?,
+         bind_value_ops \\ []
        ) do
     start_label = callbacks.unique_label.(:for_of_start)
     end_label = callbacks.unique_label.(:for_of_end)
@@ -1881,8 +1940,6 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
     with {:loc, iter_loc} <- callbacks.resolve.(scope, "<for_of_array>"),
          {:loc, result_loc} <- callbacks.resolve.(scope, "<for_of_index>") do
-      # Manual iterator protocol: call iterable[Symbol.iterator](), loop with next()
-      # Stack has iterable from caller. Call [Symbol.iterator]() on it.
       {init, loop_head} =
         for_of_iterator_setup(start_label, end_label, value_loc, iter_loc, result_loc)
 
@@ -1890,14 +1947,17 @@ defmodule QuickBEAM.JS.Compiler.Statements do
              compile(
                body,
                scope,
-               instructions ++ init ++ loop_head,
+               instructions ++ init ++ loop_head ++ bind_value_ops,
                constants,
-               [tail?: false, break_label: end_label, continue_label: update_label],
+               [tail?: tail?, break_label: end_label, continue_label: update_label],
                callbacks
              ) do
+        instructions = maybe_drop_loop_completion(instructions, tail?)
+
         {:ok,
-         instructions ++
-           [{:label, update_label}, {:jump, start_label}, {:label, end_label}], constants}
+         instructions
+         |> Kernel.++([{:label, update_label}, {:jump, start_label}, {:label, end_label}])
+         |> maybe_push_loop_completion(tail?), constants}
       end
     else
       :error -> {:error, {:unsupported, :for_of_binding}}
@@ -1911,7 +1971,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
          scope,
          instructions,
          constants,
-         callbacks
+         callbacks,
+         tail?
        ) do
     start_label = callbacks.unique_label.(:for_of_start)
     end_label = callbacks.unique_label.(:for_of_end)
@@ -1936,17 +1997,31 @@ defmodule QuickBEAM.JS.Compiler.Statements do
                scope,
                instructions,
                constants,
-               [tail?: false, break_label: end_label, continue_label: update_label],
+               [tail?: tail?, break_label: end_label, continue_label: update_label],
                callbacks
              ) do
+        instructions = maybe_drop_loop_completion(instructions, tail?)
+
         {:ok,
-         instructions ++
-           [{:label, update_label}, {:jump, start_label}, {:label, end_label}], constants}
+         instructions
+         |> Kernel.++([{:label, update_label}, {:jump, start_label}, {:label, end_label}])
+         |> maybe_push_loop_completion(tail?), constants}
       end
     else
       :error -> {:error, {:unsupported, :for_of_binding}}
     end
   end
+
+  defp maybe_reset_loop_completion(instructions, false), do: instructions
+
+  defp maybe_reset_loop_completion(instructions, true),
+    do: instructions ++ [:undefined, {:set_loc, 0}, :drop]
+
+  defp maybe_drop_loop_completion(instructions, false), do: instructions
+  defp maybe_drop_loop_completion(instructions, true), do: instructions ++ [:drop]
+
+  defp maybe_push_loop_completion(instructions, false), do: instructions
+  defp maybe_push_loop_completion(instructions, true), do: instructions ++ [{:get_loc, 0}]
 
   defp compile_indexed_iteration(
          body,
@@ -2793,7 +2868,8 @@ defmodule QuickBEAM.JS.Compiler.Statements do
       {:get_field, "iterator"},
       :get_array_el2,
       {:call_method, 0},
-      {:put_loc, iter_loc}
+      {:put_loc, iter_loc},
+      :drop
     ]
 
     loop_head = [

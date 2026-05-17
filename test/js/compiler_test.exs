@@ -309,6 +309,13 @@ defmodule QuickBEAM.JS.CompilerTest do
       assert_compiles_to(~S|let { a: [b], ...rest } = { a: [1], c: 2 }; b + rest.c|, 3)
     end
 
+    test "for-of preserves completion values and assignment heads" do
+      assert_compiles_to(~S|for (let x of []) { 1 }|, :undefined)
+      assert_compiles_to(~S|for (let x of [0]) { 3 }|, 3)
+      assert_compiles_to(~S|let x; for (x of [0]) { 4 }|, 4)
+      assert_compiles_to(~S|let x; for (x of []) { 4 }|, :undefined)
+    end
+
     test "block lexical patterns keep coercion checks without leaking bindings" do
       assert_compiles_error_name(~S|{ let { a } = null; } "unreachable"|, "TypeError")
       assert_compiles_error_name(~S|{ let [a] = undefined; } "unreachable"|, "TypeError")
