@@ -899,11 +899,27 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         end
       end
     else
-      pairs =
+      entries =
         proxy
         |> OwnProperty.descriptor_keys()
         |> Enum.filter(&OwnProperty.enumerable?(proxy, &1))
-        |> Enum.map(fn key -> {to_string(key), proxy |> Get.get(key) |> to_json()} end)
+        |> Enum.map(&{&1, nil})
+        |> order_json_entries(nil)
+
+      pairs =
+        entries
+        |> Enum.map(fn {key, _value} ->
+          string_key = to_string(key)
+
+          replaced =
+            proxy
+            |> Get.get(string_key)
+            |> apply_to_json_hook(string_key)
+            |> apply_property_replacer(string_key, proxy)
+
+          value = if replaced == :undefined, do: :undefined, else: to_json(replaced)
+          {string_key, value}
+        end)
         |> Enum.reject(fn {_, value} -> value == :undefined end)
 
       {:ordered_map, pairs}

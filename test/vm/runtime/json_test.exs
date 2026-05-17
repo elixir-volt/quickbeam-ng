@@ -24,4 +24,18 @@ defmodule QuickBEAM.VM.Runtime.JSONTest do
       "[3]"
     )
   end
+
+  test "proxy object stringify applies property toJSON, replacer, and property list", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let obj = { x: { toJSON() { return 2; } }, y: 3 }; let p = new Proxy(obj, {}); JSON.stringify(p, ["x"])|,
+      ~S|{"x":2}|
+    )
+
+    assert_modes(
+      rt,
+      ~S|let obj = { x: { toJSON() { return 2; } } }; let p = new Proxy(obj, {}); JSON.stringify(p, (k, v) => k === "x" ? v + 1 : v)|,
+      ~S|{"x":3}|
+    )
+  end
 end

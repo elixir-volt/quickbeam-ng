@@ -294,6 +294,17 @@ defmodule QuickBEAM.JS.CompilerTest do
       )
     end
 
+    test "computed property reads perform ToPropertyKey" do
+      assert_compiles_to(
+        ~S|let key = { toString() { globalThis.hit = 1; return "x"; } }; let obj = { x: 2 }; obj[key] + hit|,
+        3
+      )
+    end
+
+    test "compiled globalThis field writes update global bindings" do
+      assert_compiles_to(~S|globalThis.compiledGlobal = 1; compiledGlobal|, 1)
+    end
+
     test "preserves object property order in compiled mode" do
       assert_compiles_to(
         ~S|let a = { get: 2, set: 3, async: 4, get a(){ return this.get } }; JSON.stringify(a)|,

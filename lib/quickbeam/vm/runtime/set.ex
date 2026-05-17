@@ -162,18 +162,8 @@ defmodule QuickBEAM.VM.Runtime.Set do
       JSThrow.type_error!("Iterator next is not callable")
     end
 
-    result = call_with_this(next_fn, [], iterator)
-
     try do
-      unless match?({:obj, _}, result) or is_map(result) do
-        JSThrow.type_error!("Iterator result is not an object")
-      end
-
-      unless Get.get(result, "done") == true do
-        value = Get.get(result, "value")
-        call_with_this(adder, [value], set)
-        construct_set_from_iterator(iterator, set, adder)
-      end
+      construct_set_iterator_loop(iterator, next_fn, set, adder)
     catch
       {:js_throw, _} = thrown ->
         call_iterator_return(iterator)
@@ -206,22 +196,26 @@ defmodule QuickBEAM.VM.Runtime.Set do
       JSThrow.type_error!("Iterator next is not callable")
     end
 
-    result = call_with_this(next_fn, [], iterator)
-
     try do
-      unless match?({:obj, _}, result) or is_map(result) do
-        JSThrow.type_error!("Iterator result is not an object")
-      end
-
-      unless Get.get(result, "done") == true do
-        value = Get.get(result, "value")
-        call_with_this(adder, [value], set)
-        construct_weak_set_from_iterator(iterator, set, adder)
-      end
+      construct_set_iterator_loop(iterator, next_fn, set, adder)
     catch
       {:js_throw, _} = thrown ->
         call_iterator_return(iterator)
         throw(thrown)
+    end
+  end
+
+  defp construct_set_iterator_loop(iterator, next_fn, set, adder) do
+    result = call_with_this(next_fn, [], iterator)
+
+    unless match?({:obj, _}, result) or is_map(result) do
+      JSThrow.type_error!("Iterator result is not an object")
+    end
+
+    unless Get.get(result, "done") == true do
+      value = Get.get(result, "value")
+      call_with_this(adder, [value], set)
+      construct_set_iterator_loop(iterator, next_fn, set, adder)
     end
   end
 

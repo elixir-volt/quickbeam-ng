@@ -43,6 +43,13 @@ defmodule QuickBEAM.VM.Runtime.SetTest do
            ) == true
   end
 
+  test "constructor closes iterator only once for recursive abrupts", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|let closed = 0; let proto = Object.getPrototypeOf(new Set()); let original = proto.add; let count = 0; proto.add = function() { if (++count === 2) throw new Error("boom"); return this; }; let iterable = { [Symbol.iterator]() { let i = 0; return { next() { return {value: ++i, done: false}; }, return() { closed++; return {}; } }; } }; try { new Set(iterable); } catch (_) {} proto.add = original; closed|
+           ) == 1
+  end
+
   test "constructor closes iterator when done or value access throws", %{rt: rt} do
     assert beam!(
              rt,

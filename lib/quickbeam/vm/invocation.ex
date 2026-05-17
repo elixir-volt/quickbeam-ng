@@ -124,24 +124,38 @@ defmodule QuickBEAM.VM.Invocation do
   def call_callback!(fun, args, this_obj) do
     ctx = active_ctx()
 
+    callback_ctx =
+      if this_obj == nil, do: ctx, else: %{ctx | this: this_obj} |> Context.mark_dirty()
+
     case fun do
       {:closure, _, %QuickBEAM.VM.Function{need_home_object: false, closure_vars: []}} = closure ->
-        case Runner.invoke(closure, args, ctx) do
-          {:ok, value} -> value
-          :error -> Interpreter.invoke_closure_fallback(closure, args, ctx.gas, ctx)
+        case Runner.invoke(closure, args, callback_ctx) do
+          {:ok, value} ->
+            value
+
+          :error ->
+            Interpreter.invoke_closure_fallback(closure, args, callback_ctx.gas, callback_ctx)
         end
 
       {:closure, _, %QuickBEAM.VM.Function{}} = closure ->
-        Interpreter.invoke_closure_fallback(closure, args, ctx.gas, ctx)
+        Interpreter.invoke_closure_fallback(closure, args, callback_ctx.gas, callback_ctx)
 
       %QuickBEAM.VM.Function{} = bytecode_fun ->
-        case Runner.invoke(bytecode_fun, args, ctx) do
-          {:ok, value} -> value
-          :error -> Interpreter.invoke_function_fallback(bytecode_fun, args, ctx.gas, ctx)
+        case Runner.invoke(bytecode_fun, args, callback_ctx) do
+          {:ok, value} ->
+            value
+
+          :error ->
+            Interpreter.invoke_function_fallback(
+              bytecode_fun,
+              args,
+              callback_ctx.gas,
+              callback_ctx
+            )
         end
 
       {:obj, _} = obj ->
-        dispatch_proxy_call(obj, args, ctx, this_obj)
+        dispatch_proxy_call(obj, args, callback_ctx, this_obj)
 
       other ->
         Builtin.call(other, args, this_obj)

@@ -448,7 +448,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           target,
           key,
           val,
-          Invocation.invoke_callback_or_throw(set_trap, [target, key, val, receiver])
+          Invocation.invoke_callback_or_throw(set_trap, [target, key, val, receiver], handler)
         )
     end
   end
@@ -468,7 +468,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           target,
           key,
           val,
-          Invocation.invoke_callback_or_throw(set_trap, [target, key, val, receiver])
+          Invocation.invoke_callback_or_throw(set_trap, [target, key, val, receiver], handler)
         )
     end
   end
@@ -1436,7 +1436,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           JSThrow.type_error!("proxy set trap violates invariant")
 
         match?(%{configurable: false}, desc) and
-            match?({:accessor, _, nil}, Heap.raw_fetch(target_ref, key)) ->
+            match?({:ok, {:accessor, _, nil}}, Heap.raw_fetch(target_ref, key)) ->
           JSThrow.type_error!("proxy set trap violates invariant")
 
         true ->

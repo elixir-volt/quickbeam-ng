@@ -17,4 +17,8 @@ defmodule QuickBEAM.VM.ObjectModel.DefineTest do
       "ok"
     )
   end
+
+  test "delayed computed property values preserve missing identifier errors", %{rt: rt} do
+    assert_modes(rt, ~S|try { ({ [0]: missing }); "no" } catch (e) { e.name }|, "ReferenceError")
+  end
 end

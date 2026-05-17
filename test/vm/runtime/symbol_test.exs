@@ -5,6 +5,10 @@ defmodule QuickBEAM.VM.Runtime.SymbolTest do
     assert_modes(rt, ~S|Symbol().description === undefined|, true)
   end
 
+  test "Symbol null description stringifies null", %{rt: rt} do
+    assert_modes(rt, ~S|Symbol(null).description|, "null")
+  end
+
   test "anonymous symbol names computed accessor with empty description", %{rt: rt} do
     assert_modes(
       rt,

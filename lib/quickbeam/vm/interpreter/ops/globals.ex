@@ -115,8 +115,22 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
       defp resolve_delayed_define_value({:qb_delayed_get_var, atom_idx}, ctx) do
         case GlobalEnv.fetch(ctx, atom_idx) do
-          {:found, val} -> val
-          :not_found -> :undefined
+          {:found, val} ->
+            val
+
+          :not_found ->
+            name = Names.resolve_atom(ctx, atom_idx)
+
+            case Map.get(ctx.globals, "globalThis") do
+              {:obj, _} = global_this ->
+                case Get.get(global_this, name) do
+                  :undefined -> JSThrow.reference_error!("#{name} is not defined")
+                  val -> val
+                end
+
+              _ ->
+                JSThrow.reference_error!("#{name} is not defined")
+            end
         end
       end
 

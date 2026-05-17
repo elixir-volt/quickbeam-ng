@@ -11,7 +11,6 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
       desc =
         case args do
           [] -> :undefined
-          [nil | _] -> :undefined
           [:undefined | _] -> :undefined
           [s | _] when is_binary(s) -> s
           [value | _] -> QuickBEAM.VM.Interpreter.Values.stringify(value)

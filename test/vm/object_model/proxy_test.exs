@@ -39,6 +39,20 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
+  test "get and set traps are called with handler receiver", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let handler = { marker: 42, get() { return this.marker; } }; let p = new Proxy({}, handler); p.x|,
+      42
+    )
+
+    assert_modes(
+      rt,
+      ~S|let receiver; let handler = { marker: 42, set() { receiver = this; return true; } }; let p = new Proxy({}, handler); p.x = 1; receiver === handler|,
+      true
+    )
+  end
+
   test "get and set traps use inherited callable traps and propagate errors", %{rt: rt} do
     assert {:error, %QuickBEAM.JS.Error{message: "boom"}} =
              QuickBEAM.eval(

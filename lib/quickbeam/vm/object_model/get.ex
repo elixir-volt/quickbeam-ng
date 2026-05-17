@@ -455,7 +455,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
             validate_proxy_get_invariant(
               target,
               key,
-              Invocation.invoke_callback_or_throw(get_trap, [target, key, {:obj, ref}])
+              Invocation.invoke_callback_or_throw(get_trap, [target, key, {:obj, ref}], handler)
             )
         end
 

@@ -59,10 +59,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   def to_property_key(value), do: PropertyAccess.to_property_key(value)
-  def to_property_key(_ctx, value), do: PropertyAccess.to_property_key(value)
 
-  def to_property_key_for_access(_ctx, receiver, key),
-    do: PropertyAccess.to_property_key_for_access(receiver, key)
+  def to_property_key(ctx, value),
+    do: with_runtime_ctx(ctx, fn -> PropertyAccess.to_property_key(value) end)
+
+  def to_property_key_for_access(ctx, receiver, key),
+    do: with_runtime_ctx(ctx, fn -> PropertyAccess.to_property_key_for_access(receiver, key) end)
 
   def to_object(:undefined), do: JSThrow.type_error!("Cannot convert undefined to object")
   def to_object(nil), do: JSThrow.type_error!("Cannot convert null to object")
@@ -527,10 +529,14 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   @doc "Writes a JavaScript property value."
-  def put_field(_ctx, obj, key, val) when is_binary(key), do: put_field(obj, key, val)
+  def put_field(ctx, obj, key, val) when is_binary(key) do
+    with_runtime_ctx(ctx, fn -> PropertyAccess.set_property(ctx, obj, key, val) end)
+    sync_global_field_write(ctx, obj, key, val)
+    :ok
+  end
 
   def put_field(ctx, obj, atom_idx, val),
-    do: put_field(obj, Names.resolve_atom(context_atoms(ctx), atom_idx), val)
+    do: put_field(ctx, obj, Names.resolve_atom(context_atoms(ctx), atom_idx), val)
 
   def put_field(obj, key, val) when is_binary(key) do
     PropertyAccess.set_property(obj, key, val)
@@ -539,6 +545,17 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   def put_field(obj, atom_idx, val),
     do: put_field(obj, Names.resolve_atom(InvokeContext.current_atoms(), atom_idx), val)
+
+  defp sync_global_field_write(%{globals: globals} = ctx, obj, key, val) do
+    if Map.get(globals, "globalThis") == obj do
+      new_globals = Map.put(globals, key, val)
+      Heap.put_persistent_globals(new_globals)
+      Heap.put_base_globals(new_globals)
+      Heap.put_ctx(%{ctx | globals: new_globals} |> Context.mark_dirty())
+    end
+  end
+
+  defp sync_global_field_write(_ctx, _obj, _key, _val), do: :ok
 
   @doc "Writes a JavaScript array element."
   def put_array_el(ctx \\ nil, obj, idx, val) do
@@ -626,8 +643,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   @doc "Copies enumerable object-spread properties."
-  def copy_data_properties(_ctx \\ nil, target, source, exclude \\ nil) do
-    Copy.copy_data_properties(target, source, exclude)
+  def copy_data_properties(ctx \\ nil, target, source, exclude \\ nil) do
+    with_runtime_ctx(ctx, fn -> Copy.copy_data_properties(target, source, exclude) end)
     target
   end
 
