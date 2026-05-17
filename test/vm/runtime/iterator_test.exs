@@ -59,6 +59,20 @@ defmodule QuickBEAM.VM.Runtime.IteratorTest do
     )
   end
 
+  test "for-of accepts callable and regexp iterator results as objects", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S"""
+      let count = 0;
+      let results = [/x/, function() {}];
+      let iter = { [Symbol.iterator]() { return this; }, next() { return results[count++] || { done: true }; } };
+      for (let x of iter) {}
+      count
+      """,
+      3
+    )
+  end
+
   test "iterator next uses iterator receiver", %{rt: rt} do
     assert_modes(
       rt,

@@ -193,7 +193,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
       end
 
       defp run({@op_iterator_check_object, []}, pc, frame, [value | _] = stack, gas, ctx) do
-        if QuickBEAM.VM.Value.is_object(value) do
+        if Iterators.iterator_result_object?(value) do
           run(pc + 1, frame, stack, gas, ctx)
         else
           throw_or_catch(

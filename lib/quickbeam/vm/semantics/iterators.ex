@@ -25,7 +25,9 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
 
   def for_of_next(next_fn, iter_obj) do
     result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
-    unless is_object(result), do: iterator_type_error!("iterator result is not an object")
+
+    unless iterator_result_object?(result),
+      do: iterator_type_error!("iterator result is not an object")
 
     if Runtime.truthy?(Get.get(result, "done")) do
       {true, :undefined, :undefined}
@@ -47,7 +49,10 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
 
   def iterator_next_result(_ctx, next_fn, iter_obj, val) do
     result = Invocation.invoke_with_receiver(next_fn, [val], iter_obj)
-    unless is_object(result), do: iterator_type_error!("iterator result is not an object")
+
+    unless iterator_result_object?(result),
+      do: iterator_type_error!("iterator result is not an object")
+
     next_iter = if Runtime.truthy?(Get.get(result, "done")), do: :undefined, else: iter_obj
     {result, next_iter}
   end
@@ -190,7 +195,9 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp do_collect_iterator_values(iterator, next_fn, acc) do
     try do
       result = Invocation.invoke_with_receiver(next_fn, [], iterator)
-      unless is_object(result), do: iterator_type_error!("iterator result is not an object")
+
+      unless iterator_result_object?(result),
+        do: iterator_type_error!("iterator result is not an object")
 
       if Runtime.truthy?(Get.get(result, "done")) do
         Enum.reverse(acc)
@@ -203,6 +210,14 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
         throw(reason)
     end
   end
+
+  def iterator_result_object?(value) when is_object(value), do: true
+  def iterator_result_object?({:regexp, _, _}), do: true
+  def iterator_result_object?({:regexp, _, _, _}), do: true
+  def iterator_result_object?({:closure, _, _}), do: true
+  def iterator_result_object?({:builtin, _, _}), do: true
+  def iterator_result_object?({:bound, _, _, _, _}), do: true
+  def iterator_result_object?(_value), do: false
 
   defp not_iterable!, do: iterator_type_error!("object is not iterable")
 

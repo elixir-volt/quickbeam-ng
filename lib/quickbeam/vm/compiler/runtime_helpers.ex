@@ -1331,7 +1331,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   defdelegate iterator_next_result(ctx \\ nil, next_fn, iter_obj, val), to: Iterators
 
   def iterator_check_object(_ctx, value) do
-    unless QuickBEAM.VM.Value.is_object(value) do
+    unless Iterators.iterator_result_object?(value) do
       throw({:js_throw, Heap.make_error("iterator result is not an object", "TypeError")})
     end
 
