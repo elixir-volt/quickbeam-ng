@@ -3,7 +3,6 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   use QuickBEAM.VM.Builtin
 
-  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Interpreter.Values.Coercion
@@ -1534,8 +1533,25 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  def regex_replace(s, {:regexp, bytecode, source, _ref}, replacement),
-    do: regex_replace(s, {:regexp, bytecode, source}, replacement)
+  def regex_replace(s, {:regexp, bytecode, source, _ref} = regexp, replacement)
+      when is_binary(s) and is_binary(bytecode) do
+    if custom_regexp_exec?(regexp) do
+      replace_with_custom_exec(s, regexp, replacement)
+    else
+      flags = Runtime.stringify(Get.get(regexp, "flags"))
+      global? = String.contains?(flags, "g")
+
+      case special_regex_replace(s, source, flags, replacement, global?) do
+        {:ok, result} ->
+          result
+
+        :none ->
+          if global?,
+            do: regex_replace_all(s, bytecode, source, replacement, 0, []),
+            else: regex_replace_first(s, bytecode, source, replacement)
+      end
+    end
+  end
 
   def regex_replace(s, {:regexp, nil, source}, replacement) when is_binary(source),
     do: string_replace_first(s, source, replacement)
@@ -1562,18 +1578,23 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   def regex_replace(s, _, _), do: s
 
-  defp custom_regexp_exec?({:regexp, _, _, ref}) do
-    case RegexpState.fetch(ref, "exec") do
+  defp custom_regexp_exec?({:regexp, _, _, ref} = regexp) do
+    case QuickBEAM.VM.Execution.RegexpState.fetch(ref, "exec") do
       {:ok, exec} -> Builtin.callable?(exec)
-      :error -> false
+      :error -> inherited_custom_regexp_exec?(regexp)
     end
   end
 
-  defp custom_regexp_exec?(regexp) do
+  defp custom_regexp_exec?(regexp), do: inherited_custom_regexp_exec?(regexp)
+
+  defp inherited_custom_regexp_exec?(regexp) do
     exec = Get.get(regexp, "exec")
     proto_exec = Get.get(Runtime.global_class_proto("RegExp"), "exec")
-    Builtin.callable?(exec) and exec != proto_exec
+    Builtin.callable?(exec) and exec != proto_exec and not builtin_regexp_exec?(exec)
   end
+
+  defp builtin_regexp_exec?({:builtin, "exec", _}), do: true
+  defp builtin_regexp_exec?(_), do: false
 
   defp replace_with_custom_exec(s, regexp, replacement) do
     exec = Get.get(regexp, "exec")

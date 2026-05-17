@@ -14,6 +14,14 @@ defmodule QuickBEAM.VM.Runtime.StringTest do
            """) == "xbx"
   end
 
+  test "bytecode RegExp replace honors custom exec", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let regexp = /a/g; regexp.exec = function (string) { let index = string.indexOf('a', this.lastIndex); if (index < 0) return null; this.lastIndex = index + 1; return Object.assign(['a'], { index, input: string }); }; 'aba'.replace(regexp, 'x');|,
+      "xbx"
+    )
+  end
+
   test "named replacements use actual named capture numbering", %{rt: rt} do
     assert beam!(rt, "'ab'.replace(/(a)(?<b>b)/, '$<b>')") == "b"
   end

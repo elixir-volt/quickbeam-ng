@@ -32,7 +32,7 @@ defmodule QuickBEAM.VM.Heap.ProcessKeysTest do
     refute Process.get(:qb_ctx)
     refute Process.get({:qb_prop_desc, 1, "a"})
     refute Process.get(123)
-    refute Process.get(heap_ref)
+    assert Process.get(heap_ref) == %{"heap" => true}
     assert Process.get(external_ref) == true
     assert Process.get(:not_quickbeam) == :keep
   after

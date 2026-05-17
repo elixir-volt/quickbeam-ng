@@ -48,15 +48,6 @@ defmodule QuickBEAM.VM.Heap.ProcessKeys do
 
   @doc "Returns true when a process dictionary entry is owned by QuickBEAM heap/runtime state."
   def owned_entry?(key, _value) when is_integer(key) and key > 0, do: true
-  def owned_entry?(key, value) when is_reference(key), do: heap_reference_value?(value)
+  def owned_entry?(key, _value) when is_reference(key), do: false
   def owned_entry?(key, _value), do: owned?(key)
-
-  defp heap_reference_value?({:qb_arr, _}), do: true
-  defp heap_reference_value?({:shape, _, _, _, _}), do: true
-  defp heap_reference_value?(value) when is_map(value), do: true
-  defp heap_reference_value?(value) when is_list(value), do: true
-
-  defp heap_reference_value?({items, index}) when is_list(items) and is_integer(index), do: true
-  defp heap_reference_value?(%QuickBEAM.VM.Function{}), do: true
-  defp heap_reference_value?(_value), do: false
 end

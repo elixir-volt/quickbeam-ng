@@ -39,6 +39,48 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
+  test "get and set traps use inherited callable traps and propagate errors", %{rt: rt} do
+    assert {:error, %QuickBEAM.JS.Error{message: "boom"}} =
+             QuickBEAM.eval(
+               rt,
+               ~S|let handler = Object.create({ get() { throw new Error("boom"); } }); let p = new Proxy({}, handler); p.x|,
+               mode: :beam
+             )
+
+    assert_modes(
+      rt,
+      ~S|let p = new Proxy({}, { get: 1 }); try { p.x; "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+
+    assert {:error, %QuickBEAM.JS.Error{message: "boom"}} =
+             QuickBEAM.eval(
+               rt,
+               ~S|let p = new Proxy({}, { set() { throw new Error("boom"); } }); p.x = 1|,
+               mode: :beam
+             )
+
+    assert_modes(
+      rt,
+      ~S|let p = new Proxy({}, { set: 1 }); try { p.x = 1; "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
+  test "revoked callable proxies cannot be called or constructed", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|let r = Proxy.revocable(function(){}, {}); r.revoke(); try { r.proxy(); "ok"; } catch (e) { e.name; }|
+           ) == "TypeError"
+
+    assert {:error, %QuickBEAM.JS.Error{name: "TypeError"}} =
+             QuickBEAM.eval(
+               rt,
+               ~S|let r = Proxy.revocable(function(){}, {}); r.revoke(); new r.proxy();|,
+               mode: :beam
+             )
+  end
+
   test "proxy call and construct require callable and constructable targets", %{rt: rt} do
     assert_modes(
       rt,

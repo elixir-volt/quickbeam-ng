@@ -16,4 +16,12 @@ defmodule QuickBEAM.VM.Runtime.JSONTest do
       "[7]"
     )
   end
+
+  test "proxy array stringify applies element toJSON and replacer", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let a = [{ toJSON() { return 2; } }]; let p = new Proxy(a, {}); JSON.stringify(p, (k, v) => k === "0" ? v + 1 : v)|,
+      "[3]"
+    )
+  end
 end

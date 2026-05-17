@@ -438,6 +438,9 @@ defmodule QuickBEAM.VM.Invocation do
 
   defp construct_proxy_runtime(ctx, {:obj, ref} = proxy, new_target, args) do
     case Heap.get_obj(ref, %{}) do
+      %{"__proxy_revoked__" => true} ->
+        QuickBEAM.VM.JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
       %{proxy_target() => target, proxy_handler() => handler} ->
         validate_constructor!(target)
         construct_trap = Get.get(handler, "construct")
@@ -479,6 +482,9 @@ defmodule QuickBEAM.VM.Invocation do
 
   defp dispatch_proxy_call({:obj, ref}, args, ctx, this) do
     case Heap.get_obj(ref, %{}) do
+      %{"__proxy_revoked__" => true} ->
+        QuickBEAM.VM.JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
       %{proxy_target() => target, proxy_handler() => handler} ->
         unless Builtin.callable?(target) do
           QuickBEAM.VM.JSThrow.type_error!("not a function")

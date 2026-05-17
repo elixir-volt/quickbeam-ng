@@ -195,7 +195,13 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       # ── Array element access (2-element push) ──
 
       defp run({@op_get_array_el2, []}, pc, frame, [idx, obj | rest], gas, ctx) do
-        run(pc + 1, frame, [Get.get(obj, idx), obj | rest], gas, ctx)
+        try do
+          run(pc + 1, frame, [PropertyAccess.get_property(obj, idx), obj | rest], gas, ctx)
+        catch
+          {:js_throw, error} ->
+            ctx = Heap.get_ctx() || ctx
+            throw_or_catch(frame, error, gas, ctx)
+        end
       end
 
       # ── Misc / no-op ──

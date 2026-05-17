@@ -209,18 +209,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         proxy_target() => target,
         proxy_handler() => handler
       } ->
-        set_trap = Get.get(handler, "set")
-
-        if set_trap != :undefined do
-          validate_proxy_set_invariant(
-            target,
-            key,
-            val,
-            Runtime.call_callback(set_trap, [target, key, val, obj])
-          )
-        else
-          put(target, key, val)
-        end
+        invoke_proxy_set_trap_or_put(target, handler, key, val, obj)
 
       list when is_list(list) ->
         put_array_key(ref, key, val)
@@ -444,21 +433,50 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   def set(target, key, val, _receiver), do: put(target, key, val)
 
+  defp invoke_proxy_set_trap_or_put(target, handler, key, val, receiver) do
+    set_trap = Get.get(handler, "set")
+
+    cond do
+      set_trap in [nil, :undefined] ->
+        put(target, key, val)
+
+      not QuickBEAM.VM.Builtin.callable?(set_trap) ->
+        JSThrow.type_error!("proxy set trap is not callable")
+
+      true ->
+        validate_proxy_set_invariant(
+          target,
+          key,
+          val,
+          Invocation.invoke_callback_or_throw(set_trap, [target, key, val, receiver])
+        )
+    end
+  end
+
+  defp invoke_proxy_set_trap_or_set(target, handler, key, val, receiver) do
+    set_trap = Get.get(handler, "set")
+
+    cond do
+      set_trap in [nil, :undefined] ->
+        set(target, key, val, receiver)
+
+      not QuickBEAM.VM.Builtin.callable?(set_trap) ->
+        JSThrow.type_error!("proxy set trap is not callable")
+
+      true ->
+        validate_proxy_set_invariant(
+          target,
+          key,
+          val,
+          Invocation.invoke_callback_or_throw(set_trap, [target, key, val, receiver])
+        )
+    end
+  end
+
   defp set_property(ref, raw, key, val, receiver) do
     case raw do
       %{proxy_target() => proxy_target, proxy_handler() => handler} ->
-        set_trap = Get.get(handler, "set")
-
-        if set_trap != :undefined do
-          validate_proxy_set_invariant(
-            proxy_target,
-            key,
-            val,
-            Runtime.call_callback(set_trap, [proxy_target, key, val, receiver])
-          )
-        else
-          set(proxy_target, key, val, receiver)
-        end
+        invoke_proxy_set_trap_or_set(proxy_target, handler, key, val, receiver)
 
       raw when is_tuple(raw) ->
         if Heap.shape?(raw) do

@@ -242,6 +242,9 @@ defmodule QuickBEAM.VM.Runtime.DataView do
     end
   end
 
+  defp to_index({:bigint, _}),
+    do: JSThrow.type_error!("Cannot convert a BigInt value to a number")
+
   defp to_index(value) do
     case Runtime.to_number(value) do
       :infinity ->
@@ -492,7 +495,7 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
   defp bigint_value(_value), do: JSThrow.type_error!("Cannot convert value to BigInt")
 
-  defp parse_bigint_string(""), do: :error
+  defp parse_bigint_string(""), do: {:ok, 0}
   defp parse_bigint_string("0x" <> digits), do: parse_bigint_digits(digits, 16)
   defp parse_bigint_string("0X" <> digits), do: parse_bigint_digits(digits, 16)
   defp parse_bigint_string("0o" <> digits), do: parse_bigint_digits(digits, 8)

@@ -887,9 +887,15 @@ defmodule QuickBEAM.VM.Runtime.JSON do
         []
       else
         for index <- 0..(length - 1) do
-          proxy
-          |> Get.get(Integer.to_string(index))
-          |> to_json()
+          key = Integer.to_string(index)
+
+          replaced =
+            proxy
+            |> Get.get(key)
+            |> apply_to_json_hook(key)
+            |> apply_property_replacer(key, proxy)
+
+          if replaced == :undefined, do: :null, else: to_json(replaced)
         end
       end
     else

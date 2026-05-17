@@ -128,12 +128,18 @@ defmodule QuickBEAM.VM.Runtime.Math do
     end
 
     method "abs" do
-      case Runtime.to_number(hd(args)) do
-        :infinity -> :infinity
-        :neg_infinity -> :infinity
-        :nan -> :nan
-        n when n == 0 -> 0
-        n -> abs(n)
+      case QuickBEAM.VM.Builtin.arg(args, 0, :undefined) do
+        {:bigint, _} ->
+          QuickBEAM.VM.JSThrow.type_error!("Cannot convert a BigInt value to a number")
+
+        value ->
+          case Runtime.to_number(value) do
+            :infinity -> :infinity
+            :neg_infinity -> :infinity
+            :nan -> :nan
+            n when n == 0 -> 0
+            n -> abs(n)
+          end
       end
     end
 

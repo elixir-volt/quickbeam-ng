@@ -442,16 +442,21 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
           JSThrow.type_error!("Cannot perform operation on a revoked proxy")
         end
 
-        get_trap = get_own(handler, "get")
+        get_trap = get(handler, "get")
 
-        if get_trap != :undefined do
-          validate_proxy_get_invariant(
-            target,
-            key,
-            Runtime.call_callback(get_trap, [target, key, {:obj, ref}])
-          )
-        else
-          get(target, key)
+        cond do
+          get_trap in [nil, :undefined] ->
+            get(target, key)
+
+          not QuickBEAM.VM.Builtin.callable?(get_trap) ->
+            JSThrow.type_error!("proxy get trap is not callable")
+
+          true ->
+            validate_proxy_get_invariant(
+              target,
+              key,
+              Invocation.invoke_callback_or_throw(get_trap, [target, key, {:obj, ref}])
+            )
         end
 
       {:qb_arr, _} = arr ->
@@ -1224,7 +1229,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     case Heap.get_array_proto(ref) do
       {:obj, _} = proto ->
         case get(proto, key) do
-          :undefined -> fallback_array_proto_property(proto, key)
+          :undefined -> receiver_array_proto_fallback(proto, key)
           val -> val
         end
 
@@ -1243,6 +1248,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
       _ ->
         Array.proto_property(key)
+    end
+  end
+
+  defp receiver_array_proto_fallback(proto, key) do
+    if proto == Heap.get_array_proto() do
+      fallback_array_proto_property(proto, key)
+    else
+      :undefined
     end
   end
 
