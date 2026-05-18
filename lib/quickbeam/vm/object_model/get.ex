@@ -611,15 +611,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_own({:builtin, name, _}, "from")
-       when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array) do
-    type = Map.get(TypedArray.types(), name, :uint8)
-
-    {:builtin, "from",
-     fn [source | _], _this ->
-       list = Heap.to_list(source)
-       TypedArray.constructor(type).(list, nil)
-     end}
+  defp get_own({:builtin, name, _} = builtin, "from")
+       when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) do
+    {:builtin, "from", fn args, this -> TypedArray.static_from(args, this || builtin) end}
   end
 
   defp get_own({:builtin, name, _} = builtin, "name") do
