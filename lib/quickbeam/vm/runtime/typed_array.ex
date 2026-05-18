@@ -48,7 +48,21 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   @doc "Returns generic properties for typed-array constructor prototype objects."
   def prototype_properties do
     %{
-      "at" => {:builtin, "at", fn args, this -> at(this, args) end}
+      "at" => {:builtin, "at", fn args, this -> at(this, args) end},
+      "entries" =>
+        {:builtin, "entries", fn _args, this -> Array.make_array_iterator(this, :entries) end},
+      "keys" => {:builtin, "keys", fn _args, this -> Array.make_array_iterator(this, :keys) end},
+      "values" =>
+        {:builtin, "values", fn _args, this -> Array.make_array_iterator(this, :values) end},
+      {:symbol, "Symbol.iterator"} =>
+        {:builtin, "[Symbol.iterator]",
+         fn _args, this -> Array.make_array_iterator(this, :values) end},
+      "every" =>
+        {:builtin, "every",
+         fn args, this ->
+           {:obj, ref} = typed_array_object!(this)
+           every(ref, args, this)
+         end}
     }
   end
 
@@ -555,10 +569,23 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     constructor(t).([vals], nil)
   end
 
-  defp every(ref, [cb | _], this) do
+  defp every(ref, [cb | rest], this) do
+    unless QuickBEAM.VM.Builtin.callable?(cb) do
+      JSThrow.type_error!("callbackfn is not callable")
+    end
+
     {b, l, t} = {buf(ref), len(ref), type(ref)}
-    Enum.all?(0..max(0, l - 1), &Runtime.truthy?(call(cb, [read_element(b, &1, t), &1, this])))
+    this_arg = arg(rest, 0, :undefined)
+
+    l == 0 or
+      Enum.all?(0..(l - 1), fn index ->
+        cb
+        |> Invocation.invoke_with_receiver([read_element(b, index, t), index, this], this_arg)
+        |> Runtime.truthy?()
+      end)
   end
+
+  defp every(_ref, _args, _this), do: JSThrow.type_error!("callbackfn is not callable")
 
   defp some(ref, [cb | _], this) do
     {b, l, t} = {buf(ref), len(ref), type(ref)}

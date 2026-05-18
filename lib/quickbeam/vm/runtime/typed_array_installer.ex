@@ -48,7 +48,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstaller do
       Map.put(TypedArray.base_prototype_properties(), "__proto__", Heap.get_object_prototype())
     )
 
-    Heap.put_prop_desc(ta_base_ref, "at", PropertyDescriptor.method())
+    for key <- Map.keys(TypedArray.prototype_properties()) do
+      Heap.put_prop_desc(ta_base_ref, key, PropertyDescriptor.method())
+    end
 
     for key <- ["buffer", "byteLength", "byteOffset", {:symbol, "Symbol.toStringTag"}] do
       Heap.put_prop_desc(ta_base_ref, key, PropertyDescriptor.accessor())
@@ -89,8 +91,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstaller do
 
   defp mark_prototype_methods(ctor) do
     case Heap.get_class_proto(ctor) do
-      {:obj, proto_ref} -> Heap.put_prop_desc(proto_ref, "at", PropertyDescriptor.method())
-      _ -> :ok
+      {:obj, proto_ref} ->
+        for key <- Map.keys(TypedArray.prototype_properties()) do
+          Heap.put_prop_desc(proto_ref, key, PropertyDescriptor.method())
+        end
+
+      _ ->
+        :ok
     end
   end
 end
