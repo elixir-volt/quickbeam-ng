@@ -624,20 +624,20 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     new_len = max(0, e - s)
     es = elem_size(t)
-    source = buf(ref) || <<>>
-    data = if new_len > 0, do: binary_part(source, s * es, new_len * es), else: <<>>
+    parent = state(ref)
+    byte_offset = Map.get(parent, offset(), 0) + s * es
 
     Heap.wrap(%{
       typed_array() => true,
       type_key() => t,
-      buffer() => data,
-      offset() => 0,
+      buffer() => Map.get(parent, buffer(), <<>>),
+      offset() => byte_offset,
       "length" => new_len,
       "byteLength" => new_len * es,
-      "byteOffset" => 0,
+      "byteOffset" => byte_offset,
       "__fixed_length__" => new_len,
       "__fixed_byte_length__" => new_len * es,
-      "buffer" => Map.get(state(ref), "buffer"),
+      "buffer" => Map.get(parent, "buffer"),
       "__proto__" => Runtime.global_class_proto(typed_array_name(t))
     })
   end
