@@ -883,14 +883,20 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     if l == 0 do
       -1
     else
+      obj = {:obj, ref}
       start = relative_index(arg(rest, 0, 0), l)
 
-      if start >= l do
-        -1
-      else
-        Enum.find_value(start..(l - 1), -1, fn i ->
-          if strict_same_value?(get_element({:obj, ref}, i), target), do: i
-        end)
+      cond do
+        start >= l ->
+          -1
+
+        out_of_bounds?(obj) ->
+          -1
+
+        true ->
+          Enum.find_value(start..(l - 1), -1, fn i ->
+            if strict_same_value?(get_element(obj, i), target), do: i
+          end)
       end
     end
   end
@@ -903,14 +909,20 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     if l == 0 do
       -1
     else
+      obj = {:obj, ref}
       start = last_index_start(arg(rest, 0, l - 1), l)
 
-      if start < 0 do
-        -1
-      else
-        Enum.find_value(start..0//-1, -1, fn i ->
-          if strict_same_value?(get_element({:obj, ref}, i), target), do: i
-        end)
+      cond do
+        start < 0 ->
+          -1
+
+        out_of_bounds?(obj) ->
+          -1
+
+        true ->
+          Enum.find_value(start..0//-1, -1, fn i ->
+            if strict_same_value?(get_element(obj, i), target), do: i
+          end)
       end
     end
   end
