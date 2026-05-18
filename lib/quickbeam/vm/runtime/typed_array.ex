@@ -186,13 +186,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     Invocation.construct_runtime(constructor, constructor, [args])
   end
 
-  defp from_args([source, map_fn, this_arg | _]) when map_fn not in [nil, :undefined],
-    do: {source, map_fn, this_arg}
-
-  defp from_args([source, map_fn | _]) when map_fn not in [nil, :undefined],
-    do: {source, map_fn, :undefined}
-
-  defp from_args([source | _]), do: {source, nil, :undefined}
+  defp from_args([source, :undefined | _]), do: {source, :__missing__, :undefined}
+  defp from_args([source, map_fn, this_arg | _]), do: {source, map_fn, this_arg}
+  defp from_args([source, map_fn | _]), do: {source, map_fn, :undefined}
+  defp from_args([source | _]), do: {source, :__missing__, :undefined}
   defp from_args(_), do: {nil, nil, :undefined}
 
   defp typed_array_from_values(nil, _map_fn, _this_arg),
@@ -202,7 +199,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
   defp typed_array_from_values(source, map_fn, this_arg) do
-    if map_fn not in [nil, :undefined] and not QuickBEAM.VM.Builtin.callable?(map_fn) do
+    if map_fn != :__missing__ and not QuickBEAM.VM.Builtin.callable?(map_fn) do
       JSThrow.type_error!("mapfn is not callable")
     end
 
@@ -210,7 +207,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     |> typed_array_source_values()
     |> Enum.with_index()
     |> Enum.map(fn {value, index} ->
-      if map_fn in [nil, :undefined] do
+      if map_fn == :__missing__ do
         value
       else
         Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
