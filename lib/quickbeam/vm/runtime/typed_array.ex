@@ -376,7 +376,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     if Map.get(s, "__length_tracking__") do
       div(max(byte_size(buf(ref) || <<>>), 0), elem_size(type(ref)))
     else
-      Map.get(s, "length", 0)
+      Map.get(s, "__fixed_length__", Map.get(s, "length", 0))
     end
   end
 
