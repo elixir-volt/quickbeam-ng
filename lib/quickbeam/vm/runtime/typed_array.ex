@@ -94,7 +94,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       "subarray" => prototype_ref_method("subarray", 2, fn ref, args, _this -> subarray(ref, args) end),
       "toLocaleString" => prototype_ref_method("toLocaleString", 0, fn ref, _args, _this -> to_locale_string(ref) end),
       "toReversed" => prototype_ref_method("toReversed", 0, fn ref, _args, _this -> to_reversed(ref) end),
-      "toSorted" => prototype_ref_method("toSorted", 1, fn ref, _args, _this -> to_sorted(ref) end),
+      "toSorted" => prototype_ref_method("toSorted", 1, fn ref, args, _this -> to_sorted(ref, args) end),
       "toString" => prototype_ref_method("toString", 0, fn ref, _args, _this -> join(ref, [","]) end),
       "with" => prototype_ref_method("with", 2, fn ref, args, _this -> with_element(ref, args) end)
     }
@@ -280,7 +280,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
           method("fill", do: fill(ref, args))
           method("toLocaleString", do: to_locale_string(ref))
           method("toReversed", do: to_reversed(ref))
-          method("toSorted", do: to_sorted(ref))
+          method("toSorted", do: to_sorted(ref, args))
           method("toString", do: join(ref, [","]))
           method("with", do: with_element(ref, args))
         end
@@ -1103,10 +1103,16 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     constructor(t).([vals], nil)
   end
 
-  defp to_sorted(ref) do
+  defp to_sorted(ref, args) do
+    compare_fn = arg(args, 0, :undefined)
+
+    if compare_fn != :undefined and not QuickBEAM.VM.Builtin.callable?(compare_fn) do
+      JSThrow.type_error!("comparison function is not callable")
+    end
+
     l = len(ref)
     t = type(ref)
-    vals = if l == 0, do: [], else: Enum.map(0..(l - 1), &get_element({:obj, ref}, &1)) |> Enum.sort()
+    vals = if l == 0, do: [], else: Enum.map(0..(l - 1), &get_element({:obj, ref}, &1)) |> sort_values(compare_fn)
     constructor(t).([vals], nil)
   end
 
