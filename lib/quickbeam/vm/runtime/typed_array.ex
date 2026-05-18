@@ -1131,21 +1131,23 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     l = len(ref)
     t = type(ref)
     relative = to_integer_or_infinity(arg(args, 0, :undefined))
+    numeric_value = coerce_element_value(arg(args, 1, :undefined), t)
+    current_len = len(ref)
 
     index =
       case relative do
         :neg_infinity -> -1
-        :infinity -> l
-        n when n < 0 -> l + n
+        :infinity -> current_len
+        n when n < 0 -> current_len + n
         n -> n
       end
 
-    if index < 0 or index >= l do
+    if index < 0 or index >= current_len do
       JSThrow.range_error!("Invalid index")
     end
 
     vals = if l == 0, do: [], else: Enum.map(0..(l - 1), &get_element({:obj, ref}, &1))
-    vals = List.replace_at(vals, index, arg(args, 1, :undefined))
+    vals = if index < l, do: List.replace_at(vals, index, numeric_value), else: vals
     constructor(t).([vals], nil)
   end
 
