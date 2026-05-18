@@ -1187,6 +1187,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         value -> relative_index(value, l)
       end
 
+    if out_of_bounds?(obj) do
+      JSThrow.type_error!("TypedArray is out of bounds")
+    end
+
     if final > start do
       new_buf =
         Enum.reduce(start..(final - 1), buf(ref) || <<>>, fn index, acc ->
