@@ -607,7 +607,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp subarray(ref, args) do
-    l = len(ref)
+    obj = {:obj, ref}
+    l = if out_of_bounds?(obj), do: 0, else: len(ref)
     t = type(ref)
     s = relative_index(arg(args, 0, 0), l)
 
