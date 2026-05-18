@@ -1084,8 +1084,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     if l > 0 do
       vals = Enum.map(0..(l - 1), &read_element(b, &1, t)) |> sort_values(compare_fn)
-      new_buf = rebuild_buffer(vals, b, t)
-      update_buffer(ref, new_buf)
+
+      unless out_of_bounds?(obj) do
+        current_len = len(ref)
+        vals = Enum.take(vals, current_len)
+        new_buf = rebuild_buffer(vals, buf(ref), t)
+        update_buffer(ref, new_buf)
+      end
     end
 
     obj
