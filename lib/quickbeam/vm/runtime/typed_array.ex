@@ -687,6 +687,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp join(ref, args) do
+    l = len(ref)
+    t = type(ref)
+
     sep =
       case args do
         [] -> ","
@@ -694,7 +697,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         [s | _] -> typed_array_to_string(s)
       end
 
-    {b, l, t} = {buf(ref), len(ref), type(ref)}
+    b = buf(ref)
 
     if l == 0 do
       ""
