@@ -763,7 +763,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
           value ->
             method = Get.get(value, "toLocaleString")
-            method |> Invocation.invoke_method_runtime(value, []) |> typed_array_to_string()
+            method |> Invocation.invoke_with_receiver([], value) |> typed_array_to_string()
         end
       end)
     end
