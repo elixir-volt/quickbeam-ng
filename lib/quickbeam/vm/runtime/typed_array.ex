@@ -638,7 +638,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       case args do
         [] -> ","
         [:undefined | _] -> ","
-        [s | _] -> Runtime.stringify(s)
+        [s | _] -> typed_array_to_string(s)
       end
 
     {b, l, t} = {buf(ref), len(ref), type(ref)}
@@ -652,7 +652,11 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp typed_array_join_value(:undefined), do: ""
   defp typed_array_join_value(nil), do: ""
-  defp typed_array_join_value(value), do: Runtime.stringify(value)
+  defp typed_array_join_value(value), do: typed_array_to_string(value)
+
+  defp typed_array_to_string({:symbol, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+  defp typed_array_to_string({:symbol, _, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+  defp typed_array_to_string(value), do: Runtime.stringify(value)
 
   defp for_each(ref, [cb | rest], this) do
     callback!(cb)
@@ -1088,8 +1092,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       JSThrow.type_error!("TypedArray is out of bounds")
     end
 
-    val = arg(args, 0, :undefined)
     l = len(ref)
+    t = type(ref)
+    val = arg(args, 0, :undefined) |> coerce_element_value(t)
     start = relative_index(arg(args, 1, 0), l)
 
     final =
@@ -1099,8 +1104,6 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       end
 
     if final > start do
-      t = type(ref)
-
       new_buf =
         Enum.reduce(start..(final - 1), buf(ref) || <<>>, fn index, acc ->
           write_element(acc, index, val, t)
@@ -1515,6 +1518,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       special -> special
     end
   end
+
+  defp coerce_element_value(value, type) when type in [:bigint64, :biguint64], do: {:bigint, bigint_value(value)}
+  defp coerce_element_value(value, _type), do: Runtime.to_number(value)
 
   defp bigint_value({:bigint, n}), do: n
   defp bigint_value(true), do: 1
