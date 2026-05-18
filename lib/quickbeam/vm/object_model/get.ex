@@ -284,7 +284,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   # ── Own property lookup ──
 
   defp callable_length_of(callable, default) do
-    if Map.get(Heap.get_ctor_statics(callable), "length") == :deleted, do: 0, else: default
+    case Map.get(Heap.get_ctor_statics(callable), "length", :not_found) do
+      :deleted -> 0
+      :not_found -> default
+      value -> value
+    end
   end
 
   defp virtual_array_length(ref) do

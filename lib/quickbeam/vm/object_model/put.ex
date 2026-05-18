@@ -673,7 +673,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     own? = Map.has_key?(statics, key)
 
     cond do
-      key in ["length", "name"] and (not own? or Map.get(statics, key) == :deleted) and
+      QuickBEAM.VM.Builtin.callable?(callable) and key in ["length", "name"] and
+        (not own? or Map.get(statics, key) == :deleted) and
           not static_class_method_definition?(callable, key) ->
         reject_failed_write!()
 
@@ -1217,7 +1218,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       %{typed_array() => true} ->
         case PropertyKey.array_index(key) do
           {:ok, idx} -> Runtime.TypedArray.set_element(obj, idx, val)
-          :error -> :ok
+          :error -> put(obj, PropertyKey.normalize(key), val)
         end
 
       {:qb_arr, arr} ->

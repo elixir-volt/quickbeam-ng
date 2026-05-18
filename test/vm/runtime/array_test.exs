@@ -30,4 +30,35 @@ defmodule QuickBEAM.VM.Runtime.ArrayTest do
       100_001
     )
   end
+
+  test "array generic methods treat builtin namespace objects as array-like", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S"""
+             Math.length = 1;
+             Math[0] = 1;
+             JSON.length = 1;
+             JSON[0] = 2;
+             [
+               Array.prototype.some.call(Math, function(value, index, object) { return value === 1 && index === 0 && Object.prototype.toString.call(object) === '[object Math]'; }),
+               Array.prototype.every.call(JSON, function(value, index, object) { return value === 2 && index === 0 && Object.prototype.toString.call(object) === '[object JSON]'; })
+             ].join(',')
+             """
+           ) == "true,true"
+  end
+
+  test "array iterators share ArrayIteratorPrototype", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S"""
+             var proto = Object.getPrototypeOf([][Symbol.iterator]());
+             [
+               Object.getPrototypeOf([].entries()) === proto,
+               Object.getPrototypeOf([].keys()) === proto,
+               Object.getPrototypeOf([].values()) === proto,
+               Object.prototype.toString.call([].values())
+             ].join('|')
+             """
+           ) == "true|true|true|[object Array Iterator]"
+  end
 end

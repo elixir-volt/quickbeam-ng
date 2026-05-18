@@ -1667,6 +1667,20 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end
   end
 
+  defp concat_length({:obj, ref} = value) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} = map ->
+        if Heap.get_prop_desc(ref, "length") != nil do
+          max(Runtime.to_int(Map.get(map, "length", 0)), 0)
+        else
+          max(Runtime.to_int(Get.get(value, "length")), 0)
+        end
+
+      _ ->
+        max(Runtime.to_int(Get.get(value, "length")), 0)
+    end
+  end
+
   defp concat_length({:qb_arr, arr}), do: :array.size(arr)
   defp concat_length(list) when is_list(list), do: length(list)
   defp concat_length(value), do: max(Runtime.to_int(Get.get(value, "length")), 0)
@@ -3156,43 +3170,38 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   def make_array_iterator(arr, mode) do
-    list_fn = array_iterator_list_fn(arr)
-    idx_ref = :atomics.new(2, signed: false)
+    state_ref = make_ref()
     iterator_ref = make_ref()
 
-    next_fn =
-      {:builtin, "next",
-       fn _args, this ->
-         reject_inherited_array_iterator_receiver!(this, iterator_ref)
-         i = :atomics.get(idx_ref, 1)
-         done = :atomics.get(idx_ref, 2) == 1
-         list = list_fn.()
+    Heap.put_obj(state_ref, %{"target" => arr, "mode" => mode, "index" => 0, "done" => false})
 
-         cond do
-           done ->
-             Heap.wrap(%{"value" => :undefined, "done" => true})
+    Heap.put_obj(iterator_ref, %{
+      "__proto__" => array_iterator_prototype(),
+      "__array_iterator_state__" => {:obj, state_ref}
+    })
 
-           i >= length(list) ->
-             :atomics.put(idx_ref, 2, 1)
-             Heap.wrap(%{"value" => :undefined, "done" => true})
+    {:obj, iterator_ref}
+  end
 
-           true ->
-             :atomics.put(idx_ref, 1, i + 1)
+  defp array_iterator_prototype do
+    array_ctor = Runtime.global_constructor("Array")
+    statics = Heap.get_ctor_statics(array_ctor)
 
-             value =
-               case mode do
-                 :values -> Enum.at(list, i, :undefined)
-                 :keys -> i
-                 :entries -> Heap.wrap([i, Enum.at(list, i, :undefined)])
-               end
+    case Map.get(statics, :__array_iterator_prototype__) do
+      {:obj, _} = proto ->
+        proto
 
-             Heap.wrap(%{"value" => value, "done" => false})
-         end
-       end}
+      _ ->
+        proto = build_array_iterator_prototype()
+        Heap.put_ctor_static(array_ctor, :__array_iterator_prototype__, proto)
+        proto
+    end
+  end
 
+  defp build_array_iterator_prototype do
     proto =
       object do
-        prop("next", next_fn)
+        prop("next", {:builtin, "next", fn _args, this -> array_iterator_next(this) end})
 
         symbol_method "Symbol.iterator" do
           this
@@ -3217,26 +3226,45 @@ defmodule QuickBEAM.VM.Runtime.Array do
       )
     end
 
-    iterator_symbol = {:builtin, "[Symbol.iterator]", fn _, this -> this end}
-
-    Heap.put_obj(iterator_ref, %{
-      "__proto__" => proto,
-      "next" => next_fn,
-      {:symbol, "Symbol.iterator"} => iterator_symbol
-    })
-
-    Heap.put_prop_desc(iterator_ref, "next", PropertyDescriptor.method())
-    Heap.put_prop_desc(iterator_ref, {:symbol, "Symbol.iterator"}, PropertyDescriptor.method())
-    {:obj, iterator_ref}
+    proto
   end
 
-  defp reject_inherited_array_iterator_receiver!({:obj, ref}, iterator_ref) do
-    if Map.get(Heap.get_obj(ref, %{}), "__proto__") == {:obj, iterator_ref} do
-      JSThrow.type_error!("Array Iterator next called on incompatible receiver")
+  defp array_iterator_next({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{"__array_iterator_state__" => {:obj, state_ref}} ->
+        state = Heap.get_obj(state_ref, %{})
+        i = Map.get(state, "index", 0)
+        done = Map.get(state, "done") == true
+        list = array_iterator_list_fn(Map.get(state, "target")).()
+
+        cond do
+          done ->
+            Heap.wrap(%{"value" => :undefined, "done" => true})
+
+          i >= length(list) ->
+            Heap.put_obj(state_ref, Map.put(state, "done", true))
+            Heap.wrap(%{"value" => :undefined, "done" => true})
+
+          true ->
+            Heap.put_obj(state_ref, Map.put(state, "index", i + 1))
+
+            value =
+              case Map.get(state, "mode") do
+                :values -> Enum.at(list, i, :undefined)
+                :keys -> i
+                :entries -> Heap.wrap([i, Enum.at(list, i, :undefined)])
+              end
+
+            Heap.wrap(%{"value" => value, "done" => false})
+        end
+
+      _ ->
+        JSThrow.type_error!("Array Iterator next called on incompatible receiver")
     end
   end
 
-  defp reject_inherited_array_iterator_receiver!(_, _), do: :ok
+  defp array_iterator_next(_),
+    do: JSThrow.type_error!("Array Iterator next called on incompatible receiver")
 
   defp array_iterator_list_fn({:obj, ref} = obj) do
     case Heap.get_obj(ref, %{}) do
