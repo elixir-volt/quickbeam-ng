@@ -933,11 +933,19 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp mapped_argument_value(ref, key) do
     with {:ok, idx} <- PropertyKey.array_index(key),
+         false <- deleted_argument?(ref, idx),
          mapped when is_map(mapped) <- Heap.get_array_prop(ref, "__mapped_arguments__"),
          {:cell, _} = cell <- Map.get(mapped, idx) do
       {:mapped, Closures.read_cell(cell)}
     else
       _ -> :not_mapped
+    end
+  end
+
+  defp deleted_argument?(ref, idx) do
+    case Heap.get_array_prop(ref, "__deleted_args__") do
+      %MapSet{} = deleted -> MapSet.member?(deleted, idx)
+      _ -> false
     end
   end
 

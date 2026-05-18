@@ -16,4 +16,12 @@ defmodule QuickBEAM.VM.Heap.ArgumentsTest do
       "2,3,1"
     )
   end
+
+  test "deleting mapped arguments disconnects parameter aliases", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|(function(a) { delete arguments[0]; a = 7; return String(arguments[0]); })(1)|,
+      "undefined"
+    )
+  end
 end
