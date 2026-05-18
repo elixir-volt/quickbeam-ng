@@ -828,14 +828,19 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp index_of(ref, [target | rest]) do
     l = len(ref)
-    start = relative_index(arg(rest, 0, 0), l)
 
-    if l == 0 or start >= l do
+    if l == 0 do
       -1
     else
-      Enum.find_value(start..(l - 1), -1, fn i ->
-        if strict_same_value?(get_element({:obj, ref}, i), target), do: i
-      end)
+      start = relative_index(arg(rest, 0, 0), l)
+
+      if start >= l do
+        -1
+      else
+        Enum.find_value(start..(l - 1), -1, fn i ->
+          if strict_same_value?(get_element({:obj, ref}, i), target), do: i
+        end)
+      end
     end
   end
 
@@ -863,12 +868,17 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp includes(ref, [target | rest]) do
     l = len(ref)
-    start = relative_index(arg(rest, 0, 0), l)
 
-    if l == 0 or start >= l do
+    if l == 0 do
       false
     else
-      Enum.any?(start..(l - 1), fn i -> same_value_zero?(get_element({:obj, ref}, i), target) end)
+      start = relative_index(arg(rest, 0, 0), l)
+
+      if start >= l do
+        false
+      else
+        Enum.any?(start..(l - 1), fn i -> same_value_zero?(get_element({:obj, ref}, i), target) end)
+      end
     end
   end
 
