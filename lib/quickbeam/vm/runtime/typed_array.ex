@@ -1092,13 +1092,54 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     obj
   end
 
-  defp sort_values(values, compare_fn) when compare_fn in [nil, :undefined], do: Enum.sort(values)
+  defp sort_values(values, compare_fn) when compare_fn in [nil, :undefined] do
+    values
+    |> Enum.with_index()
+    |> Enum.sort(fn {left, left_index}, {right, right_index} ->
+      case default_sort_order(left, right) do
+        :lt -> true
+        :gt -> false
+        :eq -> left_index <= right_index
+      end
+    end)
+    |> Enum.map(&elem(&1, 0))
+  end
 
   defp sort_values(values, compare_fn) do
     Enum.sort(values, fn left, right ->
       Runtime.to_number(Invocation.invoke_with_receiver(compare_fn, [left, right], :undefined)) < 0
     end)
   end
+
+  defp default_sort_order(left, right) do
+    cond do
+      sort_nan?(left) and sort_nan?(right) -> :eq
+      sort_nan?(left) -> :gt
+      sort_nan?(right) -> :lt
+      numeric_less?(left, right) -> :lt
+      numeric_less?(right, left) -> :gt
+      negative_zero?(left) and not negative_zero?(right) -> :lt
+      not negative_zero?(left) and negative_zero?(right) -> :gt
+      true -> :eq
+    end
+  end
+
+  defp sort_nan?(:nan), do: true
+  defp sort_nan?(value) when is_float(value), do: value != value
+  defp sort_nan?(_), do: false
+
+  defp numeric_less?(:neg_infinity, :neg_infinity), do: false
+  defp numeric_less?(:neg_infinity, _), do: true
+  defp numeric_less?(_, :neg_infinity), do: false
+  defp numeric_less?(:infinity, _), do: false
+  defp numeric_less?(_, :infinity), do: true
+  defp numeric_less?({:bigint, left}, {:bigint, right}), do: left < right
+  defp numeric_less?(left, right), do: left < right
+
+  defp negative_zero?(value) when is_float(value),
+    do: :erlang.float_to_binary(value, [:compact, decimals: 20]) == "-0.0"
+
+  defp negative_zero?(_), do: false
 
   defp reverse(ref) do
     obj = {:obj, ref}
