@@ -792,6 +792,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp map(ref, [cb | rest], this) do
     callback!(cb)
+    ensure_not_out_of_bounds(ref)
     l = len(ref)
     t = type(ref)
     this_arg = arg(rest, 0, :undefined)
@@ -812,6 +813,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp filter(ref, [cb | rest], this) do
     callback!(cb)
+    ensure_not_out_of_bounds(ref)
     l = len(ref)
     t = type(ref)
     this_arg = arg(rest, 0, :undefined)
