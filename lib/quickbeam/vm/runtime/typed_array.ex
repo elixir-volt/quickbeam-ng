@@ -609,6 +609,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp typed_array_set_source({:obj, ref} = source) do
     case Heap.get_obj(ref, %{}) do
       %{typed_array() => true} ->
+        if out_of_bounds?(source) do
+          JSThrow.type_error!("TypedArray source is out of bounds")
+        end
+
         len = element_count(source)
         values = if len == 0, do: [], else: for(index <- 0..(len - 1), do: get_element(source, index))
         {len, &Enum.at(values, &1, :undefined)}
