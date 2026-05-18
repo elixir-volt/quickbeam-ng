@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
 
@@ -49,6 +49,68 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     %{
       "at" => {:builtin, "at", fn args, this -> at(this, args) end}
     }
+  end
+
+  @doc "Returns properties installed on %TypedArray%.prototype."
+  def base_prototype_properties do
+    Map.merge(prototype_properties(), %{
+      "buffer" => {:accessor, accessor_getter("get buffer", &prototype_buffer/1), nil},
+      "byteLength" =>
+        {:accessor, accessor_getter("get byteLength", &prototype_byte_length/1), nil},
+      "byteOffset" =>
+        {:accessor, accessor_getter("get byteOffset", &prototype_byte_offset/1), nil},
+      {:symbol, "Symbol.toStringTag"} =>
+        {:accessor, accessor_getter("get [Symbol.toStringTag]", &prototype_to_string_tag/1), nil}
+    })
+  end
+
+  defp accessor_getter(name, callback) do
+    getter = {:builtin, name, fn _args, this -> callback.(this) end}
+    Heap.put_ctor_static(getter, "length", 0)
+    Heap.put_ctor_prop_desc(getter, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(getter, "name", PropertyDescriptor.hidden_readonly())
+    getter
+  end
+
+  defp prototype_buffer(this), do: typed_array_state!(this) |> Map.get("buffer", :undefined)
+
+  defp prototype_byte_length(this) do
+    obj = typed_array_object!(this)
+    if out_of_bounds?(obj), do: 0, else: current_byte_length(obj)
+  end
+
+  defp prototype_byte_offset(this) do
+    obj = typed_array_object!(this)
+    if out_of_bounds?(obj), do: 0, else: Map.get(typed_array_state!(obj), "byteOffset", 0)
+  end
+
+  defp prototype_to_string_tag({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true, type_key() => type} -> typed_array_name(type)
+      _ -> :undefined
+    end
+  end
+
+  defp prototype_to_string_tag(_), do: :undefined
+
+  defp typed_array_object!({:obj, ref} = obj) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} -> obj
+      _ -> JSThrow.type_error!("TypedArray expected")
+    end
+  end
+
+  defp typed_array_object!(_), do: JSThrow.type_error!("TypedArray expected")
+
+  defp typed_array_state!(obj) do
+    {:obj, ref} = typed_array_object!(obj)
+    Heap.get_obj(ref, %{})
+  end
+
+  defp typed_array_name(type) do
+    @types
+    |> Enum.find_value(fn {name, candidate} -> if candidate == type, do: name end)
+    |> Kernel.||("TypedArray")
   end
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."

@@ -510,6 +510,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
           "byteLength" ->
             if TypedArray.out_of_bounds?(obj), do: 0, else: TypedArray.current_byte_length(obj)
 
+          "byteOffset" ->
+            if TypedArray.out_of_bounds?(obj), do: 0, else: Map.get(map, "byteOffset", 0)
+
           _ ->
             typed_array_property(obj, map, key)
         end
