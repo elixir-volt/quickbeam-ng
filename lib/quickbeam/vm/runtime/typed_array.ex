@@ -291,6 +291,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
           "byteLength" => len * elem_size(type),
           "byteOffset" => offset,
           "BYTES_PER_ELEMENT" => elem_size(type),
+          "__proto__" => Runtime.global_class_proto(typed_array_name(type)),
           "__length_tracking__" => length_tracking?,
           "__fixed_length__" => len,
           "__fixed_byte_length__" => len * elem_size(type),
@@ -695,7 +696,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             do: v
       end
 
-    constructor(t).([vals], nil)
+    result = typed_array_species_create({:obj, ref}, t, length(vals))
+
+    vals
+    |> Enum.with_index()
+    |> Enum.each(fn {value, index} -> set_element(result, index, value) end)
+
+    result
   end
 
   defp filter(_ref, _args, _this), do: JSThrow.type_error!("callbackfn is not callable")
@@ -1007,18 +1014,39 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp get_species_ctor({:obj, ref}) do
-    map = Heap.get_obj(ref, %{})
-    ctor = Map.get(map, "constructor")
-
-    case ctor do
-      {:obj, ctor_ref} ->
-        ctor_map = Heap.get_obj(ctor_ref, %{})
-        species = Map.get(ctor_map, {:symbol, "Symbol.species"})
-        if species != nil, do: species, else: nil
-
-      _ ->
+  defp get_species_ctor({:obj, _ref} = obj) do
+    case Get.get(obj, "constructor") do
+      ctor when ctor in [nil, :undefined] ->
         nil
+
+      ctor ->
+        case Get.get(ctor, {:symbol, "Symbol.species"}) do
+          species when species in [nil, :undefined] -> nil
+          species -> species
+        end
+    end
+  end
+
+  defp typed_array_species_create(obj, default_type, length) do
+    case get_species_ctor(obj) do
+      nil ->
+        constructor(default_type).([length], nil)
+
+      ctor ->
+        unless QuickBEAM.VM.Builtin.callable?(ctor) do
+          JSThrow.type_error!("TypedArray species constructor is not a constructor")
+        end
+
+        result = Invocation.construct_runtime(ctor, ctor, [length])
+
+        case typed_array_object!(result) do
+          {:obj, result_ref} = typed_result ->
+            if len(result_ref) < length do
+              JSThrow.type_error!("TypedArray species result is too short")
+            end
+
+            typed_result
+        end
     end
   end
 
