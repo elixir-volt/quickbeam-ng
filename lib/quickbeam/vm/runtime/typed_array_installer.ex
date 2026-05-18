@@ -22,6 +22,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstaller do
           base_proto
         )
 
+      Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
       mark_prototype_methods(ctor)
       install_static_methods(ctor)
       install_species(ctor)
@@ -57,6 +58,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstaller do
     end
 
     ConstructorRegistry.put_prototype(ta_base, {:obj, ta_base_ref})
+    Heap.put_ctor_prop_desc(ta_base, "prototype", PropertyDescriptor.prototype())
     install_static_methods(ta_base)
     install_species(ta_base)
   end
