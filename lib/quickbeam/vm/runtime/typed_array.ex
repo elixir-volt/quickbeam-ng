@@ -581,6 +581,11 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp typed_array_set_source_values({:obj, _} = source), do: typed_array_source_values(source)
   defp typed_array_set_source_values({:qb_arr, arr}), do: :array.to_list(arr)
   defp typed_array_set_source_values(source) when is_list(source), do: source
+  defp typed_array_set_source_values(source) when is_binary(source), do: String.graphemes(source)
+  defp typed_array_set_source_values(source) when is_number(source) or is_boolean(source), do: []
+  defp typed_array_set_source_values({:bigint, _}), do: []
+  defp typed_array_set_source_values({:symbol, _}), do: []
+  defp typed_array_set_source_values({:symbol, _, _}), do: []
   defp typed_array_set_source_values(source), do: Heap.to_list(source)
 
   defp subarray(ref, args) do
