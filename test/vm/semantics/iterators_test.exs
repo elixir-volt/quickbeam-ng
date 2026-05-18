@@ -56,4 +56,11 @@ defmodule QuickBEAM.VM.Semantics.IteratorsTest do
 
     assert beam!(rt, code) == 1
   end
+
+  test "array for-of invokes own Symbol.iterator accessors", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S|const array = [9]; Object.defineProperty(array, Symbol.iterator, { get() { return function* () { yield 1; }; } }); let out; for (const value of array) out = value; out|
+           ) == 1
+  end
 end

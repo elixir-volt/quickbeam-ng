@@ -279,7 +279,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
 
     case OwnProperty.descriptor(obj, symbol) do
       :undefined -> :missing
-      desc -> Get.get(desc, "value")
+      _desc -> Get.get(obj, symbol)
     end
   end
 
