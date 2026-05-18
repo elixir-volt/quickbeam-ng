@@ -683,7 +683,12 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         value -> relative_index(value, l)
       end
 
-    count = min(final - start, l - target)
+    if out_of_bounds?(obj) do
+      JSThrow.type_error!("TypedArray is out of bounds")
+    end
+
+    current_len = len(ref)
+    count = min(final - start, l - target) |> min(current_len - target) |> min(current_len - start)
 
     if count > 0 do
       t = type(ref)
