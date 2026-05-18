@@ -1262,17 +1262,36 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         value -> relative_index(value, l)
       end
 
+    if out_of_bounds?({:obj, ref}) do
+      JSThrow.type_error!("TypedArray is out of bounds")
+    end
+
     new_len = max(0, final - start)
     result = typed_array_species_create({:obj, ref}, t, new_len)
 
     if new_len > 0 do
+      source = {:obj, ref}
+
       for index <- 0..(new_len - 1) do
-        set_element(result, index, get_element({:obj, ref}, start + index))
+        set_element(result, index, slice_source_value(source, start + index, t))
       end
     end
 
     result
   end
+
+  defp slice_source_value(source, index, type) do
+    value = get_element(source, index)
+
+    if value == :undefined do
+      typed_zero(type)
+    else
+      value
+    end
+  end
+
+  defp typed_zero(type) when type in [:bigint64, :biguint64], do: {:bigint, 0}
+  defp typed_zero(_type), do: 0
 
   defp get_species_ctor({:obj, _ref} = obj) do
     case Get.get(obj, "constructor") do
