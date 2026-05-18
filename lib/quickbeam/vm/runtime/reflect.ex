@@ -239,16 +239,13 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     end
   end
 
-  defp reflect_get_array_object(obj, key, receiver) do
+  defp reflect_get_array_object(obj, key, _receiver) do
     case PropertyKey.normalize(key) do
       "length" ->
         Get.length_of(obj)
 
       normalized_key ->
-        case PropertyKey.array_index(normalized_key) do
-          {:ok, _} -> Get.get(obj, normalized_key)
-          :error -> reflect_get_from_prototype(Prototype.get(obj), normalized_key, receiver)
-        end
+        Get.get(obj, normalized_key)
     end
   end
 

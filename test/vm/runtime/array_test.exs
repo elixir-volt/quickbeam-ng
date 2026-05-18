@@ -78,4 +78,22 @@ defmodule QuickBEAM.VM.Runtime.ArrayTest do
              """
            ) == "length,constructor,0,1,2,3,length,0,1,4|0,1,2,3,0,1,4"
   end
+
+  test "array slice reads huge proxied array side properties", %{rt: rt} do
+    assert beam!(
+             rt,
+             ~S"""
+             var array = [];
+             array['9007199254740989'] = 'a';
+             array['9007199254740990'] = 'b';
+             var proxy = new Proxy(array, {
+               get: function(target, key, receiver) {
+                 if (key === 'length') return Math.pow(2, 53) + 2;
+                 return Reflect.get(target, key, receiver);
+               }
+             });
+             Array.prototype.slice.call(proxy, -2).join(',')
+             """
+           ) == "a,b"
+  end
 end
