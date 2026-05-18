@@ -20,7 +20,9 @@ print(int(time.time() * 1000))
 PY
 )
 
-if [[ "${AUTORESEARCH_QUICKJS_PARITY:-}" == "1" ]]; then
+if [[ "${AUTORESEARCH_QUICKJS_PARITY_ALL:-}" == "1" ]]; then
+  output=$(mix run bench/quickjs_parity_all.exs)
+elif [[ "${AUTORESEARCH_QUICKJS_PARITY:-}" == "1" ]]; then
   export TEST262_CASE_TIMEOUT="15000"
   output=$(mix run bench/quickjs_parity_residual.exs)
 else
@@ -33,7 +35,16 @@ metric() {
   printf '%s\n' "$output" | awk -F= -v key="METRIC ${name}" '$1 == key {print $2}' | tail -1
 }
 
-if [[ "${AUTORESEARCH_QUICKJS_PARITY:-}" == "1" ]]; then
+if [[ "${AUTORESEARCH_QUICKJS_PARITY_ALL:-}" == "1" ]]; then
+  cases=$(metric quickjs_parity_all_native_accepted)
+  pass=$(metric quickjs_parity_all_pass)
+  failures=$(metric quickjs_parity_all_failures)
+  compiler_errors=$(metric compiler_errors)
+  compiler_crashes=$(metric compiler_crashes)
+  compiler_fails=$(metric compiler_fails)
+  both_fail=$(metric both_fail)
+  interpreter_fail_compiler_pass=$(metric interpreter_fail_compiler_pass)
+elif [[ "${AUTORESEARCH_QUICKJS_PARITY:-}" == "1" ]]; then
   cases=$(metric quickjs_parity_cases)
   pass=$(metric quickjs_parity_pass)
   failures=$(metric quickjs_parity_failures)
