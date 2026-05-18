@@ -1408,6 +1408,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
                 do: div(byte_size(bin) - off, elem_size(type)),
                 else: to_idx(length_arg)
 
+            if not length_tracking? and off + len * elem_size(type) > byte_size(bin) do
+              JSThrow.range_error!("Invalid typed array length")
+            end
+
             {bin, off, len, buf_obj, length_tracking?}
 
           true ->
