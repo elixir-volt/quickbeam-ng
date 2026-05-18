@@ -183,7 +183,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   def static_of(args, constructor) do
-    Invocation.construct_runtime(constructor, constructor, [args])
+    target = Invocation.construct_runtime(constructor, constructor, [length(args)])
+    typed_target = typed_array_object!(target)
+
+    args
+    |> Enum.with_index()
+    |> Enum.each(fn {value, index} -> set_element(typed_target, index, value) end)
+
+    target
   end
 
   defp from_args([source, :undefined | _]), do: {source, :__missing__, :undefined}
