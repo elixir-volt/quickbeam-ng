@@ -1023,9 +1023,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
 
     {b, l, t} = {buf(ref), len(ref), type(ref)}
-    vals = if l == 0, do: [], else: Enum.map(0..(l - 1), &read_element(b, &1, t)) |> sort_values(compare_fn)
-    new_buf = rebuild_buffer(vals, b, t)
-    update_buffer(ref, new_buf)
+
+    if l > 0 do
+      vals = Enum.map(0..(l - 1), &read_element(b, &1, t)) |> sort_values(compare_fn)
+      new_buf = rebuild_buffer(vals, b, t)
+      update_buffer(ref, new_buf)
+    end
+
     obj
   end
 
@@ -1042,9 +1046,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     if out_of_bounds?(obj), do: JSThrow.type_error!("TypedArray is out of bounds")
 
     {b, l, t} = {buf(ref), len(ref), type(ref)}
-    vals = if l == 0, do: [], else: Enum.map(0..(l - 1), &read_element(b, &1, t)) |> Enum.reverse()
-    new_buf = rebuild_buffer(vals, b, t)
-    update_buffer(ref, new_buf)
+
+    if l > 0 do
+      vals = Enum.map(0..(l - 1), &read_element(b, &1, t)) |> Enum.reverse()
+      new_buf = rebuild_buffer(vals, b, t)
+      update_buffer(ref, new_buf)
+    end
+
     obj
   end
 
