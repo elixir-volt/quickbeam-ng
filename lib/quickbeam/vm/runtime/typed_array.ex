@@ -612,8 +612,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     t = type(ref)
     s = relative_index(arg(args, 0, 0), l)
 
+    end_arg = Enum.at(args, 1, :undefined)
+
     e =
-      case Enum.at(args, 1, :undefined) do
+      case end_arg do
         :undefined -> l
         value -> relative_index(value, l)
       end
@@ -622,13 +624,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     es = elem_size(t)
     parent = state(ref)
     byte_offset = Map.get(parent, offset(), 0) + s * es
+    length_arg = if Map.get(parent, "__length_tracking__") and end_arg == :undefined, do: :auto, else: new_len
 
     typed_array_species_create_view(
       {:obj, ref},
       t,
       Map.get(parent, "buffer"),
       byte_offset,
-      new_len
+      length_arg
     )
   end
 
@@ -1206,6 +1209,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
         typed_result
     end
+  end
+
+  defp typed_array_species_create_view(obj, default_type, buffer_obj, byte_offset, :auto) do
+    construct_typed_array_species(obj, default_type, [buffer_obj, byte_offset])
   end
 
   defp typed_array_species_create_view(obj, default_type, buffer_obj, byte_offset, length) do
