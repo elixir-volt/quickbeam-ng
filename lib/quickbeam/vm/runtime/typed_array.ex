@@ -720,14 +720,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp to_locale_string(ref) do
     ensure_not_out_of_bounds(ref)
     l = len(ref)
-    b = buf(ref)
-    t = type(ref)
+    obj = {:obj, ref}
 
     if l == 0 do
       ""
     else
       Enum.map_join(0..(l - 1), ",", fn index ->
-        case read_element(b, index, t) do
+        case get_element(obj, index) do
           value when value in [:undefined, nil] ->
             ""
 
