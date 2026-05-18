@@ -48,6 +48,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstaller do
       ta_base_ref,
       TypedArray.base_prototype_properties()
       |> Map.put("constructor", ta_base)
+      |> Map.put("toString", QuickBEAM.VM.ObjectModel.Get.get(Heap.get_array_proto(), "toString"))
       |> Map.put("__proto__", Heap.get_object_prototype())
     )
 
