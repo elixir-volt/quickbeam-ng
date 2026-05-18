@@ -777,11 +777,35 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp fill(ref, [val | _]) do
-    {l, t} = {len(ref), type(ref)}
-    new_buf = Enum.reduce(0..(l - 1), buf(ref) || <<>>, &write_element(&2, &1, val, t))
-    update_buffer(ref, new_buf)
-    {:obj, ref}
+  defp fill(ref, args) do
+    obj = {:obj, ref}
+
+    if out_of_bounds?(obj) do
+      JSThrow.type_error!("TypedArray is out of bounds")
+    end
+
+    val = arg(args, 0, :undefined)
+    l = len(ref)
+    start = relative_index(arg(args, 1, 0), l)
+
+    final =
+      case Enum.at(args, 2, :undefined) do
+        :undefined -> l
+        value -> relative_index(value, l)
+      end
+
+    if final > start do
+      t = type(ref)
+
+      new_buf =
+        Enum.reduce(start..(final - 1), buf(ref) || <<>>, fn index, acc ->
+          write_element(acc, index, val, t)
+        end)
+
+      update_buffer(ref, new_buf)
+    end
+
+    obj
   end
 
   defp update_buffer(ref, new_buf) do
