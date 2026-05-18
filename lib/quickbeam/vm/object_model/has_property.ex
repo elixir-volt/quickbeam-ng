@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyKey}
+  alias QuickBEAM.VM.Runtime.TypedArray
 
   def has_property?({:obj, ref} = obj, key) do
     case Heap.get_obj(ref, %{}) do
@@ -18,6 +19,17 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
           validate_proxy_has_invariant(target, key, result)
         else
           has_property?(target, key)
+        end
+
+      %{typed_array() => true} = map ->
+        case PropertyKey.array_index(key) do
+          {:ok, _idx} ->
+            if TypedArray.out_of_bounds?(obj),
+              do: false,
+              else: OwnProperty.present?(obj, key) or prototype_has_property?(obj, map, key)
+
+          _ ->
+            OwnProperty.present?(obj, key) or prototype_has_property?(obj, map, key)
         end
 
       map when is_map(map) ->

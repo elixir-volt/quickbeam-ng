@@ -1078,6 +1078,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       {:qb_arr, _} -> Heap.get_prop_desc(ref, key) != nil
       data when is_list(data) -> Heap.get_prop_desc(ref, key) != nil
       raw when is_tuple(raw) -> Heap.shape?(raw) and match?({:ok, _}, Heap.raw_fetch(raw, key))
+      %{typed_array() => true} ->
+        match?({:ok, _}, PropertyKey.array_index(key)) or Map.has_key?(Heap.get_obj(ref, %{}), key)
+
       map when is_map(map) -> not Map.has_key?(map, proxy_target()) and Map.has_key?(map, key)
       _ -> false
     end
