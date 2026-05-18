@@ -3234,18 +3234,16 @@ defmodule QuickBEAM.VM.Runtime.Array do
       %{"__array_iterator_state__" => {:obj, state_ref}} ->
         state = Heap.get_obj(state_ref, %{})
         i = Map.get(state, "index", 0)
-        done = Map.get(state, "done") == true
-        list = array_iterator_list_fn(Map.get(state, "target")).()
 
-        cond do
-          done ->
-            Heap.wrap(%{"value" => :undefined, "done" => true})
+        if Map.get(state, "done") == true do
+          Heap.wrap(%{"value" => :undefined, "done" => true})
+        else
+          list = array_iterator_list_fn(Map.get(state, "target")).()
 
-          i >= length(list) ->
+          if i >= length(list) do
             Heap.put_obj(state_ref, Map.put(state, "done", true))
             Heap.wrap(%{"value" => :undefined, "done" => true})
-
-          true ->
+          else
             Heap.put_obj(state_ref, Map.put(state, "index", i + 1))
 
             value =
@@ -3256,6 +3254,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
               end
 
             Heap.wrap(%{"value" => value, "done" => false})
+          end
         end
 
       _ ->
