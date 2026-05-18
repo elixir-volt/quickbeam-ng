@@ -1377,25 +1377,38 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp encode_float16(n) when is_number(n) do
     f = n * 1.0
-    sign = if f < 0, do: 1, else: 0
+    sign = if f < 0 or negative_zero?(f), do: 1, else: 0
+    sign_bits = Bitwise.bsl(sign, 15)
     abs_f = abs(f)
 
     cond do
       abs_f == 0.0 ->
-        Bitwise.bsl(sign, 15)
+        sign_bits
 
-      abs_f >= 65_520.0 ->
-        Bitwise.bsl(sign, 15) |> Bitwise.bor(0x7C00)
+      abs_f < :math.pow(2, -14) ->
+        rounded = bankers_round(abs_f / :math.pow(2, -24))
+
+        cond do
+          rounded == 0 -> sign_bits
+          rounded >= 1024 -> sign_bits |> Bitwise.bor(Bitwise.bsl(1, 10))
+          true -> sign_bits |> Bitwise.bor(rounded)
+        end
 
       true ->
         exp = trunc(:math.floor(:math.log2(abs_f)))
-        exp = max(-14, min(15, exp))
-        frac = trunc((abs_f / :math.pow(2, exp) - 1) * 1024 + 0.5) |> Bitwise.band(0x3FF)
-        exp_biased = exp + 15
+        significand = bankers_round(abs_f / :math.pow(2, exp) * 1024)
+        {exp, significand} = if significand == 2048, do: {exp + 1, 1024}, else: {exp, significand}
 
-        Bitwise.bsl(sign, 15)
-        |> Bitwise.bor(Bitwise.bsl(exp_biased, 10))
-        |> Bitwise.bor(frac)
+        if exp > 15 do
+          sign_bits |> Bitwise.bor(0x7C00)
+        else
+          frac = Bitwise.band(significand - 1024, 0x3FF)
+          exp_biased = exp + 15
+
+          sign_bits
+          |> Bitwise.bor(Bitwise.bsl(exp_biased, 10))
+          |> Bitwise.bor(frac)
+        end
     end
   end
 
