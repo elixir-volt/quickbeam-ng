@@ -1106,9 +1106,18 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp sort_values(values, compare_fn) do
-    Enum.sort(values, fn left, right ->
-      Runtime.to_number(Invocation.invoke_with_receiver(compare_fn, [left, right], :undefined)) < 0
+    values
+    |> Enum.with_index()
+    |> Enum.sort(fn {left, left_index}, {right, right_index} ->
+      order = Runtime.to_number(Invocation.invoke_with_receiver(compare_fn, [left, right], :undefined))
+
+      cond do
+        order < 0 -> true
+        order > 0 -> false
+        true -> left_index <= right_index
+      end
     end)
+    |> Enum.map(&elem(&1, 0))
   end
 
   defp default_sort_order(left, right) do
