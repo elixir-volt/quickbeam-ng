@@ -565,10 +565,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       JSThrow.range_error!("offset is out of bounds")
     end
 
+    target_len = len(ref)
     validate_typed_array_set_content_type!(type(ref), source)
 
     {source_len, source_getter} = typed_array_set_source(source)
-    target_len = len(ref)
 
     if offset + source_len > target_len do
       JSThrow.range_error!("source is too large")
