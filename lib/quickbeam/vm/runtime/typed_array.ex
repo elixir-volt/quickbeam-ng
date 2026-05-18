@@ -565,6 +565,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       JSThrow.range_error!("offset is out of bounds")
     end
 
+    validate_typed_array_set_content_type!(type(ref), source)
+
     {source_len, source_getter} = typed_array_set_source(source)
     target_len = len(ref)
 
@@ -580,6 +582,22 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     :undefined
   end
+
+  defp validate_typed_array_set_content_type!(target_type, {:obj, source_ref} = source) do
+    case Heap.get_obj(source_ref, %{}) do
+      %{typed_array() => true} ->
+        if bigint_element_type?(target_type) != bigint_element_type?(type(elem(source, 1))) do
+          JSThrow.type_error!("Cannot mix BigInt and other types")
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp validate_typed_array_set_content_type!(_target_type, _source), do: :ok
+
+  defp bigint_element_type?(type), do: type in [:bigint64, :biguint64]
 
   defp typed_array_set_source(nil), do: JSThrow.type_error!("Cannot convert undefined or null to object")
   defp typed_array_set_source(:undefined), do: JSThrow.type_error!("Cannot convert undefined or null to object")
