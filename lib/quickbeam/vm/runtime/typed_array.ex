@@ -630,12 +630,18 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp join(ref, args) do
     sep =
       case args do
-        [s | _] when is_binary(s) -> s
-        _ -> ","
+        [] -> ","
+        [:undefined | _] -> ","
+        [s | _] -> Runtime.stringify(s)
       end
 
     {b, l, t} = {buf(ref), len(ref), type(ref)}
-    Enum.map_join(0..max(0, l - 1), sep, &typed_array_join_value(read_element(b, &1, t)))
+
+    if l == 0 do
+      ""
+    else
+      Enum.map_join(0..(l - 1), sep, &typed_array_join_value(read_element(b, &1, t)))
+    end
   end
 
   defp typed_array_join_value(:undefined), do: ""
@@ -673,7 +679,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         end
       end
 
-    constructor(t).([elements], nil)
+    result = typed_array_species_create({:obj, ref}, t, l)
+
+    elements
+    |> Enum.with_index()
+    |> Enum.each(fn {value, index} -> set_element(result, index, value) end)
+
+    result
   end
 
   defp map(_ref, _args, _this), do: JSThrow.type_error!("callbackfn is not callable")
@@ -798,7 +810,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       -1
     else
       Enum.find_value(start..(l - 1), -1, fn i ->
-        if get_element({:obj, ref}, i) == target, do: i
+        if strict_same_value?(get_element({:obj, ref}, i), target), do: i
       end)
     end
   end
@@ -811,14 +823,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     if l == 0 do
       -1
     else
-      from = arg(rest, 0, l - 1)
-      start = if from < 0, do: l + to_idx(from), else: min(to_idx(from), l - 1)
+      start = last_index_start(arg(rest, 0, l - 1), l)
 
       if start < 0 do
         -1
       else
         Enum.find_value(start..0//-1, -1, fn i ->
-          if get_element({:obj, ref}, i) == target, do: i
+          if strict_same_value?(get_element({:obj, ref}, i), target), do: i
         end)
       end
     end
@@ -839,9 +850,23 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp includes(_ref, _args), do: false
 
+  defp last_index_start(value, len) do
+    case to_integer_or_infinity(value) do
+      :neg_infinity -> -1
+      :infinity -> len - 1
+      index when index < 0 -> len + index
+      index -> min(index, len - 1)
+    end
+  end
+
   defp same_value_zero?(:nan, :nan), do: true
   defp same_value_zero?(a, b) when is_float(a) and is_float(b), do: a == b or (a != a and b != b)
   defp same_value_zero?(a, b), do: a == b
+
+  defp strict_same_value?(:nan, _), do: false
+  defp strict_same_value?(_, :nan), do: false
+  defp strict_same_value?(a, b) when is_float(a) and is_float(b) and (a != a or b != b), do: false
+  defp strict_same_value?(a, b), do: a == b
 
   defp find(ref, [cb | rest], this) do
     callback!(cb)
