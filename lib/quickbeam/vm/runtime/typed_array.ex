@@ -1010,7 +1010,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     compare_fn = arg(args, 0, :undefined)
 
-    if compare_fn not in [nil, :undefined] and not QuickBEAM.VM.Builtin.callable?(compare_fn) do
+    if compare_fn != :undefined and not QuickBEAM.VM.Builtin.callable?(compare_fn) do
       JSThrow.type_error!("comparison function is not callable")
     end
 
