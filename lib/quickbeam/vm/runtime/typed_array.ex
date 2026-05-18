@@ -614,20 +614,31 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp subarray(ref, args) do
     l = len(ref)
     t = type(ref)
-    s = max(0, min(to_idx(arg(args, 0, 0)), l))
-    e = min(to_idx(arg(args, 1, l)), l)
+    s = relative_index(arg(args, 0, 0), l)
+
+    e =
+      case Enum.at(args, 1, :undefined) do
+        :undefined -> l
+        value -> relative_index(value, l)
+      end
+
     new_len = max(0, e - s)
     es = elem_size(t)
+    source = buf(ref) || <<>>
+    data = if new_len > 0, do: binary_part(source, s * es, new_len * es), else: <<>>
 
     Heap.wrap(%{
       typed_array() => true,
       type_key() => t,
-      buffer() => binary_part(buf(ref), s * es, new_len * es),
+      buffer() => data,
       offset() => 0,
       "length" => new_len,
       "byteLength" => new_len * es,
       "byteOffset" => 0,
-      "buffer" => Map.get(state(ref), "buffer")
+      "__fixed_length__" => new_len,
+      "__fixed_byte_length__" => new_len * es,
+      "buffer" => Map.get(state(ref), "buffer"),
+      "__proto__" => Runtime.global_class_proto(typed_array_name(t))
     })
   end
 
