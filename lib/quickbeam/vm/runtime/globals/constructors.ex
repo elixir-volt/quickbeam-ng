@@ -270,7 +270,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       validate_regexp_source!(source)
 
       ref = make_ref()
-      RegexpState.put(ref, "flags", flags)
+      RegexpState.put(ref, "flags", canonical_regexp_flags(flags))
       RegexpState.put(ref, "lastIndex", 0)
 
       case this do
@@ -357,6 +357,9 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       JSThrow.syntax_error!("Invalid regular expression flags")
     end
   end
+
+  defp canonical_regexp_flags(flags),
+    do: Enum.reduce(~w(d g i m s u v y), "", fn flag, acc -> if String.contains?(flags, flag), do: acc <> flag, else: acc end)
 
   defp validate_regexp_source!(source) when is_binary(source) do
     if invalid_regexp_source?(source) do
