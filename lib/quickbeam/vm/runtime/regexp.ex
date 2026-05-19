@@ -82,8 +82,14 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_splitter(regexp), do: regexp
 
-  def proto_accessor("source"),
-    do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
+  def proto_accessor("source") do
+    {:accessor,
+     {:builtin, "get source",
+      fn _, this ->
+        unless regexp_match_receiver?(this), do: JSThrow.type_error!("RegExp.prototype.source receiver is not an object")
+        regexp_source(this)
+      end}, nil}
+  end
 
   def proto_accessor("flags") do
     {:accessor,
@@ -1962,9 +1968,28 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_to_string(_), do: "/(?:)/"
 
-  defp regexp_source({:regexp, _bytecode, source, _ref}) when is_binary(source), do: source
-  defp regexp_source({:regexp, _bytecode, source}) when is_binary(source), do: source
-  defp regexp_source(_), do: "(?:)"
+  defp regexp_source({:regexp, _bytecode, source, _ref}) when is_binary(source),
+    do: escape_regexp_source(source)
+
+  defp regexp_source({:regexp, _bytecode, source}) when is_binary(source),
+    do: escape_regexp_source(source)
+
+  defp regexp_source(proto) do
+    if proto == Runtime.global_class_proto("RegExp"),
+      do: "(?:)",
+      else: JSThrow.type_error!("RegExp.prototype.source receiver is not a RegExp")
+  end
+
+  defp escape_regexp_source(""), do: "(?:)"
+
+  defp escape_regexp_source(source) do
+    source
+    |> String.replace("/", "\\/")
+    |> String.replace("\n", "\\n")
+    |> String.replace("\r", "\\r")
+    |> String.replace("\u2028", "\\u2028")
+    |> String.replace("\u2029", "\\u2029")
+  end
 
   defp regexp_flag_accessor(name, flag) do
     {:accessor,
