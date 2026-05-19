@@ -386,12 +386,16 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     do: literal_exec(s, source)
 
   defp exec({:regexp, bytecode, source}, [s | _]) when is_binary(bytecode) and is_binary(s) do
+    flags = Get.regexp_flags(bytecode)
+
     case decoded_simple_escape(source) do
       literal when is_binary(literal) ->
-        literal_exec_decoded(s, literal)
+        if unicode_flags?(flags) and lone_surrogate_wtf8?(literal),
+          do: exec_nif(bytecode, source, flags, s),
+          else: literal_exec_decoded(s, literal)
 
       :error ->
-        exec_nif(bytecode, source, Get.regexp_flags(bytecode), s)
+        exec_nif(bytecode, source, flags, s)
     end
   end
 
@@ -401,6 +405,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec(_, _), do: nil
 
   defp stateful_regexp?(flags), do: String.contains?(flags, "g") or String.contains?(flags, "y")
+  defp unicode_flags?(flags), do: String.contains?(flags, "u") or String.contains?(flags, "v")
 
   defp set_last_index!({:regexp, _, _, ref} = regexp, value) do
     case Heap.get_prop_desc(ref, "lastIndex") do
@@ -1238,15 +1243,33 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp literal_exec_decoded_from(s, literal, offset) do
-    case :binary.match(s, literal, scope: {offset, byte_size(s) - offset}) do
-      {index, _length} -> exec_result([literal], index, s)
-      :nomatch -> nil
+    if lone_surrogate_wtf8?(literal) do
+      literal_exec_utf16_unit_from(s, literal, offset)
+    else
+      case :binary.match(s, literal, scope: {offset, byte_size(s) - offset}) do
+        {index, _length} -> exec_result([literal], index, s)
+        :nomatch -> nil
+      end
+    end
+  end
+
+  defp literal_exec_utf16_unit_from(s, literal, offset) do
+    [unit] = JSString.utf16_code_unit_values(literal)
+
+    s
+    |> JSString.utf16_code_unit_values()
+    |> Enum.drop(offset)
+    |> Enum.find_index(&(&1 == unit))
+    |> case do
+      nil -> nil
+      index -> exec_result([literal], offset + index, s)
     end
   end
 
   defp decode_hex_escape(hex, digits) do
     case Integer.parse(hex, 16) do
       {cp, ""} when digits == 2 -> <<cp::utf8>>
+      {cp, ""} when cp >= 0xD800 and cp <= 0xDFFF -> utf16_unit_to_binary(cp)
       {cp, ""} -> <<cp::utf8>>
       _ -> :error
     end
