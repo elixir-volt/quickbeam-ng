@@ -1518,6 +1518,8 @@ defmodule QuickBEAM.VM.Runtime.String do
       if not global? and String.contains?(flags, "y") do
         replace_first_with_builtin_exec(s, regexp, replacement)
       else
+        if global?, do: Put.put(regexp, "lastIndex", 0)
+
         case special_regex_replace(s, source, flags, replacement, global?) do
           {:ok, result} ->
             result
@@ -1587,14 +1589,15 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp builtin_regexp_exec?(_), do: false
 
   defp replace_with_custom_exec(s, regexp, replacement) do
-    exec = Get.get(regexp, "exec")
-
     flags = regexp_flags_string(Get.get(regexp, "flags"))
 
     if String.contains?(flags, "g") do
       Put.put(regexp, "lastIndex", 0)
+      exec = Get.get(regexp, "exec")
       replace_global_with_custom_exec(s, regexp, exec, replacement, 0, [])
     else
+      exec = Get.get(regexp, "exec")
+
       case custom_exec_result(exec, s, regexp) do
         nil -> s
         {:obj, _} = result -> replace_from_exec_result(s, result, replacement)
