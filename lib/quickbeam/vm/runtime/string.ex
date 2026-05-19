@@ -2986,9 +2986,19 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp require_global_match_all_flags!(regexp) do
-    flags = regexp_match_all_flags(regexp)
+    prototype_flags = Get.get(current_regexp_prototype(), "flags")
 
-    if not (is_binary(flags) and String.contains?(flags, "g")) do
+    if prototype_flags in [nil, :undefined] do
+      JSThrow.type_error!("cannot convert to object")
+    end
+
+    flags = Get.get(regexp, "flags")
+
+    if flags in [nil, :undefined] do
+      JSThrow.type_error!("cannot convert to object")
+    end
+
+    unless String.contains?(Runtime.stringify(flags), "g") do
       throw({:js_throw, Heap.make_error("matchAll requires a global RegExp", "TypeError")})
     end
   end
@@ -3028,8 +3038,6 @@ defmodule QuickBEAM.VM.Runtime.String do
     RegexpState.put(ref, "lastIndex", 0)
     {:regexp, nil, source, ref}
   end
-
-  defp regexp_match_all_flags(regexp), do: Get.get(regexp, "flags")
 
   defp literal_match_results("", s) do
     0..Get.string_length(s)

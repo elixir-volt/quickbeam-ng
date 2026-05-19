@@ -69,6 +69,20 @@ defmodule QuickBEAM.VM.Runtime.StringTest do
     )
   end
 
+  test "matchAll requires observable RegExp flags to be object-coercible", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S<let r = /a/g; Object.defineProperty(r, "flags", {value: undefined}); try { "".matchAll(r); "no" } catch (e) { e.name }>,
+      "TypeError"
+    )
+
+    assert_modes(
+      rt,
+      ~S<Object.defineProperty(RegExp.prototype, "flags", {get() { return undefined; }}); try { "".matchAll(/a/g); "no" } catch (e) { e.name }>,
+      "TypeError"
+    )
+  end
+
   test "well-formed string methods coerce primitive receivers", %{rt: rt} do
     assert_modes(rt, ~S<String.prototype.isWellFormed.call(1)>, true)
     assert_modes(rt, ~S<String.prototype.toWellFormed.call(1n)>, "1")
