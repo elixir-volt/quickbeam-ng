@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Runtime.GlobalNumeric do
+defmodule QuickBEAM.VM.Runtime.Globals.Numeric do
   @moduledoc "Global numeric functions: `parseInt`, `parseFloat`, `isNaN`, `isFinite`, and related utilities."
   alias QuickBEAM.VM.Semantics.Values
 

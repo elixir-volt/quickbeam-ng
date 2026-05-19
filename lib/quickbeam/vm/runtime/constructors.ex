@@ -218,13 +218,13 @@ defmodule QuickBEAM.VM.Runtime.Constructors do
     case lookup(name) do
       {:builtin, ^name, _} = ctor ->
         if Heap.get_ctor_statics(ctor) == %{} and Heap.get_class_proto(ctor) == nil do
-          Map.get(QuickBEAM.VM.Runtime.GlobalBuilder.build(), name)
+          Map.get(QuickBEAM.VM.Runtime.Globals.Builder.build(), name)
         else
           ctor
         end
 
       _ ->
-        Map.get(QuickBEAM.VM.Runtime.GlobalBuilder.build(), name)
+        Map.get(QuickBEAM.VM.Runtime.Globals.Builder.build(), name)
     end
   end
 end

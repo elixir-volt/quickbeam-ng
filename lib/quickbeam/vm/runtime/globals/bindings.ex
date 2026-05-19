@@ -1,20 +1,20 @@
-defmodule QuickBEAM.VM.Runtime.GlobalBindings do
+defmodule QuickBEAM.VM.Runtime.Globals.Bindings do
   @moduledoc "Builds global function and small host-object bindings."
 
   import QuickBEAM.VM.Builtin, only: [object: 1]
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Runtime.GlobalNumeric
+  alias QuickBEAM.VM.Runtime.Globals.Numeric
   alias QuickBEAM.VM.Runtime.Globals.Functions
 
   @doc "Returns non-constructor global function bindings."
   def bindings do
     %{
-      "parseInt" => builtin("parseInt", &GlobalNumeric.parse_int/2),
-      "parseFloat" => builtin("parseFloat", &GlobalNumeric.parse_float/2),
-      "isNaN" => builtin("isNaN", &GlobalNumeric.nan?/2),
-      "isFinite" => builtin("isFinite", &GlobalNumeric.finite?/2),
+      "parseInt" => builtin("parseInt", &Numeric.parse_int/2),
+      "parseFloat" => builtin("parseFloat", &Numeric.parse_float/2),
+      "isNaN" => builtin("isNaN", &Numeric.nan?/2),
+      "isFinite" => builtin("isFinite", &Numeric.finite?/2),
       "eval" => builtin("eval", &Functions.js_eval/2),
       "decodeURI" => builtin("decodeURI", &Functions.decode_uri/2),
       "decodeURIComponent" => builtin("decodeURIComponent", &Functions.decode_uri_component/2),

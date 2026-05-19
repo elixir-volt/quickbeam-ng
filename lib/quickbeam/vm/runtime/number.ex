@@ -5,7 +5,8 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
   alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, WrappedPrimitive}
-  alias QuickBEAM.VM.Runtime.{GlobalNumeric, InstallerHelpers}
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
+  alias QuickBEAM.VM.Runtime.Globals.Numeric
 
   @prototype_methods ~w(toString toFixed valueOf toExponential toPrecision toLocaleString)
 
@@ -117,8 +118,8 @@ defmodule QuickBEAM.VM.Runtime.Number do
     is_integer(val) or (is_float(val) and val == Float.floor(val))
   end
 
-  static_val("parseInt", {:builtin, "parseInt", &GlobalNumeric.parse_int/2})
-  static_val("parseFloat", {:builtin, "parseFloat", &GlobalNumeric.parse_float/2})
+  static_val("parseInt", {:builtin, "parseInt", &Numeric.parse_int/2})
+  static_val("parseFloat", {:builtin, "parseFloat", &Numeric.parse_float/2})
 
   static_val("NaN", :nan)
   static_val("POSITIVE_INFINITY", :infinity)
