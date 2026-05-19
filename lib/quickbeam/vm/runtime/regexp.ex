@@ -383,6 +383,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
+  defp exec(_receiver, [s | _]) when is_binary(s),
+    do: JSThrow.type_error!("RegExp.prototype.exec called on incompatible receiver")
+
   defp exec(_, _), do: nil
 
   defp stateful_regexp?(flags), do: String.contains?(flags, "g") or String.contains?(flags, "y")
