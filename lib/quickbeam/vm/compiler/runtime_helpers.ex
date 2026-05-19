@@ -8,7 +8,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   alias QuickBEAM.VM.Compiler.Runner
   alias QuickBEAM.VM.Environment.Captures
   alias QuickBEAM.VM.Execution.ConstructorStack
-  alias QuickBEAM.VM.Interpreter.{Closures, Context, Values}
+  alias QuickBEAM.VM.Interpreter.{Closures, Context}
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
 
   alias QuickBEAM.VM.ObjectModel.{

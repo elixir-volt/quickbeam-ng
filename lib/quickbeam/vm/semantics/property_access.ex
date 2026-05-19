@@ -42,5 +42,5 @@ defmodule QuickBEAM.VM.Semantics.PropertyAccess do
   defp format_key({:symbol, name}), do: name
   defp format_key({:symbol, name, _ref}), do: name
   defp format_key(key) when is_binary(key), do: key
-  defp format_key(key), do: QuickBEAM.VM.Interpreter.Values.stringify(key)
+  defp format_key(key), do: QuickBEAM.VM.Semantics.Values.stringify(key)
 end

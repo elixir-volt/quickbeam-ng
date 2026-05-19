@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   alias QuickBEAM.VM.{Heap, Invocation}
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyDescriptor}
   alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.Runtime

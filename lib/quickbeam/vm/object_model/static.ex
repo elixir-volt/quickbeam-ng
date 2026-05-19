@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.ObjectModel.Static do
   @moduledoc "Shared helpers for function/static object property semantics."
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty}
 
   def delete_static(fun, key) do

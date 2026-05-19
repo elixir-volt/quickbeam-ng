@@ -7,10 +7,10 @@ defmodule QuickBEAM.VM.Runtime.Date do
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime.InstallerHelpers
 
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.{Invocation, JSThrow}
 
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
 
   @epoch_gs 719_528 * 86_400
   @time_clip_limit 8_640_000_000_000_000
@@ -376,7 +376,7 @@ defmodule QuickBEAM.VM.Runtime.Date do
   end
 
   defp to_json(this, _args) do
-    tv = QuickBEAM.VM.Interpreter.Values.Coercion.to_primitive(this, "number")
+    tv = QuickBEAM.VM.Semantics.Coercion.to_primitive(this, "number")
 
     non_finite? =
       case tv do

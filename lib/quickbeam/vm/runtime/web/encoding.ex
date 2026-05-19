@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Encoding do
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.JSThrow
 
   @doc "Returns the JavaScript global bindings provided by this module."

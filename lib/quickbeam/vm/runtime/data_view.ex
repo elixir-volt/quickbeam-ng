@@ -9,8 +9,8 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime.InstallerHelpers
-  alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Semantics.Coercion
 
   @slot "__data_view__"
   @methods ~w(

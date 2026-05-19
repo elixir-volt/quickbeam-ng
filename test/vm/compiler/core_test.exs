@@ -235,7 +235,7 @@ defmodule QuickBEAM.VM.CompilerTest do
       fun = compile_and_decode(rt, code) |> user_function()
 
       assert {:ok, beam_file} = Compiler.disasm(fun)
-      refute {QuickBEAM.VM.Interpreter.Values, :truthy?, 1} in beam_extfuncs(beam_file)
+      refute {QuickBEAM.VM.Semantics.Values, :truthy?, 1} in beam_extfuncs(beam_file)
 
       block = beam_function_instructions(beam_file, :block_6)
 

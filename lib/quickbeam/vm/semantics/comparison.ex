@@ -1,10 +1,10 @@
-defmodule QuickBEAM.VM.Interpreter.Values.Comparison do
+defmodule QuickBEAM.VM.Semantics.Comparison do
   @moduledoc "JS relational comparisons: lt, lte, gt, gte, numeric_compare, abstract_compare."
 
   import Bitwise
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
 
   @doc "Applies JavaScript less-than semantics."
   def lt({:bigint, a}, {:bigint, b}), do: a < b

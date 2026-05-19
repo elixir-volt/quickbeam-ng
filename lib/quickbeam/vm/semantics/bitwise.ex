@@ -1,10 +1,10 @@
-defmodule QuickBEAM.VM.Interpreter.Values.Bitwise do
+defmodule QuickBEAM.VM.Semantics.Bitwise do
   @moduledoc "JS bitwise operations: band, bor, bxor, bnot, shl, sar, shr."
 
   import Bitwise, except: [band: 2, bor: 2, bxor: 2, bnot: 1]
 
   alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
 
   @doc "Applies JavaScript bitwise AND semantics."
   def band({:bigint, a}, {:bigint, b}), do: {:bigint, Bitwise.band(a, b)}

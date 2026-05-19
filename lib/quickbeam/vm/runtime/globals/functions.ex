@@ -45,7 +45,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
   def encode_uri_component([value | _], _), do: URI.encode_www_form(to_string_value(value))
   def encode_uri_component(_, _), do: :undefined
 
-  defp to_string_value(value), do: QuickBEAM.VM.Interpreter.Values.stringify(value)
+  defp to_string_value(value), do: QuickBEAM.VM.Semantics.Values.stringify(value)
 
   defp eval_without_runtime(code) do
     task =

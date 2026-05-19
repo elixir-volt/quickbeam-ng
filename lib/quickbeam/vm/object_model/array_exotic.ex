@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
   @moduledoc "Array exotic object semantics for length, integer-indexed properties, and descriptors."
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, PropertyKey, Put, Semantics}
 
   def define_own_property(obj, ref, existing, prop_name, desc_obj, desc, fields) do

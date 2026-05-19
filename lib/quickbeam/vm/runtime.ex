@@ -2,8 +2,9 @@ defmodule QuickBEAM.VM.Runtime do
   @moduledoc "Shared helpers for the BEAM JS runtime: coercion, callbacks, object creation."
 
   alias QuickBEAM.VM.{Heap, Invocation}
-  alias QuickBEAM.VM.Interpreter.{Context, Values}
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Interpreter.Context
+  alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.Runtime.Globals
 
   @doc "Returns the current runtime global binding map, building and caching it when needed."

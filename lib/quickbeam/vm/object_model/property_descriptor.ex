@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyDescriptor do
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty}
 
   @doc "Descriptor attributes for a normal ECMAScript method property."

@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
   alias QuickBEAM.VM.{Heap, JSThrow}
   alias QuickBEAM.VM.Interpreter
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
 
   alias QuickBEAM.VM.ObjectModel.{

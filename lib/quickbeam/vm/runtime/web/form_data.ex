@@ -212,7 +212,7 @@ defmodule QuickBEAM.VM.Runtime.Web.FormData do
             {name, str}
 
           other ->
-            {name, QuickBEAM.VM.Interpreter.Values.stringify(other)}
+            {name, QuickBEAM.VM.Semantics.Values.stringify(other)}
         end
       end)
 

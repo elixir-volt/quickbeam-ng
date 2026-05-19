@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
 

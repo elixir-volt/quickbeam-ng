@@ -34,8 +34,8 @@ Owned by the BEAM VM:
 | ECMA-262 area | QuickBEAM modules |
 |---|---|
 | §6 Values and specification types | `QuickBEAM.VM.Value`, `QuickBEAM.VM.Heap`, `ObjectModel.PropertyDescriptor` |
-| §7.1 Type Conversion | `Interpreter.Values.Coercion`, `ObjectModel.PropertyKey` |
-| §7.2 Testing and comparison | `Interpreter.Values.Equality`, `Interpreter.Values.Comparison`, `ObjectModel.Semantics` |
+| §7.1 Type Conversion | `Semantics.Coercion`, `ObjectModel.PropertyKey` |
+| §7.2 Testing and comparison | `Semantics.Equality`, `Semantics.Comparison`, `ObjectModel.Semantics` |
 | §7.3 Operations on objects | `ObjectModel.*`, `Invocation` |
 | §7.4 Iterator operations | `Semantics.Iterators`, `Runtime.Iterator` |
 | §9 Execution contexts / environments | `Interpreter.Context`, `GlobalEnv`, `EvalEnv`, `Environment.Captures` |

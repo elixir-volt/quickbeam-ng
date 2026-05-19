@@ -500,7 +500,7 @@ defmodule QuickBEAM.VM.Invocation do
         throw(
           {:js_throw,
            Heap.make_error(
-             "#{QuickBEAM.VM.Interpreter.Values.stringify(proxy)} is not a constructor",
+             "#{QuickBEAM.VM.Semantics.Values.stringify(proxy)} is not a constructor",
              "TypeError"
            )}
         )
@@ -752,7 +752,7 @@ defmodule QuickBEAM.VM.Invocation do
         throw(
           {:js_throw,
            Heap.make_error(
-             "#{QuickBEAM.VM.Interpreter.Values.stringify(ctor)} is not a constructor",
+             "#{QuickBEAM.VM.Semantics.Values.stringify(ctor)} is not a constructor",
              "TypeError"
            )}
         )
@@ -763,7 +763,7 @@ defmodule QuickBEAM.VM.Invocation do
     throw(
       {:js_throw,
        Heap.make_error(
-         "#{QuickBEAM.VM.Interpreter.Values.stringify(ctor)} is not a constructor",
+         "#{QuickBEAM.VM.Semantics.Values.stringify(ctor)} is not a constructor",
          "TypeError"
        )}
     )

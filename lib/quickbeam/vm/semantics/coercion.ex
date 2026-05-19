@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Interpreter.Values.Coercion do
+defmodule QuickBEAM.VM.Semantics.Coercion do
   @moduledoc "JS type coercion: to_number, to_int32, to_uint32, to_primitive, to_string_val, and numeric parsing."
 
   import QuickBEAM.VM.Value, only: [is_object: 1]

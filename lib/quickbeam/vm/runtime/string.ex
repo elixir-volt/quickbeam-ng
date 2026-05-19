@@ -5,8 +5,8 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
-  alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.InstallerHelpers
@@ -558,7 +558,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp coerce_string_this(val), do: QuickBEAM.VM.Interpreter.Values.stringify(val)
+  defp coerce_string_this(val), do: QuickBEAM.VM.Semantics.Values.stringify(val)
 
   defp coerce_object_to_string(obj) do
     case Coercion.to_primitive(obj, "string") do
@@ -573,7 +573,7 @@ defmodule QuickBEAM.VM.Runtime.String do
         )
 
       value ->
-        QuickBEAM.VM.Interpreter.Values.stringify(value)
+        QuickBEAM.VM.Semantics.Values.stringify(value)
     end
   end
 

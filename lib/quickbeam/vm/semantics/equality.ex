@@ -1,8 +1,8 @@
-defmodule QuickBEAM.VM.Interpreter.Values.Equality do
+defmodule QuickBEAM.VM.Semantics.Equality do
   @moduledoc "JS equality operations: eq, neq, strict_eq, abstract_eq."
 
   alias QuickBEAM.VM.Function
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
 
   @doc "Applies JavaScript strict equality semantics."
   def strict_eq(:nan, :nan), do: false

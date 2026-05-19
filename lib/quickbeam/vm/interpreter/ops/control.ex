@@ -4,7 +4,8 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Control do
   @doc "Installs the Control flow opcodes: if/goto/return, try/catch, gosub/ret, throw helpers into the caller module."
   defmacro __using__(_opts) do
     quote location: :keep do
-      alias QuickBEAM.VM.Interpreter.{Context, Values}
+      alias QuickBEAM.VM.Interpreter.Context
+      alias QuickBEAM.VM.Semantics.Values
       alias QuickBEAM.VM.Semantics.Iterators
 
       # ── Control flow ──

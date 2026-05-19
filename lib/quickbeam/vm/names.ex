@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Names do
 
   alias QuickBEAM.VM.{Heap, PredefinedAtoms}
   alias QuickBEAM.VM.Interpreter.Context
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
 
   @js_atom_end QuickBEAM.VM.Opcodes.js_atom_end()
 
@@ -84,7 +84,7 @@ defmodule QuickBEAM.VM.Names do
       {:symbol, _, _} = sym -> sym
       s when is_binary(s) -> s
       other when is_number(other) -> Kernel.to_string(other)
-      other -> QuickBEAM.VM.Interpreter.Values.stringify(other)
+      other -> QuickBEAM.VM.Semantics.Values.stringify(other)
     end
   end
 end

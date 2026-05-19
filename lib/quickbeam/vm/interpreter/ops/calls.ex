@@ -5,7 +5,8 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
   defmacro __using__(_opts) do
     quote location: :keep do
       alias QuickBEAM.VM.{Heap, Invocation, Names}
-      alias QuickBEAM.VM.Interpreter.{ClosureBuilder, Context, Frame, Values}
+      alias QuickBEAM.VM.Interpreter.{ClosureBuilder, Context, Frame}
+      alias QuickBEAM.VM.Semantics.Values
       alias QuickBEAM.VM.JSThrow
       alias QuickBEAM.VM.ObjectModel.{Class, Get}
 

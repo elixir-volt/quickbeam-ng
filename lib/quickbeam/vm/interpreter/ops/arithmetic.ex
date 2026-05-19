@@ -5,7 +5,8 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Arithmetic do
   defmacro __using__(_opts) do
     quote location: :keep do
       alias QuickBEAM.VM.Heap
-      alias QuickBEAM.VM.Interpreter.{Closures, Frame, Values}
+      alias QuickBEAM.VM.Interpreter.{Closures, Frame}
+      alias QuickBEAM.VM.Semantics.Values
 
       # ── Arithmetic ──
 

@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.{Heap, Invocation}
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor, PropertyKey, Semantics}
   alias QuickBEAM.VM.Runtime.TypedArray
 

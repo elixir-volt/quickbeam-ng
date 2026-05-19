@@ -1,6 +1,6 @@
 defmodule QuickBEAM.VM.Runtime.GlobalNumeric do
   @moduledoc "Global numeric functions: `parseInt`, `parseFloat`, `isNaN`, `isFinite`, and related utilities."
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
 
   @doc "Implements JavaScript `parseInt` semantics."
   def parse_int([string, radix | _], _) when is_binary(string) and is_number(radix) do

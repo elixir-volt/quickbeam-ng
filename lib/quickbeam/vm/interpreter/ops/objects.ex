@@ -5,7 +5,8 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
   defmacro __using__(_opts) do
     quote location: :keep do
       alias QuickBEAM.VM.{Builtin, GlobalEnv, Heap, Invocation, Names, Runtime}
-      alias QuickBEAM.VM.Interpreter.{Context, Frame, Values}
+      alias QuickBEAM.VM.Interpreter.{Context, Frame}
+      alias QuickBEAM.VM.Semantics.Values
 
       alias QuickBEAM.VM.ObjectModel.{
         Class,
@@ -334,7 +335,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
 
         ctx =
           if type in [0, 1] do
-            %{ctx | globals: Map.put(ctx.globals, {:qb_arguments_object, current_func, arg_buf}, val)}
+            %{
+              ctx
+              | globals: Map.put(ctx.globals, {:qb_arguments_object, current_func, arg_buf}, val)
+            }
           else
             ctx
           end

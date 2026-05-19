@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Math do
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
   alias QuickBEAM.VM.{Heap, Invocation}
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Semantics.Iterators

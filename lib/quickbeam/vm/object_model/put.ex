@@ -5,7 +5,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   alias QuickBEAM.VM.Execution.{RegexpState, SetterState}
   alias QuickBEAM.VM.{Heap, Runtime}
-  alias QuickBEAM.VM.Interpreter.{Closures, Values}
+  alias QuickBEAM.VM.Interpreter.Closures
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
 
@@ -271,7 +272,17 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       match?(%{writable: false}, desc) ->
         reject_failed_write!()
 
-      key in ["flags", "hasIndices", "global", "ignoreCase", "multiline", "dotAll", "unicode", "unicodeSets", "sticky"] and desc == nil ->
+      key in [
+        "flags",
+        "hasIndices",
+        "global",
+        "ignoreCase",
+        "multiline",
+        "dotAll",
+        "unicode",
+        "unicodeSets",
+        "sticky"
+      ] and desc == nil ->
         reject_failed_write!()
 
       true ->

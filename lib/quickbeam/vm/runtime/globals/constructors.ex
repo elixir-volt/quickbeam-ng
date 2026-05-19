@@ -214,7 +214,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   end
 
   defp stringify_arg(val) when is_binary(val), do: val
-  defp stringify_arg(val), do: QuickBEAM.VM.Interpreter.Values.stringify(val)
+  defp stringify_arg(val), do: QuickBEAM.VM.Semantics.Values.stringify(val)
 
   def bigint([:undefined | _], _), do: JSThrow.type_error!("Cannot convert to BigInt")
   def bigint([:infinity | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")

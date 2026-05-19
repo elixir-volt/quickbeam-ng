@@ -7,8 +7,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
-  alias QuickBEAM.VM.Interpreter.Values
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put}
   alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.String, as: JSString
@@ -1576,7 +1576,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     unless regexp_match_receiver?(regexp),
       do: JSThrow.type_error!("RegExp.prototype.matchAll called on incompatible receiver")
 
-    string = QuickBEAM.VM.Interpreter.Values.stringify(string)
+    string = QuickBEAM.VM.Semantics.Values.stringify(string)
     constructor = match_all_species_constructor(regexp)
     flags = regexp_match_all_observable_flags(regexp)
     matcher = Invocation.construct_runtime(constructor, constructor, [regexp, flags])
@@ -2127,7 +2127,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     unless regexp_match_receiver?(regexp),
       do: JSThrow.type_error!("RegExp replace receiver is not an object")
 
-    JSString.regex_replace(QuickBEAM.VM.Interpreter.Values.stringify(string), regexp, replacement)
+    JSString.regex_replace(QuickBEAM.VM.Semantics.Values.stringify(string), regexp, replacement)
   end
 
   defp regexp_replace(regexp, [string | _]), do: regexp_replace(regexp, [string, :undefined])

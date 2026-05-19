@@ -1,8 +1,8 @@
-defmodule QuickBEAM.VM.Interpreter.Values do
+defmodule QuickBEAM.VM.Semantics.Values do
   @moduledoc "JS type coercion, arithmetic, comparison, and equality operations."
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values.{Arithmetic, Bitwise, Coercion, Comparison, Equality}
+  alias QuickBEAM.VM.Semantics.{Arithmetic, Bitwise, Coercion, Comparison, Equality}
 
   @compile {:inline,
             truthy?: 1,

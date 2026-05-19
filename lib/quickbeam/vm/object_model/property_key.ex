@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKey do
 
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
 
   @doc "Converts a JS value using ECMAScript ToPropertyKey semantics."
   def to_property_key(k) when is_binary(k), do: k
@@ -15,7 +15,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKey do
 
     if is_symbol(primitive),
       do: primitive,
-      else: QuickBEAM.VM.Interpreter.Values.stringify(primitive)
+      else: QuickBEAM.VM.Semantics.Values.stringify(primitive)
   end
 
   @doc "Normalize a JS value to a property key (string or symbol)."
@@ -23,9 +23,9 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKey do
   def normalize({:symbol, "Symbol." <> _ = name, _ref}), do: {:symbol, name}
   def normalize(k) when is_symbol(k), do: k
   def normalize(k) when is_integer(k) and k >= 0, do: Integer.to_string(k)
-  def normalize(k) when is_float(k), do: QuickBEAM.VM.Interpreter.Values.stringify(k)
+  def normalize(k) when is_float(k), do: QuickBEAM.VM.Semantics.Values.stringify(k)
   def normalize({:tagged_int, n}), do: Integer.to_string(n)
-  def normalize(k), do: QuickBEAM.VM.Interpreter.Values.stringify(k)
+  def normalize(k), do: QuickBEAM.VM.Semantics.Values.stringify(k)
 
   @doc "Check if a key is a symbol."
   defguard is_symbol_key(k) when is_symbol(k)

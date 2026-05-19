@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
 
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
   alias QuickBEAM.VM.Interpreter.Context
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{Copy, Get, HasProperty, OwnProperty}
   alias QuickBEAM.VM.Runtime.Collections
 

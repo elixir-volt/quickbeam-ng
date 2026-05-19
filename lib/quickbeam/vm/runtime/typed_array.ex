@@ -10,7 +10,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry

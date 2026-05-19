@@ -161,7 +161,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
           end
 
         case next do
-          {:ok, stack} -> run(pc + 1, frame, stack, gas, ctx)
+          {:ok, stack} ->
+            run(pc + 1, frame, stack, gas, ctx)
+
           {:throw, error} ->
             close_iterator_result_owner(result, ctx)
             throw_or_catch(frame, error, gas, ctx)

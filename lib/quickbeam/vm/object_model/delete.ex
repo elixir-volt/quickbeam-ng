@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
 
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, WrappedPrimitive}
 

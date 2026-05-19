@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Web.Blob do
   import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, object: 1]
 
   alias QuickBEAM.VM.{Heap, Runtime}
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime.Web.Body
   alias QuickBEAM.VM.Runtime.WebAPIs

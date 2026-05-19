@@ -28,7 +28,7 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
           [] -> :undefined
           [:undefined | _] -> :undefined
           [s | _] when is_binary(s) -> s
-          [value | _] -> QuickBEAM.VM.Interpreter.Values.stringify(value)
+          [value | _] -> QuickBEAM.VM.Semantics.Values.stringify(value)
         end
 
       {:symbol, desc, make_ref()}

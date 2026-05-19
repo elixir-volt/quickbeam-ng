@@ -1,10 +1,10 @@
-defmodule QuickBEAM.VM.Interpreter.Values.Arithmetic do
+defmodule QuickBEAM.VM.Semantics.Arithmetic do
   @moduledoc "JS arithmetic operations: add, sub, mul, js_div, mod, pow, neg, and overflow helpers."
 
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
   alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.Interpreter.Values.Coercion
+  alias QuickBEAM.VM.Semantics.Coercion
 
   @doc "Applies JavaScript addition semantics including string concatenation and BigInt checks."
   def add({:bigint, a}, {:bigint, b}), do: {:bigint, a + b}

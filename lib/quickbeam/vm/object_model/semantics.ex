@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.ObjectModel.Semantics do
   @moduledoc "Shared object-model semantic helpers."
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime
 
