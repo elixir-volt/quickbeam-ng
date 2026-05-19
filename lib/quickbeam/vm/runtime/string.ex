@@ -1515,14 +1515,18 @@ defmodule QuickBEAM.VM.Runtime.String do
       flags = regexp_flags_string(Get.get(regexp, "flags"))
       global? = String.contains?(flags, "g")
 
-      case special_regex_replace(s, source, flags, replacement, global?) do
-        {:ok, result} ->
-          result
+      if not global? and String.contains?(flags, "y") do
+        replace_first_with_builtin_exec(s, regexp, replacement)
+      else
+        case special_regex_replace(s, source, flags, replacement, global?) do
+          {:ok, result} ->
+            result
 
-        :none ->
-          if global?,
-            do: regex_replace_all(s, bytecode, source, replacement, 0, []),
-            else: regex_replace_first(s, bytecode, source, replacement)
+          :none ->
+            if global?,
+              do: regex_replace_all(s, bytecode, source, replacement, 0, []),
+              else: regex_replace_first(s, bytecode, source, replacement)
+        end
       end
     end
   end
@@ -1551,6 +1555,13 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   def regex_replace(s, _, _), do: s
+
+  defp replace_first_with_builtin_exec(s, regexp, replacement) do
+    case RegExp.exec_result(regexp, s) do
+      nil -> s
+      {:obj, _} = result -> replace_from_exec_result(s, result, replacement)
+    end
+  end
 
   defp regexp_flags_string({:obj, _} = flags),
     do: flags |> Coercion.to_primitive("string") |> Runtime.stringify()
