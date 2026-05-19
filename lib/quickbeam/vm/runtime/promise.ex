@@ -242,7 +242,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   end
 
   defp collect_combinator_inputs(iter, next_fn, resolve, constructor, acc) do
-    case Iterators.for_of_next(next_fn, iter) do
+    case promise_for_of_next(next_fn, iter) do
       {true, _, _} ->
         {:ok, Enum.reverse(acc)}
 
@@ -257,6 +257,36 @@ defmodule QuickBEAM.VM.Runtime.Promise do
             close_iterator_preserving_throw(next_iter)
             {:abrupt, reason}
         end
+    end
+  end
+
+  defp promise_for_of_next(_next_fn, :undefined), do: {true, :undefined, :undefined}
+
+  defp promise_for_of_next(_next_fn, {:list_iter, [head | tail]}),
+    do: {false, head, {:list_iter, tail}}
+
+  defp promise_for_of_next(_next_fn, {:list_iter, []}), do: {true, :undefined, :undefined}
+
+  defp promise_for_of_next(_next_fn, {:array_iter, obj, index}) do
+    length = QuickBEAM.VM.Runtime.to_int(QuickBEAM.VM.ObjectModel.Get.get(obj, "length"))
+
+    if index >= length do
+      {true, :undefined, :undefined}
+    else
+      {false, QuickBEAM.VM.ObjectModel.Get.get(obj, Integer.to_string(index)), {:array_iter, obj, index + 1}}
+    end
+  end
+
+  defp promise_for_of_next(next_fn, iter_obj) do
+    result = Invocation.invoke_with_receiver(next_fn, [], iter_obj)
+
+    unless QuickBEAM.VM.Semantics.Iterators.iterator_result_object?(result),
+      do: JSThrow.type_error!("iterator result is not an object")
+
+    if QuickBEAM.VM.Runtime.truthy?(QuickBEAM.VM.ObjectModel.Get.get(result, "done")) do
+      {true, :undefined, :undefined}
+    else
+      {false, QuickBEAM.VM.ObjectModel.Get.get(result, "value"), iter_obj}
     end
   end
 
@@ -299,7 +329,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
          resolve,
          reject
        ) do
-    case Iterators.for_of_next(next_fn, iter) do
+    case promise_for_of_next(next_fn, iter) do
       {true, _, _} ->
         state = Heap.get_obj(state_ref, %{})
         remaining = state["remaining"] - 1
@@ -409,7 +439,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
          resolve,
          reject
        ) do
-    case Iterators.for_of_next(next_fn, iter) do
+    case promise_for_of_next(next_fn, iter) do
       {true, _, _} ->
         state = Heap.get_obj(state_ref, %{})
         remaining = state["remaining"] - 1
@@ -502,7 +532,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
          resolve,
          reject
        ) do
-    case Iterators.for_of_next(next_fn, iter) do
+    case promise_for_of_next(next_fn, iter) do
       {true, _, _} ->
         state = Heap.get_obj(state_ref, %{})
         remaining = state["remaining"] - 1
@@ -598,7 +628,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   end
 
   defp perform_race_loop(iter, next_fn, constructor, promise_resolve_fn, resolve, reject) do
-    case Iterators.for_of_next(next_fn, iter) do
+    case promise_for_of_next(next_fn, iter) do
       {true, _, _} ->
         :ok
 
