@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
   alias QuickBEAM.VM.Interpreter.Values
+  alias QuickBEAM.VM.Interpreter.Values.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put}
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
@@ -50,9 +51,14 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   def proto_accessor("source"),
     do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
 
+  def proto_accessor("hasIndices"), do: regexp_flag_accessor("hasIndices", "d")
   def proto_accessor("global"), do: regexp_flag_accessor("global", "g")
   def proto_accessor("ignoreCase"), do: regexp_flag_accessor("ignoreCase", "i")
   def proto_accessor("multiline"), do: regexp_flag_accessor("multiline", "m")
+  def proto_accessor("dotAll"), do: regexp_flag_accessor("dotAll", "s")
+  def proto_accessor("unicode"), do: regexp_flag_accessor("unicode", "u")
+  def proto_accessor("unicodeSets"), do: regexp_flag_accessor("unicodeSets", "v")
+  def proto_accessor("sticky"), do: regexp_flag_accessor("sticky", "y")
   def proto_accessor(_), do: :undefined
 
   @doc "Executes compiled QuickJS regexp bytecode against a string via the native regexp engine."
@@ -1613,47 +1619,92 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     |> Enum.sum()
   end
 
-  defp regexp_match({:regexp, bytecode, source} = regexp, [string | _])
-       when is_binary(bytecode) do
-    string = QuickBEAM.VM.Interpreter.Values.stringify(string)
-    flags = Get.regexp_flags(bytecode)
-    global? = String.contains?(flags, "g")
+  defp regexp_match(regexp, args) do
+    unless regexp_match_receiver?(regexp), do: JSThrow.type_error!("RegExp match receiver is not an object")
 
-    case regexp_custom_exec(regexp, string) do
-      :default -> regexp_match_builtin(regexp, source, flags, string, global?)
-      result -> result
+    string =
+      case args do
+        [value | _] -> Values.stringify(value)
+        [] -> Values.stringify(:undefined)
+      end
+
+    flags = regexp_match_flags(regexp)
+
+    if String.contains?(flags, "g") do
+      regexp_match_global(regexp, string, String.contains?(flags, "u") or String.contains?(flags, "v"))
+    else
+      regexp_exec_for_match(regexp, string)
     end
   end
 
-  defp regexp_match({:regexp, bytecode, source, ref} = regexp, [string | _])
-       when is_binary(bytecode) do
-    string = QuickBEAM.VM.Interpreter.Values.stringify(string)
-    flags = regexp_flags(bytecode, ref)
-    global? = String.contains?(flags, "g")
+  defp regexp_match_receiver?({:obj, _}), do: true
+  defp regexp_match_receiver?({:regexp, _, _}), do: true
+  defp regexp_match_receiver?({:regexp, _, _, _}), do: true
+  defp regexp_match_receiver?(%QuickBEAM.VM.Function{}), do: true
+  defp regexp_match_receiver?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
+  defp regexp_match_receiver?({:builtin, _, _}), do: true
+  defp regexp_match_receiver?({:bound, _, _, _, _}), do: true
+  defp regexp_match_receiver?(_), do: false
 
-    case regexp_custom_exec(regexp, string) do
-      :default -> regexp_match_builtin(regexp, source, flags, string, global?)
-      result -> result
+  defp regexp_match_flags({:regexp, _, _, ref} = regexp) do
+    case RegexpState.fetch(ref, "flags") do
+      {:ok, flags} -> regexp_to_string_hint(flags)
+      :error -> regexp_flags_from_properties(regexp)
     end
   end
 
-  defp regexp_match(regexp, [string | _]) do
-    string = QuickBEAM.VM.Interpreter.Values.stringify(string)
+  defp regexp_match_flags({:regexp, _, _} = regexp), do: regexp_flags_from_properties(regexp)
+  defp regexp_match_flags(regexp), do: regexp_to_string_hint(Get.get(regexp, "flags"))
 
+  defp regexp_flags_from_properties(regexp) do
+    [
+      {"hasIndices", "d"},
+      {"global", "g"},
+      {"ignoreCase", "i"},
+      {"multiline", "m"},
+      {"dotAll", "s"},
+      {"unicode", "u"},
+      {"unicodeSets", "v"},
+      {"sticky", "y"}
+    ]
+    |> Enum.reduce("", fn {property, flag}, acc ->
+      if Values.truthy?(Get.get(regexp, property)), do: acc <> flag, else: acc
+    end)
+  end
+
+  defp regexp_to_string_hint(:undefined), do: "undefined"
+  defp regexp_to_string_hint({:obj, _} = obj), do: obj |> Coercion.to_primitive("string") |> Values.stringify()
+  defp regexp_to_string_hint(value), do: Values.stringify(value)
+
+  defp regexp_exec_for_match(regexp, string) do
     case regexp_custom_exec(regexp, string) do
       :default -> exec(regexp, [string])
       result -> result
     end
   end
 
-  defp regexp_match(regexp, []), do: exec(regexp, [""])
+  defp regexp_match_global(regexp, string, unicode?) do
+    set_last_index!(regexp, 0)
+    regexp_match_global_loop(regexp, string, unicode?, [])
+  end
 
-  defp regexp_match_builtin(regexp, source, flags, string, global?) do
-    case special_match_results(source, flags, string, global?) do
-      {:ok, []} -> nil
-      {:ok, results} when global? -> Enum.map(results, fn {match, _index} -> match end)
-      {:ok, [{match, index} | _]} -> exec_result([match], index, string)
-      :none -> regexp_match_nif(regexp, string, flags)
+  defp regexp_match_global_loop(regexp, string, unicode?, acc) do
+    case regexp_exec_for_match(regexp, string) do
+      nil ->
+        if acc == [], do: nil, else: Enum.reverse(acc)
+
+      {:obj, _} = result ->
+        match = Values.stringify(Get.get(result, "0"))
+
+        if match == "" do
+          this_index = max(Runtime.to_int(Get.get(regexp, "lastIndex")), 0)
+          set_last_index!(regexp, advance_string_index(string, this_index, unicode?))
+        end
+
+        regexp_match_global_loop(regexp, string, unicode?, [match | acc])
+
+      _ ->
+        JSThrow.type_error!("RegExp exec result must be an object or null")
     end
   end
 
@@ -1683,16 +1734,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
-  defp regexp_match_nif(regexp, string, flags) do
-    if String.contains?(flags, "g") do
-      case regexp_match_all_results(regexp, string, 0, []) do
-        [] -> nil
-        results -> Enum.map(results, fn {:obj, _} = result -> Get.get(result, "0") end)
-      end
-    else
-      exec(regexp, [string])
-    end
-  end
 
   defp regexp_to_string({:regexp, bytecode, source, ref}) do
     flags = regexp_flags(bytecode, ref)
@@ -1721,8 +1762,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         end
       end}, nil}
   end
-
-  defp regexp_flags(bytecode, _ref) when is_binary(bytecode), do: Get.regexp_flags(bytecode)
 
   defp regexp_flags(bytecode, ref) do
     case RegexpState.fetch(ref, "flags") do

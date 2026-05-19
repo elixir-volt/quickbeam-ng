@@ -694,9 +694,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_own({:regexp, bytecode, _source, _ref}, "flags") when is_binary(bytecode),
-    do: regexp_flags(bytecode)
-
   defp get_own({:regexp, bytecode, _source, ref}, "flags") do
     case RegexpState.fetch(ref, "flags") do
       {:ok, value} -> value
