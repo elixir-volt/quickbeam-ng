@@ -431,6 +431,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("padStart"), do: meta("padStart", [length: 1, constructable: false], :proto)
   def named_meta("padEnd"), do: meta("padEnd", [length: 1, constructable: false], :proto)
   def named_meta("replace"), do: meta("replace", [length: 2, constructable: false], :proto)
+  def named_meta("[Symbol.replace]"), do: meta("[Symbol.replace]", [length: 2, constructable: false], :proto)
   def named_meta("replaceAll"), do: meta("replaceAll", [length: 2, constructable: false], :proto)
   def named_meta("match"), do: meta("match", [length: 1, constructable: false], :proto)
   def named_meta("[Symbol.match]"), do: meta("[Symbol.match]", [length: 1, constructable: false], :proto)
