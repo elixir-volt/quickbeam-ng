@@ -608,14 +608,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own({:builtin, "Symbol", _}, key) when is_binary(key) and key != "prototype",
     do: QuickBEAM.VM.Runtime.Symbol.static_property(key)
 
-  defp get_own({:builtin, name, _}, {:symbol, "Symbol.species"})
-       when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) do
-    {:accessor, {:builtin, "get [Symbol.species]", fn _args, this -> this end}, nil}
-  end
-
-  defp get_own({:builtin, name, _} = builtin, "prototype")
-       when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) do
-    TypedArray.constructor_prototype(name, builtin)
+  defp get_own({:builtin, name, _} = builtin, key)
+       when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) and
+              key in [{:symbol, "Symbol.species"}, "prototype", "BYTES_PER_ELEMENT", "from"] do
+    TypedArray.constructor_static_property(name, builtin, key)
   end
 
   defp get_own({:builtin, _, _} = builtin, "prototype") do
@@ -623,18 +619,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       nil -> :undefined
       value -> value
     end
-  end
-
-  defp get_own({:builtin, name, _}, "BYTES_PER_ELEMENT") do
-    case Map.fetch(TypedArray.types(), name) do
-      {:ok, type} -> TypedArray.elem_size(type)
-      :error -> :undefined
-    end
-  end
-
-  defp get_own({:builtin, name, _} = builtin, "from")
-       when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) do
-    {:builtin, "from", fn args, this -> TypedArray.static_from(args, this || builtin) end}
   end
 
   defp get_own({:builtin, name, _} = builtin, "name") do
@@ -666,6 +650,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp get_own({:builtin, _, _} = b, key) do
+    b = QuickBEAM.VM.Runtime.Constructors.ensure_builtin_metadata(b)
     statics = Heap.get_ctor_statics(b)
 
     case Map.fetch(statics, key) do

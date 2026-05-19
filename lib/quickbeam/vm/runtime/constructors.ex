@@ -74,9 +74,28 @@ defmodule QuickBEAM.VM.Runtime.Constructors do
     end
   end
 
+  @doc "Ensures process-local metadata for a builtin constructor is available."
+  def ensure_builtin_metadata({:builtin, name, _} = ctor) do
+    current_statics = Heap.get_ctor_statics(ctor)
+    current_proto = Heap.get_class_proto(ctor)
+
+    if current_statics == %{} or current_proto == nil do
+      copy_registered_metadata(name, ctor, current_statics, current_proto)
+    end
+
+    ctor
+  end
+
+  def ensure_builtin_metadata(ctor), do: ctor
+
   @doc "Returns a builtin constructor's prototype object, installing intrinsic metadata if needed."
-  def builtin_prototype({:builtin, name, _} = ctor) do
-    constructor_prototype(ctor) || installed_builtin_prototype(name, ctor)
+  def builtin_prototype({:builtin, _, _} = ctor) do
+    ensure_builtin_metadata(ctor)
+
+    case constructor_prototype(ctor) do
+      :deleted -> :undefined
+      value -> value
+    end
   end
 
   def builtin_prototype(_), do: nil
@@ -131,38 +150,38 @@ defmodule QuickBEAM.VM.Runtime.Constructors do
     end
   end
 
-  defp installed_builtin_prototype(name, ctor) do
+  defp copy_registered_metadata(name, ctor, current_statics, current_proto) do
+    case registered_constructor(name) do
+      {:builtin, ^name, _} = registered ->
+        registered_statics = Heap.get_ctor_statics(registered)
+
+        if current_statics == %{} and registered_statics != %{} do
+          Heap.put_ctor_statics(ctor, Map.merge(registered_statics, current_statics))
+        end
+
+        if current_proto == nil do
+          case constructor_prototype(registered) do
+            {:obj, _} = proto -> Heap.put_class_proto(ctor, proto)
+            _ -> :ok
+          end
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp registered_constructor(name) do
     case lookup(name) do
-      {:builtin, ^name, _} = registered ->
-        case constructor_prototype(registered) do
-          nil -> install_and_copy_builtin_prototype(name, ctor)
-          :deleted -> :undefined
-          proto -> copy_builtin_prototype(ctor, proto)
+      {:builtin, ^name, _} = ctor ->
+        if Heap.get_ctor_statics(ctor) == %{} and Heap.get_class_proto(ctor) == nil do
+          Map.get(QuickBEAM.VM.Runtime.GlobalInstaller.build(), name)
+        else
+          ctor
         end
 
       _ ->
-        :undefined
+        Map.get(QuickBEAM.VM.Runtime.GlobalInstaller.build(), name)
     end
-  end
-
-  defp install_and_copy_builtin_prototype(name, ctor) do
-    bindings = QuickBEAM.VM.Runtime.GlobalInstaller.build()
-
-    case Map.get(bindings, name) do
-      {:builtin, ^name, _} = registered ->
-        case constructor_prototype(registered) do
-          {:obj, _} = proto -> copy_builtin_prototype(ctor, proto)
-          _ -> :undefined
-        end
-
-      _ ->
-        :undefined
-    end
-  end
-
-  defp copy_builtin_prototype(ctor, {:obj, _} = proto) do
-    Heap.put_ctor_static(ctor, "prototype", proto)
-    Heap.put_class_proto(ctor, proto)
-    proto
   end
 end

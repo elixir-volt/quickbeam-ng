@@ -326,6 +326,33 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp typed_array_instance_proto(_, type), do: class_proto_for(type)
 
+  def constructor_static_property(name, _ctor, {:symbol, "Symbol.species"}) do
+    if Map.has_key?(types(), name) do
+      {:accessor, {:builtin, "get [Symbol.species]", fn _args, this -> this end}, nil}
+    else
+      :undefined
+    end
+  end
+
+  def constructor_static_property(name, ctor, "prototype") do
+    if Map.has_key?(types(), name), do: constructor_prototype(name, ctor), else: :undefined
+  end
+
+  def constructor_static_property(name, _ctor, "BYTES_PER_ELEMENT") do
+    case Map.fetch(types(), name) do
+      {:ok, type} -> elem_size(type)
+      :error -> :undefined
+    end
+  end
+
+  def constructor_static_property(name, ctor, "from") do
+    if Map.has_key?(types(), name),
+      do: {:builtin, "from", fn args, this -> static_from(args, this || ctor) end},
+      else: :undefined
+  end
+
+  def constructor_static_property(_name, _ctor, _key), do: :undefined
+
   def constructor_prototype(name, ctor) do
     Runtime.global_class_proto(name) ||
       cached_prototype({:qb_typed_array_constructor_proto, name}, fn ->

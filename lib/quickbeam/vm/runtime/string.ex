@@ -2843,6 +2843,12 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp match_all(s, []) when is_binary(s),
     do: invoke_created_match_all(regexp_create_match_all(:undefined), s)
 
+  defp match_all(s, [nil | _]) when is_binary(s),
+    do: invoke_created_match_all(regexp_create_match_all(nil), s)
+
+  defp match_all(s, [:undefined | _]) when is_binary(s),
+    do: invoke_created_match_all(regexp_create_match_all(:undefined), s)
+
   defp match_all(s, [{:obj, _} = regexp | _]) when is_binary(s) do
     if regexp_like?(regexp), do: require_global_match_all_flags!(regexp)
 
@@ -2926,9 +2932,16 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp regexp_prototype_match_all do
-    matcher = Get.get(Runtime.global_class_proto("RegExp"), {:symbol, "Symbol.matchAll"})
+    matcher = Get.get(current_regexp_prototype(), {:symbol, "Symbol.matchAll"})
 
     if Builtin.callable?(matcher), do: {:ok, matcher}, else: :none
+  end
+
+  defp current_regexp_prototype do
+    case Heap.get_ctx() do
+      %{globals: %{"RegExp" => ctor}} -> Get.get(ctor, "prototype")
+      _ -> Runtime.global_class_proto("RegExp")
+    end
   end
 
   defp match_all_literal({:regexp, nil, source}, s) when is_binary(source) do

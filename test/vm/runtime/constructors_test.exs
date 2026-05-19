@@ -8,4 +8,9 @@ defmodule QuickBEAM.VM.Runtime.ConstructorsTest do
       "object|object|object|object"
     )
   end
+
+  test "builtin constructor statics are restored through generic metadata lookup", %{rt: rt} do
+    assert_modes(rt, ~S<[typeof Symbol.iterator, Symbol.keyFor(Symbol.for("x"))].join("|")>, "symbol|x")
+    assert_modes(rt, ~S<[Uint8Array.BYTES_PER_ELEMENT, typeof Uint8Array.from, typeof Uint8Array.prototype].join("|")>, "1|function|object")
+  end
 end
