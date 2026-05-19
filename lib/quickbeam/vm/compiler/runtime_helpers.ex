@@ -10,12 +10,11 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     Heap,
     Invocation,
     JSThrow,
-    Names,
-    SourcePosition
+    Names
   }
 
   alias QuickBEAM.VM.Compiler.Runner
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Constants
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Constants, Errors}
   alias QuickBEAM.VM.Environment.Captures
   alias QuickBEAM.VM.Execution.ConstructorStack
   alias QuickBEAM.VM.Interpreter.{Closures, Context}
@@ -729,7 +728,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     do: Invocation.construct_runtime(ctx, ctor, new_target, args)
 
   def construct_runtime(ctx, ctor, new_target, args, call_pc) do
-    ConstructorStack.with_stack(compiled_stack(ctx, call_pc), fn ->
+    ConstructorStack.with_stack(Errors.compiled_stack(ctx, call_pc), fn ->
       construct_runtime(ctx, ctor, new_target, args)
     end)
   end
@@ -743,7 +742,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
         {replace_with_this?, checked_val}
 
       {:error, message} ->
-        throw({:js_throw, make_error_with_ctx(ctx, message, "TypeError", ConstructorStack.get())})
+        throw(
+          {:js_throw,
+           Errors.make_error_with_ctx(ctx, message, "TypeError", ConstructorStack.get())}
+        )
     end
   end
 
@@ -1057,22 +1059,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   @doc "Throws a JavaScript error value."
-  def throw_error(ctx, atom_idx, reason) do
-    name = Names.resolve_atom(context_atoms(ctx), atom_idx)
-    {error_type, message} = throw_error_message(name, reason)
-    throw({:js_throw, Heap.make_error(message, error_type)})
-  end
+  def throw_error(ctx, atom_idx, reason),
+    do: Errors.throw_error(ctx, atom_idx, reason, &Names.resolve_atom(context_atoms(&1), &2))
 
-  def throw_error_message(name, reason) do
-    case reason do
-      0 -> {"TypeError", "'#{name}' is read-only"}
-      1 -> {"SyntaxError", "redeclaration of '#{name}'"}
-      2 -> {"ReferenceError", "cannot access '#{name}' before initialization"}
-      3 -> {"ReferenceError", "unsupported reference to 'super'"}
-      4 -> {"TypeError", "iterator does not have a throw method"}
-      _ -> {"Error", name}
-    end
-  end
+  defdelegate throw_error_message(name, reason), to: Errors
 
   @doc "Applies a superclass constructor for `super(...)`."
   def apply_super(ctx, fun, new_target, args),
@@ -1205,12 +1195,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
         {:error, _} ->
           QuickBEAM.VM.Promise.rejected(
-            make_error_with_ctx(ctx, "Cannot find module '#{specifier}'", "TypeError")
+            Errors.make_error_with_ctx(ctx, "Cannot find module '#{specifier}'", "TypeError")
           )
       end
     else
       QuickBEAM.VM.Promise.rejected(
-        make_error_with_ctx(ctx, "Invalid module specifier", "TypeError")
+        Errors.make_error_with_ctx(ctx, "Invalid module specifier", "TypeError")
       )
     end
   end
@@ -1286,61 +1276,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   defp typed_array_constructor_type("BigUint64Array"), do: :biguint64
   defp typed_array_constructor_type("BigInt64Array"), do: :bigint64
   defp typed_array_constructor_type(_), do: nil
-
-  defp make_error_with_ctx(ctx, message, name, stack_override \\ nil) do
-    previous_ctx = Heap.get_ctx()
-    Heap.put_ctx(ensure_context(ctx))
-
-    try do
-      Heap.make_error(message, name)
-      |> ensure_compiled_stack(ctx, stack_override)
-    after
-      if previous_ctx, do: Heap.put_ctx(previous_ctx), else: Heap.put_ctx(nil)
-    end
-  end
-
-  defp ensure_compiled_stack({:obj, ref} = error, ctx, stack_override) do
-    stack = stack_override || compiled_stack(ctx)
-
-    case Get.get(error, "stack") do
-      "" ->
-        Heap.update_obj(ref, %{}, &Map.put(&1, "stack", stack))
-        error
-
-      _ when stack_override != nil ->
-        Heap.update_obj(ref, %{}, &Map.put(&1, "stack", stack))
-        error
-
-      _ ->
-        error
-    end
-  end
-
-  defp compiled_stack(ctx) do
-    case context_current_func(ctx) do
-      %QuickBEAM.VM.Function{} = fun ->
-        "    at #{fun.filename}:#{fun.line_num}:#{fun.col_num}"
-
-      {:closure, _captures, %QuickBEAM.VM.Function{} = fun} ->
-        "    at #{fun.filename}:#{fun.line_num}:#{fun.col_num}"
-
-      _ ->
-        ""
-    end
-  end
-
-  defp compiled_stack(ctx, pc) do
-    case context_current_func(ctx) do
-      %QuickBEAM.VM.Function{} = fun -> stack_for_pc(fun, pc)
-      {:closure, _captures, %QuickBEAM.VM.Function{} = fun} -> stack_for_pc(fun, pc)
-      _ -> ""
-    end
-  end
-
-  defp stack_for_pc(%QuickBEAM.VM.Function{} = fun, pc) do
-    {line, col} = SourcePosition.source_position(fun, pc)
-    "    at #{fun.filename}:#{line}:#{col}"
-  end
 
   def with_has_property(_ctx, obj, key), do: Static.with_has_property?(obj, key)
 
