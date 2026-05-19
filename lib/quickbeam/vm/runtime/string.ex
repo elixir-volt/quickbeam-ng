@@ -1390,25 +1390,7 @@ defmodule QuickBEAM.VM.Runtime.String do
         RegExp.exec_result(re, s)
 
       true ->
-        case RegExp.nif_exec(bytecode, s, 0) do
-          nil ->
-            nil
-
-          captures ->
-            strings =
-              Enum.map(captures, fn
-                {start, len} -> regexp_capture_string(s, start, len, flags)
-                nil -> :undefined
-              end)
-
-            match_start =
-              case hd(captures) do
-                {start, _} -> start
-                _ -> 0
-              end
-
-            match_result(strings, match_start, s)
-        end
+        RegExp.exec_result(re, s)
     end
   end
 
@@ -1419,14 +1401,6 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp match(_, _), do: nil
-
-  defp regexp_capture_string(string, start, len, flags) do
-    if String.contains?(flags, "u") or String.contains?(flags, "v") do
-      String.slice(string, start, len)
-    else
-      utf16_slice(string, start, len)
-    end
-  end
 
   defp regexp_create(:undefined), do: {:regexp, nil, ""}
 
