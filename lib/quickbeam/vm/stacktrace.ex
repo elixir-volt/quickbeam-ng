@@ -95,14 +95,17 @@ defmodule QuickBEAM.VM.Stacktrace do
 
   defp format_stack(frames) do
     Enum.map_join(frames, "\n", fn frame ->
-      suffix = "#{frame.file_name}:#{frame.line_number}:#{frame.column_number}"
+      suffix = "#{format_function_name(frame.file_name)}:#{frame.line_number}:#{frame.column_number}"
 
       case frame.function_name do
         nil -> "    at #{suffix}"
-        name -> "    at #{name} (#{suffix})"
+        name -> "    at #{format_function_name(name)} (#{suffix})"
       end
     end)
   end
+
+  defp format_function_name({:predefined, _} = name), do: QuickBEAM.VM.Names.resolve_display_name(name)
+  defp format_function_name(name), do: to_string(name)
 
   defp callsite_object(frame) do
     object do
