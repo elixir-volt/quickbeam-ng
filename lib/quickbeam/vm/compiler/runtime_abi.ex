@@ -25,6 +25,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators
 
   def push_this(ctx), do: RuntimeHelpers.push_this(ctx)
 
@@ -183,37 +184,34 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def with_has_property(ctx, obj, key), do: RuntimeHelpers.with_has_property(ctx, obj, key)
 
-  def rest(ctx, start_idx), do: RuntimeHelpers.rest(ctx, start_idx)
+  def rest(ctx, start_idx), do: Iterators.rest(ctx, start_idx)
 
   def assignment_with_iterator_close(ctx, fun, iterators, obj, key, value),
-    do: RuntimeHelpers.assignment_with_iterator_close(ctx, fun, iterators, obj, key, value)
+    do: Iterators.assignment_with_iterator_close(ctx, fun, iterators, obj, key, value)
 
-  def for_of_start(ctx, obj), do: RuntimeHelpers.for_of_start(ctx, obj)
+  def for_of_start(ctx, obj), do: Iterators.for_of_start(ctx, obj)
 
-  def for_of_next(ctx, next_fn, iter_obj), do: RuntimeHelpers.for_of_next(ctx, next_fn, iter_obj)
+  def for_of_next(ctx, next_fn, iter_obj), do: Iterators.for_of_next(ctx, next_fn, iter_obj)
 
   def iterator_next_result(ctx, next_fn, iter_obj, value),
-    do: RuntimeHelpers.iterator_next_result(ctx, next_fn, iter_obj, value)
+    do: Iterators.next_result(ctx, next_fn, iter_obj, value)
 
-  def iterator_check_object(ctx, value), do: RuntimeHelpers.iterator_check_object(ctx, value)
+  def iterator_check_object(ctx, value), do: Iterators.check_object(ctx, value)
 
   def iterator_call(ctx, flags, value, catch_offset, next_fn, iter_obj),
-    do: RuntimeHelpers.iterator_call(ctx, flags, value, catch_offset, next_fn, iter_obj)
+    do: Iterators.call(ctx, flags, value, catch_offset, next_fn, iter_obj)
 
-  def for_in_start(ctx, obj), do: RuntimeHelpers.for_in_start(ctx, obj)
+  def for_in_start(ctx, obj), do: Iterators.for_in_start(ctx, obj)
 
-  def for_in_next(ctx, iter), do: RuntimeHelpers.for_in_next(ctx, iter)
+  def for_in_next(ctx, iter), do: Iterators.for_in_next(ctx, iter)
 
-  def iterator_value_done(_ctx, result), do: RuntimeHelpers.iterator_value_done(result)
+  def iterator_value_done(_ctx, result), do: Iterators.value_done(result)
 
-  def iterator_close(ctx, iter_obj), do: RuntimeHelpers.iterator_close(ctx, iter_obj)
+  def iterator_close(ctx, iter_obj), do: Iterators.close(ctx, iter_obj)
 
-  def iterator_close_refresh(ctx, iter_obj),
-    do: RuntimeHelpers.iterator_close_refresh(ctx, iter_obj)
+  def iterator_close_refresh(ctx, iter_obj), do: Iterators.close_refresh(ctx, iter_obj)
 
-  def iterator_close_for_throw(ctx, iter_obj),
-    do: RuntimeHelpers.iterator_close_for_throw(ctx, iter_obj)
+  def iterator_close_for_throw(ctx, iter_obj), do: Iterators.close_for_throw(ctx, iter_obj)
 
-  def collect_iterator(ctx, iter, next_fn),
-    do: RuntimeHelpers.collect_iterator(ctx, iter, next_fn)
+  def collect_iterator(ctx, iter, next_fn), do: Iterators.collect(ctx, iter, next_fn)
 end

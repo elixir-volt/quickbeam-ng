@@ -15,13 +15,13 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   defdelegate for_of_next(ctx, next_fn, iter_obj), to: IteratorSemantics
   defdelegate for_of_next(next_fn, iter_obj), to: IteratorSemantics
 
-  def iterator_next_result(ctx \\ nil, next_fn, iter_obj, val) do
+  def next_result(ctx \\ nil, next_fn, iter_obj, val) do
     {result, next_iter} = IteratorSemantics.iterator_next_result(ctx, next_fn, iter_obj, val)
     Process.put({:qb_iterator_result_owner, result}, iter_obj)
     {result, next_iter}
   end
 
-  def iterator_check_object(_ctx, value) do
+  def check_object(_ctx, value) do
     unless IteratorSemantics.iterator_result_object?(value) do
       throw({:js_throw, Heap.make_error("iterator result is not an object", "TypeError")})
     end
@@ -29,7 +29,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
     value
   end
 
-  def iterator_call(_ctx, flags, val, catch_offset, next_fn, iter_obj) do
+  def call(_ctx, flags, val, catch_offset, next_fn, iter_obj) do
     method_name = if Bitwise.band(flags, 1) == 1, do: "throw", else: "return"
     method = Get.get(iter_obj, method_name)
 
@@ -48,7 +48,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   defdelegate for_in_next(ctx \\ nil, iter), to: IteratorSemantics
 
   @doc "Closes an iterator by calling its `return` method when present."
-  def iterator_value_done(result) do
+  def value_done(result) do
     try do
       done = Get.get(result, "done")
 
@@ -64,16 +64,16 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
     end
   end
 
-  defdelegate iterator_close(ctx, iter_obj), to: IteratorSemantics
-  defdelegate iterator_close(iter_obj), to: IteratorSemantics
+  def close(ctx, iter_obj), do: IteratorSemantics.iterator_close(ctx, iter_obj)
+  def close(iter_obj), do: IteratorSemantics.iterator_close(iter_obj)
 
-  def iterator_close_refresh(ctx, iter_obj) do
+  def close_refresh(ctx, iter_obj) do
     IteratorSemantics.iterator_close(ctx, iter_obj)
     persistent = Heap.get_persistent_globals() || %{}
     %{ctx | globals: Map.merge(ctx.globals, persistent)} |> Context.mark_dirty()
   end
 
-  def iterator_close_for_throw(ctx, iter_obj) do
+  def close_for_throw(ctx, iter_obj) do
     try do
       IteratorSemantics.iterator_close(ctx, iter_obj)
     catch
@@ -82,8 +82,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   end
 
   @doc "Collects remaining values from an iterator into a list."
-  defdelegate collect_iterator(ctx, iter, next_fn), to: IteratorSemantics
-  defdelegate collect_iterator(iter, next_fn), to: IteratorSemantics
+  defdelegate collect(ctx, iter, next_fn), to: IteratorSemantics, as: :collect_iterator
+  defdelegate collect(iter, next_fn), to: IteratorSemantics, as: :collect_iterator
 
   def assignment_with_iterator_close(ctx, fun, iterators, obj, key, val) do
     try do
@@ -93,7 +93,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
       end
     catch
       {:js_throw, error} ->
-        Enum.each(iterators, &iterator_close_for_throw(ctx, &1))
+        Enum.each(iterators, &close_for_throw(ctx, &1))
         throw({:js_throw, error})
     end
   end

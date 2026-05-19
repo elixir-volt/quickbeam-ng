@@ -5,13 +5,13 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.ObjectModel.Get
 
-  def throw_error(ctx, atom_idx, reason, atoms_resolver) do
+  def throw(ctx, atom_idx, reason, atoms_resolver) do
     name = atoms_resolver.(ctx, atom_idx)
-    {error_type, message} = throw_error_message(name, reason)
+    {error_type, message} = message(name, reason)
     throw({:js_throw, Heap.make_error(message, error_type)})
   end
 
-  def throw_error_message(name, reason) do
+  def message(name, reason) do
     case reason do
       0 -> {"TypeError", "'#{name}' is read-only"}
       1 -> {"SyntaxError", "redeclaration of '#{name}'"}

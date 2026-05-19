@@ -482,8 +482,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       defp run({@op_throw_error, [atom_idx, reason]}, __pc, frame, _stack, gas, ctx) do
         name = Names.resolve_atom(ctx, atom_idx)
 
-        {error_type, message} =
-          QuickBEAM.VM.Compiler.RuntimeHelpers.throw_error_message(name, reason)
+        {error_type, message} = QuickBEAM.VM.Compiler.RuntimeHelpers.Errors.message(name, reason)
 
         throw_or_catch(frame, Heap.make_error(message, error_type), gas, ctx)
       end

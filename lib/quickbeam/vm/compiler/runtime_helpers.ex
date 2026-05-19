@@ -14,7 +14,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   }
 
   alias QuickBEAM.VM.Compiler.Runner
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Constants, Errors, Iterators}
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Errors
   alias QuickBEAM.VM.Environment.Captures
   alias QuickBEAM.VM.Execution.ConstructorStack
   alias QuickBEAM.VM.Interpreter.{Closures, Context}
@@ -275,11 +275,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     end
   end
 
-  @doc "Resolves an atom-table entry to its runtime value."
-  defdelegate push_atom_value(ctx, atom_idx), to: Constants
-  defdelegate materialize_constant(ctx, value), to: Constants
-  defdelegate private_symbol(ctx, atom_idx), to: Constants
-
   @doc "Reads the value referenced by a compiled variable reference."
   def get_var_ref(ctx, idx), do: read_var_ref(current_var_ref(ctx, idx))
   def get_var_ref_check(ctx, idx), do: checked_var_ref(ctx, idx)
@@ -389,9 +384,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   def get_var_undef(atom_idx),
     do: get_var_undef(Names.resolve_atom(InvokeContext.current_atoms(), atom_idx))
-
-  defdelegate push_atom_value(atom_idx), to: Constants
-  defdelegate private_symbol(atom_idx), to: Constants
 
   def get_var_ref(idx), do: read_var_ref(current_var_ref(idx))
   def get_var_ref_check(idx), do: checked_var_ref(idx)
@@ -557,8 +549,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     :ok
   end
 
-  defdelegate assignment_with_iterator_close(ctx, fun, iterators, obj, key, val), to: Iterators
-
   def define_array_el(_ctx \\ nil, obj, idx, val), do: Put.define_array_el(obj, idx, val)
 
   def define_field(_ctx, obj, key, val) when is_binary(key) or is_number(key),
@@ -645,8 +635,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   def new_object(_ctx \\ nil), do: Construction.new_object()
-
-  defdelegate regexp_literal(ctx \\ nil, pattern, flags), to: Constants
 
   @doc "Converts an iterable or array-like value to a JavaScript array object."
   def array_from(_ctx \\ nil, list) do
@@ -1049,9 +1037,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   @doc "Throws a JavaScript error value."
   def throw_error(ctx, atom_idx, reason),
-    do: Errors.throw_error(ctx, atom_idx, reason, &Names.resolve_atom(context_atoms(&1), &2))
-
-  defdelegate throw_error_message(name, reason), to: Errors
+    do: Errors.throw(ctx, atom_idx, reason, &Names.resolve_atom(context_atoms(&1), &2))
 
   @doc "Applies a superclass constructor for `super(...)`."
   def apply_super(ctx, fun, new_target, args),
@@ -1268,39 +1254,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   def with_has_property(_ctx, obj, key), do: Static.with_has_property?(obj, key)
 
-  # ── Iterators ──
-
-  @doc "Creates iterator state for a JavaScript `for...of` loop."
-  defdelegate for_of_start(ctx, obj), to: Iterators
-  defdelegate for_of_start(obj), to: Iterators
-
-  @doc "Advances JavaScript `for...of` iterator state."
-  defdelegate for_of_next(ctx, next_fn, iter_obj), to: Iterators
-  defdelegate for_of_next(next_fn, iter_obj), to: Iterators
-
-  defdelegate iterator_next_result(ctx \\ nil, next_fn, iter_obj, val), to: Iterators
-  defdelegate iterator_check_object(ctx, value), to: Iterators
-  defdelegate iterator_call(ctx, flags, val, catch_offset, next_fn, iter_obj), to: Iterators
-
-  @doc "Creates key iteration state for a JavaScript `for...in` loop."
-  defdelegate for_in_start(ctx \\ nil, obj), to: Iterators
-  defdelegate for_in_next(ctx \\ nil, iter), to: Iterators
-
-  @doc "Closes an iterator by calling its `return` method when present."
-  defdelegate iterator_value_done(result), to: Iterators
-  defdelegate iterator_close(ctx, iter_obj), to: Iterators
-  defdelegate iterator_close(iter_obj), to: Iterators
-  defdelegate iterator_close_refresh(ctx, iter_obj), to: Iterators
-  defdelegate iterator_close_for_throw(ctx, iter_obj), to: Iterators
-
-  @doc "Collects remaining values from an iterator into a list."
-  defdelegate collect_iterator(ctx, iter, next_fn), to: Iterators
-  defdelegate collect_iterator(iter, next_fn), to: Iterators
-
   @doc "Appends spread values into an array-like target."
   def append_spread(_ctx \\ nil, arr, idx, obj), do: Copy.append_spread(arr, idx, obj)
-
-  defdelegate rest(ctx, start_idx), to: Iterators
 
   # ── Misc ──
 

@@ -230,7 +230,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
         result =
           try do
             {:ok,
-             QuickBEAM.VM.Compiler.RuntimeHelpers.iterator_call(
+             QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators.call(
                ctx,
                flags,
                val,
