@@ -265,11 +265,13 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   def put({:regexp, _, _, ref}, key, val) do
     key = normalize_key(key)
 
+    desc = Heap.get_prop_desc(ref, key)
+
     cond do
-      key in ["flags", "hasIndices", "global", "ignoreCase", "multiline", "dotAll", "unicode", "unicodeSets", "sticky"] ->
+      match?(%{writable: false}, desc) ->
         reject_failed_write!()
 
-      match?(%{writable: false}, Heap.get_prop_desc(ref, key)) ->
+      key in ["flags", "hasIndices", "global", "ignoreCase", "multiline", "dotAll", "unicode", "unicodeSets", "sticky"] and desc == nil ->
         reject_failed_write!()
 
       true ->
