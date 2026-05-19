@@ -9,6 +9,57 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
+
+  builtin_definition("Iterator",
+    constructor: constructor(),
+    length: 0,
+    phase: :fundamental,
+    prototype_parent: nil,
+    after_install: &__MODULE__.install_builtin/1
+  )
+
+  def install_builtin(ctor) do
+    for name <- ~w(concat from zip zipKeyed) do
+      Heap.put_ctor_static(ctor, name, static_property(name))
+      Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.method())
+    end
+
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      Heap.put_obj_key(proto_ref, "constructor", proto_property("constructor"))
+      Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.accessor())
+
+      InstallerHelpers.install_methods(
+        proto_ref,
+        __MODULE__,
+        ~w(drop filter flatMap forEach map reduce some take toArray every find)
+      )
+
+      InstallerHelpers.install_symbol_iterator(proto_ref, __MODULE__)
+
+      Heap.put_obj_key(
+        proto_ref,
+        {:symbol, "Symbol.dispose"},
+        proto_property({:symbol, "Symbol.dispose"})
+      )
+
+      Heap.put_prop_desc(proto_ref, {:symbol, "Symbol.dispose"}, PropertyDescriptor.method())
+
+      Heap.put_obj_key(
+        proto_ref,
+        {:symbol, "Symbol.toStringTag"},
+        proto_property({:symbol, "Symbol.toStringTag"})
+      )
+
+      Heap.put_prop_desc(
+        proto_ref,
+        {:symbol, "Symbol.toStringTag"},
+        PropertyDescriptor.accessor()
+      )
+    end)
+  end
 
   def constructor do
     fn _args, this ->

@@ -7,6 +7,8 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   import QuickBEAM.VM.Heap.Keys, only: [buffer: 0, typed_array: 0]
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
+  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Interpreter.Values
   alias QuickBEAM.VM.Interpreter.Values.Coercion
 
@@ -16,6 +18,32 @@ defmodule QuickBEAM.VM.Runtime.DataView do
     getUint8 getUint16 getUint32 setBigInt64 setBigUint64 setFloat16 setFloat32 setFloat64
     setInt8 setInt16 setInt32 setUint8 setUint16 setUint32
   )
+
+  builtin_definition("DataView",
+    constructor: &__MODULE__.constructor/2,
+    length: 1,
+    phase: :fundamental,
+    after_install: &__MODULE__.install_builtin/1
+  )
+
+  def install_builtin(ctor) do
+    Heap.put_ctor_static(ctor, "length", 1)
+    Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
+
+      for name <- ~w(buffer byteLength byteOffset) do
+        Heap.put_obj_key(proto_ref, name, accessor(name))
+        Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.accessor())
+      end
+
+      InstallerHelpers.install_methods(proto_ref, __MODULE__, proto_property_names())
+      InstallerHelpers.install_to_string_tag(proto_ref, "DataView")
+    end)
+  end
 
   def proto_property_names, do: @methods
 

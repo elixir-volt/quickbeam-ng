@@ -4,6 +4,22 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
   use QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.Runtime.InstallerHelpers
+
+  builtin_definition("Boolean",
+    constructor: constructor(),
+    length: 1,
+    phase: :fundamental,
+    after_install: &__MODULE__.install_builtin/1
+  )
+
+  def install_builtin(ctor) do
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_methods(proto_ref, __MODULE__, ~w(toString valueOf))
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
+    end)
+  end
 
   proto "toString" do
     Atom.to_string(unwrap_boolean(this))

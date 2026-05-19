@@ -7,8 +7,33 @@ defmodule QuickBEAM.VM.Runtime.PromiseBuiltins do
 
   alias QuickBEAM.VM.{Heap, Invocation, JSThrow}
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
+  alias QuickBEAM.VM.Runtime.{Constructors, InstallerHelpers}
   alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.PromiseState
+
+  builtin_definition("Promise",
+    constructor: constructor(),
+    length: 1,
+    phase: :fundamental,
+    after_install: &__MODULE__.install_builtin/1
+  )
+
+  def install_builtin(ctor) do
+    Constructors.put_prototype(ctor, prototype())
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+    InstallerHelpers.install_species(ctor)
+
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_object_parent(proto_ref)
+
+      for name <- ~w(then catch finally) do
+        Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
+      end
+
+      InstallerHelpers.install_to_string_tag(proto_ref, "Promise")
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
+    end)
+  end
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor do
