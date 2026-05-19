@@ -25,7 +25,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Captures, Iterators}
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Captures, Iterators}
 
   def push_this(ctx), do: RuntimeHelpers.push_this(ctx)
 
@@ -37,27 +37,27 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def get_capture(ctx, key), do: Captures.get(ctx, key)
 
-  def get_var(ctx, name), do: RuntimeHelpers.get_var(ctx, name)
+  def get_var(ctx, name), do: Bindings.get_var(ctx, name)
 
-  def get_var_undef(ctx, name), do: RuntimeHelpers.get_var_undef(ctx, name)
+  def get_var_undef(ctx, name), do: Bindings.get_var_undef(ctx, name)
 
-  def delete_var(ctx, atom_idx), do: RuntimeHelpers.delete_var(ctx, atom_idx)
+  def delete_var(ctx, atom_idx), do: Bindings.delete_var(ctx, atom_idx)
 
-  def put_var_ref(ctx, idx, value), do: RuntimeHelpers.put_var_ref(ctx, idx, value)
+  def put_var_ref(ctx, idx, value), do: Bindings.put_var_ref(ctx, idx, value)
 
-  def set_var_ref(ctx, idx, value), do: RuntimeHelpers.set_var_ref(ctx, idx, value)
+  def set_var_ref(ctx, idx, value), do: Bindings.set_var_ref(ctx, idx, value)
 
-  def make_loc_ref(ctx, idx, value), do: RuntimeHelpers.make_loc_ref(ctx, idx, value)
+  def make_loc_ref(ctx, idx, value), do: Bindings.make_loc_ref(ctx, idx, value)
 
-  def make_arg_ref(ctx, idx), do: RuntimeHelpers.make_arg_ref(ctx, idx)
+  def make_arg_ref(ctx, idx), do: Bindings.make_arg_ref(ctx, idx)
 
-  def make_var_ref(ctx, atom_idx), do: RuntimeHelpers.make_var_ref(ctx, atom_idx)
+  def make_var_ref(ctx, atom_idx), do: Bindings.make_var_ref(ctx, atom_idx)
 
-  def make_var_ref_ref(ctx, idx), do: RuntimeHelpers.make_var_ref_ref(ctx, idx)
+  def make_var_ref_ref(ctx, idx), do: Bindings.make_var_ref_ref(ctx, idx)
 
-  def get_ref_value(ctx, key, ref), do: RuntimeHelpers.get_ref_value(ctx, key, ref)
+  def get_ref_value(ctx, key, ref), do: Bindings.get_ref_value(ctx, key, ref)
 
-  def put_ref_value(ctx, value, key, ref), do: RuntimeHelpers.put_ref_value(ctx, value, key, ref)
+  def put_ref_value(ctx, value, key, ref), do: Bindings.put_ref_value(ctx, value, key, ref)
 
   def ensure_initialized_local!(ctx, value),
     do: RuntimeHelpers.ensure_initialized_local!(ctx, value)

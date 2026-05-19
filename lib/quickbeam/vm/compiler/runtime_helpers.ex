@@ -14,10 +14,11 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   }
 
   alias QuickBEAM.VM.Compiler.Runner
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Errors
   alias QuickBEAM.VM.Execution.ConstructorStack
-  alias QuickBEAM.VM.Interpreter.{Closures, Context}
+  alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
 
@@ -169,264 +170,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
       super ->
         super
-    end
-  end
-
-  # ── Variables ──
-
-  @doc "Reads a variable binding or throws a JavaScript ReferenceError when absent."
-  def get_var(ctx, "arguments"), do: arguments_object(ctx)
-
-  def get_var(ctx, name) when is_binary(name), do: fetch_ctx_var(ctx, name)
-
-  def get_var(ctx, atom_idx),
-    do: get_var(ctx, Names.resolve_atom(context_atoms(ctx), atom_idx))
-
-  defp arguments_object(ctx) do
-    case Map.fetch(context_globals(ctx), "arguments") do
-      {:ok, arguments} ->
-        arguments
-
-      :error ->
-        current_func = context_current_func(ctx)
-        key = {:qb_compiled_arguments_object, current_func, context_arg_buf(ctx)}
-        fallback_key = {:qb_compiled_arguments_object, current_func}
-
-        case Process.get(key) || Process.get(fallback_key) do
-          nil ->
-            arguments =
-              Heap.wrap_arguments(Tuple.to_list(context_arg_buf(ctx)),
-                strict: current_strict_mode?(ctx),
-                callee: current_func
-              )
-
-            Process.put(key, arguments)
-            Process.put(fallback_key, arguments)
-            arguments
-
-          arguments ->
-            arguments
-        end
-    end
-  end
-
-  def get_global(globals, name) do
-    case fetch_global_binding(globals, name) do
-      {:ok, :__tdz__} -> JSThrow.reference_error!("#{name} is not initialized")
-      {:ok, val} -> val
-      :error -> JSThrow.reference_error!("#{name} is not defined")
-    end
-  end
-
-  @doc "Reads a global binding and returns `:undefined` when absent."
-  def get_global_undef(globals, name) do
-    case fetch_global_binding(globals, name) do
-      {:ok, val} -> val
-      :error -> :undefined
-    end
-  end
-
-  defp fetch_global_binding(globals, name) do
-    persistent = Heap.get_persistent_globals() || %{}
-
-    if Map.has_key?(persistent, name) do
-      Map.fetch(persistent, name)
-    else
-      Map.fetch(globals, name)
-    end
-  end
-
-  def delete_var(ctx, atom_idx) do
-    name = Names.resolve_atom(context_atoms(ctx), atom_idx)
-    builtins = Heap.get_builtin_names() || MapSet.new()
-
-    case Map.fetch(context_globals(ctx), name) do
-      {:ok, _value} when name in ["NaN", "undefined", "Infinity", "globalThis"] ->
-        false
-
-      {:ok, {:builtin, _, _}} ->
-        true
-
-      {:ok, _value} ->
-        MapSet.member?(builtins, name)
-
-      :error ->
-        true
-    end
-  end
-
-  @doc "Reads the value referenced by a compiled variable reference."
-  def get_var_ref(ctx, idx), do: read_var_ref(current_var_ref(ctx, idx))
-  def get_var_ref_check(ctx, idx), do: checked_var_ref(ctx, idx)
-
-  @doc "Invokes a callable stored in a variable reference."
-  def invoke_var_ref(ctx, idx, args),
-    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), args)
-
-  def invoke_var_ref0(ctx, idx), do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [])
-
-  def invoke_var_ref1(ctx, idx, arg0),
-    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0])
-
-  @doc "Invokes a callable variable reference with two arguments."
-  def invoke_var_ref2(ctx, idx, arg0, arg1),
-    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0, arg1])
-
-  def invoke_var_ref3(ctx, idx, arg0, arg1, arg2),
-    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0, arg1, arg2])
-
-  def invoke_var_ref_check(ctx, idx, args),
-    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), args)
-
-  @doc "Checks and invokes a callable variable reference with no arguments."
-  def invoke_var_ref_check0(ctx, idx),
-    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [])
-
-  def invoke_var_ref_check1(ctx, idx, arg0),
-    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0])
-
-  def invoke_var_ref_check2(ctx, idx, arg0, arg1),
-    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0, arg1])
-
-  @doc "Checks and invokes a callable variable reference with three arguments."
-  def invoke_var_ref_check3(ctx, idx, arg0, arg1, arg2),
-    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0, arg1, arg2])
-
-  def put_var_ref(ctx, idx, val) do
-    write_var_ref(current_var_ref(ctx, idx), val)
-    :ok
-  end
-
-  @doc "Writes a value through a compiled variable reference and returns the value."
-  def set_var_ref(ctx, idx, val) do
-    put_var_ref(ctx, idx, val)
-    val
-  end
-
-  def make_var_ref(ctx, atom_idx) do
-    {:global_ref, Names.resolve_atom(context_atoms(ctx), atom_idx)}
-  end
-
-  @doc "Returns or creates a mutable reference cell for an existing variable reference."
-  def make_var_ref_ref(ctx, idx) do
-    case current_var_ref(ctx, idx) do
-      {:cell, _} = cell ->
-        cell
-
-      val ->
-        ref = make_ref()
-        Heap.put_cell(ref, val)
-        {:cell, ref}
-    end
-  end
-
-  def get_var(name) when is_binary(name) do
-    case GlobalEnvironment.fetch(name) do
-      {:found, val} -> val
-      :not_found -> JSThrow.reference_error!("#{name} is not defined")
-    end
-  end
-
-  def get_var(atom_idx),
-    do: get_var(Names.resolve_atom(InvokeContext.current_atoms(), atom_idx))
-
-  def get_var_undef(ctx, "arguments"), do: arguments_object(ctx)
-
-  def get_var_undef(ctx, name) when is_binary(name),
-    do: get_global_undef(context_globals(ctx), name)
-
-  def get_var_undef(ctx, atom_idx),
-    do: get_var_undef(ctx, Names.resolve_atom(context_atoms(ctx), atom_idx))
-
-  def get_var_undef(name) when is_binary(name), do: GlobalEnvironment.get(name, :undefined)
-
-  def get_var_undef(atom_idx),
-    do: get_var_undef(Names.resolve_atom(InvokeContext.current_atoms(), atom_idx))
-
-  def get_var_ref(idx), do: read_var_ref(current_var_ref(idx))
-  def get_var_ref_check(idx), do: checked_var_ref(idx)
-
-  def invoke_var_ref(idx, args), do: Invocation.invoke_runtime(get_var_ref(idx), args)
-  def invoke_var_ref0(idx), do: Invocation.invoke_runtime(get_var_ref(idx), [])
-  def invoke_var_ref1(idx, arg0), do: Invocation.invoke_runtime(get_var_ref(idx), [arg0])
-
-  def invoke_var_ref2(idx, arg0, arg1),
-    do: Invocation.invoke_runtime(get_var_ref(idx), [arg0, arg1])
-
-  def invoke_var_ref3(idx, arg0, arg1, arg2),
-    do: Invocation.invoke_runtime(get_var_ref(idx), [arg0, arg1, arg2])
-
-  def invoke_var_ref_check(idx, args),
-    do: Invocation.invoke_runtime(checked_var_ref(idx), args)
-
-  def invoke_var_ref_check0(idx), do: Invocation.invoke_runtime(checked_var_ref(idx), [])
-
-  def invoke_var_ref_check1(idx, arg0),
-    do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0])
-
-  def invoke_var_ref_check2(idx, arg0, arg1),
-    do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0, arg1])
-
-  def invoke_var_ref_check3(idx, arg0, arg1, arg2),
-    do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0, arg1, arg2])
-
-  def put_var_ref(idx, val) do
-    write_var_ref(current_var_ref(idx), val)
-    :ok
-  end
-
-  def set_var_ref(idx, val) do
-    put_var_ref(idx, val)
-    val
-  end
-
-  @doc "Creates a mutable reference cell for a local slot value."
-  def make_loc_ref(ctx \\ nil, idx, value \\ :undefined)
-
-  def make_loc_ref(_ctx, _idx, value) do
-    ref = make_ref()
-    Heap.put_cell(ref, value)
-    {:cell, ref}
-  end
-
-  def make_arg_ref(ctx \\ nil, idx) do
-    ref = make_ref()
-    val = ctx |> context_arg_buf() |> elem(idx)
-    Heap.put_cell(ref, val)
-    {:cell, ref}
-  end
-
-  @doc "Reads the value from a reference cell or object-property reference."
-  def get_ref_value(_ctx \\ nil, key, ref)
-  def get_ref_value(_ctx, _key, {:cell, _} = cell), do: Closures.read_cell(cell)
-  def get_ref_value(ctx, _key, {:global_ref, name}), do: get_var_undef(ctx, name)
-  def get_ref_value(_ctx, key, obj) when is_binary(key), do: Get.get(obj, key)
-  def get_ref_value(_ctx, _key, _), do: :undefined
-
-  def put_ref_value(ctx \\ nil, val, key, ref)
-
-  def put_ref_value(ctx, val, _key, {:cell, _} = cell) do
-    Closures.write_cell(cell, val)
-    ctx
-  end
-
-  def put_ref_value(ctx, val, _key, {:global_ref, name}) do
-    GlobalEnvironment.put(ensure_context(ctx), name, val)
-  end
-
-  def put_ref_value(ctx, val, key, obj) when is_binary(key) do
-    Put.put(obj, key, val)
-    ctx
-  end
-
-  def put_ref_value(ctx, _val, _key, _), do: ctx
-
-  @doc "Reads a variable from a compiled context or throws when absent."
-  def fetch_ctx_var(ctx, name) do
-    case GlobalEnvironment.fetch(context_globals(ctx), name) do
-      {:found, :__tdz__} -> JSThrow.reference_error!("#{name} is not initialized")
-      {:found, val} -> val
-      :not_found -> JSThrow.reference_error!("#{name} is not defined")
     end
   end
 
@@ -840,7 +583,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   defp run_eval_program(ctx, program) do
     reject_eval_lexical_conflicts!(ctx, program.value)
 
-    arguments = arguments_object(ctx)
+    arguments = Bindings.get_var(ctx, "arguments")
     globals = Map.put(ctx.globals, "arguments", arguments)
 
     case QuickBEAM.VM.Interpreter.eval(
@@ -1029,7 +772,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   end
 
   @doc "Creates special object forms used by compiled object/class bytecode."
-  def special_object(ctx, type) when type in [0, 1], do: arguments_object(ctx)
+  def special_object(ctx, type) when type in [0, 1], do: Bindings.get_var(ctx, "arguments")
 
   def special_object(ctx, type) do
     current_func = context_current_func(ctx)
@@ -1224,108 +967,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     do: Functions.set_name_computed(fun, name_val)
 
   # ── Private helpers ──
-
-  defp current_var_ref(idx), do: current_var_ref(current_context(), idx)
-
-  defp current_var_ref(ctx, idx) do
-    case context_current_func(ctx) do
-      {:closure, captured, %QuickBEAM.VM.Function{} = fun} ->
-        case capture_keys_tuple(fun) do
-          keys when idx >= 0 and idx < tuple_size(keys) ->
-            Map.get(captured, elem(keys, idx), :undefined)
-
-          _ ->
-            :undefined
-        end
-
-      _ ->
-        :undefined
-    end
-  end
-
-  defp capture_keys_tuple(%QuickBEAM.VM.Function{closure_vars: vars} = fun) do
-    case Heap.get_capture_keys(fun) do
-      nil ->
-        tuple = vars |> Enum.map(&closure_capture_key/1) |> List.to_tuple()
-        Heap.put_capture_keys(fun, tuple)
-        tuple
-
-      cached ->
-        cached
-    end
-  end
-
-  defp read_var_ref({:cell, _} = cell), do: Closures.read_cell(cell)
-  defp read_var_ref(other), do: other
-
-  defp checked_var_ref(idx), do: checked_var_ref(current_context(), idx)
-
-  defp checked_var_ref(ctx, idx) do
-    case current_var_ref(ctx, idx) do
-      :__tdz__ ->
-        JSThrow.reference_error!(var_ref_error_message(ctx, idx))
-
-      {:cell, _} = cell ->
-        val = Closures.read_cell(cell)
-
-        if val == :__tdz__ and var_ref_name(ctx, idx) == "this" and
-             derived_this_uninitialized?(ctx) do
-          JSThrow.reference_error!("this is not initialized")
-        end
-
-        val
-
-      val ->
-        val
-    end
-  end
-
-  defp write_var_ref({:cell, _} = cell, val), do: Closures.write_cell(cell, val)
-  defp write_var_ref(_, _), do: :ok
-
-  defp var_ref_error_message(ctx, idx) do
-    if var_ref_name(ctx, idx) == "this" and derived_this_uninitialized?(ctx) do
-      "this is not initialized"
-    else
-      "Cannot access variable before initialization"
-    end
-  end
-
-  defp var_ref_name(ctx, idx) do
-    case context_current_func(ctx) do
-      {:closure, _, %QuickBEAM.VM.Function{closure_vars: vars}}
-      when idx >= 0 and idx < length(vars) ->
-        vars
-        |> Enum.at(idx)
-        |> Map.get(:name)
-        |> Names.resolve_display_name(context_atoms(ctx))
-
-      _ ->
-        nil
-    end
-  end
-
-  defp closure_capture_key(%{closure_type: type, var_idx: idx}), do: {type, idx}
-
-  defp derived_this_uninitialized?(ctx) do
-    case context_this(ctx) do
-      this
-      when this == :uninitialized or
-             (is_tuple(this) and tuple_size(this) == 2 and elem(this, 0) == :uninitialized) ->
-        true
-
-      _ ->
-        false
-    end
-  end
-
-  defp current_context do
-    case Heap.get_ctx() do
-      %Context{} = ctx -> ctx
-      map when is_map(map) -> context_struct(map)
-      _ -> %Context{atoms: Heap.get_atoms(), globals: GlobalEnvironment.base_globals()}
-    end
-  end
 
   defp prototype_chain_contains?({:obj, ref} = obj, target) do
     case Heap.get_obj(ref, %{}) do

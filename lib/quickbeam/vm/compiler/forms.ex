@@ -2,6 +2,7 @@ defmodule QuickBEAM.VM.Compiler.Forms do
   @moduledoc "Erlang abstract-format form builder: assembles the module, entry, and block function forms for compilation."
 
   alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
 
@@ -136,7 +137,7 @@ defmodule QuickBEAM.VM.Compiler.Forms do
         [
           remote_call(Invocation, :invoke_runtime, [
             ctx,
-            remote_call(RuntimeHelpers, getter_name(prefix), [ctx, idx]),
+            remote_call(Bindings, getter_name(prefix), [ctx, idx]),
             args
           ])
         ]}
@@ -154,7 +155,7 @@ defmodule QuickBEAM.VM.Compiler.Forms do
         [
           remote_call(Invocation, :invoke_runtime, [
             ctx,
-            remote_call(RuntimeHelpers, getter_name(prefix), [ctx, idx]),
+            remote_call(Bindings, getter_name(prefix), [ctx, idx]),
             list_expr(args)
           ])
         ]}
