@@ -218,7 +218,7 @@ defmodule QuickBEAM.VM.Host.Web.Worker do
   end
 
   defp store_and_deliver(_child_rt, data) do
-    alias QuickBEAM.VM.Host.Web.BeamAPI
+    alias QuickBEAM.VM.Host.BeamAPI
     BeamAPI.deliver_beam_message(data)
   end
 end

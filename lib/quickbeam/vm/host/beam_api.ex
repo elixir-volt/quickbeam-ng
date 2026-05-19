@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Host.Web.BeamAPI do
+defmodule QuickBEAM.VM.Host.BeamAPI do
   @moduledoc "Beam object builtin for BEAM mode — provides Beam.self, Beam.onMessage, Beam.send, Beam.call, Beam.monitor, Beam.demonitor."
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
