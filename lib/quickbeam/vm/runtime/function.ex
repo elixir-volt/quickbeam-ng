@@ -29,7 +29,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
   end
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
-  def prototype do
+  def prototype(opts \\ []) do
     has_instance =
       {:builtin, "[Symbol.hasInstance]",
        fn args, this ->
@@ -89,7 +89,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
         :ok
     end
 
-    Heap.put_func_proto(proto)
+    if Keyword.get(opts, :cache, true), do: Heap.put_func_proto(proto)
     proto
   end
 

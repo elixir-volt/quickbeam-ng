@@ -355,6 +355,7 @@ defmodule QuickBEAM.JS.Compiler do
        has_prototype: true,
        has_simple_parameter_list: true,
        new_target_allowed: true,
+       func_kind: function_kind(function),
        source: ""
      )}
   end

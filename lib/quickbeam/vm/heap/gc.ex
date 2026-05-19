@@ -20,7 +20,7 @@ defmodule QuickBEAM.VM.Heap.GC do
   def gc(extra_roots \\ []) do
     module_roots = Registry.all_module_exports()
     persistent_roots = Context.get_persistent_globals() |> Map.values()
-    all_roots = List.wrap(extra_roots) ++ module_roots ++ persistent_roots
+    all_roots = List.wrap(extra_roots) ++ module_roots ++ persistent_roots ++ process_cache_roots()
 
     marked = mark(all_roots, MapSet.new())
     sweep(marked)
@@ -152,6 +152,24 @@ defmodule QuickBEAM.VM.Heap.GC do
         []
     end)
   end
+
+  defp process_cache_roots do
+    Process.get_keys()
+    |> Enum.reject(&heap_storage_key?/1)
+    |> Enum.filter(&quickbeam_cache_key?/1)
+    |> Enum.map(&Process.get/1)
+  end
+
+  defp heap_storage_key?(key),
+    do: heap_key?(key) or regexp_state_key?(key) or owner_side_table_key?(key)
+
+  defp quickbeam_cache_key?(key) when is_atom(key),
+    do: key |> Atom.to_string() |> String.starts_with?("qb_")
+
+  defp quickbeam_cache_key?({key, _}) when is_atom(key),
+    do: key |> Atom.to_string() |> String.starts_with?("qb_")
+
+  defp quickbeam_cache_key?(_), do: false
 
   defp callable_side_children(callable) do
     owner = ctor_key(callable)

@@ -1041,6 +1041,16 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, 5} = Compiler.invoke(args_apply, [])
     end
 
+    test "compiles for-of object binding patterns", %{rt: rt} do
+      fun = compile_and_decode(rt, ~S<(function(){ let out = 0; for (let {a} of [{a: 1}]) { out = a } return out })>) |> user_function()
+
+      assert {:ok, 1} = Compiler.invoke(fun, [])
+    end
+
+    test "unsupported generator stubs preserve generator kind", %{rt: rt} do
+      assert {:ok, "function"} = QuickBEAM.eval(rt, "function* g(){ yield 1; } typeof g().next", mode: :beam_compiler)
+    end
+
     test "compiles basic Proxy get and has traps", %{rt: rt} do
       proxy_get =
         compile_and_decode(rt, "let p=new Proxy({},{get(t,k){return k==='x'?3:undefined}}); p.x").value
@@ -1889,6 +1899,17 @@ defmodule QuickBEAM.VM.CompilerTest do
         |> user_function()
 
       assert {:ok, 1} = Compiler.invoke(fun, [])
+    end
+
+    test "computed instance class method keys use ToPropertyKey", %{rt: rt} do
+      fun =
+        compile_and_decode(
+          rt,
+          ~S<(function(){ let log=[]; let key={toString(){log.push("key"); return "m"}}; class A { [key](){ return 3 } } return new A().m() + "|" + log.join(",") })>
+        )
+        |> user_function()
+
+      assert {:ok, "3|key"} = Compiler.invoke(fun, [])
     end
 
     test "keeps class prototype methods non-enumerable", %{rt: rt} do

@@ -106,6 +106,22 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
              )
   end
 
+  test "defineProperty trap cannot report incompatible non-configurable definitions", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let target = {}; Object.defineProperty(target, "x", {value: 1, configurable: true}); let p = new Proxy(target, {defineProperty(){ return true; }}); try { Object.defineProperty(p, "x", {value: 1, configurable: false}); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
+  test "ownKeys invariants are enforced through Object.keys", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let target = {}; Object.defineProperty(target, "fixed", {value: 1, configurable: false}); let p = new Proxy(target, {ownKeys(){ return []; }}); try { Object.keys(p); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
   test "revoked proxies reject has and delete", %{rt: rt} do
     assert_modes(
       rt,
@@ -117,6 +133,18 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
              QuickBEAM.eval(rt, ~S|let r = Proxy.revocable({}, {}); r.revoke(); delete r.proxy.x;|,
                mode: :beam
              )
+
+    assert_modes(
+      rt,
+      ~S|let r = Proxy.revocable({}, {}); r.revoke(); try { Object.keys(r.proxy); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let r = Proxy.revocable({}, {}); r.revoke(); try { Reflect.ownKeys(r.proxy); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
   end
 
   test "proxy call and construct require callable and constructable targets", %{rt: rt} do

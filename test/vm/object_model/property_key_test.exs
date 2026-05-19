@@ -1,6 +1,20 @@
 defmodule QuickBEAM.VM.ObjectModel.PropertyKeyTest do
   use QuickBEAM.VM.TestCase, async: true
 
+  test "Reflect methods coerce property keys", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S<let log = []; let key = {toString(){ log.push("toString"); return "x"; }}; Reflect.get({x: 1}, key) + "|" + log.join(",")>,
+      "1|toString"
+    )
+
+    assert_modes(
+      rt,
+      ~S<let log = []; let key = {toString(){ log.push("toString"); return "x"; }}; let obj = {}; Reflect.set(obj, key, 2); obj.x + "|" + log.join(",")>,
+      "2|toString"
+    )
+  end
+
   alias QuickBEAM.VM.ObjectModel.PropertyKey
 
   test "array index classification follows canonical array-index strings" do
@@ -33,13 +47,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKeyTest do
   test "computed property reads convert key once before property access", %{rt: rt} do
     assert_modes(
       rt,
-      """
-      let log = [];
-      let key = { toString() { log.push('key'); return 'a'; } };
-      let object = { get a() { log.push('get'); return 1; } };
-      object[key];
-      log.join(',');
-      """,
+      ~S<let log = []; let key = { toString() { log.push('key'); return 'a'; } }; let object = { get a() { log.push('get'); return 1; } }; object[key]; log.join(',');>,
       "key,get"
     )
   end
@@ -47,13 +55,7 @@ defmodule QuickBEAM.VM.ObjectModel.PropertyKeyTest do
   test "computed assignment converts key before right-hand side", %{rt: rt} do
     assert_modes(
       rt,
-      """
-      let log = [];
-      let key = { toString() { log.push('key'); return 'a'; } };
-      let object = {};
-      object[key] = (log.push('value'), 1);
-      log.join(',') + '|' + object.a;
-      """,
+      ~S<let log = []; let key = { toString() { log.push('key'); return 'a'; } }; let object = {}; object[key] = (log.push('value'), 1); log.join(',') + '|' + object.a;>,
       "key,value|1"
     )
   end

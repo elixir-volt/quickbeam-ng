@@ -175,7 +175,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
           {:js_throw, Heap.make_error("proxy defineProperty trap returned false", "TypeError")}
         )
 
-      proxy_define_property_invariant_violation?(target, prop_name) ->
+      proxy_define_property_invariant_violation?(target, prop_name, descriptor_map(desc_obj)) ->
         throw(
           {:js_throw,
            Heap.make_error("proxy defineProperty trap violates invariant", "TypeError")}
@@ -195,12 +195,27 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   defp descriptor_map(_), do: %{}
 
-  defp proxy_define_property_invariant_violation?({:obj, target_ref}, prop_name) do
+  defp proxy_define_property_invariant_violation?({:obj, target_ref}, prop_name, desc) do
     existing = Heap.get_obj(target_ref, %{})
-    non_extensible_new_property?(target_ref, existing, prop_name)
+    current_desc = Heap.get_prop_desc(target_ref, prop_name)
+
+    cond do
+      non_extensible_new_property?(target_ref, existing, prop_name) ->
+        true
+
+      Map.get(desc, "configurable") == false and
+          not match?(%{configurable: false}, current_desc) ->
+        true
+
+      incompatible_existing_descriptor?(target_ref, existing, prop_name, desc) ->
+        true
+
+      true ->
+        false
+    end
   end
 
-  defp proxy_define_property_invariant_violation?(_target, _prop_name), do: false
+  defp proxy_define_property_invariant_violation?(_target, _prop_name, _desc), do: false
 
   defp define_typed_array_index_property(obj, _ref, existing, prop_name, desc) do
     if is_map(existing) and Map.get(existing, typed_array()) do

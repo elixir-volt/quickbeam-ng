@@ -105,12 +105,13 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       [obj, key | rest] = args
       require_object!(obj, "Reflect.get")
       receiver = arg(rest, 0, obj)
-      reflect_get(obj, key, receiver)
+      reflect_get(obj, PropertyKey.to_property_key(key), receiver)
     end
 
     method "set" do
       [obj, key | rest] = args
       require_object!(obj, "Reflect.set")
+      key = PropertyKey.to_property_key(key)
       val = arg(rest, 0, :undefined)
       receiver = arg(rest, 1, obj)
       Values.truthy?(Put.set(obj, key, val, receiver))
@@ -119,7 +120,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     method "deleteProperty" do
       [obj, key | _] = args
       require_object!(obj, "Reflect.deleteProperty")
-      Delete.delete_property(obj, key)
+      Delete.delete_property(obj, PropertyKey.to_property_key(key))
     end
 
     method "getOwnPropertyDescriptor" do
@@ -127,7 +128,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       require_object!(obj, "Reflect.getOwnPropertyDescriptor")
 
       Object.static_property("getOwnPropertyDescriptor")
-      |> Invocation.invoke_callback_or_throw([obj, key])
+      |> Invocation.invoke_callback_or_throw([obj, PropertyKey.to_property_key(key)])
     end
 
     method "getPrototypeOf" do
@@ -148,10 +149,14 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     end
 
     method "defineProperty" do
-      case hd(args) do
+      [obj, key, descriptor | _] = args
+
+      case obj do
         {:obj, _} ->
           try do
-            Object.static_property("defineProperty") |> Invocation.invoke_callback_or_throw(args)
+            Object.static_property("defineProperty")
+            |> Invocation.invoke_callback_or_throw([obj, PropertyKey.to_property_key(key), descriptor])
+
             true
           catch
             {:js_throw, _reason} -> false
@@ -179,7 +184,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     method "has" do
       [obj, key | _] = args
       require_object!(obj, "Reflect.has")
-      HasProperty.has_property?(obj, key)
+      HasProperty.has_property?(obj, PropertyKey.to_property_key(key))
     end
 
     method "ownKeys" do
@@ -387,18 +392,19 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
   defp own_keys_for({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
       %{proxy_target() => target, proxy_handler() => handler} ->
         own_keys_trap = Get.get(handler, "ownKeys")
 
         if own_keys_trap == :undefined or own_keys_trap == nil do
           own_keys_for(target)
         else
-          trap_keys =
-            own_keys_trap
-            |> Runtime.call_callback([target])
-            |> Heap.to_list()
-
-          validate_proxy_own_keys_invariant(target, trap_keys)
+          own_keys_trap
+          |> Runtime.call_callback([target])
+          |> Heap.to_list()
+          |> OwnProperty.validate_proxy_own_keys_invariant(target)
         end
 
       {:qb_arr, arr} ->
@@ -444,36 +450,4 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
   defp internal_key?(_), do: false
 
-  defp validate_proxy_own_keys_invariant(target, trap_keys) do
-    target_keys = own_keys_for(target)
-
-    missing_key =
-      Enum.find(target_keys, fn key ->
-        match?(%{configurable: false}, target_prop_desc(target, key)) and key not in trap_keys
-      end)
-
-    cond do
-      duplicate_key?(trap_keys) ->
-        JSThrow.type_error!("proxy ownKeys trap violates invariant")
-
-      missing_key ->
-        JSThrow.type_error!("proxy ownKeys trap violates invariant")
-
-      non_extensible_key_mismatch?(target, target_keys, trap_keys) ->
-        JSThrow.type_error!("proxy ownKeys trap violates invariant")
-
-      true ->
-        trap_keys
-    end
-  end
-
-  defp duplicate_key?(keys) do
-    Enum.uniq(keys) != keys
-  end
-
-  defp non_extensible_key_mismatch?({:obj, ref}, target_keys, trap_keys) do
-    not Heap.extensible?(ref) and Enum.sort(target_keys) != Enum.sort(trap_keys)
-  end
-
-  defp target_prop_desc({:obj, ref}, key), do: Heap.get_prop_desc(ref, key)
 end

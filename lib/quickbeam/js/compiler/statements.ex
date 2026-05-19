@@ -692,6 +692,45 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
   def compile(
         %AST.ForOfStatement{
+          left: %AST.VariableDeclaration{
+            declarations: [
+              %AST.VariableDeclarator{id: %AST.ObjectPattern{properties: properties}}
+            ]
+          },
+          right: right,
+          body: body,
+          await: false
+        },
+        scope,
+        instructions,
+        constants,
+        opts,
+        callbacks
+      ) do
+    instructions = maybe_reset_loop_completion(instructions, Keyword.fetch!(opts, :tail?))
+
+    with {:loc, value_loc} <- callbacks.resolve.(scope, "<for_of_value>"),
+         {:ok, instructions, constants} <-
+           callbacks.compile_expression.(right, scope, instructions, constants) do
+      compile_iterator_for_of_object_pattern(
+        body,
+        properties,
+        value_loc,
+        scope,
+        instructions,
+        constants,
+        callbacks,
+        Keyword.fetch!(opts, :tail?),
+        opts
+      )
+    else
+      :error -> {:error, {:unsupported, :for_of_binding}}
+      {:error, _} = error -> error
+    end
+  end
+
+  def compile(
+        %AST.ForOfStatement{
           left: %AST.ObjectExpression{properties: properties},
           right: right,
           body: body,
@@ -1529,7 +1568,7 @@ defmodule QuickBEAM.JS.Compiler.Statements do
 
     with {:ok, i, c} <- cb.compile_expression.(key, s, i, c),
          {:ok, f} <- cb.compile_function.(v, nil) do
-      {:ok, i ++ [{:closure, length(c)}, {:define_method_computed, flags}], [f | c]}
+      {:ok, i ++ [:to_propkey, {:closure, length(c)}, {:define_method_computed, flags}], [f | c]}
     end
   end
 

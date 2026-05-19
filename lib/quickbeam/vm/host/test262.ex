@@ -151,11 +151,11 @@ defmodule QuickBEAM.VM.Host.Test262 do
       finalization_registry_ctor
     )
 
-    function_proto = QuickBEAM.VM.Runtime.Function.prototype()
+    function_proto = QuickBEAM.VM.Runtime.Function.prototype(cache: false)
     realm_id = make_ref()
 
     proxy_ctor = realm_proxy_constructor()
-    error_bindings = Errors.bindings()
+    error_bindings = realm_error_bindings(object_proto)
 
     error_protos =
       for name <-
@@ -297,6 +297,51 @@ defmodule QuickBEAM.VM.Host.Test262 do
       _ ->
         nil
     end
+  end
+
+  defp realm_error_bindings(object_proto) do
+    base = Errors.bindings()
+    base_error_proto = Heap.get_class_proto(Map.fetch!(base, "Error"))
+    error_proto = clone_realm_error_proto(base_error_proto, object_proto)
+
+    realm_errors =
+      for {name, {:builtin, _base_name, callback} = ctor} <- base, into: %{} do
+        proto =
+          if name == "Error" do
+            error_proto
+          else
+            ctor
+            |> Heap.get_class_proto()
+            |> clone_realm_error_proto(error_proto)
+          end
+
+        realm_ctor = realm_constructor(name, callback, proto)
+        Heap.put_obj_key(elem(proto, 1), "constructor", realm_ctor)
+
+        ctor
+        |> Heap.get_ctor_statics()
+        |> Enum.reject(fn {key, _value} -> key == "prototype" end)
+        |> Enum.each(fn {key, value} -> Heap.put_ctor_static(realm_ctor, key, value) end)
+
+        {name, realm_ctor}
+      end
+
+    case Map.fetch(realm_errors, "Error") do
+      {:ok, error_ctor} ->
+        for {name, ctor} <- realm_errors, name != "Error" do
+          Heap.put_ctor_static(ctor, "__proto__", error_ctor)
+        end
+
+      :error ->
+        :ok
+    end
+
+    realm_errors
+  end
+
+  defp clone_realm_error_proto({:obj, ref}, parent) do
+    map = ref |> Heap.get_obj(%{}) |> Map.put("__proto__", parent)
+    Heap.wrap(map)
   end
 
   defp realm_object_constructor(object_proto, boolean_proto, number_proto, bigint_proto) do

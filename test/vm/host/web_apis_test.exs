@@ -30,4 +30,23 @@ defmodule QuickBEAM.VM.Host.WebAPIsTest do
     assert Map.has_key?(object, "createRealm")
     assert Map.has_key?(object, "detachArrayBuffer")
   end
+
+  test "Test262 realms allocate distinct error intrinsics" do
+    {:ok, rt} = QuickBEAM.start()
+
+    on_exit(fn ->
+      try do
+        QuickBEAM.stop(rt)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+    assert {:ok, "true|true"} =
+             QuickBEAM.eval(
+               rt,
+               ~S<let g=$262.createRealm().global; [g.TypeError !== TypeError, g.TypeError.prototype !== TypeError.prototype].join("|")>,
+               mode: :beam
+             )
+  end
 end

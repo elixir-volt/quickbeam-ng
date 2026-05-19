@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
   alias QuickBEAM.VM.Execution.RegexpState
 
   alias QuickBEAM.VM.ObjectModel.{
@@ -218,6 +218,9 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   def own_keys({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
       %{proxy_target() => target, proxy_handler() => handler} ->
         trap = Get.get(handler, "ownKeys")
 
@@ -227,6 +230,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
           trap
           |> Runtime.call_callback([target])
           |> Heap.to_list()
+          |> validate_proxy_own_keys_invariant(target)
         end
 
       {:qb_arr, arr} ->
@@ -298,6 +302,37 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   end
 
   defp module_static_keys(_module), do: []
+
+  def validate_proxy_own_keys_invariant(trap_keys, target) do
+    target_keys = own_keys(target)
+
+    missing_key =
+      Enum.find(target_keys, fn key ->
+        match?(%{configurable: false}, target_prop_desc(target, key)) and key not in trap_keys
+      end)
+
+    cond do
+      Enum.uniq(trap_keys) != trap_keys ->
+        JSThrow.type_error!("proxy ownKeys trap violates invariant")
+
+      missing_key ->
+        JSThrow.type_error!("proxy ownKeys trap violates invariant")
+
+      non_extensible_key_mismatch?(target, target_keys, trap_keys) ->
+        JSThrow.type_error!("proxy ownKeys trap violates invariant")
+
+      true ->
+        trap_keys
+    end
+  end
+
+  defp non_extensible_key_mismatch?({:obj, ref}, target_keys, trap_keys),
+    do: not Heap.extensible?(ref) and Enum.sort(target_keys) != Enum.sort(trap_keys)
+
+  defp non_extensible_key_mismatch?(_target, _target_keys, _trap_keys), do: false
+
+  defp target_prop_desc({:obj, ref}, key), do: Heap.get_prop_desc(ref, key)
+  defp target_prop_desc(_target, _key), do: nil
 
   defp ordered_map_keys(map) do
     insertion_order =
@@ -380,6 +415,9 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
       array_prototype_object?(data) and prop_name == "length" ->
         array_prototype_length_descriptor(ref, data)
+
+      is_map(data) and Map.get(data, "__proxy_revoked__") == true and Map.has_key?(data, proxy_target()) ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
 
       is_map(data) and Map.has_key?(data, proxy_target()) ->
         proxy_descriptor(data, prop_name)
