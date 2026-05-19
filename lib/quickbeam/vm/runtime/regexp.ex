@@ -1647,7 +1647,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     if String.contains?(flags, "g") do
       case regexp_match_all_results(regexp, string, 0, []) do
         [] -> nil
-        results -> Enum.map(results, fn {:obj, ref} -> Heap.get_obj(ref, []) |> List.first() end)
+        results -> Enum.map(results, fn {:obj, _} = result -> Get.get(result, "0") end)
       end
     else
       exec(regexp, [string])
