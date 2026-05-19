@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Runtime.GlobalFunctionInstaller do
+defmodule QuickBEAM.VM.Runtime.GlobalBindings do
   @moduledoc "Builds global function and small host-object bindings."
 
   import QuickBEAM.VM.Builtin, only: [object: 1]

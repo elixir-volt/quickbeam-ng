@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.GlobalRegistry do
 
   alias QuickBEAM.VM.Runtime.{
     Console,
-    GlobalFunctionInstaller,
+    GlobalBindings,
     JSON,
     Math,
     Reflect,
@@ -18,7 +18,7 @@ defmodule QuickBEAM.VM.Runtime.GlobalRegistry do
       "Reflect" => Reflect.object() |> Reflect.install_metadata(),
       "console" => Console.object()
     }
-    |> Map.merge(GlobalFunctionInstaller.bindings())
+    |> Map.merge(GlobalBindings.bindings())
     |> Map.merge(QuickBEAM.VM.Builtin.Discovery.bindings())
   end
 end

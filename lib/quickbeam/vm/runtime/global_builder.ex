@@ -1,5 +1,5 @@
-defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
-  @moduledoc "Installs global bindings and post-build global metadata for a runtime realm."
+defmodule QuickBEAM.VM.Runtime.GlobalBuilder do
+  @moduledoc "Builds global bindings and post-build global metadata for a runtime realm."
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime.WebAPIs
@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
   alias QuickBEAM.VM.Runtime.{
     Errors,
     GlobalRegistry,
-    GlobalThisInstaller
+    GlobalThis
   }
 
   def build do
@@ -25,7 +25,7 @@ defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
   end
 
   defp install_global_this(bindings) do
-    GlobalThisInstaller.install(bindings)
+    GlobalThis.install(bindings)
     bindings
   end
 end

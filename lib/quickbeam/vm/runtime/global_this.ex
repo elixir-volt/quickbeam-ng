@@ -1,5 +1,5 @@
-defmodule QuickBEAM.VM.Runtime.GlobalThisInstaller do
-  @moduledoc "Installs global bindings onto the globalThis object and records their descriptors."
+defmodule QuickBEAM.VM.Runtime.GlobalThis do
+  @moduledoc "Copies global bindings onto the globalThis object and records their descriptors."
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
