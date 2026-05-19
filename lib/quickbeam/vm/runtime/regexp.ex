@@ -1956,17 +1956,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
 
-  defp regexp_to_string({:regexp, bytecode, source, ref}) do
-    flags = regexp_flags(bytecode, ref)
+  defp regexp_to_string(this) do
+    unless regexp_match_receiver?(this), do: JSThrow.type_error!("RegExp.prototype.toString receiver is not an object")
+
+    source = regexp_to_string_hint(Get.get(this, "source"))
+    flags = regexp_to_string_hint(Get.get(this, "flags"))
     "/#{source}/#{flags}"
   end
-
-  defp regexp_to_string({:regexp, bytecode, source}) do
-    flags = Get.regexp_flags(bytecode)
-    "/#{source}/#{flags}"
-  end
-
-  defp regexp_to_string(_), do: "/(?:)/"
 
   defp regexp_source({:regexp, bytecode, source, ref}) when is_binary(source),
     do: escape_regexp_source(source, regexp_flags(bytecode, ref))
