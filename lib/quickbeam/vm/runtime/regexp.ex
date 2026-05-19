@@ -1424,6 +1424,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
     string = QuickBEAM.VM.Interpreter.Values.stringify(string)
     flags = regexp_match_all_observable_flags(regexp)
+    validate_match_all_species!(regexp)
     offset = regexp_last_index(regexp)
 
     regexp_string_iterator(
@@ -1536,6 +1537,24 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     do: Get.regexp_flags(bytecode)
 
   defp regexp_match_all_flags(regexp), do: regexp_match_all_observable_flags(regexp)
+
+  defp validate_match_all_species!(regexp) do
+    case Get.get(regexp, "constructor") do
+      :undefined ->
+        :ok
+
+      ctor ->
+        unless match_all_constructor_object?(ctor), do: JSThrow.type_error!("RegExp constructor is not an object")
+
+        case Get.get(ctor, {:symbol, "Symbol.species"}) do
+          value when value in [nil, :undefined] -> :ok
+          species -> unless Builtin.callable?(species), do: JSThrow.type_error!("RegExp species is not a constructor")
+        end
+    end
+  end
+
+  defp match_all_constructor_object?({:obj, _}), do: true
+  defp match_all_constructor_object?(value), do: Builtin.callable?(value)
 
   defp regexp_match_all_observable_flags(regexp) do
     case Get.get(regexp, "flags") do
