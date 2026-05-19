@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
 
   alias QuickBEAM.VM.{Heap, Invocation, Runtime}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Semantics.Iterators, as: IteratorSemantics
@@ -99,7 +100,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   end
 
   def rest(ctx, start_idx) do
-    arg_buf = RuntimeHelpers.context_arg_buf(ctx)
+    arg_buf = RuntimeContext.arg_buf(ctx)
 
     rest_args =
       if start_idx < tuple_size(arg_buf) do

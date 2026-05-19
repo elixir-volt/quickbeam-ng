@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.Forms do
   @moduledoc "Erlang abstract-format form builder: assembles the module, entry, and block function forms for compilation."
 
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
 
@@ -50,7 +50,7 @@ defmodule QuickBEAM.VM.Compiler.Forms do
         force_capture_slots? ->
           Enum.map(
             initial_slots,
-            &remote_call(RuntimeHelpers, :ensure_capture_cell, [ctx, atom(:undefined), &1])
+            &remote_call(RuntimeABI, :ensure_capture_cell, [ctx, atom(:undefined), &1])
           )
 
         true ->

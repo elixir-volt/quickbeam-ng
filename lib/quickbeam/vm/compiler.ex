@@ -23,7 +23,7 @@ defmodule QuickBEAM.VM.Compiler do
   @type compiled_fun :: {module(), atom()}
   @type beam_file :: {:beam_file, module(), list(), list(), list(), list()}
 
-  @compiler_cache_version "v4"
+  @compiler_cache_version "v6"
 
   @doc "Invokes the runtime object represented by this module."
   def invoke(fun, args), do: invoke(fun, args, nil)

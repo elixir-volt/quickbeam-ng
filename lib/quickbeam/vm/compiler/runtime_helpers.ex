@@ -14,8 +14,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   }
 
   alias QuickBEAM.VM.Compiler.Runner
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Errors
-  alias QuickBEAM.VM.Environment.Captures
   alias QuickBEAM.VM.Execution.ConstructorStack
   alias QuickBEAM.VM.Interpreter.{Closures, Context}
   alias QuickBEAM.VM.Semantics.Values
@@ -135,42 +135,22 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     {Values.sub(num, 1), num}
   end
 
-  def ensure_capture_cell(_ctx \\ nil, cell, val), do: Captures.ensure(cell, val)
-  def close_capture_cell(_ctx \\ nil, cell, val), do: Captures.close(cell, val)
-  def sync_capture_cell(_ctx \\ nil, cell, val), do: Captures.sync(cell, val)
-  def read_capture_cell(_ctx \\ nil, cell, slot_val), do: Captures.read(cell, slot_val)
-
   @doc "Resolves an awaited JavaScript value for compiled async code."
   def await(_ctx \\ nil, val), do: QuickBEAM.VM.Interpreter.resolve_awaited(val)
 
-  def context_struct(%Context{} = ctx), do: ctx
-
-  def context_struct(map) when is_map(map) do
-    struct(Context, Map.merge(Map.from_struct(%Context{}), map))
-  end
+  defdelegate context_struct(ctx), to: RuntimeContext, as: :struct_context
 
   @doc "Returns the atom table from a context-like value."
-  def context_atoms(%{atoms: atoms}), do: atoms
-  def context_atoms(_), do: {}
-  def context_globals(%{globals: globals}), do: globals
-  def context_globals(_), do: GlobalEnvironment.base_globals()
-  def context_current_func(%{current_func: current_func}), do: current_func
-  def context_current_func(_), do: :undefined
-  def context_arg_buf(%{arg_buf: arg_buf}), do: arg_buf
-  def context_arg_buf(_), do: {}
+  defdelegate context_atoms(ctx), to: RuntimeContext, as: :atoms
+  defdelegate context_globals(ctx), to: RuntimeContext, as: :globals
+  defdelegate context_current_func(ctx), to: RuntimeContext, as: :current_func
+  defdelegate context_arg_buf(ctx), to: RuntimeContext, as: :arg_buf
+
   @doc "Returns the JavaScript `this` value from a context-like value."
-  def context_this(%{this: this}), do: this
-  def context_this(_), do: :undefined
-  def context_new_target(%{new_target: new_target}), do: new_target
-  def context_new_target(_), do: :undefined
-  def context_gas(%{gas: gas}), do: gas
-  def context_gas(_), do: Context.default_gas()
-
-  def ensure_context(%Context{} = ctx), do: ctx
-  def ensure_context(map) when is_map(map), do: context_struct(map)
-
-  def ensure_context(_),
-    do: %Context{atoms: Heap.get_atoms(), globals: GlobalEnvironment.base_globals()}
+  defdelegate context_this(ctx), to: RuntimeContext, as: :this
+  defdelegate context_new_target(ctx), to: RuntimeContext, as: :new_target
+  defdelegate context_gas(ctx), to: RuntimeContext, as: :gas
+  defdelegate ensure_context(ctx), to: RuntimeContext, as: :ensure
 
   @doc "Returns the home object associated with the current function."
   def context_home_object(ctx, current_func) do
@@ -279,13 +259,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   def get_var_ref(ctx, idx), do: read_var_ref(current_var_ref(ctx, idx))
   def get_var_ref_check(ctx, idx), do: checked_var_ref(ctx, idx)
 
-  def get_capture(ctx, key) do
-    case context_current_func(ctx) do
-      {:closure, captured, _} -> read_var_ref(Map.get(captured, key, :undefined))
-      _ -> :undefined
-    end
-  end
-
   @doc "Invokes a callable stored in a variable reference."
   def invoke_var_ref(ctx, idx, args),
     do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), args)
@@ -327,21 +300,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   @doc "Writes a value through a compiled variable reference and returns the value."
   def set_var_ref(ctx, idx, val) do
     put_var_ref(ctx, idx, val)
-    val
-  end
-
-  def put_capture(ctx, key, val) do
-    case context_current_func(ctx) do
-      {:closure, captured, _} -> write_var_ref(Map.get(captured, key, :undefined), val)
-      _ -> :ok
-    end
-
-    :ok
-  end
-
-  @doc "Writes a captured variable and returns the value."
-  def set_capture(ctx, key, val) do
-    put_capture(ctx, key, val)
     val
   end
 

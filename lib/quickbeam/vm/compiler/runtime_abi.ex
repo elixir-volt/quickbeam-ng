@@ -25,19 +25,17 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Captures, Iterators}
 
   def push_this(ctx), do: RuntimeHelpers.push_this(ctx)
 
-  def ensure_capture_cell(ctx, cell, value),
-    do: RuntimeHelpers.ensure_capture_cell(ctx, cell, value)
+  def ensure_capture_cell(ctx, cell, value), do: Captures.ensure_cell(ctx, cell, value)
 
-  def close_capture_cell(ctx, cell, value),
-    do: RuntimeHelpers.close_capture_cell(ctx, cell, value)
+  def close_capture_cell(ctx, cell, value), do: Captures.close_cell(ctx, cell, value)
 
-  def sync_capture_cell(ctx, cell, value), do: RuntimeHelpers.sync_capture_cell(ctx, cell, value)
+  def sync_capture_cell(ctx, cell, value), do: Captures.sync_cell(ctx, cell, value)
 
-  def get_capture(ctx, key), do: RuntimeHelpers.get_capture(ctx, key)
+  def get_capture(ctx, key), do: Captures.get(ctx, key)
 
   def get_var(ctx, name), do: RuntimeHelpers.get_var(ctx, name)
 

@@ -1,8 +1,8 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
   @moduledoc "Error construction and compiled stack formatting for BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{GlobalEnvironment, Heap, SourcePosition}
-  alias QuickBEAM.VM.Interpreter.Context
+  alias QuickBEAM.VM.{Heap, SourcePosition}
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.ObjectModel.Get
 
   def throw(ctx, atom_idx, reason, atoms_resolver) do
@@ -24,7 +24,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
 
   def make_error_with_ctx(ctx, message, name, stack_override \\ nil) do
     previous_ctx = Heap.get_ctx()
-    Heap.put_ctx(ensure_context(ctx))
+    Heap.put_ctx(RuntimeContext.ensure(ctx))
 
     try do
       Heap.make_error(message, name)
@@ -35,7 +35,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
   end
 
   def compiled_stack(ctx) do
-    case context_current_func(ctx) do
+    case RuntimeContext.current_func(ctx) do
       %QuickBEAM.VM.Function{} = fun ->
         "    at #{fun.filename}:#{fun.line_num}:#{fun.col_num}"
 
@@ -48,7 +48,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
   end
 
   def compiled_stack(ctx, pc) do
-    case context_current_func(ctx) do
+    case RuntimeContext.current_func(ctx) do
       %QuickBEAM.VM.Function{} = fun -> stack_for_pc(fun, pc)
       {:closure, _captures, %QuickBEAM.VM.Function{} = fun} -> stack_for_pc(fun, pc)
       _ -> ""
@@ -76,16 +76,4 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
     {line, col} = SourcePosition.source_position(fun, pc)
     "    at #{fun.filename}:#{line}:#{col}"
   end
-
-  defp context_current_func(%{current_func: current_func}), do: current_func
-  defp context_current_func(_), do: :undefined
-
-  defp ensure_context(%Context{} = ctx), do: ctx
-
-  defp ensure_context(map) when is_map(map) do
-    struct(Context, Map.merge(Map.from_struct(%Context{}), map))
-  end
-
-  defp ensure_context(_),
-    do: %Context{atoms: Heap.get_atoms(), globals: GlobalEnvironment.base_globals()}
 end

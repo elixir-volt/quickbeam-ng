@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
   import QuickBEAM.VM.OpcodeFamily, only: [is_get_slot: 1, is_put_slot: 1, is_set_slot: 1]
 
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Slots, State}
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Captures, as: RuntimeCaptures
 
   @tdz :__tdz__
 
@@ -68,7 +68,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
 
     value =
       if Captures.slot_captured?(state, slot_idx) do
-        Builder.remote_call(RuntimeHelpers, :read_capture_cell, [
+        Builder.remote_call(RuntimeCaptures, :read_cell, [
           Slots.capture_cell_expr(state, slot_idx),
           expr
         ])
@@ -92,7 +92,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
 
     value =
       if Captures.slot_captured?(state, slot_idx) do
-        Builder.remote_call(RuntimeHelpers, :read_capture_cell, [
+        Builder.remote_call(RuntimeCaptures, :read_cell, [
           Slots.capture_cell_expr(state, slot_idx),
           expr
         ])

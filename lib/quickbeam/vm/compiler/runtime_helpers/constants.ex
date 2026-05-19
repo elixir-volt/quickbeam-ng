@@ -2,18 +2,18 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Constants do
   @moduledoc "Compiler-private materialization of atom-table values, constants, and literal runtime forms."
 
   alias QuickBEAM.VM.{Heap, Names}
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
-  alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.ObjectModel.Private
 
   @doc "Resolves an atom-table entry to its runtime value."
-  def push_atom_value(ctx, atom_idx), do: Names.resolve_atom(context_atoms(ctx), atom_idx)
+  def push_atom_value(ctx, atom_idx), do: Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx)
   def push_atom_value(atom_idx), do: Names.resolve_atom(InvokeContext.current_atoms(), atom_idx)
 
   def private_symbol(_ctx, name) when is_binary(name), do: Private.private_symbol(name)
 
   def private_symbol(ctx, atom_idx),
-    do: Private.private_symbol(Names.resolve_atom(context_atoms(ctx), atom_idx))
+    do: Private.private_symbol(Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx))
 
   def private_symbol(name) when is_binary(name), do: Private.private_symbol(name)
 
@@ -35,10 +35,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Constants do
   def materialize_constant(_ctx, value), do: value
 
   def regexp_literal(_ctx \\ nil, pattern, flags), do: {:regexp, pattern, flags, make_ref()}
-
-  defp context_atoms(%Context{atoms: atoms}), do: atoms
-  defp context_atoms(%{atoms: atoms}), do: atoms
-  defp context_atoms(_), do: {}
 
   defp template_elements({:array, elems}) when is_list(elems), do: elems
   defp template_elements(elems) when is_list(elems), do: elems
