@@ -1647,12 +1647,20 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp same_value_zero?(value) when is_float(value) and value == 0.0, do: not negative_zero?(value)
   defp same_value_zero?(_), do: false
 
-  defp same_value?(a, b) when is_float(a) and is_float(b) and a == 0.0 and b == 0.0,
-    do: negative_zero?(a) == negative_zero?(b)
+  defp same_value?(a, b) do
+    if zero_number?(a) and zero_number?(b) do
+      negative_zero?(a) == negative_zero?(b)
+    else
+      a == b
+    end
+  end
 
-  defp same_value?(a, b), do: a == b
+  defp zero_number?(value), do: (is_integer(value) or is_float(value)) and value == 0
 
-  defp negative_zero?(value), do: :erlang.float_to_binary(value, [:short]) == "-0.0"
+  defp negative_zero?(value) when is_float(value),
+    do: :erlang.float_to_binary(value, [:short]) == "-0.0"
+
+  defp negative_zero?(_), do: false
 
   defp set_search_last_index!({:obj, ref} = obj, value) do
     case Heap.get_obj_raw(ref) do
