@@ -878,11 +878,16 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   end
 
   defp invoke_call_expr(state, fun, fun_type, args, _arg_types) do
-    Effects.effectful_push(
-      state,
-      invoke_runtime_expr(state, fun, args),
-      function_return_type(fun_type, state.return_type)
-    )
+    {result, state} =
+      Emit.bind(state, Builder.temp_name(state.temp), invoke_runtime_expr(state, fun, args))
+
+    state =
+      update_ctx(
+        state,
+        Builder.remote_call(QuickBEAM.VM.GlobalEnv, :refresh, [ctx_expr(state)])
+      )
+
+    {:ok, Emit.push(state, result, function_return_type(fun_type, state.return_type))}
   end
 
   defp tail_call_expr(state, _fun, :self_fun, args, _arg_types),
