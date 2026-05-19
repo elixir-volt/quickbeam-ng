@@ -1487,7 +1487,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     if custom_regexp_exec?(regexp) do
       replace_with_custom_exec(s, regexp, replacement)
     else
-      flags = Runtime.stringify(Get.get(regexp, "flags"))
+      flags = regexp_flags_string(Get.get(regexp, "flags"))
 
       case compile_elixir_regex(source, flags) do
         {:ok, regex} ->
@@ -1512,7 +1512,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     if custom_regexp_exec?(regexp) do
       replace_with_custom_exec(s, regexp, replacement)
     else
-      flags = Runtime.stringify(Get.get(regexp, "flags"))
+      flags = regexp_flags_string(Get.get(regexp, "flags"))
       global? = String.contains?(flags, "g")
 
       case special_regex_replace(s, source, flags, replacement, global?) do
@@ -1551,6 +1551,11 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   def regex_replace(s, _, _), do: s
+
+  defp regexp_flags_string({:obj, _} = flags),
+    do: flags |> Coercion.to_primitive("string") |> Runtime.stringify()
+
+  defp regexp_flags_string(flags), do: Runtime.stringify(flags)
 
   defp custom_regexp_exec?({:regexp, _, _, ref} = regexp) do
     case QuickBEAM.VM.Execution.RegexpState.fetch(ref, "exec") do
