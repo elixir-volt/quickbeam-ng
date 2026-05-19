@@ -1420,8 +1420,11 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp regexp_match_all(regexp, [string | _]) do
+    unless regexp_match_receiver?(regexp), do: JSThrow.type_error!("RegExp.prototype.matchAll called on incompatible receiver")
+
     string = QuickBEAM.VM.Interpreter.Values.stringify(string)
-    regexp_string_iterator(regexp_match_all_results(regexp, string, 0, []), regexp, string)
+    offset = regexp_last_index(regexp)
+    regexp_string_iterator(regexp_match_all_results(regexp, string, offset, []), regexp, string)
   end
 
   defp regexp_match_all(regexp, []), do: regexp_match_all(regexp, [""])
