@@ -5,7 +5,6 @@ defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
   alias QuickBEAM.VM.Runtime.WebAPIs
 
   alias QuickBEAM.VM.Runtime.{
-    CollectionInstaller,
     CoreConstructorInstaller,
     Errors,
     GlobalRegistry,
@@ -20,7 +19,6 @@ defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
     GlobalRegistry.bindings()
     |> Map.put(object_name, object_ctor)
     |> Map.merge(TypedArrayInstaller.bindings())
-    |> Map.merge(CollectionInstaller.bindings())
     |> Map.merge(CoreConstructorInstaller.bindings())
     |> Map.merge(Errors.bindings())
     |> cache_globals()

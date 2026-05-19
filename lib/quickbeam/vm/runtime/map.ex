@@ -3,12 +3,81 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   import QuickBEAM.VM.Heap.Keys
 
+  alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Runtime.Collections
+  alias QuickBEAM.VM.Runtime.{Collections, InstallerHelpers}
 
   alias QuickBEAM.VM.{Builtin, Invocation, JSThrow}
+
+  @map_methods ~w(get set has delete clear keys values entries forEach getOrInsert getOrInsertComputed)
+  @map_iterator_methods ~w(keys values entries)
+
+  def builtin_definitions do
+    [
+      %Definition{
+        name: "Map",
+        constructor: constructor(),
+        length: 0,
+        phase: :collections,
+        module: __MODULE__,
+        after_install: &__MODULE__.install_map_builtin/1
+      },
+      %Definition{
+        name: "WeakMap",
+        constructor: weak_constructor(),
+        length: 0,
+        phase: :collections,
+        module: __MODULE__,
+        after_install: &__MODULE__.install_weak_map_builtin/1
+      }
+    ]
+  end
+
+  def install_map_builtin(ctor) do
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+    install_static_group_by(ctor)
+    InstallerHelpers.install_species(ctor)
+
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_object_parent(proto_ref)
+
+      InstallerHelpers.install_methods(proto_ref, __MODULE__, @map_methods,
+        zero_length: @map_iterator_methods
+      )
+
+      InstallerHelpers.install_symbol_iterator(proto_ref, __MODULE__)
+      InstallerHelpers.install_accessor(proto_ref, "size", "get size", &size/1)
+      InstallerHelpers.install_to_string_tag(proto_ref, "Map")
+      InstallerHelpers.install_constructor_link(proto_ref, ctor)
+    end)
+  end
+
+  def install_weak_map_builtin(ctor) do
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      InstallerHelpers.install_object_parent(proto_ref)
+      Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
+
+      InstallerHelpers.install_methods_with(
+        proto_ref,
+        ~w(get set has delete getOrInsert getOrInsertComputed),
+        &weak_proto_property/1
+      )
+
+      InstallerHelpers.install_to_string_tag(proto_ref, "WeakMap")
+    end)
+  end
+
+  defp install_static_group_by(ctor) do
+    Heap.put_ctor_static(
+      ctor,
+      "groupBy",
+      {:builtin, "groupBy", fn args, _this -> group_by(args) end}
+    )
+  end
 
   @doc "Implements Map.groupBy(items, callbackfn)."
   def group_by(args) do
