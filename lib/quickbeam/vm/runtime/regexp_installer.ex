@@ -12,7 +12,8 @@ defmodule QuickBEAM.VM.Runtime.RegExpInstaller do
     {:symbol, "Symbol.match"},
     {:symbol, "Symbol.matchAll"},
     {:symbol, "Symbol.replace"},
-    {:symbol, "Symbol.search"}
+    {:symbol, "Symbol.search"},
+    {:symbol, "Symbol.split"}
   ]
 
   @doc "Returns the global RegExp constructor binding."

@@ -411,6 +411,7 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("substring"), do: meta("substring", [length: 2, constructable: false], :proto)
   def named_meta("substr"), do: meta("substr", [length: 2, constructable: false], :proto)
   def named_meta("split"), do: meta("split", [length: 2, constructable: false], :proto)
+  def named_meta("[Symbol.split]"), do: meta("[Symbol.split]", [length: 2, constructable: false], :proto)
   def named_meta("trim"), do: meta("trim", [length: 0, constructable: false], :proto)
   def named_meta("trimStart"), do: meta("trimStart", [length: 0, constructable: false], :proto)
   def named_meta("trimEnd"), do: meta("trimEnd", [length: 0, constructable: false], :proto)

@@ -49,6 +49,15 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     {:builtin, "[Symbol.search]", fn args, this -> regexp_search(this, args) end}
   end
 
+  def proto_property({:symbol, "Symbol.split"}) do
+    {:builtin, "[Symbol.split]",
+     fn args, this ->
+       string = List.first(args, :undefined)
+       limit = args |> Enum.drop(1) |> List.first(:undefined)
+       JSString.regexp_split(string, this, limit)
+     end}
+  end
+
   def proto_accessor("source"),
     do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
 
