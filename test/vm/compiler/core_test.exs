@@ -5,6 +5,7 @@ defmodule QuickBEAM.VM.CompilerTest do
 
   alias QuickBEAM.VM.{BytecodeParser, Compiler, Heap, Interpreter, Opcodes}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Calls
   alias QuickBEAM.VM.ObjectModel.Get
 
   setup do
@@ -1327,7 +1328,7 @@ defmodule QuickBEAM.VM.CompilerTest do
       fun = compile_and_decode(rt, "(function(o,x){return o.inc(x)})") |> user_function()
 
       assert {:ok, beam_file} = Compiler.disasm(fun)
-      refute {RuntimeHelpers, :invoke_method_runtime, 4} in beam_extfuncs(beam_file)
+      refute {Calls, :invoke_method_runtime, 4} in beam_extfuncs(beam_file)
 
       obj =
         Heap.wrap(%{
@@ -1574,7 +1575,7 @@ defmodule QuickBEAM.VM.CompilerTest do
 
       closure = {:closure, %{}, ctor}
 
-      assert {:obj, ref} = RuntimeHelpers.construct_runtime(closure, closure, [9])
+      assert {:obj, ref} = Calls.construct_runtime(closure, closure, [9])
       assert 9 == Heap.get_obj(ref)["x"]
 
       assert match?(

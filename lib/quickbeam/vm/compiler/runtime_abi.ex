@@ -25,7 +25,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Captures, Classes, Iterators, Properties}
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Calls, Captures, Classes, Iterators, Properties}
 
   def push_this(ctx), do: RuntimeHelpers.push_this(ctx)
 
@@ -157,22 +157,22 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def add_brand(ctx, obj, brand), do: Classes.add_brand(ctx, obj, brand)
 
-  def check_ctor_return(ctx, value), do: RuntimeHelpers.check_ctor_return(ctx, value)
+  def check_ctor_return(ctx, value), do: Calls.check_ctor_return(ctx, value)
 
-  def init_ctor(ctx), do: RuntimeHelpers.init_ctor(ctx)
+  def init_ctor(ctx), do: Calls.init_ctor(ctx)
 
   def construct_runtime(ctx, ctor, new_target, args),
-    do: RuntimeHelpers.construct_runtime(ctx, ctor, new_target, args)
+    do: Calls.construct_runtime(ctx, ctor, new_target, args)
 
   def construct_runtime(ctx, ctor, new_target, args, call_pc),
-    do: RuntimeHelpers.construct_runtime(ctx, ctor, new_target, args, call_pc)
+    do: Calls.construct_runtime(ctx, ctor, new_target, args, call_pc)
 
   def apply_super(ctx, fun, new_target, args),
-    do: RuntimeHelpers.apply_super(ctx, fun, new_target, args)
+    do: Calls.apply_super(ctx, fun, new_target, args)
 
   def update_this(ctx, this_value), do: RuntimeHelpers.update_this(ctx, this_value)
 
-  def eval_or_call(ctx, fun, args), do: RuntimeHelpers.eval_or_call(ctx, fun, args)
+  def eval_or_call(ctx, fun, args), do: Calls.eval_or_call(ctx, fun, args)
 
   def import_module(ctx, specifier), do: RuntimeHelpers.import_module(ctx, specifier)
 
