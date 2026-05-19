@@ -13,8 +13,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     Types
   }
 
-  alias QuickBEAM.VM.Compiler.{RuntimeABI, RuntimeHelpers}
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Constants
+  alias QuickBEAM.VM.Compiler.RuntimeABI
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Constants}
   alias QuickBEAM.VM.GlobalEnvironment
   alias QuickBEAM.VM.ObjectModel.PropertyKey
   alias QuickBEAM.VM.Operands.CopyDataProperties
@@ -136,10 +136,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
         {Builder.atom(:undefined), state}
     end
   end
-
-  @doc "Builds a call to a compiler runtime helper using the current context expression."
-  def compiler_call(state, fun, args),
-    do: Builder.remote_call(RuntimeHelpers, fun, [ctx_expr(state) | args])
 
   def abi_call(state, fun, args),
     do: Builder.remote_call(RuntimeABI, fun, [ctx_expr(state) | args])
@@ -598,9 +594,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def assign_slot(state, idx, keep?, wrapper \\ nil) do
     with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       expr =
-        if wrapper,
-          do: compiler_call(state, wrapper, [expr]),
-          else: expr
+        case wrapper do
+          nil -> expr
+          :ensure_initialized_local! -> abi_call(state, :ensure_initialized_local!, [expr])
+        end
 
       {slot_expr, state} = Emit.bind(state, Builder.slot_name(idx, state.temp), expr)
 
@@ -924,7 +921,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   end
 
   defp var_ref_fun_call(
-         {:call, _, {:remote, _, {:atom, _, RuntimeHelpers}, {:atom, _, fun}}, [_ctx, idx]},
+         {:call, _, {:remote, _, {:atom, _, Bindings}, {:atom, _, fun}}, [_ctx, idx]},
          argc
        )
        when fun in [:get_var_ref, :get_var_ref_check] do

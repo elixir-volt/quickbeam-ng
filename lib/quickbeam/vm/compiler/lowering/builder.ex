@@ -2,7 +2,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Builder do
   @moduledoc "Erlang abstract-format helpers: variable, literal, call, and case-clause constructors for the lowering pass."
 
   alias QuickBEAM.VM.Compiler.Lowering.Atoms
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
   @line 1
 
@@ -52,7 +51,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Builder do
 
   @doc "Builds an Erlang abstract-format local call expression."
   def local_call(fun, args), do: {:call, @line, {:atom, @line, fun}, args}
-  def compiler_call(fun, args), do: remote_call(RuntimeHelpers, fun, [ctx_var() | args])
 
   def throw_js(expr), do: remote_call(:erlang, :throw, [{:tuple, @line, [atom(:js_throw), expr]}])
 
