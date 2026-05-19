@@ -307,11 +307,11 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp lone_surrogate_wtf8?(_), do: false
 
-  defp exec({:regexp, _, _, _} = regexp, [{:obj, _} = value | rest]) do
+  defp exec({:regexp, _, _, _} = regexp, [value | rest]) when not is_binary(value) do
     exec(regexp, [Runtime.stringify(value) | rest])
   end
 
-  defp exec({:regexp, _, _} = regexp, [{:obj, _} = value | rest]) do
+  defp exec({:regexp, _, _} = regexp, [value | rest]) when not is_binary(value) do
     exec(regexp, [Runtime.stringify(value) | rest])
   end
 
