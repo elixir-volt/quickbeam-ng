@@ -364,7 +364,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   end
 
   defp invalid_regexp_source?(source) do
-    starts_with_quantifier?(source) or dangling_escape?(source) or
+    starts_with_quantifier?(source) or invalid_named_group_names?(source) or dangling_escape?(source) or
       repeated_quantifier?(source) or adjacent_interval_quantifiers?(source) or
       invalid_class_range?(source) or
       descending_character_range?(source) or invalid_interval_quantifier?(source) or
@@ -372,12 +372,71 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       duplicate_group_name_in_alternative?(source)
   end
 
+  defp invalid_named_group_names?(source) do
+    ~r/\(\?<([^=!][^>]*)>/
+    |> Regex.scan(source, capture: :all_but_first)
+    |> Enum.any?(fn [name] -> not valid_regexp_group_name?(decode_regexp_group_name(name)) end)
+  rescue
+    _ -> true
+  end
+
+  defp valid_regexp_group_name?(name) do
+    case String.graphemes(name) do
+      [first | rest] -> regexp_group_name_start?(first) and Enum.all?(rest, &regexp_group_name_continue?/1)
+      [] -> false
+    end
+  rescue
+    _ -> false
+  end
+
+  defp regexp_group_name_start?(char),
+    do: char in ["$", "_"] or Regex.match?(~r/^\p{L}$/u, char)
+
+  defp regexp_group_name_continue?(char),
+    do: regexp_group_name_start?(char) or char in ["\u200C", "\u200D"] or Regex.match?(~r/^\p{N}$/u, char)
+
+  defp decode_regexp_group_name(name) do
+    ~r/\\u\{([0-9A-Fa-f]+)\}/
+    |> Regex.replace(name, fn _all, hex -> decode_regexp_group_codepoint(hex) end)
+    |> then(fn decoded ->
+      Regex.replace(~r/\\u([D-d][89A-Ba-b][0-9A-Fa-f]{2})\\u([D-d][C-Fc-f][0-9A-Fa-f]{2})/, decoded, fn _all, high, low ->
+        decode_regexp_group_surrogate_pair(high, low)
+      end)
+    end)
+    |> then(fn decoded ->
+      Regex.replace(~r/\\u([0-9A-Fa-f]{4})/, decoded, fn _all, hex ->
+        decode_regexp_group_codepoint(hex)
+      end)
+    end)
+  end
+
+  defp decode_regexp_group_surrogate_pair(high_hex, low_hex) do
+    with {high, ""} <- Integer.parse(high_hex, 16),
+         {low, ""} <- Integer.parse(low_hex, 16) do
+      cp = 0x10000 + (high - 0xD800) * 0x400 + (low - 0xDC00)
+      <<cp::utf8>>
+    else
+      _ -> "\\u" <> high_hex <> "\\u" <> low_hex
+    end
+  rescue
+    _ -> "\\u" <> high_hex <> "\\u" <> low_hex
+  end
+
+  defp decode_regexp_group_codepoint(hex) do
+    case Integer.parse(hex, 16) do
+      {cp, ""} -> <<cp::utf8>>
+      _ -> "\\u" <> hex
+    end
+  rescue
+    _ -> "\\u" <> hex
+  end
+
   defp starts_with_quantifier?(<<first::binary-size(1), _::binary>>), do: first in ["*", "+", "?"]
   defp starts_with_quantifier?(""), do: false
 
   defp dangling_escape?(source) do
     source
-    |> String.to_charlist()
+    |> :binary.bin_to_list()
     |> Enum.reverse()
     |> Enum.take_while(&(&1 == ?\\))
     |> length()
