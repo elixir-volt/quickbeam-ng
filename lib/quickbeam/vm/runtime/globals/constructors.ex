@@ -351,8 +351,9 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
     chars = String.graphemes(flags)
     valid? = Enum.all?(chars, &(&1 in ~w(d g i m s u v y)))
     unique? = Enum.uniq(chars) == chars
+    unicode_mode_conflict? = "u" in chars and "v" in chars
 
-    unless valid? and unique? do
+    unless valid? and unique? and not unicode_mode_conflict? do
       JSThrow.syntax_error!("Invalid regular expression flags")
     end
   end
