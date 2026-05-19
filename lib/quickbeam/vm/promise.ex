@@ -13,6 +13,7 @@ defmodule QuickBEAM.VM.Promise do
   alias QuickBEAM.VM.{Builtin, Heap, JobQueue, Runtime}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.ObjectModel.{Class, Get, PropertyDescriptor}
+  alias QuickBEAM.VM.Semantics.PropertyAccess
 
   @doc "Creates or returns a resolved Promise state value."
   def resolved(val), do: make_promise(:resolved, val)
@@ -58,7 +59,7 @@ defmodule QuickBEAM.VM.Promise do
 
   @doc "Implements Promise.prototype.catch state transitions."
   def promise_catch(args, this) do
-    then = Get.get(this, "then")
+    then = primitive_then_override(this) || PropertyAccess.get_property(this, "then")
 
     unless Builtin.callable?(then) do
       throw({:js_throw, Heap.make_error("not a function", "TypeError")})
@@ -66,6 +67,28 @@ defmodule QuickBEAM.VM.Promise do
 
     Invocation.invoke_with_receiver(then, [:undefined, arg(args, 0, nil)], this)
   end
+
+  defp primitive_then_override(value) when is_boolean(value) do
+    Process.get({:qb_primitive_prototype_then, "Boolean"})
+  end
+
+  defp primitive_then_override(value) when is_number(value) do
+    Process.get({:qb_primitive_prototype_then, "Number"})
+  end
+
+  defp primitive_then_override(value) when is_binary(value) do
+    Process.get({:qb_primitive_prototype_then, "String"})
+  end
+
+  defp primitive_then_override({:symbol, _, _}) do
+    Process.get({:qb_primitive_prototype_then, "Symbol"})
+  end
+
+  defp primitive_then_override({:symbol, _}) do
+    Process.get({:qb_primitive_prototype_then, "Symbol"})
+  end
+
+  defp primitive_then_override(_value), do: nil
 
   @doc "Implements Promise.prototype.finally state transitions."
   def promise_finally([callback | _], this), do: invoke_finally_then(this, callback)

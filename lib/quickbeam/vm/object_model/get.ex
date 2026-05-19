@@ -1221,7 +1221,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype(_, _), do: :undefined
 
   defp primitive_or_class_proto(default_value, key, class_name, receiver) do
-    case Runtime.global_class_proto(class_name) do
+    case active_class_proto(class_name) do
       {:obj, proto_ref} ->
         case raw_proto_property(proto_ref, key) do
           {:accessor, getter, _} when getter != nil ->
@@ -1247,6 +1247,13 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
+  defp active_class_proto(class_name) do
+    case QuickBEAM.VM.GlobalEnvironment.current() do
+      %{^class_name => ctor} -> get(ctor, "prototype")
+      _ -> Runtime.global_class_proto(class_name)
+    end
+  end
+
   defp raw_proto_property(ref, key) do
     case Heap.raw_fetch(Heap.get_obj_raw(ref), key) do
       {:ok, value} -> value
@@ -1255,7 +1262,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp primitive_class_proto(key, class_name) do
-    case Runtime.global_class_proto(class_name) do
+    case active_class_proto(class_name) do
       {:obj, _} = proto ->
         case get(proto, key) do
           :undefined -> get_own(Heap.get_object_prototype(), key)

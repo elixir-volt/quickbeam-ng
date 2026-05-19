@@ -25,11 +25,15 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
   @max_array_length 4_294_967_295
 
-  defp shape_put(ref, key, val), do: Heap.put_obj_key(ref, key, val)
+  defp shape_put(ref, key, val) do
+    cache_primitive_then_override(ref, key, val)
+    Heap.put_obj_key(ref, key, val)
+  end
 
   @doc "Writes a field using the fast shape path when possible."
   def put_field({:obj, ref}, key, val) do
     key = normalize_key(key)
+    cache_primitive_then_override(ref, key, val)
     raw = Heap.get_obj_raw(ref)
 
     if Heap.shape?(raw), do: shape_put(ref, key, val), else: put({:obj, ref}, key, val)
@@ -238,12 +242,14 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
             :ok
 
           not Map.has_key?(map, key) ->
+            cache_primitive_then_override(map, key, val)
             Heap.put_obj_key(ref, map, key, val)
 
           match?(%{writable: false}, Heap.get_prop_desc(ref, key)) ->
             :ok
 
           true ->
+            cache_primitive_then_override(map, key, val)
             Heap.put_obj_key(ref, map, key, val)
         end
 
@@ -291,6 +297,33 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   end
 
   def put(_, _, _), do: :ok
+
+  defp cache_primitive_then_override(ref, "then", val) when is_reference(ref) do
+    Enum.each(["Boolean", "Number", "String", "Symbol"], fn name ->
+      case Runtime.global_class_proto(name) do
+        {:obj, ^ref} -> Process.put({:qb_primitive_prototype_then, name}, val)
+        _ -> :ok
+      end
+    end)
+  end
+
+  defp cache_primitive_then_override(map, "then", val) when is_map(map) do
+    case Map.get(map, "constructor") do
+      {:builtin, name, _} when name in ["Boolean", "Number", "String", "Symbol"] ->
+        Process.put({:qb_primitive_prototype_then, name}, val)
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp cache_primitive_then_override(_ref, "then", val) do
+    Enum.each(["Boolean", "Number", "String", "Symbol"], fn name ->
+      Process.put({:qb_primitive_prototype_then, name}, val)
+    end)
+  end
+
+  defp cache_primitive_then_override(_map, _key, _val), do: :ok
 
   defp put_shape_object(obj, ref, raw, key, val) do
     case Heap.raw_accessor_setter(raw, key) do
@@ -1284,6 +1317,8 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
              str_key == {:symbol, "Symbol.matchAll"} do
           Process.put(:qb_regexp_prototype_match_all_override, val)
         end
+
+        cache_primitive_then_override(ref, str_key, val)
 
         if set(obj, str_key, val, obj) == false, do: reject_failed_write!()
 
