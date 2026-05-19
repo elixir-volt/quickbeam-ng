@@ -1628,17 +1628,17 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp replace_from_exec_result(s, {:obj, _} = result, replacement) do
     {matched, index, rep} = exec_result_replacement(s, result, replacement)
     before = binary_part(s, 0, index)
-    after_offset = index + byte_size(matched)
+    after_offset = min(index + byte_size(matched), byte_size(s))
     after_str = binary_part(s, after_offset, byte_size(s) - after_offset)
     before <> rep <> after_str
   end
 
   defp exec_result_replacement(s, {:obj, _} = result, replacement) do
     matched = Runtime.stringify(Get.get(result, "0"))
-    index = Runtime.to_int(Get.get(result, "index"))
-    captures = result |> Heap.to_list() |> Enum.drop(1)
+    index = replace_result_index(Get.get(result, "index"))
+    captures = replace_result_captures(result)
     before = binary_part(s, 0, index)
-    after_offset = index + byte_size(matched)
+    after_offset = min(index + byte_size(matched), byte_size(s))
     after_str = binary_part(s, after_offset, byte_size(s) - after_offset)
     groups = Get.get(result, "groups")
 
@@ -1646,6 +1646,29 @@ defmodule QuickBEAM.VM.Runtime.String do
       object_replacement_text(replacement, matched, before, after_str, captures, index, s, groups)
 
     {matched, index, rep}
+  end
+
+  defp replace_result_index(value) do
+    case Runtime.to_number(value, "number") do
+      :nan -> 0
+      :undefined -> 0
+      :neg_infinity -> 0
+      :infinity -> 9_007_199_254_740_991
+      number when is_number(number) -> max(trunc(number), 0)
+      _ -> 0
+    end
+  end
+
+  defp replace_result_captures(result) do
+    length = result |> Get.get("length") |> raw_to_length()
+
+    1..max(length - 1, 0)//1
+    |> Enum.map(fn index ->
+      case Get.get(result, Integer.to_string(index)) do
+        :undefined -> :undefined
+        value -> Runtime.stringify(value)
+      end
+    end)
   end
 
   defp object_replacement_text(
