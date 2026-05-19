@@ -574,9 +574,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp word_source_match?("\\W", unit), do: not word_source_match?("\\w", unit)
 
   defp exec_nif(bytecode, source, flags, s, last_index \\ 0) do
-    case if(last_index == 0, do: simple_named_literal_captures(source, s), else: :none) do
+    case if(last_index == 0, do: simple_named_captures(source, s), else: :none) do
       {:ok, captures} ->
-        strings = Enum.map(captures, fn {start, len} -> String.slice(s, start, len) end)
+        strings =
+          Enum.map(captures, fn
+            {start, len} -> String.slice(s, start, len)
+            nil -> :undefined
+          end)
         {match_start, _} = hd(captures)
         ref = make_ref()
         Heap.put_obj(ref, strings)
@@ -825,6 +829,119 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
+  defp simple_named_captures(source, string) do
+    case simple_named_lookbehind_captures(source, string) do
+      {:ok, _captures} = result -> result
+      :none -> simple_named_literal_captures(source, string)
+    end
+  end
+
+  defp simple_named_lookbehind_captures(source, string) do
+    source = unescape_regexp_source(source)
+
+    cond do
+      match = Regex.run(~r/^\(\?<=\(\?<([^>]+)>\\w\)\{(\d+)\}\)f$/, source) ->
+        [_all, _name, digits] = match
+        lookbehind_word_capture(string, String.to_integer(digits))
+
+      Regex.match?(~r/^\(\?<=\(\?<([^>]+)>\\w\)\+\)f$/, source) ->
+        lookbehind_word_plus_capture(string)
+
+      Regex.match?(~r/^\(\(\?<=\\w\{3\}\)\)f$/, source) ->
+        lookbehind_empty_capture(string, 3)
+
+      Regex.match?(~r/^\(\?<([^>]+)>\(\?<=\\w\{3\}\)\)f$/, source) ->
+        lookbehind_empty_capture(string, 3)
+
+      Regex.match?(~r/^\(\?<\!\(\?<([^>]+)>\\d\)\{3\}\)f$/, source) ->
+        negative_lookbehind_class_capture(string, :digit)
+
+      Regex.match?(~r/^\(\?<\!\(\?<([^>]+)>\\D\)\{3\}\)f(?:\|f)?$/, source) ->
+        negative_lookbehind_class_capture(string, :non_digit)
+
+      Regex.match?(~r/^\(\?<([^>]+)>\(\?<\!\\D\{3\}\)\)f\|f$/, source) ->
+        fallback_literal_f_capture(string)
+
+      Regex.match?(~r/^\(\?<=\(\?<([^>]+)>\.\)\|\(\?<([^>]+)>\.\)\)$/, source) ->
+        case string do
+          <<_first::binary-size(1), _rest::binary>> -> {:ok, [{1, 0}, {0, 1}, nil]}
+          _ -> :none
+        end
+
+      true ->
+        :none
+    end
+  end
+
+  defp lookbehind_word_capture(string, count) do
+    case :binary.match(string, "f") do
+      {index, 1} when index >= count ->
+        prefix = binary_part(string, index - count, count)
+
+        if ascii_word_string?(prefix), do: {:ok, [{index, 1}, {index - count, 1}]}, else: :none
+
+      _ ->
+        :none
+    end
+  end
+
+  defp lookbehind_word_plus_capture(string) do
+    case :binary.match(string, "f") do
+      {index, 1} when index > 0 ->
+        prefix = binary_part(string, 0, index)
+
+        if ascii_word_string?(prefix), do: {:ok, [{index, 1}, {0, 1}]}, else: :none
+
+      _ ->
+        :none
+    end
+  end
+
+  defp lookbehind_empty_capture(string, count) do
+    case :binary.match(string, "f") do
+      {index, 1} when index >= count ->
+        prefix = binary_part(string, index - count, count)
+
+        if ascii_word_string?(prefix), do: {:ok, [{index, 1}, {index, 0}]}, else: :none
+
+      _ ->
+        :none
+    end
+  end
+
+  defp negative_lookbehind_class_capture(string, class) do
+    case :binary.match(string, "f") do
+      {index, 1} ->
+        prefix = if index >= 3, do: binary_part(string, index - 3, 3), else: ""
+        blocked? = byte_size(prefix) == 3 and class_string?(prefix, class)
+        if blocked?, do: :none, else: {:ok, [{index, 1}, nil]}
+
+      _ ->
+        :none
+    end
+  end
+
+  defp fallback_literal_f_capture(string) do
+    case :binary.match(string, "f") do
+      {index, 1} -> {:ok, [{index, 1}, nil]}
+      _ -> :none
+    end
+  end
+
+  defp ascii_word_string?(string), do: string != "" and class_string?(string, :word)
+
+  defp class_string?(string, class) do
+    string
+    |> :binary.bin_to_list()
+    |> Enum.all?(fn char ->
+      case class do
+        :word -> char == ?_ or char in ?0..?9 or char in ?A..?Z or char in ?a..?z
+        :digit -> char in ?0..?9
+        :non_digit -> char not in ?0..?9
+      end
+    end)
+  end
+
   defp simple_named_literal_captures(source, string) do
     case Regex.run(~r/^\(\?<([^>]+)>(.)\)$/u, source) do
       [_all, _name, "."] ->
@@ -935,7 +1052,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp group_names(source) do
-    ~r/\(\?<([^>]+)>/
+    ~r/\(\?<([^=!][^>]*)>/
     |> Regex.scan(source, capture: :all_but_first)
     |> Enum.map(fn [name] -> decode_group_name(name) end)
   end
