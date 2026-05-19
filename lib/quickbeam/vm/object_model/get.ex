@@ -69,10 +69,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   def get(value, {:symbol, "Symbol.hasInstance", _} = sym_key),
     do: get_callable_symbol(value, PropertyKey.normalize(sym_key))
 
-  def get(value, {:symbol, _} = sym_key), do: get_symbol_own(value, sym_key)
+  def get(value, {:symbol, _} = sym_key) do
+    if QuickBEAM.VM.Builtin.callable?(value),
+      do: get_callable_symbol(value, sym_key),
+      else: get_symbol_own(value, sym_key)
+  end
 
   def get(value, {:symbol, _, _} = sym_key),
-    do: get_symbol_own(value, PropertyKey.normalize(sym_key))
+    do: get(value, PropertyKey.normalize(sym_key))
 
   def get(_, _), do: :undefined
 
@@ -128,7 +132,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_callable_symbol(value, sym_key) do
     if QuickBEAM.VM.Builtin.callable?(value) do
       case get_own(value, sym_key) do
-        :undefined -> fallback_to_function_proto(:undefined, value, sym_key)
+        :undefined -> fallback_to_function_proto(get_from_prototype(value, sym_key), value, sym_key)
+        {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
+        {:accessor, nil, _} -> :undefined
         val -> val
       end
     else
@@ -599,6 +605,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
+  defp get_own({:builtin, "Symbol", _}, key) when is_binary(key),
+    do: QuickBEAM.VM.Runtime.Symbol.static_property(key)
+
+  defp get_own({:builtin, name, _}, {:symbol, "Symbol.species"})
+       when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) do
+    {:accessor, {:builtin, "get [Symbol.species]", fn _args, this -> this end}, nil}
+  end
+
   defp get_own({:builtin, name, _} = builtin, "prototype")
        when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) do
     TypedArray.constructor_prototype(name, builtin)
@@ -877,13 +891,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         end
 
       :error ->
-        own_value = get_map_property(map, key, obj)
-
-        if own_value == :undefined and Heap.get_prop_desc(elem(obj, 1), key) == nil do
-          get_from_prototype(obj, key)
-        else
-          own_value
-        end
+        get_map_property(map, key, obj)
     end
   end
 
@@ -1200,7 +1208,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f} = c, key) do
     case Heap.get_parent_ctor(f) do
       nil -> fallback_to_function_proto(:undefined, c, key)
-      parent -> fallback_to_function_proto(get(parent, key), c, key)
+      parent -> fallback_to_function_proto(get_parent_static_property(parent, key, c), c, key)
     end
   end
 
@@ -1358,6 +1366,35 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp function_kind_constructor(_),
     do: fallback_to_function_proto(:undefined, :undefined, "constructor")
+
+  defp get_parent_static_property(nil, _key, _receiver), do: :undefined
+  defp get_parent_static_property(:undefined, _key, _receiver), do: :undefined
+
+  defp get_parent_static_property(parent, key, receiver) do
+    case Map.fetch(Heap.get_ctor_statics(parent), key) do
+      {:ok, {:accessor, getter, _}} when getter != nil -> call_getter(getter, receiver)
+      {:ok, {:accessor, nil, _}} -> :undefined
+      {:ok, :deleted} -> :undefined
+      {:ok, val} -> val
+      :error ->
+        case get_own(parent, key) do
+          {:accessor, getter, _} when getter != nil -> call_getter(getter, receiver)
+          {:accessor, nil, _} -> :undefined
+          :undefined -> get_parent_static_property(next_static_parent(parent), key, receiver)
+          val -> val
+        end
+    end
+  end
+
+  defp next_static_parent({:closure, _, %QuickBEAM.VM.Function{} = fun}),
+    do: Heap.get_parent_ctor(fun)
+
+  defp next_static_parent(%QuickBEAM.VM.Function{} = fun), do: Heap.get_parent_ctor(fun)
+
+  defp next_static_parent({:builtin, _, _} = builtin),
+    do: Map.get(Heap.get_ctor_statics(builtin), "__proto__")
+
+  defp next_static_parent(_), do: nil
 
   defp fallback_to_function_proto(:undefined, fun, key) do
     case Heap.get_func_proto() do

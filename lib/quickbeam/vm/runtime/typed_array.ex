@@ -288,9 +288,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor(type) do
-    fn args, _this ->
+    fn args, this ->
       {buf, offset, len, orig_buf, length_tracking?} = parse_args(args, type)
       ref = make_ref()
+      proto = typed_array_instance_proto(this, type)
 
       obj =
         %{
@@ -302,7 +303,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
           "byteLength" => len * elem_size(type),
           "byteOffset" => offset,
           "BYTES_PER_ELEMENT" => elem_size(type),
-          "__proto__" => class_proto_for(type),
+          "__proto__" => proto,
           "__length_tracking__" => length_tracking?,
           "__fixed_length__" => len,
           "__fixed_byte_length__" => len * elem_size(type),
@@ -314,6 +315,16 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       {:obj, ref}
     end
   end
+
+  defp typed_array_instance_proto({:obj, ref}, type) do
+    case Heap.get_obj(ref, %{}) do
+      %{__proto__: proto} -> proto
+      %{"__proto__" => proto} -> proto
+      _ -> class_proto_for(type)
+    end
+  end
+
+  defp typed_array_instance_proto(_, type), do: class_proto_for(type)
 
   def constructor_prototype(name, ctor) do
     Runtime.global_class_proto(name) ||

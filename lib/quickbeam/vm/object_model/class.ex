@@ -78,7 +78,7 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
     raw = raw_function(ctor_closure)
     proto_ref = make_ref()
     proto_map = %{"constructor" => ctor_closure}
-    parent_proto = Heap.get_class_proto(parent_ctor)
+    parent_proto = Heap.get_class_proto(parent_ctor) || inherited_constructor_prototype(parent_ctor)
     base_proto = parent_proto || Heap.get_object_prototype()
     proto_map = if base_proto, do: Map.put(proto_map, proto(), base_proto), else: proto_map
 
@@ -125,6 +125,16 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
       val == :undefined -> {true, val}
       object_like?(val) -> {false, val}
       true -> :error
+    end
+  end
+
+  defp inherited_constructor_prototype(:undefined), do: nil
+
+  defp inherited_constructor_prototype(parent_ctor) do
+    case Get.get(parent_ctor, "prototype") do
+      {:obj, _} = proto -> proto
+      :null_proto -> :null_proto
+      _ -> nil
     end
   end
 
