@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Host.Web.EventSourceAPI do
   import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, object: 1]
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Host.Web.Callback
+  alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.WebAPIs
 
   # readyState values

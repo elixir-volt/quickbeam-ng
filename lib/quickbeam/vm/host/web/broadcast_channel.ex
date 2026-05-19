@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Host.Web.BroadcastChannel do
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 1]
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Host.Web.Callback
+  alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.WebAPIs
 
   @channels_key :qb_broadcast_channels

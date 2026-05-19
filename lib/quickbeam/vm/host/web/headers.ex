@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Host.Web.Headers do
 
   alias Mint.Core.Headers, as: MintHeaders
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Host.Web.Callback
+  alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.WebAPIs
 
   @doc "Returns the global binding for the JavaScript `Headers` constructor."

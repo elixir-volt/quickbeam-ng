@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.Get
-  alias QuickBEAM.VM.Host.Web.Callback
+  alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.WebAPIs
 
   @doc "Returns the JavaScript global bindings provided by this module."

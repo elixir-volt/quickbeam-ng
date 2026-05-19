@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
   alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime.StructuredClone
-  alias QuickBEAM.VM.Host.Web.Callback
+  alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.WebAPIs
 
   @doc "Returns the JavaScript global bindings provided by this module."

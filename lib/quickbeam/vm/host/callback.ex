@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Host.Web.Callback do
+defmodule QuickBEAM.VM.Host.Callback do
   @moduledoc "Callback invocation helpers for Web API event listeners and user-provided handlers."
 
   alias QuickBEAM.VM.Invocation

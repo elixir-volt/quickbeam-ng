@@ -7,7 +7,8 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
 
   alias QuickBEAM.VM.{Heap, Promise}
   alias QuickBEAM.VM.ObjectModel.{Get, Put}
-  alias QuickBEAM.VM.Host.Web.{Callback, IteratorResult}
+  alias QuickBEAM.VM.Host.Callback
+  alias QuickBEAM.VM.Host.Web.IteratorResult
   alias QuickBEAM.VM.Host.Web.Streams.Bytes
   alias QuickBEAM.VM.Host.WebAPIs
 

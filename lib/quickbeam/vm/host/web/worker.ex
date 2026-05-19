@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Host.Web.Worker do
   import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, object: 2]
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Host.Web.Callback
+  alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.WebAPIs
 
   @workers_key :qb_beam_workers
