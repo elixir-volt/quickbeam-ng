@@ -781,10 +781,27 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     ~r/\\u\{([0-9A-Fa-f]+)\}/
     |> Regex.replace(name, fn _all, hex -> decode_group_codepoint(hex) end)
     |> then(fn decoded ->
+      Regex.replace(~r/\\u([D-d][89A-Ba-b][0-9A-Fa-f]{2})\\u([D-d][C-Fc-f][0-9A-Fa-f]{2})/, decoded, fn _all, high, low ->
+        decode_group_surrogate_pair(high, low)
+      end)
+    end)
+    |> then(fn decoded ->
       Regex.replace(~r/\\u([0-9A-Fa-f]{4})/, decoded, fn _all, hex ->
         decode_group_codepoint(hex)
       end)
     end)
+  end
+
+  defp decode_group_surrogate_pair(high_hex, low_hex) do
+    with {high, ""} <- Integer.parse(high_hex, 16),
+         {low, ""} <- Integer.parse(low_hex, 16) do
+      cp = 0x10000 + (high - 0xD800) * 0x400 + (low - 0xDC00)
+      <<cp::utf8>>
+    else
+      _ -> "\\u" <> high_hex <> "\\u" <> low_hex
+    end
+  rescue
+    _ -> "\\u" <> high_hex <> "\\u" <> low_hex
   end
 
   defp decode_group_codepoint(hex) do
