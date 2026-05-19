@@ -34,10 +34,10 @@ Owned by the BEAM VM:
 | ECMA-262 area | QuickBEAM modules |
 |---|---|
 | §6 Values and specification types | `QuickBEAM.VM.Value`, `QuickBEAM.VM.SpecTypes.*`, `QuickBEAM.VM.Heap` |
-| §7.1 Type Conversion | `QuickBEAM.VM.Semantics.TypeConversion`, `Interpreter.Values.Coercion`, `ObjectModel.PropertyKey` |
-| §7.2 Testing and comparison | `QuickBEAM.VM.Semantics.Comparison`, `Interpreter.Values.Equality`, `Interpreter.Values.Comparison`, `ObjectModel.Semantics` |
-| §7.3 Operations on objects | `QuickBEAM.VM.Semantics.ObjectOperations`, `ObjectModel.*`, `Invocation` |
-| §7.4 Iterator operations | `QuickBEAM.VM.Semantics.IteratorOperations`, `Semantics.Iterators`, `Runtime.Iterator` |
+| §7.1 Type Conversion | `Interpreter.Values.Coercion`, `ObjectModel.PropertyKey` |
+| §7.2 Testing and comparison | `Interpreter.Values.Equality`, `Interpreter.Values.Comparison`, `ObjectModel.Semantics` |
+| §7.3 Operations on objects | `ObjectModel.*`, `Invocation` |
+| §7.4 Iterator operations | `Semantics.Iterators`, `Runtime.Iterator` |
 | §9 Execution contexts / environments | `Interpreter.Context`, `GlobalEnv`, `EvalEnv`, `Environment.Captures` |
 | §9.5 Jobs | `PromiseState`, heap async state |
 | §10 Object internal methods | `ObjectModel.Get`, `Put`, `Define`, `Delete`, `OwnProperty`, `HasProperty`, `ArrayExotic`, `Prototype` |
