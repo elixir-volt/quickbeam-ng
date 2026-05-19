@@ -45,6 +45,13 @@ defmodule QuickBEAM.VM.Runtime.StringTest do
     )
   end
 
+  test "split handles constructor RegExp empty and class escape separators", %{rt: rt} do
+    assert_modes(rt, ~S<"hello".split(new RegExp()).join("|")>, "h|e|l|l|o")
+    assert_modes(rt, ~S<"hello".split(new RegExp(), 1).join("|")>, "h")
+    assert_modes(rt, ~S<"x".split(/\w/).join("|")>, "|")
+    assert_modes(rt, ~S<"x".split(/\D/).join("|")>, "|")
+  end
+
   test "fromCodePoint preserves surrogate code points", %{rt: rt} do
     assert beam!(rt, "String.fromCodePoint(0xD800) === ''") == false
   end

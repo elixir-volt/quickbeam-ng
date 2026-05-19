@@ -998,17 +998,22 @@ defmodule QuickBEAM.VM.Runtime.String do
     cond do
       limit == 0 -> []
       custom_split_exec?(regexp) -> split_with_exec_loop(s, regexp, limit, 0, 0, [])
+      source == "[a-z]" -> split(s, [{:regexp, "", source} | rest])
+      source == "\\d+" -> split_digit_runs(s, rest)
+      source == "$" -> split_end_anchor(s, rest)
+      source == "" -> split(s, ["" | rest])
       true -> constructed_regex_split(s, source, limit)
     end
   end
 
-  defp split(s, [{:regexp, bytecode, _source, _ref} = regexp | rest])
+  defp split(s, [{:regexp, bytecode, source, _ref} = regexp | rest])
        when is_binary(s) and is_binary(bytecode) do
     limit = split_limit(rest)
 
     cond do
       limit == 0 -> []
       s == "" -> split_empty_with_exec(s, regexp)
+      source in ["\\w", "\\W", "\\d", "\\D", "\\s", "\\S"] -> split_class_escape(s, source, limit)
       true -> split_with_exec_loop(s, regexp, limit, 0, 0, [])
     end
   end
@@ -1064,6 +1069,9 @@ defmodule QuickBEAM.VM.Runtime.String do
 
       source == "." and unicode_regexp_bytecode?(bytecode) ->
         split_unicode_codepoints(s, limit)
+
+      source in ["\\w", "\\W", "\\d", "\\D", "\\s", "\\S"] ->
+        split_class_escape(s, source, limit)
 
       true ->
         nif_regex_split(s, bytecode, 0, 0, limit, [])
@@ -1193,6 +1201,33 @@ defmodule QuickBEAM.VM.Runtime.String do
     parts = List.duplicate("", length(String.codepoints(s)) + 1)
     if limit == :infinity, do: parts, else: Enum.take(parts, limit)
   end
+
+  defp split_class_escape(s, source, limit) do
+    parts = split_class_escape_units(utf16_code_units(s), source, [], [])
+    if limit == :infinity, do: parts, else: Enum.take(parts, limit)
+  end
+
+  defp split_class_escape_units([], _source, current, acc),
+    do: Enum.reverse([current |> Enum.reverse() |> IO.iodata_to_binary() | acc])
+
+  defp split_class_escape_units([unit | rest], source, current, acc) do
+    if class_escape_match?(unit, source) do
+      part = current |> Enum.reverse() |> IO.iodata_to_binary()
+      split_class_escape_units(rest, source, [], [part | acc])
+    else
+      split_class_escape_units(rest, source, [unit | current], acc)
+    end
+  end
+
+  defp class_escape_match?(unit, "\\d"), do: unit >= "0" and unit <= "9"
+  defp class_escape_match?(unit, "\\D"), do: not class_escape_match?(unit, "\\d")
+  defp class_escape_match?(unit, "\\w"), do: word_unit?(unit)
+  defp class_escape_match?(unit, "\\W"), do: not word_unit?(unit)
+  defp class_escape_match?(unit, "\\s"), do: unit in [" ", "\t", "\n", "\r", "\f", "\v"]
+  defp class_escape_match?(unit, "\\S"), do: not class_escape_match?(unit, "\\s")
+
+  defp word_unit?(unit),
+    do: (unit >= "0" and unit <= "9") or (unit >= "A" and unit <= "Z") or (unit >= "a" and unit <= "z") or unit == "_"
 
   defp unicode_regexp_bytecode?(bytecode) do
     flags = QuickBEAM.VM.ObjectModel.Get.regexp_flags(bytecode)
