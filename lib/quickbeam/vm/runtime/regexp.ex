@@ -757,7 +757,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         {:obj, ref}
 
       :none ->
-        named_backreference_fallback(source, flags, s, last_index) ||
+        special_exec_fallback(source, flags, s, last_index) ||
+          named_backreference_fallback(source, flags, s, last_index) ||
           unicode_regex_fallback(source, flags, s, last_index) ||
           exec_nif_native(bytecode, source, flags, s, last_index)
     end
@@ -1492,6 +1493,21 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     Heap.put_obj(ref, strings)
     Heap.put_regexp_result(ref, %{"index" => index, "input" => input, "groups" => :undefined})
     {:obj, ref}
+  end
+
+  defp special_exec_fallback(source, flags, string, last_index) do
+    case special_match_results(source, flags, string, true) do
+      {:ok, results} ->
+        results
+        |> Enum.find(fn {_match, index} -> index >= last_index end)
+        |> case do
+          {match, index} -> exec_result([match], index, string)
+          nil -> nil
+        end
+
+      :none ->
+        nil
+    end
   end
 
   defp special_match_results("𠮷", _flags, string, global?),
