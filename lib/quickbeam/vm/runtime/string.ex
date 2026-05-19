@@ -991,7 +991,8 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp split_method(value) when is_tuple(value), do: get_method(value, {:symbol, "Symbol.split"})
   defp split_method(_), do: :none
 
-  defp split(s, [{:regexp, nil, source, _ref} = regexp | rest]) when is_binary(s) and is_binary(source) do
+  defp split(s, [{:regexp, nil, source, _ref} = regexp | rest])
+       when is_binary(s) and is_binary(source) do
     limit = split_limit(rest)
 
     cond do
@@ -1137,16 +1138,40 @@ defmodule QuickBEAM.VM.Runtime.String do
 
         case split_exec_result(splitter, s) do
           nil ->
-            split_with_exec_loop(s, splitter, limit, split_advance_string_index(s, q, unicode?), p, acc, unicode?)
+            split_with_exec_loop(
+              s,
+              splitter,
+              limit,
+              split_advance_string_index(s, q, unicode?),
+              p,
+              acc,
+              unicode?
+            )
 
           {:obj, _} = result ->
             if split_default_exec?(splitter) and raw_to_length(Get.get(result, "index")) != q do
-              split_with_exec_loop(s, splitter, limit, split_advance_string_index(s, q, unicode?), p, acc, unicode?)
+              split_with_exec_loop(
+                s,
+                splitter,
+                limit,
+                split_advance_string_index(s, q, unicode?),
+                p,
+                acc,
+                unicode?
+              )
             else
               e = min(raw_to_length(Get.get(splitter, "lastIndex")), size)
 
               if e == p do
-                split_with_exec_loop(s, splitter, limit, split_advance_string_index(s, q, unicode?), p, acc, unicode?)
+                split_with_exec_loop(
+                  s,
+                  splitter,
+                  limit,
+                  split_advance_string_index(s, q, unicode?),
+                  p,
+                  acc,
+                  unicode?
+                )
               else
                 part = utf16_slice(s, p, max(q - p, 0))
                 acc = append_split_part(acc, part, limit)
@@ -1184,9 +1209,10 @@ defmodule QuickBEAM.VM.Runtime.String do
     first = Enum.at(units, index, :undefined)
     second = Enum.at(units, index + 1, :undefined)
 
-    if is_integer(first) and first >= 0xD800 and first <= 0xDBFF and is_integer(second) and second >= 0xDC00 and second <= 0xDFFF,
-      do: index + 2,
-      else: index + 1
+    if is_integer(first) and first >= 0xD800 and first <= 0xDBFF and is_integer(second) and
+         second >= 0xDC00 and second <= 0xDFFF,
+       do: index + 2,
+       else: index + 1
   end
 
   defp split_advance_string_index(_s, index, false), do: index + 1
@@ -1237,12 +1263,15 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp append_split_parts(acc, parts, limit),
-    do: Enum.reduce_while(parts, acc, fn part, result ->
-      result = append_split_part(result, part, limit)
-      if limited_split_done?(result, limit), do: {:halt, result}, else: {:cont, result}
-    end)
+    do:
+      Enum.reduce_while(parts, acc, fn part, result ->
+        result = append_split_part(result, part, limit)
+        if limited_split_done?(result, limit), do: {:halt, result}, else: {:cont, result}
+      end)
 
-  defp append_split_part(acc, _part, limit) when is_integer(limit) and length(acc) >= limit, do: acc
+  defp append_split_part(acc, _part, limit) when is_integer(limit) and length(acc) >= limit,
+    do: acc
+
   defp append_split_part(acc, part, _limit), do: acc ++ [part]
 
   defp limited_split_done?(_acc, :infinity), do: false
@@ -1712,18 +1741,19 @@ defmodule QuickBEAM.VM.Runtime.String do
             result
 
           :none ->
-            if global?,
-              do:
-                regex_replace_all(
-                  s,
-                  bytecode,
-                  source,
-                  replacement,
-                  String.contains?(flags, "u") or String.contains?(flags, "v"),
-                  0,
-                  []
-                ),
-              else: regex_replace_first(s, bytecode, source, replacement)
+            if named_capture_source?(source) do
+              case compile_named_elixir_regex(source, flags) do
+                {:ok, regex} ->
+                  if global?,
+                    do: regex_replace_all_elixir(s, regex, replacement, flags, 0, [], source),
+                    else: regex_replace_first_elixir(s, regex, replacement, flags, source)
+
+                :error ->
+                  regex_replace_with_nif(s, bytecode, source, replacement, flags, global?)
+              end
+            else
+              regex_replace_with_nif(s, bytecode, source, replacement, flags, global?)
+            end
         end
       end
     end
@@ -1746,22 +1776,37 @@ defmodule QuickBEAM.VM.Runtime.String do
         result
 
       :none ->
-        if global?,
-          do:
-            regex_replace_all(
-              s,
-              bytecode,
-              source,
-              replacement,
-              String.contains?(flags, "u") or String.contains?(flags, "v"),
-              0,
-              []
-            ),
-          else: regex_replace_first(s, bytecode, source, replacement)
+        regex_replace_with_nif(s, bytecode, source, replacement, flags, global?)
     end
   end
 
   def regex_replace(s, _, _), do: s
+
+  defp named_capture_source?(source), do: is_binary(source) and String.contains?(source, "(?<")
+
+  defp regex_replace_with_nif(s, bytecode, source, replacement, flags, global?) do
+    unicode? = String.contains?(flags, "u") or String.contains?(flags, "v")
+
+    if unicode? do
+      case compile_elixir_regex(source, flags) do
+        {:ok, regex} ->
+          if global?,
+            do: regex_replace_all_elixir(s, regex, replacement, flags, 0, []),
+            else: regex_replace_first_elixir(s, regex, replacement, flags)
+
+        :error ->
+          regex_replace_with_nif_fallback(s, bytecode, source, replacement, unicode?, global?)
+      end
+    else
+      regex_replace_with_nif_fallback(s, bytecode, source, replacement, unicode?, global?)
+    end
+  end
+
+  defp regex_replace_with_nif_fallback(s, bytecode, source, replacement, unicode?, global?) do
+    if global?,
+      do: regex_replace_all(s, bytecode, source, replacement, unicode?, 0, []),
+      else: regex_replace_first(s, bytecode, source, replacement)
+  end
 
   defp replace_first_with_builtin_exec(s, regexp, replacement) do
     case RegExp.exec_result(regexp, s) do
@@ -1799,7 +1844,16 @@ defmodule QuickBEAM.VM.Runtime.String do
     if String.contains?(flags, "g") do
       put_regexp_last_index!(regexp, 0)
       exec = Get.get(regexp, "exec")
-      replace_global_with_custom_exec(s, regexp, exec, replacement, regexp_unicode?(regexp), 0, [])
+
+      replace_global_with_custom_exec(
+        s,
+        regexp,
+        exec,
+        replacement,
+        regexp_unicode?(regexp),
+        0,
+        []
+      )
     else
       exec = Get.get(regexp, "exec")
 
@@ -1810,7 +1864,15 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp replace_global_with_custom_exec(s, regexp, exec, replacement, unicode?, next_source_pos, parts) do
+  defp replace_global_with_custom_exec(
+         s,
+         regexp,
+         exec,
+         replacement,
+         unicode?,
+         next_source_pos,
+         parts
+       ) do
     case custom_exec_result(exec, s, regexp) do
       nil ->
         IO.iodata_to_binary(
@@ -1821,7 +1883,15 @@ defmodule QuickBEAM.VM.Runtime.String do
         {matched, index, replacement_text} = exec_result_replacement(s, result, replacement)
 
         if index < next_source_pos do
-          replace_global_with_custom_exec(s, regexp, exec, replacement, unicode?, next_source_pos, parts)
+          replace_global_with_custom_exec(
+            s,
+            regexp,
+            exec,
+            replacement,
+            unicode?,
+            next_source_pos,
+            parts
+          )
         else
           match_end = index + byte_size(matched)
           prefix = binary_part(s, next_source_pos, index - next_source_pos)
@@ -1962,7 +2032,9 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp replace_object_named_substitutions(rep, :undefined), do: rep
-  defp replace_object_named_substitutions(_rep, nil), do: JSThrow.type_error!("Cannot convert null to object")
+
+  defp replace_object_named_substitutions(_rep, nil),
+    do: JSThrow.type_error!("Cannot convert null to object")
 
   defp replace_object_named_substitutions(rep, groups) do
     Regex.replace(~r/\$<([^>]+)>/, rep, fn _, name ->
@@ -2106,7 +2178,17 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp regex_replace_first_elixir(s, regex, replacement, flags) do
+  defp compile_named_elixir_regex(source, flags) do
+    case compile_elixir_regex(source, flags) do
+      {:ok, _regex} = ok -> ok
+      :error -> compile_elixir_regex(strip_named_capture_names(source), flags)
+    end
+  end
+
+  defp strip_named_capture_names(source),
+    do: Regex.replace(~r/\(\?<[^=!][^>]*>/u, source, "(")
+
+  defp regex_replace_first_elixir(s, regex, replacement, flags, names_source \\ nil) do
     case Regex.run(regex, s, return: :index) do
       nil ->
         s
@@ -2115,17 +2197,30 @@ defmodule QuickBEAM.VM.Runtime.String do
         if match_start != 0 and String.contains?(flags, "y") do
           s
         else
-          replace_elixir_match(s, regex, match_start, match_len, captures, replacement, 0, [])
+          replace_elixir_match(
+            s,
+            regex,
+            match_start,
+            match_len,
+            captures,
+            replacement,
+            0,
+            [],
+            names_source
+          )
         end
     end
   end
 
-  defp regex_replace_all_elixir(s, _regex, _replacement, _flags, offset, acc)
+  defp regex_replace_all_elixir(s, regex, replacement, flags, offset, acc),
+    do: regex_replace_all_elixir(s, regex, replacement, flags, offset, acc, nil)
+
+  defp regex_replace_all_elixir(s, _regex, _replacement, _flags, offset, acc, _names_source)
        when offset > byte_size(s) do
     IO.iodata_to_binary(acc)
   end
 
-  defp regex_replace_all_elixir(s, regex, replacement, flags, offset, acc) do
+  defp regex_replace_all_elixir(s, regex, replacement, flags, offset, acc, names_source) do
     case Regex.run(regex, s, return: :index, offset: offset) do
       nil ->
         IO.iodata_to_binary(acc ++ [binary_part(s, offset, byte_size(s) - offset)])
@@ -2145,7 +2240,8 @@ defmodule QuickBEAM.VM.Runtime.String do
               captures,
               replacement,
               offset,
-              acc ++ [before_match]
+              acc ++ [before_match],
+              names_source
             )
 
           next_offset = match_start + max(match_len, 1)
@@ -2153,7 +2249,16 @@ defmodule QuickBEAM.VM.Runtime.String do
           case replaced do
             {:parts, parts} ->
               parts = append_zero_length_advance(s, parts, match_start, match_len)
-              regex_replace_all_elixir(s, regex, replacement, flags, next_offset, parts)
+
+              regex_replace_all_elixir(
+                s,
+                regex,
+                replacement,
+                flags,
+                next_offset,
+                parts,
+                names_source
+              )
 
             binary when is_binary(binary) ->
               binary
@@ -2167,12 +2272,28 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp append_zero_length_advance(_s, parts, _match_start, _match_len), do: parts
 
-  defp replace_elixir_match(s, regex, match_start, match_len, captures, replacement, offset, acc) do
+  defp replace_elixir_match(
+         s,
+         regex,
+         match_start,
+         match_len,
+         captures,
+         replacement,
+         offset,
+         acc,
+         names_source
+       ) do
     before = binary_part(s, 0, match_start)
     matched = binary_part(s, match_start, match_len)
     after_str = binary_part(s, match_start + match_len, byte_size(s) - match_start - match_len)
-    capture_strings = pad_captures(capture_strings(s, captures), max(length(Regex.names(regex)), capture_count(regex.source)))
-    named_captures = named_capture_values(regex, capture_strings, s, match_start)
+
+    capture_strings =
+      pad_captures(
+        capture_strings(s, captures),
+        max(length(Regex.names(regex)), capture_count(regex.source))
+      )
+
+    named_captures = named_capture_values(names_source || regex.source, capture_strings)
 
     rep =
       replacement_text(
@@ -2199,10 +2320,6 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp pad_captures(captures, count),
     do: captures ++ List.duplicate(:undefined, count - length(captures))
-
-  defp named_capture_values(%Regex{source: source}, capture_strings, _s, _match_start) do
-    named_capture_values(source, capture_strings)
-  end
 
   defp named_capture_values(source, capture_strings)
        when is_binary(source) and is_list(capture_strings) do
@@ -2349,7 +2466,15 @@ defmodule QuickBEAM.VM.Runtime.String do
           )
 
         next_offset = next_replace_offset(s, match_start, match_len, unicode?)
-        parts = append_zero_length_advance(acc ++ [before_match, rep], s, match_start, next_offset, match_len)
+
+        parts =
+          append_zero_length_advance(
+            acc ++ [before_match, rep],
+            s,
+            match_start,
+            next_offset,
+            match_len
+          )
 
         regex_replace_all(
           s,
@@ -2372,8 +2497,9 @@ defmodule QuickBEAM.VM.Runtime.String do
     utf16_index_to_byte_offset(s, next_index)
   end
 
-  defp append_zero_length_advance(parts, _s, _match_start, _next_offset, match_len) when match_len > 0,
-    do: parts
+  defp append_zero_length_advance(parts, _s, _match_start, _next_offset, match_len)
+       when match_len > 0,
+       do: parts
 
   defp append_zero_length_advance(parts, s, match_start, next_offset, _match_len)
        when next_offset > match_start,
@@ -2495,8 +2621,11 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp search(s, [{:regexp, _, _, _} = regexp | _]) when is_binary(s), do: search_regexp_value(s, regexp)
-  defp search(s, [{:regexp, _, _} = regexp | _]) when is_binary(s), do: search_regexp_value(s, regexp)
+  defp search(s, [{:regexp, _, _, _} = regexp | _]) when is_binary(s),
+    do: search_regexp_value(s, regexp)
+
+  defp search(s, [{:regexp, _, _} = regexp | _]) when is_binary(s),
+    do: search_regexp_value(s, regexp)
 
   defp search(s, [pattern | _]) when is_binary(s) do
     regexp = {:regexp, nil, stringify_search_string(pattern), make_ref()}
@@ -2563,7 +2692,8 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp match_all(s, []) when is_binary(s), do: invoke_created_match_all(regexp_create_match_all(:undefined), s)
+  defp match_all(s, []) when is_binary(s),
+    do: invoke_created_match_all(regexp_create_match_all(:undefined), s)
 
   defp match_all(s, [{:obj, _} = regexp | _]) when is_binary(s) do
     if regexp_like?(regexp), do: require_global_match_all_flags!(regexp)

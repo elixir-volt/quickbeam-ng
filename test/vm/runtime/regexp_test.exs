@@ -28,15 +28,32 @@ defmodule QuickBEAM.VM.Runtime.RegExpTest do
   end
 
   test "String matchAll creates global regexps for string patterns", %{rt: rt} do
-    assert_modes(rt, ~S<let a = [..."aba".matchAll("a")]; [a.length, a[0].index, a[1].index].join("|")>, "2|0|2")
+    assert_modes(
+      rt,
+      ~S<let a = [..."aba".matchAll("a")]; [a.length, a[0].index, a[1].index].join("|")>,
+      "2|0|2"
+    )
   end
 
   test "closed locals keep existing captured cell identity", %{rt: rt} do
-    assert_modes(rt, ~S<let f; { let y = 1; f = function() { return ++y; }; y = 2; } [f(), f()].join("|")>, "3|4")
+    assert_modes(
+      rt,
+      ~S<let f; { let y = 1; f = function() { return ++y; }; y = 2; } [f(), f()].join("|")>,
+      "3|4"
+    )
+  end
+
+  test "RegExp string replacement handles unicode and named capture templates", %{rt: rt} do
+    assert_modes(rt, ~S</b/u[Symbol.replace]("abc", "$&$<food")>, "ab$<foodc")
+    assert_modes(rt, ~S|/(?<foo>.)(?<bar>.)/gu[Symbol.replace]("abc", "$2$<foo>$1")|, "baac")
+    assert_modes(rt, ~S|/(?<𝒜>b)/u[Symbol.replace]("abc", "d$<𝒜>$`")|, "adbac")
   end
 
   test "RegExp split uses species clone and throwing lastIndex writes", %{rt: rt} do
-    assert beam!(rt, ~S<let re = /x/iy; re.constructor = function() {}; re.constructor[Symbol.species] = function() { return /[db]/y; }; RegExp.prototype[Symbol.split].call(re, "abcde").join("|")>) == "a|c|e"
+    assert beam!(
+             rt,
+             ~S<let re = /x/iy; re.constructor = function() {}; re.constructor[Symbol.species] = function() { return /[db]/y; }; RegExp.prototype[Symbol.split].call(re, "abcde").join("|")>
+           ) == "a|c|e"
 
     assert_modes(
       rt,
