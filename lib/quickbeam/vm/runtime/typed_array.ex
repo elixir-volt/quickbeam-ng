@@ -1316,6 +1316,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     new_len = max(0, final - start)
     result = typed_array_species_create({:obj, ref}, t, new_len)
 
+    if out_of_bounds?({:obj, ref}) and not length_tracking?(ref) do
+      JSThrow.type_error!("TypedArray is out of bounds")
+    end
+
     if new_len > 0 do
       source = {:obj, ref}
 
@@ -1325,6 +1329,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
 
     result
+  end
+
+  defp length_tracking?(ref) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) -> Map.get(map, "__length_tracking__") == true
+      _ -> false
+    end
   end
 
   defp slice_source_value(source, index, type) do
