@@ -594,7 +594,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec_nif_native(bytecode, source, flags, s, last_index) do
     case nif_exec(bytecode, s, last_index) do
       nil ->
-        unicode_regex_fallback(source, flags, s, last_index)
+        named_group_regex_fallback(source, flags, s, last_index) ||
+          unicode_regex_fallback(source, flags, s, last_index)
 
       captures ->
         strings =
@@ -616,6 +617,22 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         materialize_regexp_result_props(ref, props)
 
         {:obj, ref}
+    end
+  end
+
+  defp named_group_regex_fallback(source, flags, string, last_index) do
+    if Regex.match?(~r/\(\?<[^=!][^>]*>/u, source) do
+      with {:ok, transformed} <- transform_named_backreferences(source),
+           {:ok, regex} <- Regex.compile(unescape_regexp_source(transformed), "u") do
+        case Regex.run(regex, string, return: :index, capture: :all, offset: last_index) do
+          nil -> nil
+          captures -> unicode_regex_result(source, flags, string, captures)
+        end
+      else
+        _ -> nil
+      end
+    else
+      nil
     end
   end
 
@@ -745,8 +762,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp unicode_regex_fallback(source, flags, string, last_index) do
-    if String.contains?(flags, "d") and String.contains?(flags, "u") do
-      case Regex.compile(source, "u") do
+    if String.contains?(flags, "u") do
+      case Regex.compile(unescape_regexp_source(source), "u") do
         {:ok, regex} ->
           case Regex.run(regex, string, return: :index, capture: :all, offset: last_index) do
             nil -> nil
