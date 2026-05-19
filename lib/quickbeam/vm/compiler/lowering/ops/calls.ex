@@ -32,7 +32,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
             Emit.bind(
               state,
               Builder.temp_name(state.temp),
-              State.compiler_call(state, :apply_super, [
+              State.abi_call(state, :apply_super, [
                 fun,
                 new_target,
                 Builder.remote_call(QuickBEAM.VM.Heap, :to_list, [arg_array])
@@ -42,7 +42,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
           state =
             State.update_ctx(
               state,
-              State.compiler_call(state, :update_this, [result])
+              State.abi_call(state, :update_this, [result])
             )
 
           {:ok, Emit.push(state, result)}
@@ -82,7 +82,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
 
           LoweringEffects.effectful_push(
             state,
-            State.compiler_call(state, :eval_or_call, [eval_ref, Builder.list_expr(call_args)])
+            State.abi_call(state, :eval_or_call, [eval_ref, Builder.list_expr(call_args)])
           )
         end
 
@@ -91,7 +91,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
              {:ok, specifier, state} <- Emit.pop(state) do
           LoweringEffects.effectful_push(
             state,
-            State.compiler_call(state, :import_module, [specifier])
+            State.abi_call(state, :import_module, [specifier])
           )
         end
 

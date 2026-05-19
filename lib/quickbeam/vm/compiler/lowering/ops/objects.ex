@@ -15,7 +15,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
           Emit.bind(
             state,
             Builder.temp_name(state.temp),
-            State.compiler_call(state, :new_object, [])
+            State.abi_call(state, :new_object, [])
           )
 
         {:ok, Emit.push(state, obj, {:shaped_object, %{}})}
@@ -143,7 +143,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
       {:ok,
        %{
          state
-         | body: [State.compiler_call(state, :set_proto, [obj, proto]) | state.body],
+         | body: [State.abi_call(state, :set_proto, [obj, proto]) | state.body],
            stack: [obj | state.stack],
            stack_types: [:object | state.stack_types]
        }}
@@ -207,7 +207,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          State.compiler_call(state, :check_ctor_return, [val])
+          State.abi_call(state, :check_ctor_return, [val])
         )
 
       {:ok,
@@ -225,7 +225,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
       {:ok,
        Emit.emit(
          state,
-         State.compiler_call(state, :define_static_method, [ctor, key_expr, method])
+         State.abi_call(state, :define_static_method, [ctor, key_expr, method])
        )}
     end
   end
@@ -235,7 +235,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
          {:ok, obj, state} <- Emit.pop(state) do
       LoweringEffects.effectful_push(
         state,
-        State.compiler_call(state, :get_private_field, [obj, key])
+        State.abi_call(state, :get_private_field, [obj, key])
       )
     end
   end
@@ -247,7 +247,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
       {:ok,
        %{
          state
-         | body: [State.compiler_call(state, :put_private_field, [obj, key, val]) | state.body]
+         | body: [State.abi_call(state, :put_private_field, [obj, key, val]) | state.body]
        }}
     end
   end
@@ -259,7 +259,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Objects do
       {:ok,
        %{
          state
-         | body: [State.compiler_call(state, :define_private_field, [obj, key, val]) | state.body],
+         | body: [State.abi_call(state, :define_private_field, [obj, key, val]) | state.body],
            stack: [obj | state.stack],
            stack_types: [:object | state.stack_types]
        }}

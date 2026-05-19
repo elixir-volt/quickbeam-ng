@@ -308,7 +308,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       {:ok,
        Emit.push(
          state,
-         compiler_call(state, :set_function_name, [fun, Builder.literal(atom_name)]),
+         abi_call(state, :set_function_name, [fun, Builder.literal(atom_name)]),
          fun_type
        )}
     end
@@ -318,7 +318,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def set_name_computed(state) do
     with {:ok, fun, fun_type, state} <- Emit.pop_typed(state),
          {:ok, name, name_type, state} <- Emit.pop_typed(state) do
-      named = compiler_call(state, :set_function_name_computed, [fun, name])
+      named = abi_call(state, :set_function_name_computed, [fun, name])
 
       {:ok,
        %{
@@ -333,7 +333,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def set_home_object(state) do
     with {:ok, state, method} <- Emit.bind_stack_entry(state, 0),
          {:ok, state, target} <- Emit.bind_stack_entry(state, 1) do
-      {:ok, Emit.emit(state, compiler_call(state, :set_home_object, [method, target]))}
+      {:ok, Emit.emit(state, abi_call(state, :set_home_object, [method, target]))}
     else
       :error -> {:error, :set_home_object_state_missing}
     end
@@ -343,7 +343,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def add_brand(state) do
     with {:ok, obj, state} <- Emit.pop(state),
          {:ok, brand, state} <- Emit.pop(state) do
-      {:ok, Emit.emit(state, compiler_call(state, :add_brand, [obj, brand]))}
+      {:ok, Emit.emit(state, abi_call(state, :add_brand, [obj, brand]))}
     end
   end
 
@@ -367,7 +367,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       if key_str == "__proto__" do
         {:ok,
          state
-         |> Emit.emit(compiler_call(state, :define_field, [obj, key_expr, val]))
+         |> Emit.emit(abi_call(state, :define_field, [obj, key_expr, val]))
          |> Emit.push(obj, :object)}
       else
         new_type =
@@ -382,7 +382,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
         {:ok,
          state
-         |> Emit.emit(compiler_call(state, :define_field, [obj, key_expr, val]))
+         |> Emit.emit(abi_call(state, :define_field, [obj, key_expr, val]))
          |> Emit.push(obj, new_type)}
       end
     end
@@ -394,7 +394,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
          {:ok, target, _target_type, state} <- Emit.pop_typed(state) do
       Effects.effectful_push(
         state,
-        compiler_call(state, :define_method, [
+        abi_call(state, :define_method, [
           target,
           method,
           Builder.literal(method_name),
@@ -412,7 +412,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
          {:ok, target, state} <- Emit.pop(state) do
       Effects.effectful_push(
         state,
-        compiler_call(state, :define_method_computed, [
+        abi_call(state, :define_method_computed, [
           target,
           method,
           field_name,
@@ -430,7 +430,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          compiler_call(state, :define_class, [ctor, parent_ctor, Builder.literal(atom_idx)])
+          abi_call(state, :define_class, [ctor, parent_ctor, Builder.literal(atom_idx)])
         )
 
       ctor = Builder.tuple_element(pair, 2)
@@ -486,7 +486,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          compiler_call(state, :define_array_el, [obj, prop_key, val])
+          abi_call(state, :define_array_el, [obj, prop_key, val])
         )
 
       {:ok,
@@ -527,7 +527,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       {:ok,
        Emit.push(
          state,
-         compiler_call(state, :array_from, [Builder.list_expr(Enum.reverse(elems))]),
+         abi_call(state, :array_from, [Builder.list_expr(Enum.reverse(elems))]),
          :object
        )}
     end
@@ -644,7 +644,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
          {:ok, ctor, _ctor_type, state} <- Emit.pop_typed(state) do
       Effects.effectful_push(
         state,
-        compiler_call(state, :construct_runtime, [
+        abi_call(state, :construct_runtime, [
           ctor,
           new_target,
           Builder.list_expr(Enum.reverse(args)),

@@ -36,7 +36,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Control do
       {{:ok, :throw_error}, [atom_idx, reason]} ->
         {:done,
          Enum.reverse([
-           State.compiler_call(state, :throw_error, [
+           State.abi_call(state, :throw_error, [
              Builder.literal(atom_idx),
              Builder.literal(reason)
            ])

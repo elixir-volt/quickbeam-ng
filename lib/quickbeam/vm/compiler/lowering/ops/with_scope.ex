@@ -46,7 +46,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
          key = State.compiler_call(next_state, :push_atom_value, [Builder.literal(atom_idx)]),
          {:ok, target_call} <- State.block_jump_call(target_state, target, stack_depths),
          {:ok, next_call} <- State.block_jump_call(next_state, next_entry, stack_depths) do
-      condition = State.compiler_call(next_state, :with_has_property, [obj, key])
+      condition = State.abi_call(next_state, :with_has_property, [obj, key])
       put = Builder.remote_call(Put, :put, [obj, key, val])
       branch = Builder.branch_case(condition, [next_call], [put, target_call])
 
@@ -79,7 +79,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
       key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
       target_state = Emit.push(state, Builder.atom(true), :boolean)
       delete = Builder.remote_call(Delete, :delete_property, [obj, key])
-      condition = State.compiler_call(state, :with_has_property, [obj, key])
+      condition = State.abi_call(state, :with_has_property, [obj, key])
       {:ok, target_call} = State.block_jump_call(target_state, target, stack_depths)
       {:ok, next_call} = State.block_jump_call(state, next_entry, stack_depths)
       branch = Builder.branch_case(condition, [next_call], [delete, target_call])
@@ -121,7 +121,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
        ) do
     with {:ok, target_call} <- State.block_jump_call(target_state, target, stack_depths),
          {:ok, next_call} <- State.block_jump_call(next_state, next_entry, stack_depths) do
-      condition = State.compiler_call(state, :with_has_property, [obj, key])
+      condition = State.abi_call(state, :with_has_property, [obj, key])
 
       body =
         Enum.reverse([Builder.branch_case(condition, [next_call], [target_call]) | state.body])

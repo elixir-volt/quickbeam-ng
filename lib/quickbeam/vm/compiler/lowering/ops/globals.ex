@@ -17,7 +17,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
         else
           LoweringEffects.effectful_push(
             state,
-            State.compiler_call(state, :get_var, [Builder.literal(name)])
+            State.abi_call(state, :get_var, [Builder.literal(name)])
           )
         end
 
@@ -29,7 +29,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
         else
           LoweringEffects.effectful_push(
             state,
-            State.compiler_call(state, :get_var_undef, [Builder.literal(name)])
+            State.abi_call(state, :get_var_undef, [Builder.literal(name)])
           )
         end
 
@@ -113,7 +113,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
         {:ok,
          Emit.push(
            state,
-           State.compiler_call(state, :delete_var, [Builder.literal(atom_idx)]),
+           State.abi_call(state, :delete_var, [Builder.literal(atom_idx)]),
            :boolean
          )}
 
@@ -143,7 +143,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
        %{
          state
          | body: [
-             State.compiler_call(state, :put_var_ref, [Builder.literal(idx), val]) | state.body
+             State.abi_call(state, :put_var_ref, [Builder.literal(idx), val]) | state.body
            ]
        }}
     end
@@ -153,14 +153,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
     with {:ok, val, _type, state} <- Emit.pop_typed(state) do
       LoweringEffects.effectful_push(
         state,
-        State.compiler_call(state, :set_var_ref, [Builder.literal(idx), val])
+        State.abi_call(state, :set_var_ref, [Builder.literal(idx), val])
       )
     end
   end
 
   defp lower_make_loc_ref(state, atom_idx, idx) do
     ref =
-      State.compiler_call(state, :make_loc_ref, [
+      State.abi_call(state, :make_loc_ref, [
         Builder.literal(idx),
         Slots.slot_expr(state, idx)
       ])
@@ -171,21 +171,21 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   end
 
   defp lower_make_arg_ref(state, atom_idx, idx) do
-    ref = State.compiler_call(state, :make_arg_ref, [Builder.literal(idx)])
+    ref = State.abi_call(state, :make_arg_ref, [Builder.literal(idx)])
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
     {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}
   end
 
   defp lower_make_var_ref(state, atom_idx) do
-    ref = State.compiler_call(state, :make_var_ref, [Builder.literal(atom_idx)])
+    ref = State.abi_call(state, :make_var_ref, [Builder.literal(atom_idx)])
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
     {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}
   end
 
   defp lower_make_var_ref_ref(state, atom_idx, idx) do
-    ref = State.compiler_call(state, :make_var_ref_ref, [Builder.literal(idx)])
+    ref = State.abi_call(state, :make_var_ref_ref, [Builder.literal(idx)])
     key = State.compiler_call(state, :push_atom_value, [Builder.literal(atom_idx)])
 
     {:ok, state |> Emit.push(ref, :unknown) |> Emit.push(key, :string)}
@@ -194,7 +194,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   defp lower_get_ref_value(state) do
     with {:ok, key, key_type, state} <- Emit.pop_typed(state),
          {:ok, ref, ref_type, state} <- Emit.pop_typed(state) do
-      value = State.compiler_call(state, :get_ref_value, [key, ref])
+      value = State.abi_call(state, :get_ref_value, [key, ref])
 
       {:ok,
        %{
@@ -209,7 +209,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
     with {:ok, val, state} <- Emit.pop(state),
          {:ok, key, state} <- Emit.pop(state),
          {:ok, ref, state} <- Emit.pop(state) do
-      {:ok, State.update_ctx(state, State.compiler_call(state, :put_ref_value, [val, key, ref]))}
+      {:ok, State.update_ctx(state, State.abi_call(state, :put_ref_value, [val, key, ref]))}
     end
   end
 

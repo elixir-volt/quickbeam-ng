@@ -35,7 +35,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
       {{:ok, :init_ctor}, []} ->
         LoweringEffects.effectful_push(
           state,
-          State.compiler_call(state, :init_ctor, []),
+          State.abi_call(state, :init_ctor, []),
           :object
         )
 
@@ -52,7 +52,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          State.compiler_call(state, :define_class_computed, [
+          State.abi_call(state, :define_class_computed, [
             ctor,
             parent_ctor,
             computed_name
@@ -78,7 +78,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
       {:ok,
        %{
          state
-         | body: [State.compiler_call(state, :check_brand, [obj, brand]) | state.body]
+         | body: [State.abi_call(state, :check_brand, [obj, brand]) | state.body]
        }}
     else
       :error -> {:error, :check_brand_state_missing}

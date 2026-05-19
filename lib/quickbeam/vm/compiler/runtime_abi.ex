@@ -27,6 +27,28 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
+  def get_var(ctx, name), do: RuntimeHelpers.get_var(ctx, name)
+
+  def get_var_undef(ctx, name), do: RuntimeHelpers.get_var_undef(ctx, name)
+
+  def delete_var(ctx, atom_idx), do: RuntimeHelpers.delete_var(ctx, atom_idx)
+
+  def put_var_ref(ctx, idx, value), do: RuntimeHelpers.put_var_ref(ctx, idx, value)
+
+  def set_var_ref(ctx, idx, value), do: RuntimeHelpers.set_var_ref(ctx, idx, value)
+
+  def make_loc_ref(ctx, idx, value), do: RuntimeHelpers.make_loc_ref(ctx, idx, value)
+
+  def make_arg_ref(ctx, idx), do: RuntimeHelpers.make_arg_ref(ctx, idx)
+
+  def make_var_ref(ctx, atom_idx), do: RuntimeHelpers.make_var_ref(ctx, atom_idx)
+
+  def make_var_ref_ref(ctx, idx), do: RuntimeHelpers.make_var_ref_ref(ctx, idx)
+
+  def get_ref_value(ctx, key, ref), do: RuntimeHelpers.get_ref_value(ctx, key, ref)
+
+  def put_ref_value(ctx, value, key, ref), do: RuntimeHelpers.put_ref_value(ctx, value, key, ref)
+
   def to_object(_ctx, value), do: RuntimeHelpers.to_object(value)
 
   def to_property_key(ctx, value), do: RuntimeHelpers.to_property_key(ctx, value)
@@ -55,6 +77,75 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def in_operator(ctx, key, obj), do: RuntimeHelpers.in_operator(ctx, key, obj)
 
   def append_spread(ctx, arr, idx, obj), do: RuntimeHelpers.append_spread(ctx, arr, idx, obj)
+
+  def new_object(ctx), do: RuntimeHelpers.new_object(ctx)
+
+  def set_proto(ctx, obj, proto), do: RuntimeHelpers.set_proto(ctx, obj, proto)
+
+  def define_array_el(ctx, obj, index, value),
+    do: RuntimeHelpers.define_array_el(ctx, obj, index, value)
+
+  def define_field(ctx, obj, key, value), do: RuntimeHelpers.define_field(ctx, obj, key, value)
+
+  def define_static_method(ctx, ctor, key, method),
+    do: RuntimeHelpers.define_static_method(ctx, ctor, key, method)
+
+  def define_method(ctx, target, method, name, flags),
+    do: RuntimeHelpers.define_method(ctx, target, method, name, flags)
+
+  def define_method_computed(ctx, target, method, field_name, flags),
+    do: RuntimeHelpers.define_method_computed(ctx, target, method, field_name, flags)
+
+  def define_class(ctx, ctor, parent_ctor, atom_idx),
+    do: RuntimeHelpers.define_class(ctx, ctor, parent_ctor, atom_idx)
+
+  def define_class_computed(ctx, ctor, parent_ctor, computed_name),
+    do: RuntimeHelpers.define_class_computed(ctx, ctor, parent_ctor, computed_name)
+
+  def get_private_field(ctx, obj, key), do: RuntimeHelpers.get_private_field(ctx, obj, key)
+
+  def put_private_field(ctx, obj, key, value),
+    do: RuntimeHelpers.put_private_field(ctx, obj, key, value)
+
+  def define_private_field(ctx, obj, key, value),
+    do: RuntimeHelpers.define_private_field(ctx, obj, key, value)
+
+  def check_brand(ctx, obj, brand), do: RuntimeHelpers.check_brand(ctx, obj, brand)
+
+  def set_function_name(ctx, fun, name), do: RuntimeHelpers.set_function_name(ctx, fun, name)
+
+  def set_function_name_computed(ctx, fun, name_value),
+    do: RuntimeHelpers.set_function_name_computed(ctx, fun, name_value)
+
+  def set_home_object(ctx, method, target),
+    do: RuntimeHelpers.set_home_object(ctx, method, target)
+
+  def add_brand(ctx, obj, brand), do: RuntimeHelpers.add_brand(ctx, obj, brand)
+
+  def check_ctor_return(ctx, value), do: RuntimeHelpers.check_ctor_return(ctx, value)
+
+  def init_ctor(ctx), do: RuntimeHelpers.init_ctor(ctx)
+
+  def construct_runtime(ctx, ctor, new_target, args),
+    do: RuntimeHelpers.construct_runtime(ctx, ctor, new_target, args)
+
+  def construct_runtime(ctx, ctor, new_target, args, call_pc),
+    do: RuntimeHelpers.construct_runtime(ctx, ctor, new_target, args, call_pc)
+
+  def apply_super(ctx, fun, new_target, args),
+    do: RuntimeHelpers.apply_super(ctx, fun, new_target, args)
+
+  def update_this(ctx, this_value), do: RuntimeHelpers.update_this(ctx, this_value)
+
+  def eval_or_call(ctx, fun, args), do: RuntimeHelpers.eval_or_call(ctx, fun, args)
+
+  def import_module(ctx, specifier), do: RuntimeHelpers.import_module(ctx, specifier)
+
+  def throw_error(ctx, atom_idx, reason), do: RuntimeHelpers.throw_error(ctx, atom_idx, reason)
+
+  def array_from(ctx, list), do: RuntimeHelpers.array_from(ctx, list)
+
+  def with_has_property(ctx, obj, key), do: RuntimeHelpers.with_has_property(ctx, obj, key)
 
   def assignment_with_iterator_close(ctx, fun, iterators, obj, key, value),
     do: RuntimeHelpers.assignment_with_iterator_close(ctx, fun, iterators, obj, key, value)
