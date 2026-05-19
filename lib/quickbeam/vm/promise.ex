@@ -1,22 +1,16 @@
 defmodule QuickBEAM.VM.Promise do
   @moduledoc """
-  Promise object state, reactions, and microtask draining.
+  Promise object state, reactions, and Promise-resolution adoption.
 
   Spec relation:
   - ECMA-262 §27.2 Promise Objects
-  - ECMA-262 §9.5 Jobs and Host Operations to Enqueue Jobs
-
-  This module currently owns both Promise state transitions/reactions and the
-  microtask flushing entry points backed by heap async state. Future refactors may
-  split the job-queue concepts into a dedicated `JobQueue` module, but generated
-  and interpreted code should continue to use these shared operations.
+  - ECMA-262 §9.5 Jobs and Host Operations to Enqueue Jobs, via `QuickBEAM.VM.JobQueue`
   """
 
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Builtin, only: [arg: 3]
 
-  alias QuickBEAM.VM.{Builtin, Heap, Runtime}
-  alias QuickBEAM.VM.Interpreter
+  alias QuickBEAM.VM.{Builtin, Heap, JobQueue, Runtime}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.ObjectModel.{Class, Get, PropertyDescriptor}
 
@@ -111,42 +105,16 @@ defmodule QuickBEAM.VM.Promise do
         end
 
       handler = if callable?(handler), do: handler, else: fn v -> v end
-      Heap.enqueue_microtask({:resolve, child_ref, handler, val})
+      JobQueue.enqueue_promise_reaction(child_ref, handler, val)
     end
   end
 
   @doc "Runs queued microtasks until the queue is empty."
-  def drain_microtasks do
-    case Heap.dequeue_microtask() do
-      nil ->
-        :ok
+  def drain_microtasks, do: JobQueue.drain_microtasks()
 
-      {:resolve, nil, callback, val} ->
-        # queueMicrotask-style: fire and forget, errors silently discarded
-        try do
-          Interpreter.invoke_callback(callback, [val])
-        catch
-          {:js_throw, _} -> :ok
-        end
-
-        drain_microtasks()
-
-      {:resolve, child_ref, callback, val} ->
-        result =
-          try do
-            Interpreter.invoke_callback(callback, [val])
-          catch
-            {:js_throw, err} -> {:rejected, err}
-          end
-
-        case result do
-          {:rejected, err} -> resolve(child_ref, :rejected, err)
-          result_val -> resolve_or_chain(child_ref, result_val)
-        end
-
-        drain_microtasks()
-    end
-  end
+  @doc "Settles a reaction child promise from a queued Promise job result."
+  def resolve_reaction_result({:rejected, err}, child_ref), do: resolve(child_ref, :rejected, err)
+  def resolve_reaction_result(result_val, child_ref), do: resolve_or_chain(child_ref, result_val)
 
   # ── Internal ──
 
@@ -268,7 +236,7 @@ defmodule QuickBEAM.VM.Promise do
         handler = if state == :resolved, do: on_fulfilled, else: on_rejected
 
         if callable?(handler) do
-          Heap.enqueue_microtask({:resolve, child_ref, handler, val})
+          JobQueue.enqueue_promise_reaction(child_ref, handler, val)
           child_promise
         else
           resolve(child_ref, state, val)
