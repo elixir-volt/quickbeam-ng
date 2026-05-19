@@ -492,7 +492,7 @@ defmodule QuickBEAM.VM.Interpreter do
     case compile_eval_code(ctx.runtime_pid, code) do
       {:ok, parsed} ->
         declared_names = eval_declared_names(parsed.value, parsed.atoms)
-        assigned_names = EvalSemantics.simple_assigned_names(code)
+        _assigned_names = EvalSemantics.simple_assigned_names(code)
         reject_eval_lexical_conflicts!(ctx, declared_names)
         eval_globals = collect_caller_locals(caller_frame, ctx)
         captured_globals = collect_captured_globals(ctx.current_func)
@@ -553,7 +553,6 @@ defmodule QuickBEAM.VM.Interpreter do
           |> Map.keys()
           |> Enum.filter(&is_binary/1)
           |> MapSet.new()
-          |> MapSet.intersection(MapSet.union(declared_names, assigned_names))
 
         eval_opts = %{
           gas: gas,
