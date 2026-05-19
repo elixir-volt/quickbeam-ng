@@ -1424,6 +1424,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
     string = QuickBEAM.VM.Interpreter.Values.stringify(string)
     flags = regexp_match_all_observable_flags(regexp)
+    observe_match_all_is_regexp(regexp)
     validate_match_all_species!(regexp)
     offset = regexp_last_index(regexp)
 
@@ -1537,6 +1538,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     do: Get.regexp_flags(bytecode)
 
   defp regexp_match_all_flags(regexp), do: regexp_match_all_observable_flags(regexp)
+
+  defp observe_match_all_is_regexp({:obj, _} = regexp), do: Get.get(regexp, {:symbol, "Symbol.match"})
+  defp observe_match_all_is_regexp(_regexp), do: :undefined
 
   defp validate_match_all_species!(regexp) do
     case Get.get(regexp, "constructor") do
