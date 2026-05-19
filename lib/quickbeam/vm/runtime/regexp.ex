@@ -85,6 +85,15 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   def proto_accessor("source"),
     do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
 
+  def proto_accessor("flags") do
+    {:accessor,
+     {:builtin, "get flags",
+      fn _, this ->
+        unless regexp_match_receiver?(this), do: JSThrow.type_error!("RegExp.prototype.flags receiver is not an object")
+        regexp_flags_from_properties(this)
+      end}, nil}
+  end
+
   def proto_accessor("hasIndices"), do: regexp_flag_accessor("hasIndices", "d")
   def proto_accessor("global"), do: regexp_flag_accessor("global", "g")
   def proto_accessor("ignoreCase"), do: regexp_flag_accessor("ignoreCase", "i")

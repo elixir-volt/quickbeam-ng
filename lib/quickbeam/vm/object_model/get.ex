@@ -694,12 +694,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_own({:regexp, bytecode, _source, ref} = regexp, "flags") do
-    case RegexpState.fetch(ref, "flags") do
-      {:ok, value} -> regexp_state_value(value, regexp)
-      :error -> regexp_flags(bytecode)
-    end
-  end
+  defp get_own({:regexp, _, _, _} = regexp, "flags"), do: regexp_instance_property(regexp, "flags")
 
   defp get_own({:regexp, _bytecode, source, ref} = regexp, "source") when is_binary(source) do
     case RegexpState.fetch(ref, "source") do
@@ -715,7 +710,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_own({:regexp, bytecode, _source}, "flags"), do: regexp_flags(bytecode)
+  defp get_own({:regexp, _, _} = regexp, "flags"), do: regexp_instance_property(regexp, "flags")
   defp get_own({:regexp, _bytecode, source}, "source") when is_binary(source), do: source
   defp get_own({:regexp, _, _}, "lastIndex"), do: 0
 
@@ -844,7 +839,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp symbol_to_string(:undefined), do: "Symbol()"
   defp symbol_to_string(desc), do: "Symbol(#{desc})"
 
-  defp regexp_instance_property(_regexp, key) when key in ["global", "ignoreCase", "multiline"] do
+  defp regexp_instance_property(_regexp, key)
+       when key in ["flags", "hasIndices", "global", "ignoreCase", "multiline", "dotAll", "unicode", "unicodeSets", "sticky"] do
     RegExp.proto_accessor(key)
   end
 

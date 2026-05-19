@@ -465,6 +465,16 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("[Symbol.iterator]"),
     do: meta("[Symbol.iterator]", [length: 0, constructable: false], :proto)
 
+  def named_meta("get flags"), do: meta("get flags", [length: 0, constructable: false], :proto)
+  def named_meta("get hasIndices"), do: meta("get hasIndices", [length: 0, constructable: false], :proto)
+  def named_meta("get global"), do: meta("get global", [length: 0, constructable: false], :proto)
+  def named_meta("get ignoreCase"), do: meta("get ignoreCase", [length: 0, constructable: false], :proto)
+  def named_meta("get multiline"), do: meta("get multiline", [length: 0, constructable: false], :proto)
+  def named_meta("get dotAll"), do: meta("get dotAll", [length: 0, constructable: false], :proto)
+  def named_meta("get unicode"), do: meta("get unicode", [length: 0, constructable: false], :proto)
+  def named_meta("get unicodeSets"), do: meta("get unicodeSets", [length: 0, constructable: false], :proto)
+  def named_meta("get sticky"), do: meta("get sticky", [length: 0, constructable: false], :proto)
+
   def named_meta("exec"), do: meta("exec", [length: 1, constructable: false], :proto)
   def named_meta("test"), do: meta("test", [length: 1, constructable: false], :proto)
 

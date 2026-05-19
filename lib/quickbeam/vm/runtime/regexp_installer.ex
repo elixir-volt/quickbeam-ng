@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.RegExpInstaller do
   alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.RegExp
 
-  @accessors ~w(source global ignoreCase multiline)
+  @accessors ~w(source flags hasIndices global ignoreCase multiline dotAll unicode unicodeSets sticky)
   @methods ~w(exec test toString)
   @symbol_methods [
     {:symbol, "Symbol.match"},
