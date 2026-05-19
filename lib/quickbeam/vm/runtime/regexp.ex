@@ -1615,21 +1615,21 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
     string =
       case args do
-        [value | _] -> Values.stringify(value)
+        [value | _] -> regexp_search_string(value)
         [] -> Values.stringify(:undefined)
       end
 
     previous_last_index = Get.get(regexp, "lastIndex")
 
-    if previous_last_index != 0 do
-      set_last_index!(regexp, 0)
+    unless same_value_zero?(previous_last_index) do
+      set_search_last_index!(regexp, 0)
     end
 
     result = regexp_exec_for_match(regexp, string)
     current_last_index = Get.get(regexp, "lastIndex")
 
-    if current_last_index != previous_last_index do
-      set_last_index!(regexp, previous_last_index)
+    unless same_value?(current_last_index, previous_last_index) do
+      set_search_last_index!(regexp, previous_last_index)
     end
 
     case result do
@@ -1638,6 +1638,45 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       _ -> JSThrow.type_error!("RegExp exec result must be an object or null")
     end
   end
+
+  defp regexp_search_string({:symbol, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+  defp regexp_search_string({:symbol, _, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+  defp regexp_search_string(value), do: Values.stringify(value)
+
+  defp same_value_zero?(0), do: true
+  defp same_value_zero?(value) when is_float(value) and value == 0.0, do: not negative_zero?(value)
+  defp same_value_zero?(_), do: false
+
+  defp same_value?(a, b) when is_float(a) and is_float(b) and a == 0.0 and b == 0.0,
+    do: negative_zero?(a) == negative_zero?(b)
+
+  defp same_value?(a, b), do: a == b
+
+  defp negative_zero?(value), do: :erlang.float_to_binary(value, [:short]) == "-0.0"
+
+  defp set_search_last_index!({:obj, ref} = obj, value) do
+    case Heap.get_obj_raw(ref) do
+      map when is_map(map) ->
+        case Map.get(map, "lastIndex") do
+          {:accessor, _getter, nil} ->
+            JSThrow.type_error!("Cannot assign to read only property")
+
+          {:accessor, _getter, setter} ->
+            Invocation.invoke_with_receiver(setter, [value], Runtime.gas_budget(), obj)
+
+          _ ->
+            case Heap.get_prop_desc(ref, "lastIndex") do
+              %{writable: false} -> JSThrow.type_error!("Cannot assign to read only property")
+              _ -> Put.put(obj, "lastIndex", value)
+            end
+        end
+
+      _ ->
+        Put.put(obj, "lastIndex", value)
+    end
+  end
+
+  defp set_search_last_index!(regexp, value), do: set_last_index!(regexp, value)
 
   defp regexp_match(regexp, args) do
     unless regexp_match_receiver?(regexp), do: JSThrow.type_error!("RegExp match receiver is not an object")
