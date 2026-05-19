@@ -1518,7 +1518,7 @@ defmodule QuickBEAM.VM.Runtime.String do
       if not global? and String.contains?(flags, "y") do
         replace_first_with_builtin_exec(s, regexp, replacement)
       else
-        if global?, do: Put.put(regexp, "lastIndex", 0)
+        if global?, do: put_regexp_last_index!(regexp, 0)
 
         case special_regex_replace(s, source, flags, replacement, global?) do
           {:ok, result} ->
@@ -1610,7 +1610,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     flags = regexp_flags_string(Get.get(regexp, "flags"))
 
     if String.contains?(flags, "g") do
-      Put.put(regexp, "lastIndex", 0)
+      put_regexp_last_index!(regexp, 0)
       exec = Get.get(regexp, "exec")
       replace_global_with_custom_exec(s, regexp, exec, replacement, regexp_unicode?(regexp), 0, [])
     else
@@ -1641,7 +1641,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
           if byte_size(matched) == 0 do
             this_index = raw_to_length(Get.get(regexp, "lastIndex"))
-            Put.put(regexp, "lastIndex", advance_string_index(s, this_index, unicode?))
+            put_regexp_last_index!(regexp, advance_string_index(s, this_index, unicode?))
           end
 
           replace_global_with_custom_exec(
@@ -1656,6 +1656,15 @@ defmodule QuickBEAM.VM.Runtime.String do
         end
     end
   end
+
+  defp put_regexp_last_index!({:regexp, _, _, ref} = regexp, value) do
+    case Heap.get_prop_desc(ref, "lastIndex") do
+      %{writable: false} -> JSThrow.type_error!("Cannot assign to read only property")
+      _ -> Put.put(regexp, "lastIndex", value)
+    end
+  end
+
+  defp put_regexp_last_index!(regexp, value), do: Put.put(regexp, "lastIndex", value)
 
   defp regexp_unicode?(regexp), do: Runtime.truthy?(Get.get(regexp, "unicode"))
 
