@@ -605,7 +605,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_own({:builtin, "Symbol", _}, key) when is_binary(key),
+  defp get_own({:builtin, "Symbol", _}, key) when is_binary(key) and key != "prototype",
     do: QuickBEAM.VM.Runtime.Symbol.static_property(key)
 
   defp get_own({:builtin, name, _}, {:symbol, "Symbol.species"})
@@ -616,6 +616,13 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own({:builtin, name, _} = builtin, "prototype")
        when name in ~w(Uint8Array Int8Array Uint8ClampedArray Uint16Array Int16Array Uint32Array Int32Array Float32Array Float64Array Float16Array BigInt64Array BigUint64Array) do
     TypedArray.constructor_prototype(name, builtin)
+  end
+
+  defp get_own({:builtin, _, _} = builtin, "prototype") do
+    case QuickBEAM.VM.Runtime.Constructors.builtin_prototype(builtin) do
+      nil -> :undefined
+      value -> value
+    end
   end
 
   defp get_own({:builtin, name, _}, "BYTES_PER_ELEMENT") do

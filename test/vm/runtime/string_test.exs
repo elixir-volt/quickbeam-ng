@@ -66,6 +66,12 @@ defmodule QuickBEAM.VM.Runtime.StringTest do
     )
   end
 
+  test "well-formed string methods coerce primitive receivers", %{rt: rt} do
+    assert_modes(rt, ~S<String.prototype.isWellFormed.call(1)>, true)
+    assert_modes(rt, ~S<String.prototype.toWellFormed.call(1n)>, "1")
+    assert_modes(rt, ~S<try { String.prototype.isWellFormed.call(Symbol()) } catch (e) { e.name }>, "TypeError")
+  end
+
   test "fromCodePoint preserves surrogate code points", %{rt: rt} do
     assert beam!(rt, "String.fromCodePoint(0xD800) === ''") == false
   end

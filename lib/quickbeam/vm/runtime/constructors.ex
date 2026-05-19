@@ -74,6 +74,13 @@ defmodule QuickBEAM.VM.Runtime.Constructors do
     end
   end
 
+  @doc "Returns a builtin constructor's prototype object, installing intrinsic metadata if needed."
+  def builtin_prototype({:builtin, name, _} = ctor) do
+    constructor_prototype(ctor) || installed_builtin_prototype(name, ctor)
+  end
+
+  def builtin_prototype(_), do: nil
+
   @doc "Invokes a global constructor and falls back when it is not available."
   def construct(name, args, fallback), do: construct(name, args, fallback, & &1)
 
@@ -115,4 +122,47 @@ defmodule QuickBEAM.VM.Runtime.Constructors do
 
   defp put_proto_if_missing(map, nil), do: map
   defp put_proto_if_missing(map, proto), do: Map.put_new(map, "__proto__", proto)
+
+  defp constructor_prototype(ctor) do
+    case Heap.get_ctor_statics(ctor) do
+      %{"prototype" => :deleted} -> :deleted
+      %{"prototype" => {:obj, _} = proto} -> proto
+      _ -> Heap.get_class_proto(ctor)
+    end
+  end
+
+  defp installed_builtin_prototype(name, ctor) do
+    case lookup(name) do
+      {:builtin, ^name, _} = registered ->
+        case constructor_prototype(registered) do
+          nil -> install_and_copy_builtin_prototype(name, ctor)
+          :deleted -> :undefined
+          proto -> copy_builtin_prototype(ctor, proto)
+        end
+
+      _ ->
+        :undefined
+    end
+  end
+
+  defp install_and_copy_builtin_prototype(name, ctor) do
+    bindings = QuickBEAM.VM.Runtime.GlobalInstaller.build()
+
+    case Map.get(bindings, name) do
+      {:builtin, ^name, _} = registered ->
+        case constructor_prototype(registered) do
+          {:obj, _} = proto -> copy_builtin_prototype(ctor, proto)
+          _ -> :undefined
+        end
+
+      _ ->
+        :undefined
+    end
+  end
+
+  defp copy_builtin_prototype(ctor, {:obj, _} = proto) do
+    Heap.put_ctor_static(ctor, "prototype", proto)
+    Heap.put_class_proto(ctor, proto)
+    proto
+  end
 end
