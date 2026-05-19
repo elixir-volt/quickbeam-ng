@@ -1614,23 +1614,28 @@ defmodule QuickBEAM.VM.Runtime.String do
 
       {:obj, _} = result ->
         {matched, index, replacement_text} = exec_result_replacement(s, result, replacement)
-        match_end = index + byte_size(matched)
-        prefix = binary_part(s, next_source_pos, max(index - next_source_pos, 0))
 
-        if byte_size(matched) == 0 do
-          this_index = raw_to_length(Get.get(regexp, "lastIndex"))
-          Put.put(regexp, "lastIndex", advance_string_index(s, this_index, unicode?))
+        if index < next_source_pos do
+          replace_global_with_custom_exec(s, regexp, exec, replacement, unicode?, next_source_pos, parts)
+        else
+          match_end = index + byte_size(matched)
+          prefix = binary_part(s, next_source_pos, index - next_source_pos)
+
+          if byte_size(matched) == 0 do
+            this_index = raw_to_length(Get.get(regexp, "lastIndex"))
+            Put.put(regexp, "lastIndex", advance_string_index(s, this_index, unicode?))
+          end
+
+          replace_global_with_custom_exec(
+            s,
+            regexp,
+            exec,
+            replacement,
+            unicode?,
+            match_end,
+            parts ++ [prefix, replacement_text]
+          )
         end
-
-        replace_global_with_custom_exec(
-          s,
-          regexp,
-          exec,
-          replacement,
-          unicode?,
-          match_end,
-          parts ++ [prefix, replacement_text]
-        )
     end
   end
 
