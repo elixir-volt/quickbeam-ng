@@ -1,5 +1,19 @@
 defmodule QuickBEAM.VM.Value do
-  @moduledoc "Type definitions and guards for JS values in the BEAM VM."
+  @moduledoc """
+  Type definitions and guards for JavaScript values in the BEAM VM.
+
+  Spec:
+  - ECMA-262 §6.1 ECMAScript Language Types
+  - ECMA-262 §6.2 ECMAScript Specification Types
+
+  Implementation notes:
+  - `null` is represented as `nil`.
+  - `undefined` is represented as `:undefined`.
+  - Object identity is represented as `{:obj, heap_ref}`.
+  - Built-in functions are represented as `{:builtin, name, callback_or_map}`.
+  - Abrupt completions are represented with `throw({:js_throw, value})`; see
+    `QuickBEAM.VM.SpecTypes.Completion`.
+  """
 
   @type heap_ref :: reference() | pos_integer()
   @type object :: {:obj, heap_ref()}

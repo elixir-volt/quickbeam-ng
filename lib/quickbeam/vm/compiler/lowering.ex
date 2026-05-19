@@ -1,5 +1,13 @@
 defmodule QuickBEAM.VM.Compiler.Lowering do
-  @moduledoc "VM-instruction-to-Erlang lowering pipeline: analyses control flow and types, then emits abstract-form block functions."
+  @moduledoc """
+  VM-instruction-to-Erlang lowering pipeline.
+
+  Lowering translates decoded QuickJS bytecode instructions into Erlang abstract
+  forms. It is bytecode-oriented rather than ECMA-grammar-oriented. Complex
+  ECMAScript semantics should be emitted as calls to `RuntimeABI` or shared VM
+  semantic modules unless a specialization is guarded or proven observationally
+  equivalent for the inferred operand types.
+  """
 
   alias QuickBEAM.VM.Compiler.Analysis.{CFG, Stack, Types}
 

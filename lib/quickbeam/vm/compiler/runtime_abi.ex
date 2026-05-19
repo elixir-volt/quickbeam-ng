@@ -6,6 +6,23 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   subset of helpers that generated code should treat as ABI: operations whose
   calling convention is part of compiler lowering rather than an implementation
   detail of a particular helper module.
+
+  Spec boundary examples:
+
+  | ABI helper | ECMA relation |
+  |---|---|
+  | `to_object/2` | §7.1.18 ToObject |
+  | `to_property_key/2` | §7.1.19 ToPropertyKey |
+  | `copy_data_properties/4` | §7.3.25 CopyDataProperties |
+  | `get_field/3` | §7.3.2 Get, §10.1.8 [[Get]] |
+  | `put_field/4` | §7.3.4 Set, §10.1.9 [[Set]] |
+  | `for_of_start/2` | §7.4.1 GetIterator / iterator setup for bytecode |
+  | `iterator_next_result/4` | §7.4.6 IteratorNext |
+  | `iterator_close/2` | §7.4.11 IteratorClose |
+
+  Generated code should prefer this ABI for spec-sensitive behavior. Direct
+  calls to `RuntimeHelpers` should remain compiler-private mechanics or migrate
+  here when they become part of generated-code semantics.
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
@@ -56,7 +73,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def iterator_close(ctx, iter_obj), do: RuntimeHelpers.iterator_close(ctx, iter_obj)
 
-  def iterator_close_refresh(ctx, iter_obj), do: RuntimeHelpers.iterator_close_refresh(ctx, iter_obj)
+  def iterator_close_refresh(ctx, iter_obj),
+    do: RuntimeHelpers.iterator_close_refresh(ctx, iter_obj)
 
   def iterator_close_for_throw(ctx, iter_obj),
     do: RuntimeHelpers.iterator_close_for_throw(ctx, iter_obj)

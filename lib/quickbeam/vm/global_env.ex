@@ -1,5 +1,16 @@
 defmodule QuickBEAM.VM.GlobalEnv do
-  @moduledoc "Global variable environment: resolves JS globals from the persistent heap and runtime bindings."
+  @moduledoc """
+  Global binding support for the BEAM VM.
+
+  Spec relation:
+  - ECMA-262 §9.1.1.4 Global Environment Records
+  - ECMA-262 §9.4 Execution Contexts
+
+  Implementation note:
+  QuickJS bytecode resolves much of lexical binding behavior before this layer.
+  This module models the observable global binding behavior needed by bytecode
+  execution, not the full Environment Record hierarchy.
+  """
 
   alias QuickBEAM.VM.{Heap, JSThrow, Names, Runtime}
   alias QuickBEAM.VM.Interpreter.Context
@@ -90,6 +101,7 @@ defmodule QuickBEAM.VM.GlobalEnv do
     unless lexical? do
       sync_global_this_property(globals, name, Map.get(globals, name))
     end
+
     Heap.put_persistent_globals(globals)
     Context.mark_dirty(%{ctx | globals: globals})
   end

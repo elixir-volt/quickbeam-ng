@@ -1,5 +1,13 @@
 defmodule QuickBEAM.VM.Compiler.Analysis.Types do
-  @moduledoc "Abstract type inference: propagates JS value types through basic blocks to enable guard elision."
+  @moduledoc """
+  Compiler abstract type inference.
+
+  These types are compiler abstractions used for specialization and guard
+  elision; they are not a complete model of ECMA-262 language types. For example,
+  `:integer` is a representation-level subtype of ECMA Number, `:function`
+  represents callable VM values, and shaped-object types represent objects with
+  compiler-known layout assumptions.
+  """
 
   alias QuickBEAM.VM.Compiler.Analysis.{CFG, Stack}
   alias QuickBEAM.VM.Compiler.Lowering.Types, as: LoweringTypes

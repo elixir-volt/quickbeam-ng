@@ -1,5 +1,18 @@
 defmodule QuickBEAM.VM.Invocation do
-  @moduledoc "Unified JS function invocation: dispatches to compiled modules, interpreter fallback, builtins, and native callbacks."
+  @moduledoc """
+  Unified JavaScript function invocation.
+
+  Spec relation:
+  - ECMA-262 §7.3.13 Call
+  - ECMA-262 §7.3.14 Construct
+  - ECMA-262 §10.2.1 [[Call]]
+  - ECMA-262 §10.2.2 [[Construct]]
+  - ECMA-262 §10.4.1 Bound Function Exotic Objects
+
+  This module dispatches to compiled modules, interpreter fallback, built-ins,
+  constructors, bound functions, and native callbacks while preserving the VM's
+  shared call/construct semantics.
+  """
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0, proxy_handler: 0, proxy_target: 0]
 

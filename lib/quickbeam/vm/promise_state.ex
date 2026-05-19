@@ -1,5 +1,16 @@
 defmodule QuickBEAM.VM.PromiseState do
-  @moduledoc "Promise lifecycle: create resolved/rejected promises, chain `.then`/`.catch`/`.finally`, and flush microtasks."
+  @moduledoc """
+  Promise object state, reactions, and microtask draining.
+
+  Spec relation:
+  - ECMA-262 §27.2 Promise Objects
+  - ECMA-262 §9.5 Jobs and Host Operations to Enqueue Jobs
+
+  This module currently owns both Promise state transitions/reactions and the
+  microtask flushing entry points backed by heap async state. Future refactors may
+  split the job-queue concepts into a dedicated `JobQueue` module, but generated
+  and interpreted code should continue to use these shared operations.
+  """
 
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Builtin, only: [arg: 3]

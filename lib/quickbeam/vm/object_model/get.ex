@@ -1,5 +1,13 @@
 defmodule QuickBEAM.VM.ObjectModel.Get do
-  @moduledoc "JS property resolution: own properties, prototype chain, getters."
+  @moduledoc """
+  JavaScript property resolution: own properties, prototype chain, and getters.
+
+  Spec:
+  - ECMA-262 §7.3.2 Get
+  - ECMA-262 §10.1.8 [[Get]]
+  - ECMA-262 §10.1.8.1 OrdinaryGet
+  - ECMA-262 §10.4 built-in exotic object internal methods where represented by VM values
+  """
 
   import Bitwise, only: [band: 2]
   import QuickBEAM.VM.Heap.Keys

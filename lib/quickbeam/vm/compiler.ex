@@ -1,5 +1,17 @@
 defmodule QuickBEAM.VM.Compiler do
-  @moduledoc "JIT compiler entry point: lowers bytecode to BEAM modules, caches them, and invokes compiled functions."
+  @moduledoc """
+  BEAM-code compiler entry point.
+
+  The compiler lowers QuickJS bytecode to Erlang abstract forms, loads the
+  resulting BEAM module, caches it, and invokes compiled functions. It does not
+  compile ECMA parse nodes directly: QuickJS-NG owns parsing, early bytecode
+  generation, and most syntax-directed work. Observable ECMAScript semantics are
+  preserved through `QuickBEAM.VM.Compiler.RuntimeABI`, shared semantic modules,
+  `ObjectModel`, `Invocation`, `GlobalEnv`, and interpreter fallback.
+
+  Unsupported bytecode patterns fall back to the interpreter when correctness
+  requires it; permanently unsupported compiler results are cached as unsupported.
+  """
 
   import QuickBEAM.VM.Heap.Keys, only: [promise_state: 0, promise_value: 0]
 
