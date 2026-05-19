@@ -125,7 +125,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
           {{:op, 1, op, expr, {:integer, 1, 1}}, :integer}
         else
           fun = if op == :+, do: :inc, else: :dec
-          {State.compiler_call(state, fun, [expr]), :unknown}
+          {State.abi_call(state, fun, [expr]), :unknown}
         end
 
       {:ok, Emit.push(state, result_expr, result_type)}
