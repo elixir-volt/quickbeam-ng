@@ -1647,9 +1647,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp regexp_match_receiver?(_), do: false
 
   defp regexp_match_flags({:regexp, _, _, ref} = regexp) do
-    case RegexpState.fetch(ref, "flags") do
-      {:ok, flags} -> regexp_to_string_hint(flags)
-      :error -> regexp_flags_from_properties(regexp)
+    if RegexpState.has_property?(ref, "flags") do
+      regexp_to_string_hint(Get.get(regexp, "flags"))
+    else
+      regexp_flags_from_properties(regexp)
     end
   end
 

@@ -694,23 +694,23 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_own({:regexp, bytecode, _source, ref}, "flags") do
+  defp get_own({:regexp, bytecode, _source, ref} = regexp, "flags") do
     case RegexpState.fetch(ref, "flags") do
-      {:ok, value} -> value
+      {:ok, value} -> regexp_state_value(value, regexp)
       :error -> regexp_flags(bytecode)
     end
   end
 
-  defp get_own({:regexp, _bytecode, source, ref}, "source") when is_binary(source) do
+  defp get_own({:regexp, _bytecode, source, ref} = regexp, "source") when is_binary(source) do
     case RegexpState.fetch(ref, "source") do
-      {:ok, value} -> value
+      {:ok, value} -> regexp_state_value(value, regexp)
       :error -> source
     end
   end
 
-  defp get_own({:regexp, _, _, ref}, "lastIndex") do
+  defp get_own({:regexp, _, _, ref} = regexp, "lastIndex") do
     case RegexpState.fetch(ref, "lastIndex") do
-      {:ok, value} -> value
+      {:ok, value} -> regexp_state_value(value, regexp)
       :error -> 0
     end
   end
@@ -721,7 +721,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_own({:regexp, _, _, ref} = regexp, key) do
     case RegexpState.fetch(ref, key) do
-      {:ok, value} -> value
+      {:ok, value} -> regexp_state_value(value, regexp)
       :error -> regexp_instance_property(regexp, key)
     end
   end
@@ -834,6 +834,12 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp get_own(_, _), do: :undefined
+
+  defp regexp_state_value({:accessor, getter, _}, receiver) when getter != nil,
+    do: call_getter(getter, receiver)
+
+  defp regexp_state_value({:accessor, nil, _}, _receiver), do: :undefined
+  defp regexp_state_value(value, _receiver), do: value
 
   defp symbol_to_string(:undefined), do: "Symbol()"
   defp symbol_to_string(desc), do: "Symbol(#{desc})"
