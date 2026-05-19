@@ -492,7 +492,7 @@ defmodule QuickBEAM.VM.Interpreter do
     case compile_eval_code(ctx.runtime_pid, strict_eval_code(ctx, code)) do
       {:ok, parsed} ->
         declared_names = eval_declared_names(parsed.value, parsed.atoms)
-        _assigned_names = EvalSemantics.simple_assigned_names(code)
+        assigned_names = EvalSemantics.simple_assigned_names(code)
         reject_eval_lexical_conflicts!(ctx, declared_names)
         eval_globals = collect_caller_locals(caller_frame, ctx)
         captured_globals = collect_captured_globals(ctx.current_func)
@@ -553,6 +553,15 @@ defmodule QuickBEAM.VM.Interpreter do
           |> Map.keys()
           |> Enum.filter(&is_binary/1)
           |> MapSet.new()
+          |> MapSet.intersection(MapSet.union(declared_names, assigned_names))
+
+        abrupt_visible_names =
+          base_globals
+          |> Map.merge(eval_scope_globals)
+          |> Map.put("arguments", :present)
+          |> Map.keys()
+          |> Enum.filter(&is_binary/1)
+          |> MapSet.new()
 
         eval_opts = %{
           gas: gas,
@@ -587,7 +596,7 @@ defmodule QuickBEAM.VM.Interpreter do
           {:error, {:js_throw, val}} ->
             transient_globals =
               (Heap.get_persistent_globals() || %{})
-              |> Map.take(MapSet.to_list(visible_declared_names))
+              |> Map.take(MapSet.to_list(abrupt_visible_names))
               |> put_created_eval_arguments(created_arguments?, arguments_key, arguments_obj)
 
             returned_transients = filter_local_eval_transients(ctx, transient_globals)
