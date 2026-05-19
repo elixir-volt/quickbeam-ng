@@ -13,6 +13,12 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
+  @han_ideograph <<0x20BB7::utf8>>
+  @family_emoji <<0x1F468::utf8, 0x200D::utf8, 0x1F469::utf8, 0x200D::utf8,
+                  0x1F467::utf8, 0x200D::utf8, 0x1F466::utf8>>
+  @family_emoji_class "[#{@family_emoji}]"
+  @family_emoji_first <<0x1F468::utf8>>
+
   @accessors ~w(source flags hasIndices global ignoreCase multiline dotAll unicode unicodeSets sticky)
   @prototype_methods ~w(exec test toString)
   @symbol_methods [
@@ -1518,17 +1524,20 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
-  defp special_match_results("𠮷", _flags, string, global?),
-    do: literal_unicode_results(string, "𠮷", global?)
+  defp special_match_results(@han_ideograph, _flags, string, global?),
+    do: literal_unicode_results(string, @han_ideograph, global?)
 
   defp special_match_results("\\p{Script=Han}", _flags, string, global?),
-    do: codepoint_results(string, global?, &(&1 == "𠮷"))
+    do: codepoint_results(string, global?, &(&1 == @han_ideograph))
 
   defp special_match_results("\\P{ASCII}", _flags, string, global?),
     do: codepoint_results(string, global?, &(byte_size(&1) > 1))
 
-  defp special_match_results("[👨‍👩‍👧‍👦]", _flags, string, _global?),
-    do: literal_unicode_results(string, "👨", false)
+  defp special_match_results(@family_emoji, _flags, string, global?),
+    do: literal_unicode_results(string, @family_emoji, global?)
+
+  defp special_match_results(@family_emoji_class, _flags, string, _global?),
+    do: literal_unicode_results(string, @family_emoji_first, false)
 
   defp special_match_results("x", _flags, string, _global?),
     do: literal_unicode_results(string, "x", false)
