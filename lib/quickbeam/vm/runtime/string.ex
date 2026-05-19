@@ -990,9 +990,16 @@ defmodule QuickBEAM.VM.Runtime.String do
   defp split_method(value) when is_tuple(value), do: get_method(value, {:symbol, "Symbol.split"})
   defp split_method(_), do: :none
 
-  defp split(s, [{:regexp, bytecode, source, _ref} | rest])
-       when is_binary(s) and is_binary(bytecode),
-       do: split(s, [{:regexp, bytecode, source} | rest])
+  defp split(s, [{:regexp, bytecode, source, _ref} = regexp | rest])
+       when is_binary(s) and is_binary(bytecode) do
+    limit = split_limit(rest)
+
+    cond do
+      limit == 0 -> []
+      custom_split_exec?(regexp) -> split_with_exec_loop(s, regexp, limit, 0, 0, [])
+      true -> split(s, [{:regexp, bytecode, source} | rest])
+    end
+  end
 
   defp split(s, [{:regexp, nil, "[a-z]", _ref} | rest]) when is_binary(s),
     do: split(s, [{:regexp, "", "[a-z]"} | rest])
