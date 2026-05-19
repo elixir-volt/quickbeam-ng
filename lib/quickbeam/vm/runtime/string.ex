@@ -1594,7 +1594,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     if String.contains?(flags, "g") do
       Put.put(regexp, "lastIndex", 0)
       exec = Get.get(regexp, "exec")
-      replace_global_with_custom_exec(s, regexp, exec, replacement, 0, [])
+      replace_global_with_custom_exec(s, regexp, exec, replacement, regexp_unicode?(regexp), 0, [])
     else
       exec = Get.get(regexp, "exec")
 
@@ -1605,7 +1605,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  defp replace_global_with_custom_exec(s, regexp, exec, replacement, next_source_pos, parts) do
+  defp replace_global_with_custom_exec(s, regexp, exec, replacement, unicode?, next_source_pos, parts) do
     case custom_exec_result(exec, s, regexp) do
       nil ->
         IO.iodata_to_binary(
@@ -1618,7 +1618,8 @@ defmodule QuickBEAM.VM.Runtime.String do
         prefix = binary_part(s, next_source_pos, max(index - next_source_pos, 0))
 
         if byte_size(matched) == 0 do
-          Put.put(regexp, "lastIndex", Runtime.to_int(Get.get(regexp, "lastIndex")) + 1)
+          this_index = raw_to_length(Get.get(regexp, "lastIndex"))
+          Put.put(regexp, "lastIndex", advance_string_index(s, this_index, unicode?))
         end
 
         replace_global_with_custom_exec(
@@ -1626,10 +1627,28 @@ defmodule QuickBEAM.VM.Runtime.String do
           regexp,
           exec,
           replacement,
+          unicode?,
           match_end,
           parts ++ [prefix, replacement_text]
         )
     end
+  end
+
+  defp regexp_unicode?(regexp), do: Runtime.truthy?(Get.get(regexp, "unicode"))
+
+  defp advance_string_index(string, index, true) do
+    first = utf16_code_unit_value_at(string, index)
+    second = utf16_code_unit_value_at(string, index + 1)
+
+    if first in 0xD800..0xDBFF and second in 0xDC00..0xDFFF, do: index + 2, else: index + 1
+  end
+
+  defp advance_string_index(_string, index, _unicode?), do: index + 1
+
+  defp utf16_code_unit_value_at(string, index) do
+    string
+    |> utf16_code_unit_values()
+    |> Enum.at(index, :undefined)
   end
 
   defp custom_exec_result(exec, s, regexp) do
