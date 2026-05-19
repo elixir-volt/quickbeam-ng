@@ -9,8 +9,7 @@ defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
     Errors,
     GlobalRegistry,
     GlobalThisInstaller,
-    ObjectInstaller,
-    TypedArrayInstaller
+    ObjectInstaller
   }
 
   def build do
@@ -18,7 +17,6 @@ defmodule QuickBEAM.VM.Runtime.GlobalInstaller do
 
     GlobalRegistry.bindings()
     |> Map.put(object_name, object_ctor)
-    |> Map.merge(TypedArrayInstaller.bindings())
     |> Map.merge(CoreConstructorInstaller.bindings())
     |> Map.merge(Errors.bindings())
     |> cache_globals()

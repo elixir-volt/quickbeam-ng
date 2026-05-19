@@ -5,6 +5,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   use QuickBEAM.VM.Builtin
 
+  alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
@@ -12,6 +13,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.Interpreter.Values.Coercion
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
+  alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
   alias QuickBEAM.VM.Semantics.Iterators
 
   @types %{
@@ -28,6 +30,37 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     "BigInt64Array" => :bigint64,
     "BigUint64Array" => :biguint64
   }
+
+  def builtin_definitions do
+    for {name, type} <- @types do
+      %Definition{
+        name: name,
+        constructor: constructor(type),
+        length: 3,
+        phase: :collections,
+        module: __MODULE__,
+        after_install: &__MODULE__.install_builtin/1
+      }
+    end
+  end
+
+  def install_builtin({:builtin, name, _} = ctor) do
+    type = Map.fetch!(@types, name)
+    ta_base = abstract_typed_array_constructor()
+    install_base_prototype(ta_base)
+    base_proto = Heap.get_class_proto(ta_base)
+
+    ConstructorRegistry.put_prototype(
+      ctor,
+      Heap.wrap(%{"constructor" => ctor, "__proto__" => base_proto})
+    )
+
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+    install_static_methods(ctor)
+    install_species(ctor)
+    Heap.put_ctor_static(ctor, "__proto__", ta_base)
+    Heap.put_ctor_static(ctor, "BYTES_PER_ELEMENT", elem_size(type))
+  end
 
   @doc "Returns typed-array type descriptors supported by the runtime."
   def types, do: @types
@@ -80,10 +113,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       "findLast" => prototype_ref_method("findLast", 1, &find_last/3),
       "findLastIndex" => prototype_ref_method("findLastIndex", 1, &find_last_index/3),
       "forEach" => prototype_ref_method("forEach", 1, &for_each/3),
-      "includes" => prototype_ref_method("includes", 1, fn ref, args, _this -> includes(ref, args) end),
-      "indexOf" => prototype_ref_method("indexOf", 1, fn ref, args, _this -> index_of(ref, args) end),
+      "includes" =>
+        prototype_ref_method("includes", 1, fn ref, args, _this -> includes(ref, args) end),
+      "indexOf" =>
+        prototype_ref_method("indexOf", 1, fn ref, args, _this -> index_of(ref, args) end),
       "join" => prototype_ref_method("join", 1, fn ref, args, _this -> join(ref, args) end),
-      "lastIndexOf" => prototype_ref_method("lastIndexOf", 1, fn ref, args, _this -> last_index_of(ref, args) end),
+      "lastIndexOf" =>
+        prototype_ref_method("lastIndexOf", 1, fn ref, args, _this -> last_index_of(ref, args) end),
       "map" => prototype_ref_method("map", 1, &map/3),
       "reduce" => prototype_ref_method("reduce", 1, &reduce/3),
       "reduceRight" => prototype_ref_method("reduceRight", 1, &reduce_right/3),
@@ -92,12 +128,20 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       "slice" => prototype_ref_method("slice", 2, fn ref, args, _this -> slice(ref, args) end),
       "some" => prototype_ref_method("some", 1, &some/3),
       "sort" => prototype_ref_method("sort", 1, fn ref, args, _this -> sort(ref, args) end),
-      "subarray" => prototype_ref_method("subarray", 2, fn ref, args, _this -> subarray(ref, args) end),
-      "toLocaleString" => prototype_ref_method("toLocaleString", 0, fn ref, _args, _this -> to_locale_string(ref) end),
-      "toReversed" => prototype_ref_method("toReversed", 0, fn ref, _args, _this -> to_reversed(ref) end),
-      "toSorted" => prototype_ref_method("toSorted", 1, fn ref, args, _this -> to_sorted(ref, args) end),
-      "toString" => prototype_ref_method("toString", 0, fn ref, _args, _this -> join(ref, [","]) end),
-      "with" => prototype_ref_method("with", 2, fn ref, args, _this -> with_element(ref, args) end)
+      "subarray" =>
+        prototype_ref_method("subarray", 2, fn ref, args, _this -> subarray(ref, args) end),
+      "toLocaleString" =>
+        prototype_ref_method("toLocaleString", 0, fn ref, _args, _this ->
+          to_locale_string(ref)
+        end),
+      "toReversed" =>
+        prototype_ref_method("toReversed", 0, fn ref, _args, _this -> to_reversed(ref) end),
+      "toSorted" =>
+        prototype_ref_method("toSorted", 1, fn ref, args, _this -> to_sorted(ref, args) end),
+      "toString" =>
+        prototype_ref_method("toString", 0, fn ref, _args, _this -> join(ref, [","]) end),
+      "with" =>
+        prototype_ref_method("with", 2, fn ref, args, _this -> with_element(ref, args) end)
     }
   end
 
@@ -360,12 +404,98 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       end)
   end
 
+  defp abstract_typed_array_constructor do
+    {:builtin, "TypedArray",
+     fn _args, _this ->
+       JSThrow.type_error!("Abstract class TypedArray cannot be called")
+     end}
+  end
+
+  defp install_base_prototype(ta_base) do
+    case Heap.get_class_proto(ta_base) do
+      {:obj, _} ->
+        :ok
+
+      _ ->
+        ta_base_ref = make_ref()
+
+        Heap.put_obj(
+          ta_base_ref,
+          base_prototype_properties()
+          |> Map.put("constructor", ta_base)
+          |> Map.put(
+            "toString",
+            QuickBEAM.VM.ObjectModel.Get.get(Heap.get_array_proto(), "toString")
+          )
+          |> Map.put("__proto__", Heap.get_object_prototype())
+        )
+
+        for key <- Map.keys(prototype_properties()) do
+          Heap.put_prop_desc(ta_base_ref, key, PropertyDescriptor.method())
+        end
+
+        for key <- [
+              "buffer",
+              "byteLength",
+              "byteOffset",
+              "length",
+              {:symbol, "Symbol.toStringTag"}
+            ] do
+          Heap.put_prop_desc(ta_base_ref, key, PropertyDescriptor.accessor())
+        end
+
+        Heap.put_prop_desc(ta_base_ref, "constructor", PropertyDescriptor.constructor())
+
+        ConstructorRegistry.put_prototype(ta_base, {:obj, ta_base_ref})
+        Heap.put_ctor_prop_desc(ta_base, "prototype", PropertyDescriptor.prototype())
+        install_static_methods(ta_base)
+        install_species(ta_base)
+    end
+  end
+
+  defp install_static_methods(ctor) do
+    from = {:builtin, "from", fn args, this -> static_from(args, this) end}
+    of = {:builtin, "of", fn args, this -> static_of(args, this) end}
+
+    Heap.put_ctor_static(from, "length", 1)
+    Heap.put_ctor_prop_desc(from, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(from, "name", PropertyDescriptor.hidden_readonly())
+
+    Heap.put_ctor_static(of, "length", 0)
+    Heap.put_ctor_prop_desc(of, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(of, "name", PropertyDescriptor.hidden_readonly())
+
+    Heap.put_ctor_static(ctor, "from", from)
+    Heap.put_ctor_static(ctor, "of", of)
+    Heap.put_ctor_prop_desc(ctor, "from", PropertyDescriptor.method())
+    Heap.put_ctor_prop_desc(ctor, "of", PropertyDescriptor.method())
+  end
+
+  defp install_species(ctor) do
+    getter = {:builtin, "get [Symbol.species]", fn _args, this -> this end}
+    Heap.put_ctor_static(getter, "length", 0)
+    Heap.put_ctor_prop_desc(getter, "length", PropertyDescriptor.hidden_readonly())
+    Heap.put_ctor_prop_desc(getter, "name", PropertyDescriptor.hidden_readonly())
+
+    Heap.put_ctor_static(ctor, {:symbol, "Symbol.species"}, {:accessor, getter, nil})
+    Heap.put_ctor_prop_desc(ctor, {:symbol, "Symbol.species"}, PropertyDescriptor.accessor())
+  end
+
   defp abstract_prototype do
     cached_prototype(:qb_typed_array_abstract_proto, fn ->
       Heap.wrap(
         base_prototype_properties()
-        |> Map.put("constructor", {:builtin, "TypedArray", fn _args, _this -> JSThrow.type_error!("Abstract class TypedArray cannot be called") end})
-        |> Map.put("toString", QuickBEAM.VM.ObjectModel.Get.get(Heap.get_array_proto(), "toString"))
+        |> Map.put(
+          "constructor",
+          {:builtin, "TypedArray",
+           fn _args, _this ->
+             JSThrow.type_error!("Abstract class TypedArray cannot be called")
+           end}
+        )
+        |> Map.put(
+          "toString",
+          QuickBEAM.VM.ObjectModel.Get.get(Heap.get_array_proto(), "toString")
+        )
         |> Map.put("__proto__", Heap.get_object_prototype())
       )
     end)
@@ -385,7 +515,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp class_proto_for(type) do
     Runtime.global_class_proto(typed_array_name(type)) ||
-      constructor_prototype(typed_array_name(type), {:builtin, typed_array_name(type), constructor(type)})
+      constructor_prototype(
+        typed_array_name(type),
+        {:builtin, typed_array_name(type), constructor(type)}
+      )
   end
 
   defp register_buffer_view({:obj, buf_ref}, view_ref) do
@@ -675,8 +808,11 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp bigint_element_type?(type), do: type in [:bigint64, :biguint64]
 
-  defp typed_array_set_source(nil), do: JSThrow.type_error!("Cannot convert undefined or null to object")
-  defp typed_array_set_source(:undefined), do: JSThrow.type_error!("Cannot convert undefined or null to object")
+  defp typed_array_set_source(nil),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
+
+  defp typed_array_set_source(:undefined),
+    do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
   defp typed_array_set_source({:obj, ref} = source) do
     case Heap.get_obj(ref, %{}) do
@@ -686,7 +822,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         end
 
         len = element_count(source)
-        values = if len == 0, do: [], else: for(index <- 0..(len - 1), do: get_element(source, index))
+
+        values =
+          if len == 0, do: [], else: for(index <- 0..(len - 1), do: get_element(source, index))
+
         {len, &Enum.at(values, &1, :undefined)}
 
       _ ->
@@ -700,14 +839,17 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     {len, fn index -> :array.get(index, arr) end}
   end
 
-  defp typed_array_set_source(source) when is_list(source), do: {length(source), &Enum.at(source, &1, :undefined)}
+  defp typed_array_set_source(source) when is_list(source),
+    do: {length(source), &Enum.at(source, &1, :undefined)}
 
   defp typed_array_set_source(source) when is_binary(source) do
     chars = String.graphemes(source)
     {length(chars), &Enum.at(chars, &1, :undefined)}
   end
 
-  defp typed_array_set_source(source) when is_number(source) or is_boolean(source), do: {0, fn _ -> :undefined end}
+  defp typed_array_set_source(source) when is_number(source) or is_boolean(source),
+    do: {0, fn _ -> :undefined end}
+
   defp typed_array_set_source({:bigint, _}), do: {0, fn _ -> :undefined end}
   defp typed_array_set_source({:symbol, _}), do: {0, fn _ -> :undefined end}
   defp typed_array_set_source({:symbol, _, _}), do: {0, fn _ -> :undefined end}
@@ -735,7 +877,11 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     es = elem_size(t)
     parent = state(ref)
     byte_offset = Map.get(parent, offset(), 0) + s * es
-    length_arg = if Map.get(parent, "__length_tracking__") and end_arg == :undefined, do: :auto, else: new_len
+
+    length_arg =
+      if Map.get(parent, "__length_tracking__") and end_arg == :undefined,
+        do: :auto,
+        else: new_len
 
     typed_array_species_create_view(
       {:obj, ref},
@@ -768,7 +914,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
 
     current_len = len(ref)
-    count = min(final - start, l - target) |> min(current_len - target) |> min(current_len - start)
+
+    count =
+      min(final - start, l - target) |> min(current_len - target) |> min(current_len - start)
 
     if count > 0 do
       t = type(ref)
@@ -841,8 +989,12 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp typed_array_to_string({:symbol, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
-  defp typed_array_to_string({:symbol, _, _}), do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+  defp typed_array_to_string({:symbol, _}),
+    do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+
+  defp typed_array_to_string({:symbol, _, _}),
+    do: JSThrow.type_error!("Cannot convert a Symbol value to a string")
+
   defp typed_array_to_string(value), do: Runtime.stringify(value)
 
   defp for_each(ref, [cb | rest], this) do
@@ -873,7 +1025,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     if l > 0 do
       for i <- 0..(l - 1) do
-        value = Invocation.invoke_with_receiver(cb, [get_element({:obj, ref}, i), i, this], this_arg)
+        value =
+          Invocation.invoke_with_receiver(cb, [get_element({:obj, ref}, i), i, this], this_arg)
+
         set_element(result, i, value)
       end
     end
@@ -922,7 +1076,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     l == 0 or
       Enum.all?(0..(l - 1), fn index ->
         cb
-        |> Invocation.invoke_with_receiver([get_element({:obj, ref}, index), index, this], this_arg)
+        |> Invocation.invoke_with_receiver(
+          [get_element({:obj, ref}, index), index, this],
+          this_arg
+        )
         |> Runtime.truthy?()
       end)
   end
@@ -938,7 +1095,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     l > 0 and
       Enum.any?(0..(l - 1), fn index ->
         cb
-        |> Invocation.invoke_with_receiver([get_element({:obj, ref}, index), index, this], this_arg)
+        |> Invocation.invoke_with_receiver(
+          [get_element({:obj, ref}, index), index, this],
+          this_arg
+        )
         |> Runtime.truthy?()
       end)
   end
@@ -960,13 +1120,18 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         init
 
       true ->
-        {start, acc} = if init == :__missing__, do: {1, get_element({:obj, ref}, 0)}, else: {0, init}
+        {start, acc} =
+          if init == :__missing__, do: {1, get_element({:obj, ref}, 0)}, else: {0, init}
 
         if start >= l do
           acc
         else
           Enum.reduce(start..(l - 1), acc, fn i, a ->
-            Invocation.invoke_with_receiver(cb, [a, get_element({:obj, ref}, i), i, this], :undefined)
+            Invocation.invoke_with_receiver(
+              cb,
+              [a, get_element({:obj, ref}, i), i, this],
+              :undefined
+            )
           end)
         end
     end
@@ -988,13 +1153,19 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
       true ->
         {start, acc} =
-          if init == :__missing__, do: {l - 2, get_element({:obj, ref}, l - 1)}, else: {l - 1, init}
+          if init == :__missing__,
+            do: {l - 2, get_element({:obj, ref}, l - 1)},
+            else: {l - 1, init}
 
         if start < 0 do
           acc
         else
           Enum.reduce(start..0//-1, acc, fn i, a ->
-            Invocation.invoke_with_receiver(cb, [a, get_element({:obj, ref}, i), i, this], :undefined)
+            Invocation.invoke_with_receiver(
+              cb,
+              [a, get_element({:obj, ref}, i), i, this],
+              :undefined
+            )
           end)
         end
     end
@@ -1066,7 +1237,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       if start >= l do
         false
       else
-        Enum.any?(start..(l - 1), fn i -> same_value_zero?(get_element({:obj, ref}, i), target) end)
+        Enum.any?(start..(l - 1), fn i ->
+          same_value_zero?(get_element({:obj, ref}, i), target)
+        end)
       end
     end
   end
@@ -1218,7 +1391,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     values
     |> Enum.with_index()
     |> Enum.sort(fn {left, left_index}, {right, right_index} ->
-      order = Runtime.to_number(Invocation.invoke_with_receiver(compare_fn, [left, right], :undefined))
+      order =
+        Runtime.to_number(Invocation.invoke_with_receiver(compare_fn, [left, right], :undefined))
 
       cond do
         order < 0 -> true
@@ -1297,7 +1471,12 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     l = len(ref)
     t = type(ref)
-    vals = if l == 0, do: [], else: Enum.map(0..(l - 1), &get_element({:obj, ref}, &1)) |> sort_values(compare_fn)
+
+    vals =
+      if l == 0,
+        do: [],
+        else: Enum.map(0..(l - 1), &get_element({:obj, ref}, &1)) |> sort_values(compare_fn)
+
     constructor(t).([vals], nil)
   end
 
@@ -1305,6 +1484,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     l = len(ref)
     t = type(ref)
     relative = to_integer_or_infinity(arg(args, 0, :undefined))
+
     index =
       case relative do
         :neg_infinity -> -1
@@ -1916,7 +2096,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp coerce_element_value(value, type) when type in [:bigint64, :biguint64], do: {:bigint, bigint_value(value)}
+  defp coerce_element_value(value, type) when type in [:bigint64, :biguint64],
+    do: {:bigint, bigint_value(value)}
+
   defp coerce_element_value(value, _type), do: Runtime.to_number(value)
 
   defp bigint_value({:bigint, n}), do: n
@@ -1933,7 +2115,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp bigint_value({:obj, _} = value), do: value |> Coercion.to_primitive("number") |> bigint_value()
+  defp bigint_value({:obj, _} = value),
+    do: value |> Coercion.to_primitive("number") |> bigint_value()
+
   defp bigint_value(_), do: JSThrow.type_error!("Cannot convert value to BigInt")
 
   defp parse_bigint_string(""), do: {:ok, 0}
@@ -1972,7 +2156,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     |> Enum.reduce(buf, fn {val, i}, acc -> write_element(acc, i, val, type) end)
   end
 
-  defp to_integer_or_infinity({:bigint, _}), do: JSThrow.type_error!("Cannot convert BigInt to number")
+  defp to_integer_or_infinity({:bigint, _}),
+    do: JSThrow.type_error!("Cannot convert BigInt to number")
 
   defp to_integer_or_infinity(value) do
     case Runtime.to_number(value) do
