@@ -2,10 +2,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   @moduledoc """
   Stable runtime ABI called from lowered BEAM compiler output.
 
-  `RuntimeHelpers` remains the implementation façade. This module names the
-  subset of helpers that generated code should treat as ABI: operations whose
-  calling convention is part of compiler lowering rather than an implementation
-  detail of a particular helper module.
+  This module names the helpers that generated code should treat as ABI:
+  operations whose calling convention is part of compiler lowering rather than
+  an implementation detail of a particular helper module.
 
   Spec boundary examples:
 
@@ -26,6 +25,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
+
+  def push_this(ctx), do: RuntimeHelpers.push_this(ctx)
 
   def get_var(ctx, name), do: RuntimeHelpers.get_var(ctx, name)
 
@@ -48,6 +49,31 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def get_ref_value(ctx, key, ref), do: RuntimeHelpers.get_ref_value(ctx, key, ref)
 
   def put_ref_value(ctx, value, key, ref), do: RuntimeHelpers.put_ref_value(ctx, value, key, ref)
+
+  def ensure_initialized_local!(ctx, value),
+    do: RuntimeHelpers.ensure_initialized_local!(ctx, value)
+
+  def undefined?(ctx, value), do: RuntimeHelpers.undefined?(ctx, value)
+
+  def null?(ctx, value), do: RuntimeHelpers.null?(ctx, value)
+
+  def typeof_is_undefined(ctx, value), do: RuntimeHelpers.typeof_is_undefined(ctx, value)
+
+  def typeof_is_function(ctx, value), do: RuntimeHelpers.typeof_is_function(ctx, value)
+
+  def strict_neq(ctx, left, right), do: RuntimeHelpers.strict_neq(ctx, left, right)
+
+  def bit_not(ctx, value), do: RuntimeHelpers.bit_not(ctx, value)
+
+  def lnot(ctx, value), do: RuntimeHelpers.lnot(ctx, value)
+
+  def inc(ctx, value), do: RuntimeHelpers.inc(ctx, value)
+
+  def dec(ctx, value), do: RuntimeHelpers.dec(ctx, value)
+
+  def post_inc(ctx, value), do: RuntimeHelpers.post_inc(ctx, value)
+
+  def post_dec(ctx, value), do: RuntimeHelpers.post_dec(ctx, value)
 
   def to_object(_ctx, value), do: RuntimeHelpers.to_object(value)
 
@@ -146,6 +172,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def array_from(ctx, list), do: RuntimeHelpers.array_from(ctx, list)
 
   def with_has_property(ctx, obj, key), do: RuntimeHelpers.with_has_property(ctx, obj, key)
+
+  def rest(ctx, start_idx), do: RuntimeHelpers.rest(ctx, start_idx)
 
   def assignment_with_iterator_close(ctx, fun, iterators, obj, key, value),
     do: RuntimeHelpers.assignment_with_iterator_close(ctx, fun, iterators, obj, key, value)

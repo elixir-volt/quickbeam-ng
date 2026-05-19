@@ -87,7 +87,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
       if Slots.slot_initialized?(state, slot_idx) do
         slot_expr
       else
-        State.compiler_call(state, :ensure_initialized_local!, [slot_expr])
+        State.abi_call(state, :ensure_initialized_local!, [slot_expr])
       end
 
     value =

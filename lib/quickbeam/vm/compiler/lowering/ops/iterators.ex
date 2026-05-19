@@ -53,7 +53,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Iterators do
       {{:ok, :rest}, [start_idx]} ->
         LoweringEffects.effectful_push(
           state,
-          State.compiler_call(state, :rest, [Builder.literal(start_idx)]),
+          State.abi_call(state, :rest, [Builder.literal(start_idx)]),
           :object
         )
 

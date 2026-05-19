@@ -226,7 +226,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       update_slot(
         state,
         idx,
-        compiler_call(state, :inc, [Slots.slot_expr(state, idx)]),
+        abi_call(state, :inc, [Slots.slot_expr(state, idx)]),
         false,
         if(Slots.slot_type(state, idx) == :integer, do: :integer, else: :number)
       )
@@ -237,7 +237,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
       update_slot(
         state,
         idx,
-        compiler_call(state, :dec, [Slots.slot_expr(state, idx)]),
+        abi_call(state, :dec, [Slots.slot_expr(state, idx)]),
         false,
         if(Slots.slot_type(state, idx) == :integer, do: :integer, else: :number)
       )

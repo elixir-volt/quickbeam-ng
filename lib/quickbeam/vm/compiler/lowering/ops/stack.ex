@@ -47,7 +47,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
         {:ok, Emit.push(state, Builder.literal(Builder.atom_name(state, atom_idx)), :string)}
 
       {{:ok, :push_this}, []} ->
-        {:ok, Emit.push(state, State.compiler_call(state, :push_this, []), :object)}
+        {:ok, Emit.push(state, State.abi_call(state, :push_this, []), :object)}
 
       {{:ok, :push_const}, [const_idx]} ->
         push_const(state, constants, arg_count, const_idx)
