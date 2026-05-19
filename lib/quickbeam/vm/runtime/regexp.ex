@@ -371,7 +371,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       exec_stateful(regexp, s, flags)
     else
       _ = regexp_last_index(regexp)
-      literal_exec(s, source)
+      literal_exec(s, source) || constructed_regex_exec(source, flags, s)
     end
   end
 
@@ -668,6 +668,21 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
         {:obj, ref}
     end
+  end
+
+  defp constructed_regex_exec(source, flags, string) do
+    with {:ok, regex} <- Regex.compile(unescape_regexp_source(source), regex_compile_flags(flags)) do
+      case Regex.run(regex, string, return: :index, capture: :all) do
+        nil -> nil
+        captures -> unicode_regex_result(source, flags, string, captures)
+      end
+    else
+      _ -> nil
+    end
+  end
+
+  defp regex_compile_flags(flags) do
+    if String.contains?(flags, "u") or String.contains?(flags, "v"), do: "u", else: ""
   end
 
   defp named_group_regex_fallback(source, flags, string, last_index) do
