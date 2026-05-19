@@ -215,6 +215,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
+  defp test({:regexp, _, _, _} = regexp, [s | _]), do: test(regexp, [Values.stringify(s)])
+  defp test({:regexp, _, _} = regexp, [s | _]), do: test(regexp, [Values.stringify(s)])
+
   defp test({:obj, _} = obj, [s | _]) when is_binary(s) do
     case Get.get(obj, "exec") do
       exec_fun when exec_fun not in [nil, :undefined] ->
