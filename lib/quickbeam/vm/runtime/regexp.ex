@@ -56,9 +56,31 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
        string = List.first(args, :undefined)
        limit = args |> Enum.drop(1) |> List.first(:undefined)
-       JSString.regexp_split(string, this, limit)
+       splitter = regexp_splitter(this)
+       JSString.regexp_split(string, splitter, limit)
      end}
   end
+
+  defp regexp_splitter({:obj, _} = regexp) do
+    flags = regexp_to_string_hint(Get.get(regexp, "flags"))
+    new_flags = if String.contains?(flags, "y"), do: flags, else: flags <> "y"
+
+    case Get.get(regexp, "constructor") do
+      ctor when ctor in [nil, :undefined] ->
+        regexp
+
+      ctor ->
+        species = Get.get(ctor, {:symbol, "Symbol.species"})
+
+        case species do
+          nil -> regexp
+          :undefined -> regexp
+          constructor -> Invocation.construct_runtime(constructor, constructor, [regexp, new_flags])
+        end
+    end
+  end
+
+  defp regexp_splitter(regexp), do: regexp
 
   def proto_accessor("source"),
     do: {:accessor, {:builtin, "get source", fn _, this -> regexp_source(this) end}, nil}
