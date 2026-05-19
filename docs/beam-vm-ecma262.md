@@ -66,7 +66,7 @@ Owned by the BEAM VM:
 |---|---|
 | `[[Prototype]]` | `"__proto__"` and heap prototype helpers |
 | `[[Extensible]]` | heap non-extensible side table |
-| `[[PromiseState]]` | `promise_state()` heap key |
+| `[[PromiseState]]` | `promise_state()` heap key; Promise reactions are scheduled through `QuickBEAM.VM.JobQueue` |
 | `[[PromiseResult]]` | `promise_value()` heap key |
 | `[[ViewedArrayBuffer]]` | typed-array buffer keys in heap object maps |
 | `[[ArrayLength]]` | array storage plus length descriptor/side-table behavior |

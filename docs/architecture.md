@@ -237,9 +237,10 @@ The BEAM VM layers are intentionally split by responsibility:
 | Layer | Modules |
 |---|---|
 | QuickJS bytecode | `BytecodeParser`, `InstructionDecoder`, `Opcodes`, `Interpreter.Ops.*`, `Compiler.Lowering.Ops.*` |
-| ECMA semantics | `Semantics.*`, `ObjectModel.*`, `Invocation`, `GlobalEnvironment`, `Promise` |
+| ECMA semantics | `Semantics.*`, `ObjectModel.*`, `Invocation`, `GlobalEnvironment`, `Promise`, `JobQueue` |
 | Standard built-ins | `Runtime.Object`, `Runtime.Array`, `Runtime.Promise`, `Runtime.TypedArray`, etc. |
-| Host APIs | `Host.Web.*`, `Host.Test262`, BEAM/native bridge helpers |
+| Global realm bindings | `Runtime.Globals.*` |
+| Host APIs | `Host.Web.*`, `Host.BeamAPI`, `Host.Test262`, BEAM/native bridge helpers |
 | Compiler boundary | `Compiler.RuntimeABI`, `Compiler.RuntimeHelpers`, `Compiler.SemanticEffects` |
 
 See `docs/beam-vm-ecma262.md` and `docs/beam-vm-compiler.md` for the detailed
