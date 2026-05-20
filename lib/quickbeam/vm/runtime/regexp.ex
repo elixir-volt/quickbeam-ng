@@ -207,6 +207,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       source == "^.$" ->
         single_dot_match?(s, regexp_flags(bytecode, ref))
 
+      flags = modifier_anchored_dot_flags(source, regexp_flags(bytecode, ref)) ->
+        single_dot_match?(s, flags)
+
       true ->
         case class_escape_test(source, s) do
           {:ok, result} -> result
@@ -234,6 +237,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
       source == "^.$" ->
         single_dot_match?(s, Get.regexp_flags(bytecode))
+
+      flags = modifier_anchored_dot_flags(source, Get.regexp_flags(bytecode)) ->
+        single_dot_match?(s, flags)
 
       true ->
         case class_escape_test(source, s) do
@@ -625,6 +631,34 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
         0x3000,
         0xFEFF
       ] or cp in 0x2000..0x200A
+
+  defp modifier_anchored_dot_flags(source, flags) do
+    case Regex.run(~r/^\(\?([ims]*)(?:-([ims]*))?:\^\.\$\)$/, source) do
+      [_all, add, remove] -> apply_modifier_flags(flags, add, remove)
+      [_all, add] -> apply_modifier_flags(flags, add, "")
+      _ -> nil
+    end
+  end
+
+  defp apply_modifier_flags(flags, add, remove) do
+    flags
+    |> remove_modifier_flags(remove)
+    |> add_modifier_flags(add)
+  end
+
+  defp remove_modifier_flags(flags, remove) do
+    remove
+    |> String.graphemes()
+    |> Enum.reduce(flags, &String.replace(&2, &1, ""))
+  end
+
+  defp add_modifier_flags(flags, add) do
+    add
+    |> String.graphemes()
+    |> Enum.reduce(flags, fn flag, acc ->
+      if String.contains?(acc, flag), do: acc, else: acc <> flag
+    end)
+  end
 
   defp single_dot_match?(string, flags) do
     dot_matches = String.contains?(flags, "s") or string not in ["\n", "\r", "\u2028", "\u2029"]
