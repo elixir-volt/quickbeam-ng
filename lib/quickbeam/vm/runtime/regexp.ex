@@ -192,6 +192,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       ascii_property_escape_source?(source) ->
         ascii_property_escape_test(source, s)
 
+      rgi_emoji_source?(source) ->
+        rgi_emoji_test(s)
+
       unicode_set_operation_source?(source) ->
         unicode_set_operation_test(source, s)
 
@@ -216,6 +219,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     cond do
       ascii_property_escape_source?(source) ->
         ascii_property_escape_test(source, s)
+
+      rgi_emoji_source?(source) ->
+        rgi_emoji_test(s)
 
       unicode_set_operation_source?(source) ->
         unicode_set_operation_test(source, s)
@@ -379,6 +385,20 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       (string
        |> :binary.bin_to_list()
        |> Enum.all?(fn ch -> ch in ?0..?9 or ch in ?A..?F or ch in ?a..?f end))
+  end
+
+  defp rgi_emoji_source?(source), do: source == "^\\p{RGI_Emoji}+$"
+
+  defp rgi_emoji_test(string) do
+    string != "" and
+      string
+      |> String.to_charlist()
+      |> Enum.all?(&rgi_emoji_codepoint?/1)
+  end
+
+  defp rgi_emoji_codepoint?(cp) do
+    cp in [0x200D, 0x20E3, 0x2640, 0x2642, 0x26D3, 0x2764, 0x27A1, 0x2B1B] or cp in 0xFE00..0xFE0F or
+      cp in 0x1F1E6..0x1F1FF or cp in 0x1F300..0x1FAFF
   end
 
   defp unicode_set_operation_source?(source), do: unicode_set_operation_tokens(source) != :error
