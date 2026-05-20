@@ -274,6 +274,12 @@ defmodule QuickBEAM.VM.Builtin do
   def named_meta("fromEntries"),
     do: meta("fromEntries", [length: 1, constructable: false], :static)
 
+  def named_meta("__defineGetter__"),
+    do: meta("__defineGetter__", [length: 2, constructable: false], :proto)
+
+  def named_meta("__defineSetter__"),
+    do: meta("__defineSetter__", [length: 2, constructable: false], :proto)
+
   def named_meta("call"), do: meta("call", [length: 1, constructable: false], :proto)
   def named_meta("apply"), do: meta("apply", [length: 2, constructable: false], :proto)
   def named_meta("bind"), do: meta("bind", [length: 1, constructable: false], :proto)
