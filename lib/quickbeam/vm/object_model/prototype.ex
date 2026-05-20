@@ -1,9 +1,11 @@
 defmodule QuickBEAM.VM.ObjectModel.Prototype do
   @moduledoc "Shared JavaScript prototype access and chain helpers."
 
-  import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
+  import QuickBEAM.VM.Heap.Keys, only: [proto: 0, proxy_target: 0, proxy_handler: 0]
 
   alias QuickBEAM.VM.Builtin
+  alias QuickBEAM.VM.Invocation
+  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap
 
@@ -11,6 +13,7 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
     case Heap.get_obj(ref, %{}) do
       {:qb_arr, _} -> array_like_prototype(ref)
       data when is_list(data) -> array_like_prototype(ref)
+      map when is_map(map) and is_map_key(map, proxy_target()) -> proxy_prototype(map)
       map when is_map(map) -> object_map_prototype(ref, map)
       _ -> nil
     end
@@ -68,6 +71,18 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   end
 
   defp chain_contains?(_, _target_ref, _seen), do: false
+
+  defp proxy_prototype(map) do
+    target = Map.fetch!(map, proxy_target())
+    handler = Map.fetch!(map, proxy_handler())
+    trap = Get.get(handler, "getPrototypeOf")
+
+    if trap == :undefined or trap == nil do
+      get(target)
+    else
+      Invocation.invoke_callback_or_throw(trap, [target])
+    end
+  end
 
   defp array_like_prototype(ref) do
     if Heap.get_array_prop(ref, "__arguments__") == true do

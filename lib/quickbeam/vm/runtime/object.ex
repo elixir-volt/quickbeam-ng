@@ -303,8 +303,24 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_value_of({:symbol, _} = value), do: WrappedPrimitive.wrap(value)
   defp object_value_of(value), do: value
 
-  defp prototype_of?([value | _], {:obj, proto_ref}),
-    do: Prototype.chain_contains?(value, proto_ref)
+  defp prototype_of?([value | _], target) do
+    cond do
+      not is_object_like?(value) ->
+        false
+
+      target in [nil, :undefined] ->
+        throw(
+          {:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")}
+        )
+
+      match?({:obj, _}, target) ->
+        {:obj, proto_ref} = target
+        Prototype.chain_contains?(value, proto_ref)
+
+      true ->
+        false
+    end
+  end
 
   defp prototype_of?(_, _), do: false
 
@@ -636,6 +652,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp object_extensible?(_), do: true
 
+  defp is_object_like?({:obj, _}), do: true
   defp is_object_like?(%QuickBEAM.VM.Function{}), do: true
   defp is_object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
   defp is_object_like?({:bound, _, _, _, _}), do: true
