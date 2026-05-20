@@ -133,14 +133,8 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
     method "getPrototypeOf" do
       [obj | _] = args
-
-      case obj do
-        {:obj, _} ->
-          Object.static_property("getPrototypeOf") |> Invocation.invoke_callback_or_throw([obj])
-
-        _ ->
-          JSThrow.type_error!("Reflect.getPrototypeOf called on non-object")
-      end
+      require_object!(obj, "Reflect.getPrototypeOf")
+      Object.static_property("getPrototypeOf") |> Invocation.invoke_callback_or_throw([obj])
     end
 
     method "setPrototypeOf" do
@@ -150,20 +144,19 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
     method "defineProperty" do
       [obj, key, descriptor | _] = args
+      require_object!(obj, "Reflect.defineProperty")
 
-      case obj do
-        {:obj, _} ->
-          try do
-            Object.static_property("defineProperty")
-            |> Invocation.invoke_callback_or_throw([obj, PropertyKey.to_property_key(key), descriptor])
+      try do
+        Object.static_property("defineProperty")
+        |> Invocation.invoke_callback_or_throw([
+          obj,
+          PropertyKey.to_property_key(key),
+          descriptor
+        ])
 
-            true
-          catch
-            {:js_throw, _reason} -> false
-          end
-
-        _ ->
-          JSThrow.type_error!("Reflect.defineProperty called on non-object")
+        true
+      catch
+        {:js_throw, _reason} -> false
       end
     end
 
@@ -175,10 +168,9 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     end
 
     method "isExtensible" do
-      case hd(args) do
-        {:obj, _} = obj -> extensible?(obj)
-        _ -> JSThrow.type_error!("Reflect.isExtensible called on non-object")
-      end
+      obj = hd(args)
+      require_object!(obj, "Reflect.isExtensible")
+      extensible?(obj)
     end
 
     method "has" do
@@ -340,6 +332,8 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   defp object?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
   defp object?({:bound, _, _, _, _}), do: true
   defp object?({:builtin, _, _}), do: true
+  defp object?({:regexp, _, _}), do: true
+  defp object?({:regexp, _, _, _}), do: true
   defp object?(_), do: false
 
   defp prevent_extensions({:obj, ref}) do
@@ -449,5 +443,4 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     do: String.starts_with?(key, "__") and String.ends_with?(key, "__")
 
   defp internal_key?(_), do: false
-
 end

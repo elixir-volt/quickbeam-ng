@@ -281,6 +281,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     case hd(args) do
       {:obj, ref} -> Heap.extensible?(ref)
       {:builtin, "ThrowTypeError", _} -> false
+      {:builtin, _, _} -> true
       value -> QuickBEAM.VM.Builtin.callable?(value)
     end
   end
