@@ -221,7 +221,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
     if is_map(existing) and Map.get(existing, typed_array()) do
       case PropertyKey.integer_index(prop_name) do
         {:ok, idx} ->
-          if idx >= TypedArray.element_count(obj) do
+          if TypedArray.out_of_bounds?(obj) or idx >= TypedArray.element_count(obj) do
             throw({:js_throw, Heap.make_error("Invalid typed array index", "TypeError")})
           end
 
