@@ -2,6 +2,7 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
   @moduledoc "Array exotic object semantics for length, integer-indexed properties, and descriptors."
 
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.Interpreter.Closures
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, PropertyKey, Put, Semantics}
 
@@ -151,6 +152,7 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
             new_set =
               PropertyDescriptor.accessor_slot(fields.setter_present, fields.setter, old_set)
 
+            delete_mapped_argument(ref, idx)
             Heap.put_array_prop(ref, prop_name, {:accessor, new_get, new_set})
 
           fields.value_present or fields.writable_present or
@@ -159,6 +161,7 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
 
             unless match?(%{writable: false}, existing_flags) do
               sync_arguments_index(ref, idx, value)
+              sync_mapped_argument(ref, idx, value)
             end
 
             if Map.get(desc, "writable") == false do
@@ -254,6 +257,19 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
         _ ->
           :ok
       end
+    end
+  end
+
+  defp sync_mapped_argument(ref, idx, value) do
+    case Heap.get_array_prop(ref, "__mapped_arguments__") do
+      mapped when is_map(mapped) ->
+        case Map.get(mapped, idx) do
+          {:cell, _} = cell -> Closures.write_cell(cell, value)
+          _ -> :ok
+        end
+
+      _ ->
+        :ok
     end
   end
 
