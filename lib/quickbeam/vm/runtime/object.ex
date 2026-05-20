@@ -1511,6 +1511,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
+  defp values([target | _]) when target in [nil, :undefined] do
+    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
+  end
+
   defp values([{:obj, ref} = obj | _]) do
     data = Heap.get_obj(ref, %{})
     Heap.wrap(Enum.map(enumerable_keys(ref), fn key -> enumerable_value(obj, data, key) end))
