@@ -1,3 +1,7 @@
+if is_nil(System.get_env("QUICKBEAM_COMPILER_CACHE")) do
+  System.put_env("QUICKBEAM_COMPILER_CACHE", "1")
+end
+
 Mix.Task.run("app.start")
 
 unless Code.ensure_loaded?(QuickBEAM.Test262) do
