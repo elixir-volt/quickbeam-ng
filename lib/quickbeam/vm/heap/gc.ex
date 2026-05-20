@@ -235,19 +235,28 @@ defmodule QuickBEAM.VM.Heap.GC do
   defp side_table_owner_marked?({:qb_key_order, ref}, marked), do: MapSet.member?(marked, ref)
 
   defp side_table_owner_marked?({:qb_ctor_prop_desc, owner, _}, marked),
-    do: MapSet.member?(marked, owner)
+    do: callable_owner_marked?(owner, marked)
 
   defp side_table_owner_marked?({:qb_ctor_prop_desc_index, owner}, marked),
-    do: MapSet.member?(marked, owner)
+    do: callable_owner_marked?(owner, marked)
 
   defp side_table_owner_marked?({:qb_ctor_statics, owner}, marked),
-    do: MapSet.member?(marked, owner)
+    do: callable_owner_marked?(owner, marked)
 
   defp side_table_owner_marked?({:qb_class_proto, owner}, marked),
-    do: MapSet.member?(marked, owner)
+    do: callable_owner_marked?(owner, marked)
 
   defp side_table_owner_marked?({:qb_parent_ctor, owner}, marked),
-    do: MapSet.member?(marked, owner)
+    do: callable_owner_marked?(owner, marked)
+
+  defp callable_owner_marked?(owner, marked) do
+    MapSet.member?(marked, owner) or MapSet.member?(marked, callable_mark_key(owner))
+  end
+
+  defp callable_mark_key({:builtin, _, _} = builtin), do: {:builtin, :erlang.phash2(builtin)}
+  defp callable_mark_key({:closure, _, _} = closure), do: {:closure, :erlang.phash2(closure)}
+  defp callable_mark_key(%QuickBEAM.VM.Function{id: id}), do: {:function, id}
+  defp callable_mark_key(owner), do: owner
 
   defp ctor_key({:closure, _captured, %QuickBEAM.VM.Function{} = fun}), do: ctor_key(fun)
   defp ctor_key(%QuickBEAM.VM.Function{id: id}) when is_integer(id), do: {:function, id}
