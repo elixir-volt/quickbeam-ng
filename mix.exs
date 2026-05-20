@@ -1,7 +1,7 @@
 defmodule QuickBEAM.MixProject do
   use Mix.Project
 
-  @version "0.10.13"
+  @version "0.10.14"
 
   @source_url "https://github.com/elixir-volt/quickbeam"
 

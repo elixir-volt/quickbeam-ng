@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.14
 
 - Update optional `npm_ex` dependency to 0.7.4
 
