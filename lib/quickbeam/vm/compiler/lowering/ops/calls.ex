@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   import QuickBEAM.VM.OpcodeFamily, only: [is_call: 1]
 
-  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
+  alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Emit, Slots, State}
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, idx, name_args) do
@@ -65,24 +65,32 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
 
       {{:ok, :apply_eval}, [_scope_idx]} ->
         with {:ok, arg_array, state} <- Emit.pop(state),
-             {:ok, fun, state} <- Emit.pop(state) do
+             {:ok, fun, state} <- Emit.pop(state),
+             {:ok, state} <- ensure_eval_capture_cells(state) do
           LoweringEffects.effectful_push(
             state,
-            Builder.remote_call(QuickBEAM.VM.Invocation, :invoke_runtime, [
-              State.ctx_expr(state),
+            State.abi_call(state, :eval_or_call_scope, [
               fun,
-              Builder.remote_call(QuickBEAM.VM.Heap, :to_list, [arg_array])
+              Builder.remote_call(QuickBEAM.VM.Heap, :to_list, [arg_array]),
+              Builder.literal(state.locals),
+              Builder.list_expr(Slots.current_capture_cells(state))
             ])
           )
         end
 
       {{:ok, :eval}, [argc | _scope_args]} ->
-        with {:ok, args, _types, state} <- Emit.pop_n_typed(state, argc + 1) do
+        with {:ok, args, _types, state} <- Emit.pop_n_typed(state, argc + 1),
+             {:ok, state} <- ensure_eval_capture_cells(state) do
           [eval_ref | call_args] = Enum.reverse(args)
 
           LoweringEffects.effectful_push(
             state,
-            State.abi_call(state, :eval_or_call, [eval_ref, Builder.list_expr(call_args)])
+            State.abi_call(state, :eval_or_call_scope, [
+              eval_ref,
+              Builder.list_expr(call_args),
+              Builder.literal(state.locals),
+              Builder.list_expr(Slots.current_capture_cells(state))
+            ])
           )
         end
 
@@ -104,5 +112,20 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Calls do
       _ ->
         :not_handled
     end
+  end
+
+  defp ensure_eval_capture_cells(state) do
+    state.locals
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, state}, fn {_local, idx}, {:ok, state} ->
+      if Captures.slot_captured?(state, idx) do
+        case Captures.ensure_capture_cell(state, idx) do
+          {:ok, state, _cell} -> {:cont, {:ok, state}}
+          error -> {:halt, error}
+        end
+      else
+        {:cont, {:ok, state}}
+      end
+    end)
   end
 end

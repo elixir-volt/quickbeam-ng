@@ -25,7 +25,15 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Calls, Captures, Classes, Iterators, Properties}
+
+  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{
+    Bindings,
+    Calls,
+    Captures,
+    Classes,
+    Iterators,
+    Properties
+  }
 
   def push_this(ctx), do: RuntimeHelpers.push_this(ctx)
 
@@ -173,6 +181,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def update_this(ctx, this_value), do: RuntimeHelpers.update_this(ctx, this_value)
 
   def eval_or_call(ctx, fun, args), do: Calls.eval_or_call(ctx, fun, args)
+
+  def eval_or_call_scope(ctx, fun, args, locals, captures),
+    do: Calls.eval_or_call_scope(ctx, fun, args, locals, captures)
 
   def import_module(ctx, specifier), do: RuntimeHelpers.import_module(ctx, specifier)
 

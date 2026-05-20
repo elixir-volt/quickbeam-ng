@@ -1,9 +1,10 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
   @moduledoc "Call, construction, and direct-eval helpers for BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{Heap, Invocation}
+  alias QuickBEAM.VM.{Heap, Invocation, Names}
   alias QuickBEAM.VM.Compiler.Runner
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Context, Errors}
+  alias QuickBEAM.VM.Environment.Captures, as: EnvCaptures
   alias QuickBEAM.VM.Execution.ConstructorStack
   alias QuickBEAM.VM.Interpreter.Context, as: InterpreterContext
   alias QuickBEAM.VM.Semantics.{Construction, Eval}
@@ -111,6 +112,20 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
   end
 
   def eval_or_call(ctx, fun, args), do: Invocation.invoke_runtime(ctx, fun, args)
+
+  def eval_or_call_scope(ctx, fun, [code | _] = args, locals, captures) when is_binary(code) do
+    if fun == ctx.globals["eval"] do
+      scoped_globals = Map.merge(ctx.globals, local_globals(locals, captures))
+      pre_globals = Heap.get_persistent_globals() || %{}
+      result = eval_source(%{ctx | globals: scoped_globals}, code)
+      sync_eval_locals(locals, captures, pre_globals)
+      result
+    else
+      Invocation.invoke_runtime(ctx, fun, args)
+    end
+  end
+
+  def eval_or_call_scope(ctx, fun, args, _locals, _captures), do: eval_or_call(ctx, fun, args)
 
   def invoke_method_runtime(ctx, fun, this_object, args),
     do: Invocation.invoke_method_runtime(ctx, fun, this_object, args)
@@ -222,6 +237,52 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
       Eval.reject_lexical_conflicts!(ctx, Eval.declared_local_names(eval_fun), false)
     end
   end
+
+  defp local_globals(locals, captures) do
+    locals
+    |> Enum.zip(captures)
+    |> Map.new(fn {local, capture} ->
+      {local_name(local), EnvCaptures.read(capture, :undefined)}
+    end)
+    |> Map.reject(fn {name, _value} -> is_nil(name) end)
+  end
+
+  defp sync_eval_locals(locals, captures, pre_globals) do
+    post_globals = Heap.get_persistent_globals() || %{}
+
+    local_names =
+      locals
+      |> Enum.map(&local_name/1)
+      |> Enum.filter(&is_binary/1)
+      |> MapSet.new()
+
+    locals
+    |> Enum.zip(captures)
+    |> Enum.each(fn {local, capture} ->
+      with name when is_binary(name) <- local_name(local),
+           true <- Map.has_key?(post_globals, name),
+           true <- Map.get(pre_globals, name, :__missing__) != Map.fetch!(post_globals, name) do
+        EnvCaptures.sync(capture, Map.fetch!(post_globals, name))
+      else
+        _ -> :ok
+      end
+    end)
+
+    restored_globals =
+      Enum.reduce(local_names, post_globals, fn name, globals ->
+        case Map.fetch(pre_globals, name) do
+          {:ok, value} -> Map.put(globals, name, value)
+          :error -> Map.delete(globals, name)
+        end
+      end)
+
+    Heap.put_persistent_globals(restored_globals)
+  end
+
+  defp local_name(%{name: name}), do: Names.resolve_display_name(name)
+  defp local_name(%{"name" => name}) when is_binary(name), do: name
+  defp local_name(name) when is_binary(name), do: name
+  defp local_name(_), do: nil
 
   defp parse_error_message([%{message: message} | _]), do: message
   defp parse_error_message(_errors), do: "Syntax error"
