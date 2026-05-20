@@ -13,13 +13,13 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   alias QuickBEAM.VM.Runtime
 
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
-  def object([arg | _], _) do
+  def object([arg | _], this) do
     case arg do
       {:symbol, _, _} = symbol ->
         WrappedPrimitive.wrap(symbol)
 
       {:obj, _} = obj ->
-        obj
+        if subclass_object_this?(this), do: this, else: obj
 
       %QuickBEAM.VM.Function{} = value ->
         value
@@ -61,6 +61,18 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   end
 
   def object(_, _), do: ordinary_object()
+
+  defp subclass_object_this?({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      map when is_map(map) ->
+        Map.get(map, "__proto__") not in [nil, Runtime.global_class_proto("Object")]
+
+      _ ->
+        false
+    end
+  end
+
+  defp subclass_object_this?(_), do: false
 
   defp ordinary_object do
     ref = make_ref()
