@@ -434,26 +434,14 @@ defmodule QuickBEAM.VM.Runtime.Object do
     prevent_extensions_object(obj)
   end
 
-  defp frozen_object?({:obj, ref} = obj) do
-    not Heap.extensible?(ref) and
-      Enum.all?(OwnProperty.descriptor_keys(obj), fn key ->
-        desc = Heap.get_prop_desc(ref, key) || %{writable: true, configurable: true}
-        current = Heap.get_obj(ref, %{}) |> property_value_for_descriptor(key)
-
-        if match?({:accessor, _, _}, current) do
-          desc.configurable == false
-        else
-          desc.configurable == false and desc.writable == false
-        end
-      end)
+  defp frozen_object?({:obj, _ref} = obj) do
+    not object_extensible?(obj) and
+      Enum.all?(OwnProperty.descriptor_keys(obj), &frozen_descriptor?(obj, &1))
   end
 
-  defp sealed_object?({:obj, ref} = obj) do
-    not Heap.extensible?(ref) and
-      Enum.all?(OwnProperty.descriptor_keys(obj), fn key ->
-        desc = Heap.get_prop_desc(ref, key) || %{configurable: true}
-        desc.configurable == false
-      end)
+  defp sealed_object?({:obj, _ref} = obj) do
+    not object_extensible?(obj) and
+      Enum.all?(OwnProperty.descriptor_keys(obj), &sealed_descriptor?(obj, &1))
   end
 
   defp frozen_object_like?(target) do
@@ -482,6 +470,24 @@ defmodule QuickBEAM.VM.Runtime.Object do
       _ -> false
     end
   end
+
+  defp object_extensible?({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => target, proxy_handler() => handler} ->
+        trap = Get.get(handler, "isExtensible")
+
+        if trap == :undefined or trap == nil do
+          object_extensible?(target)
+        else
+          Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target]))
+        end
+
+      _ ->
+        Heap.extensible?(ref)
+    end
+  end
+
+  defp object_extensible?(_), do: true
 
   defp is_object_like?(%QuickBEAM.VM.Function{}), do: true
   defp is_object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
