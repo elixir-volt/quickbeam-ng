@@ -1790,8 +1790,22 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
-  def regexp_split(s, regexp, limit \\ :undefined),
+  def regexp_split(s, regexp, limit \\ :undefined)
+
+  def regexp_split(s, {:obj, _} = regexp, limit) do
+    string = stringify_search_string(s)
+    split_regexp_object(string, regexp, split_limit([limit]))
+  end
+
+  def regexp_split(s, regexp, limit),
     do: split(stringify_search_string(s), [regexp, limit])
+
+  defp split_regexp_object(s, splitter, limit) do
+    case s do
+      "" -> split_empty_with_exec(s, splitter)
+      _ -> split_with_exec_loop(s, splitter, limit, 0, 0, [])
+    end
+  end
 
   def regex_replace(s, {:regexp, nil, source, _ref} = regexp, replacement)
       when is_binary(source) do
