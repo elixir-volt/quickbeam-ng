@@ -273,15 +273,16 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp function_descriptor_present?(_, _), do: false
 
-  defp property_enumerable?([_key | _], target) when target in [nil, :undefined] do
-    throw(
-      {:js_throw,
-       Heap.make_error("propertyIsEnumerable called on null or undefined", "TypeError")}
-    )
-  end
-
   defp property_enumerable?([key | _], target) do
-    prop_name = if is_binary(key) or is_symbol(key), do: key, else: Values.stringify(key)
+    prop_name = PropertyKey.to_property_key(key)
+
+    if target in [nil, :undefined] do
+      throw(
+        {:js_throw,
+         Heap.make_error("propertyIsEnumerable called on null or undefined", "TypeError")}
+      )
+    end
+
     OwnProperty.present?(target, prop_name) and OwnProperty.enumerable?(target, prop_name)
   end
 
