@@ -1067,11 +1067,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp get_own_property_descriptors([obj | _]) do
     ref = make_ref()
+    keys = OwnProperty.descriptor_keys(obj)
 
     descriptors =
-      obj
-      |> OwnProperty.descriptor_keys()
-      |> Enum.reduce(%{}, fn key, acc ->
+      Enum.reduce(keys, %{key_order() => descriptor_result_key_order(keys)}, fn key, acc ->
         case get_own_property_descriptor([obj, key]) do
           :undefined -> acc
           desc -> Map.put(acc, key, desc)
@@ -1083,6 +1082,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp get_own_property_descriptors(_), do: Heap.wrap(%{})
+
+  defp descriptor_result_key_order(keys) do
+    if Enum.all?(keys, &is_symbol/1), do: keys, else: Enum.reverse(keys)
+  end
 
   defp enumerable_keys(ref) do
     data = Heap.get_obj(ref, %{})
