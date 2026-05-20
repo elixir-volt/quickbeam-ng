@@ -5,7 +5,7 @@ defmodule QuickBEAM.ContextPool.BeamWorker do
 
   alias QuickBEAM.VM.Heap
 
-  defstruct [:runtime, :mode]
+  defstruct [:runtime, :mode, snapshots: %{}]
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
@@ -19,12 +19,20 @@ defmodule QuickBEAM.ContextPool.BeamWorker do
     GenServer.call(worker, :reset, :infinity)
   end
 
+  def snapshot(worker, name) do
+    GenServer.call(worker, {:snapshot, name}, :infinity)
+  end
+
+  def restore(worker, name) do
+    GenServer.call(worker, {:restore, name}, :infinity)
+  end
+
   @impl true
   def init(opts) do
     mode = Keyword.fetch!(opts, :mode)
     {:ok, runtime} = QuickBEAM.start(apis: false, mode: mode)
     Heap.reset()
-    {:ok, %__MODULE__{runtime: runtime, mode: mode}}
+    {:ok, %__MODULE__{runtime: runtime, mode: mode, snapshots: %{}}}
   end
 
   @impl true
@@ -37,6 +45,20 @@ defmodule QuickBEAM.ContextPool.BeamWorker do
     Heap.reset()
     result = QuickBEAM.reset(state.runtime)
     {:reply, result, state}
+  end
+
+  def handle_call({:snapshot, name}, _from, state) do
+    {:reply, :ok, %{state | snapshots: Map.put(state.snapshots, name, Heap.snapshot())}}
+  end
+
+  def handle_call({:restore, name}, _from, state) do
+    case Map.fetch(state.snapshots, name) do
+      {:ok, snapshot} ->
+        {:reply, Heap.restore(snapshot), state}
+
+      :error ->
+        {:reply, {:error, :snapshot_not_found}, state}
+    end
   end
 
   defp normalize_result({:error, %QuickBEAM.JS.Error{} = error}) do

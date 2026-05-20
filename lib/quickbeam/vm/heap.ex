@@ -544,6 +544,34 @@ defmodule QuickBEAM.VM.Heap do
     :ok
   end
 
+  @doc "Captures the mutable BEAM VM heap state for later restoration."
+  def snapshot do
+    entries =
+      for key <- Process.get_keys(),
+          ProcessKeys.owned_entry?(key, Process.get(key)),
+          not snapshot_preserved_key?(key),
+          into: %{} do
+        {key, Process.get(key)}
+      end
+
+    %{entries: entries}
+  end
+
+  @doc "Restores a heap snapshot created by snapshot/0 while preserving safe caches."
+  def restore(%{entries: entries}) when is_map(entries) do
+    for key <- Process.get_keys(),
+        ProcessKeys.owned_entry?(key, Process.get(key)),
+        not snapshot_preserved_key?(key) do
+      Process.delete(key)
+    end
+
+    Enum.each(entries, fn {key, value} -> Process.put(key, value) end)
+    :ok
+  end
+
+  defp snapshot_preserved_key?({:qb_compiled, _}), do: true
+  defp snapshot_preserved_key?(_), do: false
+
   @doc "Runs heap garbage collection using the active VM roots plus extra roots."
   defdelegate gc(extra_roots \\ []), to: GC
 end

@@ -78,15 +78,30 @@ defmodule QuickBEAM.Context do
 
   @spec eval(GenServer.server(), String.t(), keyword()) :: {:ok, term()} | {:error, String.t()}
   def eval(server, code, opts \\ []) when is_binary(code) do
-    timeout_ms = Keyword.get(opts, :timeout, 0)
-    filename = Keyword.get(opts, :filename, "")
-    GenServer.call(server, {:eval, code, timeout_ms, filename}, :infinity)
+    with :ok <- maybe_restore(server, Keyword.get(opts, :restore)) do
+      timeout_ms = Keyword.get(opts, :timeout, 0)
+      filename = Keyword.get(opts, :filename, "")
+      GenServer.call(server, {:eval, code, timeout_ms, filename}, :infinity)
+    end
   end
 
   @spec reset(GenServer.server()) :: :ok | {:error, String.t()}
   def reset(server) do
     GenServer.call(server, :reset, :infinity)
   end
+
+  @spec snapshot(GenServer.server(), atom()) :: :ok | {:error, term()}
+  def snapshot(server, name \\ :default) when is_atom(name) do
+    GenServer.call(server, {:snapshot, name}, :infinity)
+  end
+
+  @spec restore(GenServer.server(), atom()) :: :ok | {:error, term()}
+  def restore(server, name \\ :default) when is_atom(name) do
+    GenServer.call(server, {:restore, name}, :infinity)
+  end
+
+  defp maybe_restore(_server, nil), do: :ok
+  defp maybe_restore(server, name) when is_atom(name), do: restore(server, name)
 
   @spec stop(GenServer.server()) :: :ok
   def stop(server) do
@@ -345,6 +360,14 @@ defmodule QuickBEAM.Context do
     {:noreply, put_pending(state, ref, from)}
   end
 
+  def handle_call({:snapshot, name}, _from, state) do
+    {:reply, context_snapshot(state, name), state}
+  end
+
+  def handle_call({:restore, name}, _from, state) do
+    {:reply, context_restore(state, name), state}
+  end
+
   # ── NIF dispatch callbacks ──
 
   defp nif_eval(state, code, timeout, filename \\ "")
@@ -409,6 +432,18 @@ defmodule QuickBEAM.Context do
 
   defp nif_reset(state),
     do: QuickBEAM.Native.pool_reset_context(state.pool_resource, state.context_id)
+
+  defp context_snapshot(%{pool_resource: {:beam_worker, worker, _}}, name) do
+    QuickBEAM.ContextPool.BeamWorker.snapshot(worker, name)
+  end
+
+  defp context_snapshot(_state, _name), do: {:error, :snapshots_not_supported}
+
+  defp context_restore(%{pool_resource: {:beam_worker, worker, _}}, name) do
+    QuickBEAM.ContextPool.BeamWorker.restore(worker, name)
+  end
+
+  defp context_restore(_state, _name), do: {:error, :snapshots_not_supported}
 
   defp nif_get_global(state, name),
     do: QuickBEAM.Native.pool_get_global(state.pool_resource, state.context_id, name)
