@@ -1001,6 +1001,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
+  defp keys([target | _]) when target in [nil, :undefined] do
+    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
+  end
+
   defp keys([{:obj, ref} | _]) do
     data = Heap.get_obj(ref, %{})
 
@@ -1008,6 +1012,17 @@ defmodule QuickBEAM.VM.Runtime.Object do
       Heap.wrap(enumerable_keys(ref))
     else
       keys_from_map(ref, data)
+    end
+  end
+
+  defp keys([target | _]) do
+    if is_object_like?(target) do
+      target
+      |> OwnProperty.descriptor_keys()
+      |> Enum.filter(&(is_binary(&1) and OwnProperty.enumerable?(target, &1)))
+      |> Heap.wrap()
+    else
+      Heap.wrap([])
     end
   end
 
@@ -1032,24 +1047,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp get_own_property_names([{:obj, ref} | _]) do
-    data = Heap.get_obj(ref, %{})
-
-    names =
-      case data do
-        {:qb_arr, arr} ->
-          for(i <- 0..(:array.size(arr) - 1), do: Integer.to_string(i)) ++ ["length"]
-
-        list when is_list(list) ->
-          array_indices(list) ++ ["length"]
-
-        map when is_map(map) ->
-          OwnProperty.descriptor_keys({:obj, ref})
-
-        _ ->
-          []
-      end
-
-    Heap.wrap(names)
+    Heap.wrap(OwnProperty.descriptor_keys({:obj, ref}) |> Enum.filter(&is_binary/1))
   end
 
   defp get_own_property_names([target | _]) do

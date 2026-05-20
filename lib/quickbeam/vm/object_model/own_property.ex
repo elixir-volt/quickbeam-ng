@@ -234,10 +234,10 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
         end
 
       {:qb_arr, arr} ->
-        array_indices(:array.size(arr)) ++ array_property_keys(ref) ++ ["length"]
+        array_present_indices(ref, :array.size(arr)) ++ ["length"] ++ array_property_keys(ref)
 
       list when is_list(list) ->
-        array_indices(list) ++ array_property_keys(ref) ++ ["length"]
+        array_present_indices(ref, length(list)) ++ ["length"] ++ array_property_keys(ref)
 
       map when is_map(map) ->
         ordered_map_keys(map)
@@ -917,6 +917,19 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp array_indices(list) do
     list |> Enum.with_index() |> Enum.map(fn {_, i} -> Integer.to_string(i) end)
+  end
+
+  defp array_present_indices(_ref, size) when size <= 0, do: []
+
+  defp array_present_indices(ref, size) do
+    0..(size - 1)
+    |> Enum.filter(fn idx ->
+      key = Integer.to_string(idx)
+
+      Heap.array_get(ref, idx) != :undefined or Heap.get_array_prop(ref, key) != :undefined or
+        Heap.get_prop_desc(ref, key) != nil
+    end)
+    |> Enum.map(&Integer.to_string/1)
   end
 
   defp array_property_keys(ref) do
