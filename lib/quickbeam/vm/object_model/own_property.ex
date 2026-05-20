@@ -259,6 +259,10 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   end
 
   def own_keys({:bound, _, _, _, _} = bound), do: callable_descriptor_keys(bound)
+
+  def own_keys(string) when is_binary(string),
+    do: array_indices(Get.string_length(string)) ++ ["length"]
+
   def own_keys(_), do: []
 
   defp builtin_namespace_descriptor_keys(builtin, inline_map) do
@@ -416,7 +420,8 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
       array_prototype_object?(data) and prop_name == "length" ->
         array_prototype_length_descriptor(ref, data)
 
-      is_map(data) and Map.get(data, "__proxy_revoked__") == true and Map.has_key?(data, proxy_target()) ->
+      is_map(data) and Map.get(data, "__proxy_revoked__") == true and
+          Map.has_key?(data, proxy_target()) ->
         JSThrow.type_error!("Cannot perform operation on a revoked proxy")
 
       is_map(data) and Map.has_key?(data, proxy_target()) ->
@@ -433,6 +438,29 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
       true ->
         :undefined
+    end
+  end
+
+  def descriptor(string, key) when is_binary(string) do
+    prop_name = PropertyKey.normalize(key)
+
+    cond do
+      prop_name == "length" ->
+        PropertyDescriptor.data_object(
+          Get.string_length(string),
+          PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+        )
+
+      true ->
+        with {:ok, idx} <- PropertyKey.array_index(prop_name),
+             true <- idx < Get.string_length(string) do
+          PropertyDescriptor.data_object(
+            QuickBEAM.VM.Runtime.String.utf16_code_unit_at(string, idx),
+            PropertyDescriptor.attrs(writable: false, enumerable: true, configurable: false)
+          )
+        else
+          _ -> :undefined
+        end
     end
   end
 

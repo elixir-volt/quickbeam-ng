@@ -650,16 +650,21 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   static "getOwnPropertySymbols", length: 1 do
     case args do
-      [{:obj, ref} | _] ->
-        data = Heap.get_obj(ref, %{})
+      [target | _] when target in [nil, :undefined] ->
+        throw(
+          {:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")}
+        )
 
-        syms =
-          if is_map(data), do: Enum.filter(Map.keys(data), &is_symbol/1), else: []
-
-        Heap.wrap(syms)
+      [target | _] ->
+        target
+        |> OwnProperty.descriptor_keys()
+        |> Enum.filter(&is_symbol/1)
+        |> Heap.wrap()
 
       _ ->
-        Heap.wrap([])
+        throw(
+          {:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")}
+        )
     end
   end
 
@@ -935,6 +940,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
     Heap.wrap(enumerable_keys(ref))
   end
 
+  defp get_own_property_names([target | _]) when target in [nil, :undefined] do
+    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
+  end
+
   defp get_own_property_names([{:obj, ref} | _]) do
     data = Heap.get_obj(ref, %{})
 
@@ -956,8 +965,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     Heap.wrap(names)
   end
 
-  defp get_own_property_names([target | _])
-       when is_tuple(target) or is_struct(target) do
+  defp get_own_property_names([target | _]) do
     target
     |> OwnProperty.descriptor_keys()
     |> Enum.filter(&is_binary/1)
@@ -968,7 +976,11 @@ defmodule QuickBEAM.VM.Runtime.Object do
     Heap.wrap([])
   end
 
-  defp get_own_property_descriptors([{:obj, _} = obj | _]) do
+  defp get_own_property_descriptors([target | _]) when target in [nil, :undefined] do
+    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
+  end
+
+  defp get_own_property_descriptors([obj | _]) do
     ref = make_ref()
 
     descriptors =
