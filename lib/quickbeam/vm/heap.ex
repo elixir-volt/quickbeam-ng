@@ -397,7 +397,8 @@ defmodule QuickBEAM.VM.Heap do
       _ ->
         proto =
           wrap(%{
-            "__proto__" => get_object_prototype(),
+            "__proto__" =>
+              QuickBEAM.VM.Runtime.global_class_proto("Iterator") || get_object_prototype(),
             {:symbol, "Symbol.toStringTag"} => "Generator"
           })
 
