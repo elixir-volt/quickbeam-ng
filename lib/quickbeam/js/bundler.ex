@@ -11,7 +11,7 @@ defmodule QuickBEAM.JS.Bundler do
     entry_path = Path.expand(entry_path)
     node_modules = Keyword.get(opts, :node_modules) || find_node_modules(entry_path)
     project_root = project_root(entry_path, node_modules)
-    entry_label = Path.relative_to(entry_path, project_root, separator: "/")
+    entry_label = relative_label(entry_path, project_root)
 
     bundle_opts =
       opts
@@ -37,7 +37,7 @@ defmodule QuickBEAM.JS.Bundler do
     else
       with {:ok, source} <- File.read(abs_path),
            {:ok, rewritten, resolved_paths} <- rewrite_and_resolve(source, abs_path, project_root) do
-        label = Path.relative_to(abs_path, project_root, separator: "/")
+        label = relative_label(abs_path, project_root)
         seen = MapSet.put(seen, abs_path)
         files = [{label, rewritten} | files]
         collect_deps(resolved_paths, project_root, files, seen)
@@ -99,6 +99,13 @@ defmodule QuickBEAM.JS.Bundler do
 
   defp find_node_modules(entry_path) do
     PackageResolver.find_node_modules(Path.dirname(entry_path))
+  end
+
+  defp relative_label(path, root) do
+    path
+    |> Path.relative_to(root)
+    |> Path.split()
+    |> Enum.join("/")
   end
 
   defp project_root(entry_path, nil), do: Path.dirname(entry_path)
