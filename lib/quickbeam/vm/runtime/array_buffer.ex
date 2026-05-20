@@ -47,7 +47,12 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
         _ -> {0, nil}
       end
 
-    map = %{buffer() => :binary.copy(<<0>>, byte_length), "byteLength" => byte_length}
+    map = %{
+      buffer() => :binary.copy(<<0>>, byte_length),
+      "byteLength" => byte_length,
+      "resizable" => max_byte_length != nil
+    }
+
     map = if max_byte_length, do: Map.put(map, "maxByteLength", max_byte_length), else: map
     Heap.wrap(map)
   end

@@ -1796,7 +1796,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             es = elem_size(type)
             off = to_index(Enum.at(rest, 0, :undefined))
             length_arg = Enum.at(rest, 1, :undefined)
-            length_tracking? = length_arg in [nil, :undefined]
+            auto_length? = length_arg in [nil, :undefined]
+            length_tracking? = auto_length? and Map.has_key?(buf, "maxByteLength")
             available = byte_size(bin) - off
 
             cond do
@@ -1807,9 +1808,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
                 JSThrow.range_error!("Invalid typed array byteOffset")
 
               true ->
-                len = if length_tracking?, do: div(available, es), else: to_index(length_arg)
+                len = if auto_length?, do: div(available, es), else: to_index(length_arg)
 
-                if not length_tracking? and len * es > available do
+                if not auto_length? and len * es > available do
                   JSThrow.range_error!("Invalid typed array length")
                 end
 
