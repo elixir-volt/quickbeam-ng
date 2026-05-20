@@ -40,7 +40,13 @@ defmodule QuickBEAM.VM.Heap.Store do
   def raw_has_key?(raw, key), do: match?({:ok, _}, raw_fetch(raw, key))
 
   def raw_proto(raw) when is_tuple(raw), do: shape_proto(raw)
-  def raw_proto(map) when is_map(map), do: Map.get(map, proto())
+
+  def raw_proto(map) when is_map(map) do
+    if Map.has_key?(map, :__internal_proto__),
+      do: Map.get(map, :__internal_proto__),
+      else: Map.get(map, proto())
+  end
+
   def raw_proto(_raw), do: nil
 
   def raw_accessor_setter(raw, key) do

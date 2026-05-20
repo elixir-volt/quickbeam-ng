@@ -62,57 +62,61 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
     Heap.put_obj(
       ref,
-      object heap: false do
-        method "toString" do
-          object_to_string(this)
-        end
-
-        method "toLocaleString" do
-          object_to_locale_string(this)
-        end
-
-        method "valueOf" do
-          object_value_of(this)
-        end
-
-        method "hasOwnProperty" do
-          has_own_property(args, this)
-        end
-
-        method "isPrototypeOf" do
-          prototype_of?(args, this)
-        end
-
-        method "propertyIsEnumerable" do
-          property_enumerable?(args, this)
-        end
-
-        method "__defineGetter__" do
-          define_accessor_property(args, this, :get)
-        end
-
-        method "__defineSetter__" do
-          define_accessor_property(args, this, :set)
-        end
-
-        method "__lookupGetter__" do
-          lookup_accessor_property(args, this, :get)
-        end
-
-        method "__lookupSetter__" do
-          lookup_accessor_property(args, this, :set)
-        end
-
-        accessor "__proto__" do
-          get do
-            object_proto_get(this)
+      Map.put(
+        object heap: false do
+          method "toString" do
+            object_to_string(this)
           end
 
-          set do
-            object_proto_set(args, this)
+          method "toLocaleString" do
+            object_to_locale_string(this)
           end
-        end
-      end
+
+          method "valueOf" do
+            object_value_of(this)
+          end
+
+          method "hasOwnProperty" do
+            has_own_property(args, this)
+          end
+
+          method "isPrototypeOf" do
+            prototype_of?(args, this)
+          end
+
+          method "propertyIsEnumerable" do
+            property_enumerable?(args, this)
+          end
+
+          method "__defineGetter__" do
+            define_accessor_property(args, this, :get)
+          end
+
+          method "__defineSetter__" do
+            define_accessor_property(args, this, :set)
+          end
+
+          method "__lookupGetter__" do
+            lookup_accessor_property(args, this, :get)
+          end
+
+          method "__lookupSetter__" do
+            lookup_accessor_property(args, this, :set)
+          end
+
+          accessor "__proto__" do
+            get do
+              object_proto_get(this)
+            end
+
+            set do
+              object_proto_set(args, this)
+            end
+          end
+        end,
+        :__internal_proto__,
+        nil
+      )
     )
 
     proto = {:obj, ref}
@@ -149,6 +153,12 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_proto_set([proto | _], {:obj, ref} = target) do
     if proto == nil or match?({:obj, _}, proto) do
       cond do
+        target == Heap.get_object_prototype() and proto != nil ->
+          throw({:js_throw, Heap.make_error("Cannot set immutable prototype", "TypeError")})
+
+        target == Heap.get_object_prototype() ->
+          :ok
+
         match?({:obj, _}, proto) and Prototype.chain_contains?(proto, ref) ->
           throw({:js_throw, Heap.make_error("Cannot create prototype cycle", "TypeError")})
 
