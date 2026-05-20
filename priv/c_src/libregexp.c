@@ -1587,14 +1587,28 @@ static int re_parse_term(REParseState *s, bool is_backward_dir)
             if (ret)
                 return -1;
         } else {
-            if (s->ignore_case)
-                c = lre_canonicalize(c, s->is_unicode);
+            if (s->ignore_case) {
+                int folded = lre_canonicalize(c, s->is_unicode);
+                if (folded != c) {
+                    cr_init(cr, s->opaque, lre_realloc);
+                    if (cr_union_interval(cr, c, c) ||
+                        cr_union_interval(cr, folded, folded) ||
+                        re_emit_range(s, cr)) {
+                        cr_free(cr);
+                        return -1;
+                    }
+                    cr_free(cr);
+                    goto normal_char_done;
+                }
+                c = folded;
+            }
             if (c <= 0x7f)
                 re_emit_op_u8(s, REOP_char8, c);
             else if (c <= 0xffff)
                 re_emit_op_u16(s, REOP_char16, c);
             else
                 re_emit_op_u32(s, REOP_char32, c);
+        normal_char_done: ;
         }
         if (is_backward_dir)
             re_emit_op(s, REOP_prev);
