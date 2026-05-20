@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.ObjectGetPrototypeTest do
     Object.getPrototypeOf(Math) === Object.prototype,
     Object.getPrototypeOf(JSON) === Object.prototype,
     Object.getPrototypeOf(args(1)) === Object.prototype,
+    Object.getPrototypeOf(Object.prototype),
     Object.getPrototypeOf(Object.create(null))
   ];
   '''
@@ -16,7 +17,7 @@ defmodule QuickBEAM.VM.ObjectGetPrototypeTest do
 
     test "#{mode} Object.getPrototypeOf returns Object.prototype for ordinary namespace and arguments objects" do
       {:ok, runtime} = QuickBEAM.start(apis: false)
-      assert {:ok, [true, true, true, nil]} = QuickBEAM.eval(runtime, @source, mode: @mode)
+      assert {:ok, [true, true, true, nil, nil]} = QuickBEAM.eval(runtime, @source, mode: @mode)
       QuickBEAM.stop(runtime)
     end
   end

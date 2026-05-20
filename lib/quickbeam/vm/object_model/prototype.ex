@@ -78,9 +78,13 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   end
 
   defp object_map_prototype(ref, map) do
-    case object_map_prototype_value(ref, map) do
-      :null_proto -> nil
-      proto -> proto
+    if Heap.get_object_prototype() == {:obj, ref} do
+      nil
+    else
+      case object_map_prototype_value(ref, map) do
+        :null_proto -> nil
+        proto -> proto
+      end
     end
   end
 

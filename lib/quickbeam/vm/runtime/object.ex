@@ -680,8 +680,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         )
 
       [target, key | _] ->
-        prop_name = if is_binary(key) or is_symbol(key), do: key, else: Values.stringify(key)
-        OwnProperty.present?(target, prop_name)
+        OwnProperty.present?(target, PropertyKey.to_property_key(key))
 
       _ ->
         false
