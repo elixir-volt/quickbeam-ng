@@ -747,6 +747,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       not own? and function_proto_has_getter_only?(key) ->
         :ok
 
+      not own? and not Heap.extensible?(callable) ->
+        reject_failed_write!()
+
       true ->
         Heap.put_ctor_static(callable, key, val)
     end
@@ -795,6 +798,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         cond do
           match?(%{writable: false}, Heap.get_prop_desc(ref, key)) ->
             :ok
+
+          not array_named_property_present?(ref, key) and not Heap.extensible?(ref) ->
+            reject_failed_write!()
 
           not array_named_property_present?(ref, key) and proto_has_named_setter?(key) ->
             invoke_named_proto_setter(obj, key, val)
@@ -1344,8 +1350,15 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           match?(%{writable: false}, Heap.get_prop_desc(ref, key)) ->
             reject_failed_write!()
 
+          i >= :array.size(arr) and Heap.get_array_prop(ref, "__arguments__") == true and
+              not Heap.extensible?(ref) ->
+            reject_failed_write!()
+
           i >= :array.size(arr) and Heap.get_array_prop(ref, "__arguments__") == true ->
             Heap.put_array_prop(ref, key, val)
+
+          i >= :array.size(arr) and not Heap.extensible?(ref) ->
+            reject_failed_write!()
 
           i >= :array.size(arr) and proto_has_setter?(i) ->
             invoke_proto_setter(obj, i, val)
@@ -1423,8 +1436,14 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
             Heap.put_obj(ref, List.replace_at(list, i, val))
             mark_undefined_array_write(ref, key, val)
 
+          Heap.get_array_prop(ref, "__arguments__") == true and not Heap.extensible?(ref) ->
+            reject_failed_write!()
+
           Heap.get_array_prop(ref, "__arguments__") == true ->
             Heap.put_array_prop(ref, key, val)
+
+          not Heap.extensible?(ref) ->
+            reject_failed_write!()
 
           true ->
             padded = list ++ List.duplicate(:undefined, i - length(list)) ++ [val]
