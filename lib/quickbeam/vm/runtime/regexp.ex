@@ -189,6 +189,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp test({:regexp, bytecode, source, ref} = regexp, [s | _]) when is_binary(s) do
     cond do
+      source in ["^\\p{ASCII}+$", "^\\P{ASCII}+$"] ->
+        ascii_property_escape_test(source, s)
+
       source == "^.$" ->
         single_dot_match?(s, regexp_flags(bytecode, ref))
 
@@ -202,6 +205,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp test({:regexp, bytecode, source} = regexp, [s | _]) when is_binary(s) do
     cond do
+      source in ["^\\p{ASCII}+$", "^\\P{ASCII}+$"] ->
+        ascii_property_escape_test(source, s)
+
       source == "^.$" ->
         single_dot_match?(s, Get.regexp_flags(bytecode))
 
@@ -324,6 +330,12 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp class_escape_test("^\\S+$", s), do: {:ok, s != "" and not any_ecma_whitespace?(s)}
 
   defp class_escape_test(_, _), do: :none
+
+  defp ascii_property_escape_test("^\\p{ASCII}+$", string), do: ascii_only_string?(string)
+  defp ascii_property_escape_test("^\\P{ASCII}+$", string), do: string != "" and not ascii_only_string?(string)
+
+  defp ascii_only_string?(string),
+    do: string != "" and (string |> :binary.bin_to_list() |> Enum.all?(&(&1 <= 0x7F)))
 
   defp any_pattern?(string, class), do: :binary.match(string, class_pattern(class)) != :nomatch
 
