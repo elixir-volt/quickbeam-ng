@@ -1509,6 +1509,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp slice(ref, args) do
+    if out_of_bounds?({:obj, ref}) do
+      JSThrow.type_error!("TypedArray is out of bounds")
+    end
+
     l = len(ref)
     t = type(ref)
     start = relative_index(arg(args, 0, 0), l)
@@ -1518,10 +1522,6 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         :undefined -> l
         value -> relative_index(value, l)
       end
-
-    if out_of_bounds?({:obj, ref}) do
-      JSThrow.type_error!("TypedArray is out of bounds")
-    end
 
     new_len = max(0, final - start)
     result = typed_array_species_create({:obj, ref}, t, new_len)
@@ -1792,6 +1792,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             {list_to_buffer(buf, type), 0, length(buf), nil, false}
 
           is_map(buf) and Map.has_key?(buf, buffer()) ->
+            if Map.get(buf, "__detached__") do
+              JSThrow.type_error!("ArrayBuffer is detached")
+            end
+
             bin = Map.get(buf, buffer())
             es = elem_size(type)
             off = to_index(Enum.at(rest, 0, :undefined))
