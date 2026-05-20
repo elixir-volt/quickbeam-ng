@@ -177,10 +177,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_symbol(value, sym_key) do
     case get_own(value, sym_key) do
       :undefined ->
-        case get_prototype_raw(value, sym_key) do
-          {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
-          {:accessor, nil, _} -> :undefined
-          val -> val
+        if explicit_undefined_own?(value, sym_key) do
+          :undefined
+        else
+          case get_prototype_raw(value, sym_key) do
+            {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
+            {:accessor, nil, _} -> :undefined
+            val -> val
+          end
         end
 
       {:accessor, getter, _} when getter != nil ->
@@ -1155,6 +1159,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype(%QuickBEAM.VM.Function{} = f, "constructor"),
     do: function_kind_constructor(f)
 
+  defp get_from_prototype(%QuickBEAM.VM.Function{} = f, {:symbol, "Symbol.toStringTag"} = key),
+    do: function_kind_to_string_tag(f, key)
+
   defp get_from_prototype(%QuickBEAM.VM.Function{} = f, key) when key in ["length", "name"] do
     if Map.get(Heap.get_ctor_statics(f), key) == :deleted,
       do: fallback_to_function_proto(:undefined, f, key),
@@ -1170,6 +1177,12 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f}, "constructor"),
     do: function_kind_constructor(f)
+
+  defp get_from_prototype(
+         {:closure, _, %QuickBEAM.VM.Function{}} = closure,
+         {:symbol, "Symbol.toStringTag"} = key
+       ),
+       do: function_kind_to_string_tag(closure, key)
 
   defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f} = c, key)
        when key in ["length", "name"] do
@@ -1322,21 +1335,71 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 1}),
-    do:
-      {:builtin, "GeneratorFunction",
-       &QuickBEAM.VM.Runtime.Globals.Constructors.generator_function/2}
+  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 1} = fun) do
+    function_kind_constructor(
+      "GeneratorFunction",
+      &QuickBEAM.VM.Runtime.Globals.Constructors.generator_function/2,
+      fun
+    )
+  end
 
-  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 2}),
-    do: {:builtin, "AsyncFunction", &QuickBEAM.VM.Runtime.Globals.Constructors.async_function/2}
+  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 2} = fun) do
+    function_kind_constructor(
+      "AsyncFunction",
+      &QuickBEAM.VM.Runtime.Globals.Constructors.async_function/2,
+      fun
+    )
+  end
 
-  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 3}),
-    do:
-      {:builtin, "AsyncGeneratorFunction",
-       &QuickBEAM.VM.Runtime.Globals.Constructors.async_generator_function/2}
+  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 3} = fun) do
+    function_kind_constructor(
+      "AsyncGeneratorFunction",
+      &QuickBEAM.VM.Runtime.Globals.Constructors.async_generator_function/2,
+      fun
+    )
+  end
 
   defp function_kind_constructor(_),
     do: fallback_to_function_proto(:undefined, :undefined, "constructor")
+
+  defp function_kind_constructor(name, callback, fun) do
+    ctor = {:builtin, name, callback}
+    Heap.put_ctor_static(ctor, "prototype", function_kind_constructor_prototype(name, ctor, fun))
+    ctor
+  end
+
+  defp function_kind_constructor_prototype(name, ctor, fun) do
+    key = {:qb_function_kind_constructor_prototype, name}
+
+    case Process.get(key) do
+      {:obj, _} = proto ->
+        proto
+
+      _ ->
+        proto =
+          case QuickBEAM.VM.ObjectModel.Prototype.get(fun) do
+            {:obj, _} = existing ->
+              existing
+
+            _ ->
+              Heap.wrap(%{
+                "constructor" => ctor,
+                {:symbol, "Symbol.toStringTag"} => name,
+                "__proto__" => Heap.get_func_proto()
+              })
+          end
+
+        Process.put(key, proto)
+        proto
+    end
+  end
+
+  defp function_kind_to_string_tag(callable, key) do
+    case QuickBEAM.VM.ObjectModel.Prototype.get(callable) do
+      {:obj, _} = proto -> get(proto, key)
+      _ -> fallback_to_function_proto(:undefined, callable, key)
+    end
+  end
 
   defp get_parent_static_property(nil, _key, _receiver), do: :undefined
   defp get_parent_static_property(:undefined, _key, _receiver), do: :undefined

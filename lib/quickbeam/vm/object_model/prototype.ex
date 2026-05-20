@@ -144,23 +144,40 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   end
 
   defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 2}, _callable) do
-    Heap.wrap(%{
-      "constructor" =>
-        {:builtin, "AsyncFunction", &QuickBEAM.VM.Runtime.Globals.Constructors.async_function/2},
-      proto() => Heap.get_func_proto()
-    })
+    cached_function_kind_prototype(
+      :qb_async_function_prototype,
+      "AsyncFunction",
+      &QuickBEAM.VM.Runtime.Globals.Constructors.async_function/2
+    )
   end
 
   defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 3}, _callable) do
-    Heap.wrap(%{
-      "constructor" =>
-        {:builtin, "AsyncGeneratorFunction",
-         &QuickBEAM.VM.Runtime.Globals.Constructors.async_generator_function/2},
-      proto() => Heap.get_func_proto()
-    })
+    cached_function_kind_prototype(
+      :qb_async_generator_function_prototype,
+      "AsyncGeneratorFunction",
+      &QuickBEAM.VM.Runtime.Globals.Constructors.async_generator_function/2
+    )
   end
 
   defp function_kind_prototype(_function, callable), do: callable_prototype(callable)
+
+  defp cached_function_kind_prototype(key, name, constructor) do
+    case Process.get(key) do
+      {:obj, _} = proto ->
+        proto
+
+      _ ->
+        proto =
+          Heap.wrap(%{
+            "constructor" => {:builtin, name, constructor},
+            {:symbol, "Symbol.toStringTag"} => name,
+            proto() => Heap.get_func_proto()
+          })
+
+        Process.put(key, proto)
+        proto
+    end
+  end
 
   defp generator_prototype_object do
     case Process.get(:qb_generator_prototype_object) do
@@ -193,6 +210,7 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
               {:builtin, "GeneratorFunction",
                &QuickBEAM.VM.Runtime.Globals.Constructors.generator_function/2},
             "prototype" => generator_proto,
+            {:symbol, "Symbol.toStringTag"} => "GeneratorFunction",
             proto() => Heap.get_func_proto()
           })
 

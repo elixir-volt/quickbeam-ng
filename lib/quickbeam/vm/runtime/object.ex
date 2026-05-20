@@ -427,11 +427,11 @@ defmodule QuickBEAM.VM.Runtime.Object do
             "Object"
         end
 
-      %QuickBEAM.VM.Function{} = fun ->
-        function_tag(fun)
+      %QuickBEAM.VM.Function{} ->
+        "Function"
 
-      {:closure, _, %QuickBEAM.VM.Function{} = fun} ->
-        function_tag(fun)
+      {:closure, _, %QuickBEAM.VM.Function{}} ->
+        "Function"
 
       {:bound, _, _, _, _} ->
         "Function"
