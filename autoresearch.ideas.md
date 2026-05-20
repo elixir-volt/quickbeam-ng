@@ -1,5 +1,11 @@
 # Autoresearch Ideas
 
+## Current Object-tail notes
+
+- `built-ins/Object` offset 3000 tail now completes with only the six `Object.prototype.toString` `Symbol.toStringTag` residuals from the offset 3200 cluster. Stale notes claiming later Object seal/setPrototypeOf/values crashes are superseded: RegExp internal keys, RegExp side-property sealing, proxy seal `defineProperty` traps, nullish `Object.setPrototypeOf`, `Object.values` descriptor rechecks, subclass `Object` construction, and string-primitive `Object.values` are kept.
+- Do not retry the discarded function-kind constructor/proxy fallback patch unchanged: it fixed the proxy-function crash but regressed the toString cluster by changing generator/async function proxy fallback tags. The remaining path needs effective `@@toStringTag` lookup that observes constructor/prototype mutations while preserving callable builtinTag fallback semantics.
+- Do not retry the discarded builtin namespace `Object.prototype.toString` fallback patch unchanged: `Math[Symbol.toStringTag]` and `JSON[Symbol.toStringTag]` observe mutations, but `Object.prototype.toString` still sees stale tags, so the issue is in the effective tag lookup path rather than fallback string selection alone.
+
 - Add a compact failure-clustering helper for `bench/vm_compiler_test262.exs` that groups failures by message prefix and filename stem to pick structurally large clusters before individual cases.
 - Build focused direct-eval parity probes for native bytecode interpreter vs source-compiled eval output. Broadly switching interpreter direct eval to the source compiler regresses the workload; broad `ctx.globals` capture on method definitions, broad transient-global writeback, and returning assigned globals through eval context all regress. A narrow simple `Identifier = ...` eval assignment propagation is kept; broad nested/compound assignment-name collection did not improve the call workload. Future retries must distinguish assignment expressions from `var` declarations and preserve eval var semantics.
 - Replace the source-text class-constructor exception used by constructability checks with an explicit VM function constructable/class-constructor flag. Current object-method rejection works but relies on `source` beginning with `class` for class constructors.
