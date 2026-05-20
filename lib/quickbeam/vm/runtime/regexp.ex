@@ -187,12 +187,18 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   def nif_exec(_, _, _), do: nil
 
-  defp test({:regexp, _bytecode, _source, _ref} = regexp, [s | _]) when is_binary(s) do
-    exec(regexp, [s]) != nil
+  defp test({:regexp, _bytecode, source, _ref} = regexp, [s | _]) when is_binary(s) do
+    case class_escape_test(source, s) do
+      {:ok, result} -> result
+      :none -> exec(regexp, [s]) != nil
+    end
   end
 
-  defp test({:regexp, _bytecode, _source} = regexp, [s | _]) when is_binary(s) do
-    exec(regexp, [s]) != nil
+  defp test({:regexp, _bytecode, source} = regexp, [s | _]) when is_binary(s) do
+    case class_escape_test(source, s) do
+      {:ok, result} -> result
+      :none -> exec(regexp, [s]) != nil
+    end
   end
 
   defp test({:regexp, _, _, _} = regexp, [{:obj, _} = value | rest]) do
