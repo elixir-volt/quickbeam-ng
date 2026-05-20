@@ -1591,6 +1591,14 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     {:obj, ref}
   end
 
+  defp special_exec_fallback("(\\p{Script=Han})(.)", flags, string, last_index) do
+    if unicode_flags?(flags) do
+      han_dot_pair_result(string, last_index)
+    else
+      :none
+    end
+  end
+
   defp special_exec_fallback(source, flags, string, last_index) do
     case terminal_special_match_results(source, flags, string) do
       {:ok, results} ->
@@ -1606,12 +1614,38 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
+  defp han_dot_pair_result(string, last_index) do
+    string
+    |> codepoint_spans(0, [])
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.find(fn [{char, index}, _next] -> char == @han_ideograph and index >= last_index end)
+    |> case do
+      [{first, index}, {second, _}] ->
+        {:ok, exec_result([first <> second, first, second], index, string)}
+
+      nil ->
+        :nomatch
+    end
+  end
+
+  defp codepoint_spans(<<>>, _index, acc), do: Enum.reverse(acc)
+
+  defp codepoint_spans(<<cp::utf8, rest::binary>>, index, acc) do
+    char = <<cp::utf8>>
+    codepoint_spans(rest, index + Get.string_length(char), [{char, index} | acc])
+  end
+
   defp terminal_special_match_results(@han_ideograph, _flags, string),
     do: literal_unicode_results(string, @han_ideograph, true)
 
   defp terminal_special_match_results("\\p{Script=Han}", flags, string)
        when is_binary(flags) do
     if unicode_flags?(flags), do: codepoint_results(string, true, &(&1 == @han_ideograph)), else: :none
+  end
+
+  defp terminal_special_match_results("\\p{ASCII}", flags, string)
+       when is_binary(flags) do
+    if unicode_flags?(flags), do: codepoint_results(string, false, &(byte_size(&1) == 1)), else: :none
   end
 
   defp terminal_special_match_results("\\P{ASCII}", flags, string)
@@ -1635,6 +1669,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp special_match_results("\\p{Script=Han}", flags, string, global?) do
     if unicode_flags?(flags), do: codepoint_results(string, global?, &(&1 == @han_ideograph)), else: :none
+  end
+
+  defp special_match_results("\\p{ASCII}", flags, string, global?) do
+    if unicode_flags?(flags), do: codepoint_results(string, global?, &(byte_size(&1) == 1)), else: :none
   end
 
   defp special_match_results("\\P{ASCII}", flags, string, global?) do
