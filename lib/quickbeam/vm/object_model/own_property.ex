@@ -232,7 +232,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
         else
           trap
           |> Runtime.call_callback([target])
-          |> Heap.to_list()
+          |> proxy_own_keys_list()
           |> validate_proxy_own_keys_invariant(target)
         end
 
@@ -342,6 +342,16 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     do: not Heap.extensible?(ref) and Enum.sort(target_keys) != Enum.sort(trap_keys)
 
   defp non_extensible_key_mismatch?(_target, _target_keys, _trap_keys), do: false
+
+  defp proxy_own_keys_list(result) do
+    length = Get.get(result, "length")
+
+    if is_integer(length) and length > 0 do
+      for index <- 0..(length - 1), do: Get.get(result, Integer.to_string(index))
+    else
+      []
+    end
+  end
 
   defp target_prop_desc({:obj, ref}, key), do: Heap.get_prop_desc(ref, key)
   defp target_prop_desc(_target, _key), do: nil

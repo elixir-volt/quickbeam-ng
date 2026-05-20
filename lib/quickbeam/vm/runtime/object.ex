@@ -1106,7 +1106,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
       map when is_map(map) and is_map_key(map, proxy_target()) ->
         {:obj, ref}
         |> OwnProperty.descriptor_keys()
-        |> Enum.filter(&proxy_enumerable_key?({:obj, ref}, &1))
+        |> Enum.filter(&(is_binary(&1) and proxy_enumerable_key?({:obj, ref}, &1)))
 
       map when is_map(map) ->
         map
