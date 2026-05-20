@@ -31,11 +31,22 @@ defmodule QuickBEAM.Core.ContextSnapshotTest do
     end
   end
 
+  test "missing BEAM snapshots return an explicit error" do
+    {:ok, pool} = QuickBEAM.ContextPool.start_link(size: 1, mode: :beam_compiler)
+    {:ok, ctx} = QuickBEAM.Context.start_link(pool: pool, apis: false)
+
+    assert {:error, :snapshot_not_found} = QuickBEAM.Context.restore(ctx, :missing)
+    assert {:error, :snapshot_not_found} = QuickBEAM.Context.eval(ctx, "1", restore: :missing)
+  end
+
   test "NIF contexts report snapshots as unsupported" do
     {:ok, pool} = QuickBEAM.ContextPool.start_link(size: 1)
     {:ok, ctx} = QuickBEAM.Context.start_link(pool: pool, apis: false)
 
     assert {:error, :snapshots_not_supported} = QuickBEAM.Context.snapshot(ctx, :harness)
     assert {:error, :snapshots_not_supported} = QuickBEAM.Context.restore(ctx, :harness)
+
+    assert {:error, :snapshots_not_supported} =
+             QuickBEAM.Context.eval(ctx, "1", restore: :harness)
   end
 end

@@ -15,6 +15,10 @@ defmodule QuickBEAM.ContextPool.BeamWorker do
     GenServer.call(worker, {:eval, code, timeout, filename}, :infinity)
   end
 
+  def eval_restore(worker, name, code, timeout, filename) do
+    GenServer.call(worker, {:eval_restore, name, code, timeout, filename}, :infinity)
+  end
+
   def reset(worker) do
     GenServer.call(worker, :reset, :infinity)
   end
@@ -37,8 +41,16 @@ defmodule QuickBEAM.ContextPool.BeamWorker do
 
   @impl true
   def handle_call({:eval, code, timeout, filename}, _from, state) do
-    opts = [mode: state.mode, timeout: timeout, filename: filename]
-    {:reply, normalize_result(QuickBEAM.eval(state.runtime, code, opts)), state}
+    {:reply, eval_code(state, code, timeout, filename), state}
+  end
+
+  def handle_call({:eval_restore, name, code, timeout, filename}, _from, state) do
+    result =
+      with :ok <- restore_snapshot(state, name) do
+        eval_code(state, code, timeout, filename)
+      end
+
+    {:reply, result, state}
   end
 
   def handle_call(:reset, _from, state) do
@@ -52,12 +64,18 @@ defmodule QuickBEAM.ContextPool.BeamWorker do
   end
 
   def handle_call({:restore, name}, _from, state) do
-    case Map.fetch(state.snapshots, name) do
-      {:ok, snapshot} ->
-        {:reply, Heap.restore(snapshot), state}
+    {:reply, restore_snapshot(state, name), state}
+  end
 
-      :error ->
-        {:reply, {:error, :snapshot_not_found}, state}
+  defp eval_code(state, code, timeout, filename) do
+    opts = [mode: state.mode, timeout: timeout, filename: filename]
+    normalize_result(QuickBEAM.eval(state.runtime, code, opts))
+  end
+
+  defp restore_snapshot(state, name) do
+    case Map.fetch(state.snapshots, name) do
+      {:ok, snapshot} -> Heap.restore(snapshot)
+      :error -> {:error, :snapshot_not_found}
     end
   end
 
