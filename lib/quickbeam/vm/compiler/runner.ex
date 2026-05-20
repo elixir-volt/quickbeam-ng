@@ -137,19 +137,16 @@ defmodule QuickBEAM.VM.Compiler.Runner do
   defp interpreter_fallback(%QuickBEAM.VM.Function{} = fun, args, ctx),
     do: Interpreter.invoke_function_fallback(fun, args, ctx.gas, ctx)
 
-  defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 1}, compiled, ctx, args) do
-    # Generator: wrap in yield/suspend protocol
-    compiled_gen_invoke(compiled, ctx, args)
+  defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 1} = fun, compiled, ctx, args) do
+    compiled_gen_invoke(compiled, ctx, args, fun)
   end
 
   defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 2}, compiled, ctx, args) do
-    # Async: wrap in promise
     compiled_async_invoke(compiled, ctx, args)
   end
 
-  defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 3}, compiled, ctx, args) do
-    # Async generator
-    compiled_async_gen_invoke(compiled, ctx, args)
+  defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 3} = fun, compiled, ctx, args) do
+    compiled_async_gen_invoke(compiled, ctx, args, fun)
   end
 
   defp invoke_compiled(fun, compiled, ctx, args) do
@@ -168,7 +165,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
     end
   end
 
-  defp compiled_gen_invoke(compiled, ctx, args) do
+  defp compiled_gen_invoke(compiled, ctx, args, generator_fun) do
     gen_ref = make_ref()
 
     try do
@@ -178,7 +175,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
         Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation, mode: :initial})
     end
 
-    GeneratorIterator.build(gen_ref)
+    GeneratorIterator.build(gen_ref, generator_fun)
   end
 
   defp build_suspended_generator(continuation) do
@@ -194,7 +191,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
     {:js_throw, error} -> Promise.rejected(error)
   end
 
-  defp compiled_async_gen_invoke(compiled, ctx, args) do
+  defp compiled_async_gen_invoke(compiled, ctx, args, generator_fun) do
     gen_ref = make_ref()
 
     try do
@@ -204,7 +201,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
         Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation, mode: :initial})
     end
 
-    GeneratorIterator.build_async(gen_ref)
+    GeneratorIterator.build_async(gen_ref, generator_fun)
   end
 
   defp apply_compiled({mod, name}, ctx, args), do: apply(mod, name, [ctx | args])

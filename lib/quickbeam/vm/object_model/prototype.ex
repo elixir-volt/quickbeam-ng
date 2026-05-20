@@ -168,7 +168,12 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
         proto
 
       _ ->
-        proto = Heap.wrap(%{proto() => Heap.get_object_prototype()})
+        proto =
+          Heap.wrap(%{
+            proto() => Heap.get_object_prototype(),
+            {:symbol, "Symbol.toStringTag"} => "Generator"
+          })
+
         Process.put(:qb_generator_prototype_object, proto)
         proto
     end

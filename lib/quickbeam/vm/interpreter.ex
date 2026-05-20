@@ -627,11 +627,20 @@ defmodule QuickBEAM.VM.Interpreter do
 
   defp filter_local_eval_transients(%Context{current_func: current_func}, transients) do
     case current_func do
-      %QuickBEAM.VM.Function{name: {:predefined, 81}} -> transients
-      {:closure, _, %QuickBEAM.VM.Function{name: {:predefined, 81}}} -> transients
-      %QuickBEAM.VM.Function{locals: locals} -> Map.drop(transients, local_names(locals))
-      {:closure, _, %QuickBEAM.VM.Function{locals: locals}} -> Map.drop(transients, local_names(locals))
-      _ -> transients
+      %QuickBEAM.VM.Function{name: {:predefined, 81}} ->
+        transients
+
+      {:closure, _, %QuickBEAM.VM.Function{name: {:predefined, 81}}} ->
+        transients
+
+      %QuickBEAM.VM.Function{locals: locals} ->
+        Map.drop(transients, local_names(locals))
+
+      {:closure, _, %QuickBEAM.VM.Function{locals: locals}} ->
+        Map.drop(transients, local_names(locals))
+
+      _ ->
+        transients
     end
   end
 
@@ -1468,10 +1477,17 @@ defmodule QuickBEAM.VM.Interpreter do
 
         try do
           case fun.func_kind do
-            @func_generator -> Generator.invoke(frame, gas, inner_ctx)
-            @func_async -> Generator.invoke_async(frame, gas, inner_ctx)
-            @func_async_generator -> Generator.invoke_async_generator(frame, gas, inner_ctx)
-            _ -> run(0, frame, [], gas, inner_ctx)
+            @func_generator ->
+              Generator.invoke(frame, gas, inner_ctx, self_ref)
+
+            @func_async ->
+              Generator.invoke_async(frame, gas, inner_ctx)
+
+            @func_async_generator ->
+              Generator.invoke_async_generator(frame, gas, inner_ctx, self_ref)
+
+            _ ->
+              run(0, frame, [], gas, inner_ctx)
           end
         after
           restore_eval_restores(restore_mark)

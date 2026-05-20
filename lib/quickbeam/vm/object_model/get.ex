@@ -90,7 +90,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   def get(value, {:symbol, _} = sym_key) do
     if QuickBEAM.VM.Builtin.callable?(value),
       do: get_callable_symbol(value, sym_key),
-      else: get_symbol_own(value, sym_key)
+      else: get_symbol(value, sym_key)
   end
 
   def get(value, {:symbol, _, _} = sym_key),
@@ -164,14 +164,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       end
     else
       get_own(value, sym_key)
-    end
-  end
-
-  defp get_symbol_own(value, sym_key) do
-    case get_own(value, sym_key) do
-      {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
-      {:accessor, nil, _} -> :undefined
-      val -> val
     end
   end
 
@@ -960,10 +952,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         if Heap.shape?(raw) do
           case Heap.shape_proto(raw) do
             {:obj, _pref} = proto ->
-              case Heap.raw_fetch(Heap.get_obj_raw(elem(proto, 1)), key) do
-                {:ok, val} -> val
-                :error -> get_prototype_raw(proto, key)
-              end
+              get(proto, key)
 
             nil ->
               get_default_object_prototype({:obj, ref}, key)
@@ -1014,17 +1003,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
           proto = Map.get(map, :__internal_proto__, Map.get(map, proto()))
 
           case proto do
-            {:obj, pref} ->
-              pmap = Heap.get_obj(pref, %{})
-
-              if is_map(pmap) do
-                case Map.get(pmap, key, :undefined) do
-                  :undefined -> get_prototype_raw(proto, key)
-                  val -> val
-                end
-              else
-                get_from_prototype(proto, key)
-              end
+            {:obj, _pref} = proto ->
+              get(proto, key)
 
             :null_proto ->
               :undefined
@@ -1043,14 +1023,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp direct_prototype_property(map, key) do
     case Map.get(map, :__internal_proto__, Map.get(map, proto())) do
-      {:obj, proto_ref} = proto ->
-        case Heap.get_obj(proto_ref, %{}) do
-          proto_map when is_map(proto_map) -> Map.get(proto_map, key, :undefined)
-          _ -> get(proto, key)
-        end
-
-      _ ->
-        :undefined
+      {:obj, _} = proto -> get(proto, key)
+      _ -> :undefined
     end
   end
 
@@ -1220,16 +1194,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_from_prototype(_, _), do: :undefined
 
-  defp primitive_or_class_proto(default_value, key, class_name, receiver) do
+  defp primitive_or_class_proto(default_value, key, class_name, _receiver) do
     case active_class_proto(class_name) do
-      {:obj, proto_ref} ->
-        case raw_proto_property(proto_ref, key) do
-          {:accessor, getter, _} when getter != nil ->
-            call_getter(getter, receiver)
-
-          {:accessor, nil, _} ->
-            :undefined
-
+      {:obj, _} = proto ->
+        case get(proto, key) do
           :undefined ->
             if(default_value == :undefined,
               do: get_own(Heap.get_object_prototype(), key),
@@ -1251,13 +1219,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     case QuickBEAM.VM.GlobalEnvironment.current() do
       %{^class_name => ctor} -> get(ctor, "prototype")
       _ -> Runtime.global_class_proto(class_name)
-    end
-  end
-
-  defp raw_proto_property(ref, key) do
-    case Heap.raw_fetch(Heap.get_obj_raw(ref), key) do
-      {:ok, value} -> value
-      :error -> :undefined
     end
   end
 

@@ -331,10 +331,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_to_string(value) when is_number(value), do: object_tag(value, "Number")
   defp object_to_string(value) when is_boolean(value), do: object_tag(value, "Boolean")
 
-  defp object_to_string({:bigint, _}), do: "[object #{active_primitive_tag("BigInt", "Object")}]"
+  defp object_to_string({:bigint, _} = value), do: object_tag(value, "Object")
 
-  defp object_to_string({:symbol, _} = value), do: object_tag(value, "Symbol")
-  defp object_to_string({:symbol, _, _} = value), do: object_tag(value, "Symbol")
+  defp object_to_string({:symbol, _} = value), do: object_tag(value, "Object")
+  defp object_to_string({:symbol, _, _} = value), do: object_tag(value, "Object")
   defp object_to_string({:regexp, _, _} = value), do: object_tag(value, "RegExp")
   defp object_to_string({:regexp, _, _, _} = value), do: object_tag(value, "RegExp")
 
@@ -400,23 +400,6 @@ defmodule QuickBEAM.VM.Runtime.Object do
       :bigint -> "Object"
       type when type in [:symbol] -> "Object"
       _ -> WrappedPrimitive.tag(map)
-    end
-  end
-
-  defp active_primitive_tag(class_name, fallback) do
-    proto =
-      case QuickBEAM.VM.GlobalEnvironment.current() do
-        %{^class_name => ctor} -> Get.get(ctor, "prototype")
-        _ -> QuickBEAM.VM.Runtime.global_class_proto(class_name)
-      end
-
-    case proto do
-      {:obj, _} ->
-        tag = Get.get(proto, {:symbol, "Symbol.toStringTag"})
-        if is_binary(tag), do: tag, else: fallback
-
-      _ ->
-        fallback
     end
   end
 
@@ -543,6 +526,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
         seal_object(obj)
         obj
 
+      callable when is_tuple(callable) or is_struct(callable) ->
+        if is_object_like?(callable), do: seal_callable(callable)
+        callable
+
       obj ->
         obj
     end
@@ -569,9 +556,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
           :ok
 
         desc ->
-          current =
-            Heap.get_ctor_prop_desc(callable, key) ||
-              %{writable: true, enumerable: true, configurable: true}
+          current = callable_descriptor_attrs(callable, key)
 
           attrs =
             if Get.get(desc, "writable") == :undefined do
@@ -583,6 +568,24 @@ defmodule QuickBEAM.VM.Runtime.Object do
           Heap.put_ctor_prop_desc(callable, key, attrs)
       end
     end
+  end
+
+  defp seal_callable(callable) do
+    for key <- OwnProperty.descriptor_keys(callable) do
+      unless OwnProperty.descriptor(callable, key) == :undefined do
+        callable
+        |> callable_descriptor_attrs(key)
+        |> Map.put(:configurable, false)
+        |> then(&Heap.put_ctor_prop_desc(callable, key, &1))
+      end
+    end
+
+    Heap.prevent_extensions(callable)
+  end
+
+  defp callable_descriptor_attrs(callable, key) do
+    Heap.get_ctor_prop_desc(callable, key) ||
+      %{writable: true, enumerable: true, configurable: true}
   end
 
   defp freeze_object({:obj, ref} = obj) do

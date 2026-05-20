@@ -30,6 +30,12 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       {:bound, _, _, _, _} = value ->
         value
 
+      {:regexp, _, _} = value ->
+        value
+
+      {:regexp, _, _, _} = value ->
+        value
+
       value when is_binary(value) ->
         WrappedPrimitive.wrap(:string, value)
 
@@ -543,10 +549,14 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   end
 
   defp unicode_invalid_class_escape_range?(source),
-    do: Regex.match?(~r/\[\\[dDsSwW]-[^\]]+\]/, source) or Regex.match?(~r/\[[^\]]+-\\[dDsSwW]\]/, source)
+    do:
+      Regex.match?(~r/\[\\[dDsSwW]-[^\]]+\]/, source) or
+        Regex.match?(~r/\[[^\]]+-\\[dDsSwW]\]/, source)
 
   defp unicode_invalid_bare_interval?(source),
-    do: Regex.match?(~r/^\{\d+(?:,\d*)?\}\??$/, source) or Regex.match?(~r/^.?\{\d*(?:,\d*)?$/, source)
+    do:
+      Regex.match?(~r/^\{\d+(?:,\d*)?\}\??$/, source) or
+        Regex.match?(~r/^.?\{\d*(?:,\d*)?$/, source)
 
   defp unicode_quantified_assertion?(source), do: Regex.match?(~r/\(\?[=!][^)]*\)[*+?{]/, source)
 

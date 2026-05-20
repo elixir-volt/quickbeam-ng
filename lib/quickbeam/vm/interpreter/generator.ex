@@ -8,10 +8,10 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
   alias QuickBEAM.VM.Promise, as: Promise
 
   @doc "Invokes the runtime object represented by this module."
-  def invoke(frame, gas, ctx) do
+  def invoke(frame, gas, ctx, generator_fun \\ nil) do
     gen_ref = make_ref()
     suspend(gen_ref, frame, gas, ctx)
-    build_iterator(gen_ref, &next/2, &return_value/2)
+    build_iterator(gen_ref, &next/2, &return_value/2, generator_fun)
   end
 
   @doc "Invokes the runtime object asynchronously."
@@ -24,13 +24,18 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
   end
 
   @doc "Invokes an async generator runtime object."
-  def invoke_async_generator(frame, gas, ctx) do
+  def invoke_async_generator(frame, gas, ctx, generator_fun \\ nil) do
     gen_ref = make_ref()
     suspend(gen_ref, frame, gas, ctx)
 
-    build_iterator(gen_ref, &async_next/2, fn _ref, val ->
-      Promise.resolved(done_result(val))
-    end)
+    build_iterator(
+      gen_ref,
+      &async_next/2,
+      fn _ref, val ->
+        Promise.resolved(done_result(val))
+      end,
+      generator_fun
+    )
   end
 
   # ── Sync generator ──
@@ -183,7 +188,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
   defp yield_result(val), do: Heap.wrap(%{"value" => val, "done" => false})
   defp done_result(val), do: Heap.wrap(%{"value" => val, "done" => true})
 
-  defp build_iterator(gen_ref, next_impl, return_impl) do
+  defp build_iterator(gen_ref, next_impl, return_impl, generator_fun) do
     next_fn =
       {:builtin, "next",
        fn
@@ -201,10 +206,17 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
     iterator_symbol = {:builtin, "[Symbol.iterator]", fn _, this -> this end}
 
     object do
-      prop("__proto__", QuickBEAM.VM.Runtime.global_class_proto("Iterator"))
+      prop("__proto__", generator_object_prototype(generator_fun))
       prop("next", next_fn)
       prop("return", return_fn)
       prop({:symbol, "Symbol.iterator"}, iterator_symbol)
+    end
+  end
+
+  defp generator_object_prototype(generator_fun) do
+    case QuickBEAM.VM.ObjectModel.Get.get(generator_fun, "prototype") do
+      {:obj, _} = proto -> proto
+      _ -> QuickBEAM.VM.Runtime.global_class_proto("Iterator")
     end
   end
 end

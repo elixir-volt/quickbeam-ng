@@ -657,20 +657,23 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
       _ when prop_key == "length" ->
         PropertyDescriptor.data_object(
           callable_length(target),
-          PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: true)
+          callable_prop_desc(target, prop_key) ||
+            PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: true)
         )
 
       _ when prop_key == "name" ->
         PropertyDescriptor.data_object(
           callable_name(target),
-          PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: true)
+          callable_prop_desc(target, prop_key) ||
+            PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: true)
         )
 
       _ when prop_key == "prototype" ->
         if has_prototype?(target) do
           PropertyDescriptor.data_object(
             Heap.get_or_create_prototype(target),
-            PropertyDescriptor.attrs(writable: true, enumerable: false, configurable: false)
+            callable_prop_desc(target, prop_key) ||
+              PropertyDescriptor.attrs(writable: true, enumerable: false, configurable: false)
           )
         else
           :undefined
