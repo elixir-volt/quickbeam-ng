@@ -1065,6 +1065,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp byte_capture_to_utf16(_string, nil), do: nil
+  defp byte_capture_to_utf16(_string, {start, len}) when start < 0 or len < 0, do: nil
 
   defp byte_capture_to_utf16(string, {start, len}) do
     utf16_start = string |> binary_part(0, start) |> JSString.utf16_length()
