@@ -102,6 +102,16 @@ defmodule QuickBEAM.VM.Runtime.Object do
         method "__lookupSetter__" do
           lookup_accessor_property(args, this, :set)
         end
+
+        accessor "__proto__" do
+          get do
+            object_proto_get(this)
+          end
+
+          set do
+            object_proto_set(args, this)
+          end
+        end
       end
     )
 
@@ -118,6 +128,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
           "__defineSetter__",
           "__lookupGetter__",
           "__lookupSetter__",
+          "__proto__",
           "constructor"
         ] do
       Heap.put_prop_desc(ref, key, %{enumerable: false, configurable: true, writable: true})
@@ -126,6 +137,24 @@ defmodule QuickBEAM.VM.Runtime.Object do
     Heap.put_object_prototype(proto)
     proto
   end
+
+  defp object_proto_get(target) when target in [nil, :undefined] do
+    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
+  end
+
+  defp object_proto_get(target), do: Prototype.get(target)
+
+  defp object_proto_set(_args, target) when target in [nil, :undefined], do: :undefined
+
+  defp object_proto_set([proto | _], target) do
+    if proto == nil or match?({:obj, _}, proto) do
+      Prototype.set(target, proto)
+    end
+
+    :undefined
+  end
+
+  defp object_proto_set(_args, _target), do: :undefined
 
   defp define_accessor_property(_args, target, _kind) when target in [nil, :undefined] do
     throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
