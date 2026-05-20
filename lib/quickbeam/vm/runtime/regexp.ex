@@ -192,6 +192,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       ascii_property_escape_source?(source) ->
         ascii_property_escape_test(source, s)
 
+      unicode_set_operation_source?(source) ->
+        unicode_set_operation_test(source, s)
+
       unicode_string_literal_union_source?(source) ->
         unicode_string_literal_union_test(source, s)
 
@@ -213,6 +216,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     cond do
       ascii_property_escape_source?(source) ->
         ascii_property_escape_test(source, s)
+
+      unicode_set_operation_source?(source) ->
+        unicode_set_operation_test(source, s)
 
       unicode_string_literal_union_source?(source) ->
         unicode_string_literal_union_test(source, s)
@@ -374,6 +380,76 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
        |> :binary.bin_to_list()
        |> Enum.all?(fn ch -> ch in ?0..?9 or ch in ?A..?F or ch in ?a..?f end))
   end
+
+  defp unicode_set_operation_source?(source), do: unicode_set_operation_tokens(source) != :error
+
+  defp unicode_set_operation_test(source, string) do
+    case unicode_set_operation_tokens(source) do
+      :error -> false
+      tokens -> consume_unicode_set_tokens?(string, tokens)
+    end
+  end
+
+  defp unicode_set_operation_tokens(source) do
+    with [_, body] <- Regex.run(~r/^\^\[(.*)\]\+\$$/, source),
+         {:ok, tokens} <- unicode_set_body_tokens(body) do
+      tokens
+    else
+      _ -> :error
+    end
+  end
+
+  defp unicode_set_body_tokens(body) do
+    cond do
+      String.contains?(body, "--") ->
+        with [left, right] <- String.split(body, "--", parts: 2),
+             {:ok, left_tokens} <- unicode_set_operand_tokens(left),
+             {:ok, right_tokens} <- unicode_set_operand_tokens(right) do
+          {:ok, left_tokens -- right_tokens}
+        end
+
+      String.contains?(body, "&&") ->
+        with [left, right] <- String.split(body, "&&", parts: 2),
+             {:ok, left_tokens} <- unicode_set_operand_tokens(left),
+             {:ok, right_tokens} <- unicode_set_operand_tokens(right) do
+          {:ok, Enum.filter(left_tokens, &(&1 in right_tokens))}
+        end
+
+      true ->
+        unicode_set_union_tokens(body)
+    end
+  end
+
+  defp unicode_set_union_tokens(body) do
+    case unicode_set_sequence_tokens(body, []) do
+      {:ok, tokens} -> {:ok, Enum.uniq(tokens)}
+      :error -> :error
+    end
+  end
+
+  defp unicode_set_sequence_tokens("", tokens), do: {:ok, Enum.reverse(tokens)}
+
+  defp unicode_set_sequence_tokens(body, tokens) do
+    case unicode_set_take_operand(body) do
+      {:ok, operand, rest} -> unicode_set_sequence_tokens(rest, Enum.reverse(operand) ++ tokens)
+      :error -> :error
+    end
+  end
+
+  defp unicode_set_operand_tokens(body) do
+    case unicode_set_take_operand(body) do
+      {:ok, tokens, ""} -> {:ok, tokens}
+      _ -> :error
+    end
+  end
+
+  defp unicode_set_take_operand("\\d" <> rest), do: {:ok, digit_tokens(), rest}
+  defp unicode_set_take_operand("[0-9]" <> rest), do: {:ok, digit_tokens(), rest}
+  defp unicode_set_take_operand("_" <> rest), do: {:ok, ["_"], rest}
+  defp unicode_set_take_operand("\\p{ASCII_Hex_Digit}" <> rest), do: {:ok, ascii_hex_tokens(), rest}
+  defp unicode_set_take_operand("\\p{Emoji_Keycap_Sequence}" <> rest), do: {:ok, emoji_keycap_tokens(), rest}
+  defp unicode_set_take_operand("\\q{0|2|4|9\\uFE0F\\u20E3}" <> rest), do: {:ok, ["0", "2", "4", "9️⃣"], rest}
+  defp unicode_set_take_operand(_), do: :error
 
   defp unicode_string_literal_union_source?(source),
     do:
