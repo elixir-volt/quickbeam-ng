@@ -1752,7 +1752,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec_result(strings, index, input) do
     ref = make_ref()
     Heap.put_obj(ref, strings)
-    Heap.put_regexp_result(ref, %{"index" => index, "input" => input, "groups" => :undefined})
+    materialize_regexp_result_props(ref, %{"index" => index, "input" => input, "groups" => :undefined})
     {:obj, ref}
   end
 
