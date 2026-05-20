@@ -369,10 +369,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
             obj == Heap.get_func_proto() -> "Function"
             array_prototype_map?(map) -> "Array"
             (tag = wrapped_primitive_builtin_tag(map)) != nil -> tag
-            Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) -> "WeakMap"
-            Map.has_key?(map, map_data()) -> "Map"
-            Map.has_key?(map, set_data()) and Map.has_key?(map, :weak) -> "WeakSet"
-            Map.has_key?(map, set_data()) -> "Set"
+            Map.has_key?(map, map_data()) -> "Object"
+            Map.has_key?(map, set_data()) -> "Object"
             Map.has_key?(map, date_ms()) -> "Date"
             true -> "Object"
           end
