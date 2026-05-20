@@ -459,7 +459,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp property_value_for_descriptor(_data, _key), do: :undefined
 
   static "is", length: 2 do
-    [a, b | _] = args
+    a = arg(args, 0, :undefined)
+    b = arg(args, 1, :undefined)
 
     cond do
       is_number(a) and is_number(b) and a == 0 and b == 0 ->
