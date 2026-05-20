@@ -1939,7 +1939,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp define_properties([obj, {:obj, props_ref} = props | _]) do
-    for key <- enumerable_keys(props_ref) do
+    for key <- define_properties_keys(props, props_ref) do
       define_property([obj, key, Get.get(props, key)])
     end
 
@@ -1971,6 +1971,23 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp define_properties([obj | _]), do: obj
+
+  defp define_properties_keys(props, props_ref) do
+    case Heap.get_obj(props_ref, %{}) do
+      map when is_map(map) and is_map_key(map, proxy_target()) ->
+        props
+        |> OwnProperty.descriptor_keys()
+        |> Enum.filter(fn key ->
+          case OwnProperty.descriptor(props, key) do
+            {:obj, _} = desc -> Values.truthy?(Get.get(desc, "enumerable"))
+            _ -> false
+          end
+        end)
+
+      _ ->
+        enumerable_keys(props_ref)
+    end
+  end
 
   defp get_own_property_descriptor([target, _key | _]) when target in [nil, :undefined] do
     throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
