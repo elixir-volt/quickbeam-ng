@@ -3,7 +3,7 @@ defmodule QuickBEAM.Native do
 
   @version Mix.Project.config()[:version]
 
-  @c_src_dir Path.expand("../../priv/c_src", __DIR__)
+  @c_src_dir Application.app_dir(:quickbeam, "priv/c_src")
   @hidden_cflags ["-fvisibility=hidden"]
   @lexbor_base_cflags [
     "-std=c99",

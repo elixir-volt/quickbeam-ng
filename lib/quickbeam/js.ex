@@ -11,7 +11,7 @@ defmodule QuickBEAM.JS do
 
   # ── Polyfill compilation (compile-time only) ──
 
-  @ts_dir Path.join([__DIR__, "../../priv/ts"]) |> Path.expand()
+  @ts_dir Application.app_dir(:quickbeam, "priv/ts")
 
   for ts <- Path.wildcard(Path.join(@ts_dir, "*.ts")),
       not String.ends_with?(ts, ".d.ts") do
