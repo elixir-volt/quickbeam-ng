@@ -1526,11 +1526,11 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     new_len = max(0, final - start)
     result = typed_array_species_create({:obj, ref}, t, new_len)
 
-    if out_of_bounds?({:obj, ref}) and not length_tracking?(ref) do
-      JSThrow.type_error!("TypedArray is out of bounds")
-    end
-
     if new_len > 0 do
+      if out_of_bounds?({:obj, ref}) and not length_tracking?(ref) do
+        JSThrow.type_error!("TypedArray is out of bounds")
+      end
+
       source = {:obj, ref}
 
       for index <- 0..(new_len - 1) do
@@ -1588,6 +1588,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp typed_array_species_create(obj, default_type, length) do
     case construct_typed_array_species(obj, default_type, [length]) do
       {:obj, result_ref} = typed_result ->
+        if out_of_bounds?(typed_result) do
+          JSThrow.type_error!("TypedArray is out of bounds")
+        end
+
         if len(result_ref) < length do
           JSThrow.type_error!("TypedArray species result is too short")
         end
