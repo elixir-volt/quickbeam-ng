@@ -327,19 +327,25 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp object_to_string(nil), do: "[object Null]"
   defp object_to_string(:undefined), do: "[object Undefined]"
-  defp object_to_string(value) when is_binary(value), do: "[object String]"
-  defp object_to_string(value) when is_number(value), do: "[object Number]"
-  defp object_to_string(value) when is_boolean(value), do: "[object Boolean]"
-  defp object_to_string({:symbol, _}), do: "[object Symbol]"
-  defp object_to_string({:symbol, _, _}), do: "[object Symbol]"
-  defp object_to_string({:regexp, _, _}), do: "[object RegExp]"
-  defp object_to_string({:regexp, _, _, _}), do: "[object RegExp]"
-  defp object_to_string(%QuickBEAM.VM.Function{}), do: "[object Function]"
+  defp object_to_string(value) when is_binary(value), do: object_tag(value, "String")
+  defp object_to_string(value) when is_number(value), do: object_tag(value, "Number")
+  defp object_to_string(value) when is_boolean(value), do: object_tag(value, "Boolean")
 
-  defp object_to_string({tag, _, %QuickBEAM.VM.Function{}}) when tag in [:closure, :bound],
-    do: "[object Function]"
+  defp object_to_string({:bigint, _}), do: "[object #{active_primitive_tag("BigInt", "Object")}]"
 
-  defp object_to_string({:bound, _, _, _, _}), do: "[object Function]"
+  defp object_to_string({:symbol, _} = value), do: object_tag(value, "Symbol")
+  defp object_to_string({:symbol, _, _} = value), do: object_tag(value, "Symbol")
+  defp object_to_string({:regexp, _, _} = value), do: object_tag(value, "RegExp")
+  defp object_to_string({:regexp, _, _, _} = value), do: object_tag(value, "RegExp")
+
+  defp object_to_string(%QuickBEAM.VM.Function{} = value),
+    do: object_tag(value, function_tag(value))
+
+  defp object_to_string({tag, _, %QuickBEAM.VM.Function{} = fun} = value)
+       when tag in [:closure, :bound],
+       do: object_tag(value, function_tag(fun))
+
+  defp object_to_string({:bound, _, _, _, _} = value), do: object_tag(value, "Function")
 
   defp object_to_string({:builtin, name, map} = obj) when is_map(map) do
     custom_tag = Get.get(obj, {:symbol, "Symbol.toStringTag"})
@@ -359,9 +365,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
         map when is_map(map) ->
           cond do
+            Map.has_key?(map, proxy_target()) -> proxy_builtin_tag(map)
             obj == Heap.get_func_proto() -> "Function"
             array_prototype_map?(map) -> "Array"
-            (tag = WrappedPrimitive.tag(map)) != nil -> tag
+            (tag = wrapped_primitive_builtin_tag(map)) != nil -> tag
             Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) -> "WeakMap"
             Map.has_key?(map, map_data()) -> "Map"
             Map.has_key?(map, set_data()) and Map.has_key?(map, :weak) -> "WeakSet"
@@ -374,11 +381,93 @@ defmodule QuickBEAM.VM.Runtime.Object do
           "Object"
       end
 
-    custom_tag = Get.get(obj, {:symbol, "Symbol.toStringTag"})
-    "[object #{if is_binary(custom_tag), do: custom_tag, else: tag}]"
+    object_tag(obj, tag)
   end
 
   defp object_to_string(_value), do: "[object Object]"
+
+  defp object_tag(value, fallback) do
+    custom_tag = Get.get(value, {:symbol, "Symbol.toStringTag"})
+    "[object #{if is_binary(custom_tag), do: custom_tag, else: fallback}]"
+  end
+
+  defp function_tag(%QuickBEAM.VM.Function{func_kind: 1}), do: "GeneratorFunction"
+  defp function_tag(%QuickBEAM.VM.Function{func_kind: 2}), do: "AsyncFunction"
+  defp function_tag(%QuickBEAM.VM.Function{func_kind: 3}), do: "AsyncGeneratorFunction"
+  defp function_tag(_), do: "Function"
+
+  defp wrapped_primitive_builtin_tag(map) do
+    case WrappedPrimitive.type(map) do
+      nil -> nil
+      :bigint -> "Object"
+      type when type in [:symbol] -> "Object"
+      _ -> WrappedPrimitive.tag(map)
+    end
+  end
+
+  defp active_primitive_tag(class_name, fallback) do
+    proto =
+      case QuickBEAM.VM.GlobalEnvironment.current() do
+        %{^class_name => ctor} -> Get.get(ctor, "prototype")
+        _ -> QuickBEAM.VM.Runtime.global_class_proto(class_name)
+      end
+
+    case proto do
+      {:obj, _} ->
+        tag = Get.get(proto, {:symbol, "Symbol.toStringTag"})
+        if is_binary(tag), do: tag, else: fallback
+
+      _ ->
+        fallback
+    end
+  end
+
+  defp proxy_builtin_tag(%{proxy_target() => target}) do
+    case target do
+      {:obj, target_ref} ->
+        case Heap.get_obj(target_ref, %{}) do
+          list when is_list(list) ->
+            if Heap.get_array_prop(target_ref, "__arguments__") == true,
+              do: "Arguments",
+              else: "Array"
+
+          {:qb_arr, _} ->
+            if Heap.get_array_prop(target_ref, "__arguments__") == true,
+              do: "Arguments",
+              else: "Array"
+
+          map when is_map(map) and is_map_key(map, proxy_target()) ->
+            proxy_builtin_tag(map)
+
+          map when is_map(map) ->
+            if (tag = wrapped_primitive_builtin_tag(map)) != nil, do: tag, else: "Object"
+
+          _ ->
+            "Object"
+        end
+
+      %QuickBEAM.VM.Function{} = fun ->
+        function_tag(fun)
+
+      {:closure, _, %QuickBEAM.VM.Function{} = fun} ->
+        function_tag(fun)
+
+      {:bound, _, _, _, _} ->
+        "Function"
+
+      {:builtin, _, _} ->
+        "Function"
+
+      {:regexp, _, _, _} ->
+        "RegExp"
+
+      {:regexp, _, _} ->
+        "RegExp"
+
+      _ ->
+        "Object"
+    end
+  end
 
   defp object_to_locale_string(this) do
     to_string_fn = Get.get(this, "toString")

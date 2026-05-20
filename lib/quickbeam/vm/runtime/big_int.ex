@@ -16,6 +16,7 @@ defmodule QuickBEAM.VM.Runtime.BigInt do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref)
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
+      InstallerHelpers.install_to_string_tag(proto_ref, "BigInt")
     end)
   end
 end
