@@ -612,7 +612,11 @@ static int parse_unicode_property(REParseState *s, CharRange *cr,
         script_ext = true;
     do_script:
         cr_init(cr, s->opaque, lre_realloc);
-        ret = unicode_script(cr, value, script_ext);
+        if (script_ext && (!strcmp(value, "Unknown") || !strcmp(value, "Zzzz"))) {
+            ret = 0;
+        } else {
+            ret = unicode_script(cr, value, script_ext);
+        }
         if (ret) {
             cr_free(cr);
             if (ret == -2)
