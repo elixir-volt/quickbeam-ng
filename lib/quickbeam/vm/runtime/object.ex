@@ -526,6 +526,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
         seal_object(obj)
         obj
 
+      {:regexp, _, _, ref} = regexp ->
+        seal_regexp(regexp, ref)
+        regexp
+
       callable when is_tuple(callable) or is_struct(callable) ->
         if is_object_like?(callable), do: seal_callable(callable)
         callable
@@ -696,6 +700,33 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp sealed_object?({:obj, _ref} = obj) do
     not object_extensible?(obj) and
       Enum.all?(OwnProperty.descriptor_keys(obj), &sealed_descriptor?(obj, &1))
+  end
+
+  defp seal_regexp(regexp, ref) do
+    for key <- OwnProperty.descriptor_keys(regexp) do
+      unless OwnProperty.descriptor(regexp, key) == :undefined do
+        regexp
+        |> descriptor_attrs(key)
+        |> Map.put(:configurable, false)
+        |> then(&Heap.put_prop_desc(ref, key, &1))
+      end
+    end
+
+    Heap.prevent_extensions(regexp)
+  end
+
+  defp descriptor_attrs(target, key) do
+    case OwnProperty.descriptor(target, key) do
+      {:obj, _} = desc ->
+        %{
+          writable: Get.get(desc, "writable") == true,
+          enumerable: Get.get(desc, "enumerable") == true,
+          configurable: Get.get(desc, "configurable") == true
+        }
+
+      _ ->
+        %{writable: true, enumerable: true, configurable: true}
+    end
   end
 
   defp frozen_object_like?(target) do
