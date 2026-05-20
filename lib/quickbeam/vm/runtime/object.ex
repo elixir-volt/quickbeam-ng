@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Semantics.{Iterators, Values}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
 
@@ -648,6 +648,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
     from_entries(args)
   end
 
+  static "groupBy", length: 2 do
+    group_by(args)
+  end
+
   static "getOwnPropertySymbols", length: 1 do
     case args do
       [target | _] when target in [nil, :undefined] ->
@@ -772,6 +776,54 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp from_entries(_) do
     throw({:js_throw, Heap.make_error("Object.fromEntries requires an iterable", "TypeError")})
+  end
+
+  defp group_by([items, callback | _]) do
+    unless QuickBEAM.VM.Builtin.callable?(callback) do
+      throw({:js_throw, Heap.make_error("callback is not callable", "TypeError")})
+    end
+
+    result = Heap.wrap(%{proto() => :null_proto})
+    {iter, next_fn} = Iterators.for_of_start(items)
+    do_group_by(result, iter, next_fn, callback, 0)
+  end
+
+  defp group_by(_),
+    do: throw({:js_throw, Heap.make_error("callback is not callable", "TypeError")})
+
+  defp do_group_by(result, :undefined, _next_fn, _callback, _index), do: result
+
+  defp do_group_by(result, iter, next_fn, callback, index) do
+    {done?, value, next_iter} = Iterators.for_of_next(next_fn, iter)
+
+    if done? do
+      result
+    else
+      key = group_property_key(callback, value, index, iter)
+      append_group_value(result, key, value)
+      do_group_by(result, next_iter, next_fn, callback, index + 1)
+    end
+  end
+
+  defp group_property_key(callback, value, index, iter) do
+    callback
+    |> Invocation.invoke_with_receiver([value, index], :undefined)
+    |> PropertyKey.to_property_key()
+  catch
+    {:js_throw, error} ->
+      Iterators.iterator_close(iter)
+      throw({:js_throw, error})
+  end
+
+  defp append_group_value({:obj, _} = result, key, value) do
+    case Get.get(result, key) do
+      {:obj, ref} = array ->
+        Heap.array_push(ref, [value])
+        array
+
+      _ ->
+        Define.create_data_property_or_throw(result, key, Heap.wrap([value]))
+    end
   end
 
   defp from_entries_property_key({:obj, _} = key) do
