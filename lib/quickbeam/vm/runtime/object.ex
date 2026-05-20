@@ -682,14 +682,34 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp seal_object({:obj, ref} = obj) do
-    for key <- OwnProperty.descriptor_keys(obj) do
-      desc =
-        Heap.get_prop_desc(ref, key) || %{writable: true, enumerable: true, configurable: true}
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, proxy_handler() => _handler} ->
+        seal_proxy_object(obj)
 
-      Heap.put_prop_desc(ref, key, Map.put(desc, :configurable, false))
+      _ ->
+        for key <- OwnProperty.descriptor_keys(obj) do
+          desc =
+            Heap.get_prop_desc(ref, key) ||
+              %{writable: true, enumerable: true, configurable: true}
+
+          Heap.put_prop_desc(ref, key, Map.put(desc, :configurable, false))
+        end
+
+        prevent_extensions_object(obj)
+    end
+  end
+
+  defp seal_proxy_object(obj) do
+    unless prevent_extensions_object(obj) do
+      throw({:js_throw, Heap.make_error("Cannot seal object", "TypeError")})
     end
 
-    prevent_extensions_object(obj)
+    for key <- OwnProperty.descriptor_keys(obj) do
+      desc = %{"configurable" => false}
+      Define.property(obj, key, Heap.wrap(desc), desc)
+    end
+
+    true
   end
 
   defp frozen_object?({:obj, _ref} = obj) do
