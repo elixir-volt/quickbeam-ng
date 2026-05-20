@@ -86,6 +86,14 @@ defmodule QuickBEAM.VM.Runtime.Object do
         method "propertyIsEnumerable" do
           property_enumerable?(args, this)
         end
+
+        method "__defineGetter__" do
+          define_accessor_property(args, this, :get)
+        end
+
+        method "__defineSetter__" do
+          define_accessor_property(args, this, :set)
+        end
       end
     )
 
@@ -98,6 +106,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
           "hasOwnProperty",
           "isPrototypeOf",
           "propertyIsEnumerable",
+          "__defineGetter__",
+          "__defineSetter__",
           "constructor"
         ] do
       Heap.put_prop_desc(ref, key, %{enumerable: false, configurable: true, writable: true})
@@ -105,6 +115,34 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
     Heap.put_object_prototype(proto)
     proto
+  end
+
+  defp define_accessor_property(_args, target, _kind) when target in [nil, :undefined] do
+    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
+  end
+
+  defp define_accessor_property([key, callback | _], target, kind) do
+    prop_key = PropertyKey.to_property_key(key)
+
+    unless QuickBEAM.VM.Builtin.callable?(callback) do
+      throw(
+        {:js_throw, Heap.make_error("Object.prototype accessor must be callable", "TypeError")}
+      )
+    end
+
+    desc =
+      case kind do
+        :get -> %{"get" => callback, "enumerable" => true, "configurable" => true}
+        :set -> %{"set" => callback, "enumerable" => true, "configurable" => true}
+      end
+
+    desc_obj = Heap.wrap(desc)
+    Define.property(target, prop_key, desc_obj, desc)
+    :undefined
+  end
+
+  defp define_accessor_property(_args, _target, _kind) do
+    throw({:js_throw, Heap.make_error("Object.prototype accessor must be callable", "TypeError")})
   end
 
   defp has_own_property([_key | _], target) when target in [nil, :undefined] do
