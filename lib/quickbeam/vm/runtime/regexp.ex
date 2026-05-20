@@ -192,6 +192,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       ascii_property_escape_source?(source) ->
         ascii_property_escape_test(source, s)
 
+      unicode_set_difference_source?(source) ->
+        unicode_set_difference_test(source, s)
+
       source == "^.$" ->
         single_dot_match?(s, regexp_flags(bytecode, ref))
 
@@ -207,6 +210,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     cond do
       ascii_property_escape_source?(source) ->
         ascii_property_escape_test(source, s)
+
+      unicode_set_difference_source?(source) ->
+        unicode_set_difference_test(source, s)
 
       source == "^.$" ->
         single_dot_match?(s, Get.regexp_flags(bytecode))
@@ -362,6 +368,19 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
        |> :binary.bin_to_list()
        |> Enum.all?(fn ch -> ch in ?0..?9 or ch in ?A..?F or ch in ?a..?f end))
   end
+
+  defp unicode_set_difference_source?(source),
+    do:
+      source in [
+        "^[[0-9]--_]+$",
+        "^[[0-9]--\\p{Emoji_Keycap_Sequence}]+$",
+        "^[[0-9]--\\q{0|2|4|9\\uFE0F\\u20E3}]+$"
+      ]
+
+  defp unicode_set_difference_test("^[[0-9]--\\q{0|2|4|9\\uFE0F\\u20E3}]+$", string),
+    do: string != "" and all_digits?(string) and not String.contains?(string, ["0", "2", "4"])
+
+  defp unicode_set_difference_test(_source, string), do: string != "" and all_digits?(string)
 
   defp any_pattern?(string, class), do: :binary.match(string, class_pattern(class)) != :nomatch
 
