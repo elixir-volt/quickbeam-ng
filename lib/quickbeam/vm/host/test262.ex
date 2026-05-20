@@ -156,6 +156,7 @@ defmodule QuickBEAM.VM.Host.Test262 do
     proxy_ctor = realm_proxy_constructor()
     error_bindings = realm_error_bindings(object_proto)
     install_realm_string_methods(string_proto, error_bindings)
+    install_realm_regexp_accessors(regexp_proto, Map.fetch!(error_bindings, "TypeError"))
 
     error_protos =
       for name <-
@@ -427,6 +428,62 @@ defmodule QuickBEAM.VM.Host.Test262 do
       Heap.put_prop_desc(ref, name, %{writable: true, enumerable: false, configurable: true})
     end
   end
+
+  defp install_realm_regexp_accessors({:obj, ref} = proto, type_error_ctor) do
+    for {name, flag} <- [
+          {"hasIndices", "d"},
+          {"global", "g"},
+          {"ignoreCase", "i"},
+          {"multiline", "m"},
+          {"dotAll", "s"},
+          {"unicode", "u"},
+          {"unicodeSets", "v"},
+          {"sticky", "y"}
+        ] do
+      getter = {:builtin, "get #{name}", fn _, this -> realm_regexp_flag(this, proto, flag, type_error_ctor, name) end}
+      Heap.put_obj_key(ref, name, {:accessor, getter, nil})
+      Heap.put_prop_desc(ref, name, %{enumerable: false, configurable: true})
+    end
+
+    for {name, getter_fun} <- [{"source", &realm_regexp_source/3}, {"flags", &realm_regexp_flags/3}] do
+      getter = {:builtin, "get #{name}", fn _, this -> getter_fun.(this, proto, type_error_ctor) end}
+      Heap.put_obj_key(ref, name, {:accessor, getter, nil})
+      Heap.put_prop_desc(ref, name, %{enumerable: false, configurable: true})
+    end
+  end
+
+  defp realm_regexp_flag(this, proto, flag, type_error_ctor, name) do
+    cond do
+      this == proto ->
+        :undefined
+
+      regexp_tuple?(this) ->
+        this |> Get.get("flags") |> to_string() |> String.contains?(flag)
+
+      true ->
+        throw({:js_throw, realm_error_object(type_error_ctor, "RegExp.prototype.#{name} receiver is not a RegExp")})
+    end
+  end
+
+  defp realm_regexp_source(this, proto, type_error_ctor) do
+    cond do
+      this == proto -> :undefined
+      regexp_tuple?(this) -> Get.get(this, "source")
+      true -> throw({:js_throw, realm_error_object(type_error_ctor, "RegExp.prototype.source receiver is not a RegExp")})
+    end
+  end
+
+  defp realm_regexp_flags(this, proto, type_error_ctor) do
+    cond do
+      this == proto -> :undefined
+      regexp_tuple?(this) -> Get.get(this, "flags")
+      true -> throw({:js_throw, realm_error_object(type_error_ctor, "RegExp.prototype.flags receiver is not a RegExp")})
+    end
+  end
+
+  defp regexp_tuple?({:regexp, _, _}), do: true
+  defp regexp_tuple?({:regexp, _, _, _}), do: true
+  defp regexp_tuple?(_), do: false
 
   defp realm_string_method(name, type_error_ctor) do
     {:builtin, name,
