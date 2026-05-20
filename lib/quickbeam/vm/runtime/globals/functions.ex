@@ -33,6 +33,35 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
 
   def js_eval(_, _), do: :undefined
 
+  def js_eval_global([code | _], {:obj, ref}) when is_binary(code) do
+    ctx = Heap.get_ctx()
+    globals = Heap.get_obj(ref, %{})
+    pre_globals = Heap.get_persistent_globals()
+
+    with %{runtime_pid: pid} when pid != nil <- ctx,
+         {:ok, bytecode} <- QuickBEAM.Runtime.compile(pid, code),
+         {:ok, parsed} <- BytecodeParser.decode(bytecode),
+         {:ok, value} <-
+           Interpreter.eval(
+             parsed.value,
+             [],
+             %{gas: Runtime.gas_budget(), runtime_pid: pid, globals: globals},
+             parsed.atoms
+           ) do
+      realm_updates = Heap.get_persistent_globals() || %{}
+      Heap.put_persistent_globals(pre_globals)
+      Heap.put_obj(ref, Map.merge(globals, realm_updates))
+      value
+    else
+      {:error, {:js_throw, value}} -> throw({:js_throw, value})
+      {:error, %{message: msg}} -> JSThrow.syntax_error!(msg)
+      {:error, msg} when is_binary(msg) -> JSThrow.syntax_error!(msg)
+      _ -> :undefined
+    end
+  end
+
+  def js_eval_global(_, _), do: :undefined
+
   def decode_uri([value | _], _), do: URI.decode(to_string_value(value))
   def decode_uri(_, _), do: :undefined
 

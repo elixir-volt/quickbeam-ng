@@ -195,7 +195,7 @@ defmodule QuickBEAM.VM.Host.Test262 do
         "Object" => object_ctor,
         "Array" => array_ctor,
         "Function" => function_ctor,
-        "eval" => {:builtin, "eval", &Functions.js_eval/2},
+        "eval" => :undefined,
         "Proxy" => proxy_ctor,
         "Boolean" => boolean_ctor,
         "Number" => number_ctor,
@@ -222,6 +222,12 @@ defmodule QuickBEAM.VM.Host.Test262 do
         "AggregateError" => Map.fetch!(error_bindings, "AggregateError"),
         "SuppressedError" => Map.fetch!(error_bindings, "SuppressedError")
       })
+
+    Heap.put_obj_key(
+      elem(global, 1),
+      "eval",
+      {:builtin, "eval", fn args, _ -> Functions.js_eval_global(args, global) end}
+    )
 
     Process.put({:qb_realm_global, realm_id}, global)
     Heap.wrap(%{"global" => global})
@@ -694,7 +700,11 @@ defmodule QuickBEAM.VM.Host.Test262 do
           Regex.match?(~r/^\s*return\s+arguments\s*;?\s*$/, body) ->
         Heap.wrap_arguments(args, thrower: Heap.throw_type_error_intrinsic(realm_id))
 
-      match = Regex.run(~r/^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*this\s*;\s*return\s*\/(.*)\/([a-z]*)\s*;?\s*$/, body) ->
+      match =
+          Regex.run(
+            ~r/^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*this\s*;\s*return\s*\/(.*)\/([a-z]*)\s*;?\s*$/,
+            body
+          ) ->
         [_, name, source, flags] = match
         global = Process.get({:qb_realm_global, realm_id})
         Put.put(global, name, this_value)

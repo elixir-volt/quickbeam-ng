@@ -9,7 +9,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
   alias QuickBEAM.VM.Semantics.{Construction, Eval}
 
   @doc "Constructs a JavaScript value from compiled code."
-  def construct_runtime(ctx, ctor, new_target, args), do: Invocation.construct_runtime(ctx, ctor, new_target, args)
+  def construct_runtime(ctx, ctor, new_target, args),
+    do: Invocation.construct_runtime(ctx, ctor, new_target, args)
 
   def construct_runtime(ctx, ctor, new_target, args, call_pc) do
     ConstructorStack.with_stack(Errors.compiled_stack(ctx, call_pc), fn ->
@@ -17,7 +18,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
     end)
   end
 
-  def construct_runtime(ctor, new_target, args), do: Invocation.construct_runtime(ctor, new_target, args)
+  def construct_runtime(ctor, new_target, args),
+    do: Invocation.construct_runtime(ctor, new_target, args)
 
   def check_ctor_return(ctx, value) do
     case Construction.check_ctor_return(value) do
@@ -25,7 +27,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
         {replace_with_this?, checked_value}
 
       {:error, message} ->
-        throw({:js_throw, Errors.make_error_with_ctx(ctx, message, "TypeError", ConstructorStack.get())})
+        throw(
+          {:js_throw,
+           Errors.make_error_with_ctx(ctx, message, "TypeError", ConstructorStack.get())}
+        )
     end
   end
 
@@ -57,10 +62,24 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
           pending_this
 
         %QuickBEAM.VM.Function{} = fun ->
-          invoke_parent({:closure, %{}, fun}, args, pending_this, Context.new_target(ctx), parent_ctx, Context.gas(ctx))
+          invoke_parent(
+            {:closure, %{}, fun},
+            args,
+            pending_this,
+            Context.new_target(ctx),
+            parent_ctx,
+            Context.gas(ctx)
+          )
 
         {:closure, _, %QuickBEAM.VM.Function{}} = closure ->
-          invoke_parent(closure, args, pending_this, Context.new_target(ctx), parent_ctx, Context.gas(ctx))
+          invoke_parent(
+            closure,
+            args,
+            pending_this,
+            Context.new_target(ctx),
+            parent_ctx,
+            Context.gas(ctx)
+          )
 
         {:builtin, _name, callback} when is_function(callback, 2) ->
           callback.(args, pending_this)
@@ -93,14 +112,20 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
 
   def eval_or_call(ctx, fun, args), do: Invocation.invoke_runtime(ctx, fun, args)
 
-  def invoke_method_runtime(ctx, fun, this_object, args), do: Invocation.invoke_method_runtime(ctx, fun, this_object, args)
-  def invoke_method_runtime(fun, this_object, args), do: Invocation.invoke_method_runtime(fun, this_object, args)
+  def invoke_method_runtime(ctx, fun, this_object, args),
+    do: Invocation.invoke_method_runtime(ctx, fun, this_object, args)
+
+  def invoke_method_runtime(fun, this_object, args),
+    do: Invocation.invoke_method_runtime(fun, this_object, args)
 
   @doc "Invokes a tail-position JavaScript method from compiled code."
-  def invoke_tail_method(ctx, fun, this_object, args), do: Invocation.invoke_method_runtime(ctx, fun, this_object, args)
+  def invoke_tail_method(ctx, fun, this_object, args),
+    do: Invocation.invoke_method_runtime(ctx, fun, this_object, args)
 
   @doc "Applies a superclass constructor for `super(...)`."
-  def apply_super(ctx, fun, new_target, args), do: Invocation.construct_runtime(ctx, fun, new_target, args)
+  def apply_super(ctx, fun, new_target, args),
+    do: Invocation.construct_runtime(ctx, fun, new_target, args)
+
   def apply_super(fun, new_target, args), do: Invocation.construct_runtime(fun, new_target, args)
 
   defp invoke_parent(parent, args, pending_this, new_target, parent_ctx, gas) do
@@ -137,8 +162,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
   defp compile_eval_program(%{runtime_pid: runtime_pid}, code) when is_pid(runtime_pid),
     do: compile_native_eval_program(runtime_pid, code)
 
-  defp compile_eval_program(%{runtime_pid: runtime_pid}, code) when is_atom(runtime_pid) and not is_nil(runtime_pid),
-    do: compile_native_eval_program(runtime_pid, code)
+  defp compile_eval_program(%{runtime_pid: runtime_pid}, code)
+       when is_atom(runtime_pid) and not is_nil(runtime_pid),
+       do: compile_native_eval_program(runtime_pid, code)
 
   defp compile_eval_program(_ctx, code), do: compile_source_eval_program(code)
 
