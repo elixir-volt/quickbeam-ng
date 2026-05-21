@@ -12,12 +12,12 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
   execution, not the full Environment Record hierarchy.
   """
 
-  alias QuickBEAM.VM.{Heap, JSThrow, Names, Runtime}
+  alias QuickBEAM.VM.{Heap, JSThrow, Names, Runtime, RuntimeState}
   alias QuickBEAM.VM.Interpreter.Context
 
   @doc "Returns the active JavaScript global environment."
   def current do
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %Context{globals: globals} when globals != %{} -> globals
       %Context{} -> base_globals()
       _ -> base_globals()

@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Stacktrace do
   alias QuickBEAM.VM.Execution.Trace
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.RuntimeState
   alias QuickBEAM.VM.SourcePosition
 
   @doc "Attaches a JavaScript stack string to an error object."
@@ -81,7 +82,7 @@ defmodule QuickBEAM.VM.Stacktrace do
   end
 
   defp error_static(key, default) do
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %{globals: globals} ->
         case Map.get(globals, "Error") do
           {:builtin, _, _} = ctor -> Map.get(Heap.get_ctor_statics(ctor), key, default)
@@ -95,7 +96,8 @@ defmodule QuickBEAM.VM.Stacktrace do
 
   defp format_stack(frames) do
     Enum.map_join(frames, "\n", fn frame ->
-      suffix = "#{format_function_name(frame.file_name)}:#{frame.line_number}:#{frame.column_number}"
+      suffix =
+        "#{format_function_name(frame.file_name)}:#{frame.line_number}:#{frame.column_number}"
 
       case frame.function_name do
         nil -> "    at #{suffix}"
@@ -104,7 +106,9 @@ defmodule QuickBEAM.VM.Stacktrace do
     end)
   end
 
-  defp format_function_name({:predefined, _} = name), do: QuickBEAM.VM.Names.resolve_display_name(name)
+  defp format_function_name({:predefined, _} = name),
+    do: QuickBEAM.VM.Names.resolve_display_name(name)
+
   defp format_function_name(name), do: to_string(name)
 
   defp callsite_object(frame) do

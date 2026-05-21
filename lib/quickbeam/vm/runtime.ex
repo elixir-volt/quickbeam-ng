@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Runtime do
   @moduledoc "Shared helpers for the BEAM JS runtime: coercion, callbacks, object creation."
 
-  alias QuickBEAM.VM.{Heap, Invocation}
+  alias QuickBEAM.VM.{Heap, Invocation, RuntimeState}
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Semantics.Coercion
@@ -40,7 +40,7 @@ defmodule QuickBEAM.VM.Runtime do
 
   @doc "Returns the active interpreter gas budget or the default budget outside evaluation."
   def gas_budget do
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %{gas: gas} -> gas
       _ -> Context.default_gas()
     end
