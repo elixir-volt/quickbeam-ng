@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
   use QuickBEAM.VM.Builtin
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Value}
   alias QuickBEAM.VM.Execution.Trace
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
@@ -102,7 +102,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
       not Builtin.callable?(callable) ->
         false
 
-      not object_like?(obj) ->
+      not Value.object_like?(obj) ->
         false
 
       typed_array_builtin_instance?(obj, callable) ->
@@ -111,7 +111,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
       true ->
         prototype = Get.get(callable, "prototype")
 
-        unless object_like?(prototype),
+        unless Value.object_like?(prototype),
           do: QuickBEAM.VM.JSThrow.type_error!("Function has non-object prototype")
 
         prototype_chain_contains?(obj, prototype, MapSet.new())
@@ -143,15 +143,6 @@ defmodule QuickBEAM.VM.Runtime.Function do
     QuickBEAM.VM.Runtime.Object.static_property("getPrototypeOf")
     |> Invocation.invoke_callback_or_throw([obj])
   end
-
-  defp object_like?({:obj, _}), do: true
-  defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp object_like?({:builtin, _, _}), do: true
-  defp object_like?({:regexp, _, _}), do: true
-  defp object_like?({:regexp, _, _, _}), do: true
-  defp object_like?({:bound, _, _, _, _}), do: true
-  defp object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp object_like?(_), do: false
 
   defp typed_array_builtin_instance?({:obj, ref}, {:builtin, constructor_name, _})
        when is_binary(constructor_name) do

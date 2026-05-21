@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Value}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
@@ -772,7 +772,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp get_method(value, key) do
-    if object_like?(value) do
+    if Value.object_like?(value) do
       case Get.get(value, key) do
         method when method in [nil, :undefined] ->
           :none
@@ -788,15 +788,6 @@ defmodule QuickBEAM.VM.Runtime.String do
       :none
     end
   end
-
-  defp object_like?({:obj, _}), do: true
-  defp object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp object_like?({:bound, _, _, _, _}), do: true
-  defp object_like?({:builtin, _, _}), do: true
-  defp object_like?({:regexp, _, _}), do: true
-  defp object_like?({:regexp, _, _, _}), do: true
-  defp object_like?(_), do: false
 
   defp to_integer_or_infinity({:bigint, _}) do
     throw({:js_throw, Heap.make_error("Cannot convert a BigInt value to a number", "TypeError")})

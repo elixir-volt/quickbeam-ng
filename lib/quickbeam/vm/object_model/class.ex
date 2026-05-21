@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Names
   alias QuickBEAM.VM.ObjectModel.{Functions, Get, Put}
@@ -126,7 +126,7 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
   def check_ctor_return(val) do
     cond do
       val == :undefined -> {true, val}
-      object_like?(val) -> {false, val}
+      Value.object_like?(val) -> {false, val}
       true -> :error
     end
   end
@@ -169,13 +169,6 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
   def define_class_name(ctor_closure, atom_idx, atoms \\ Heap.get_atoms()) do
     define_class(ctor_closure, :undefined, Names.resolve_atom(atoms, atom_idx))
   end
-
-  defp object_like?({:obj, _}), do: true
-  defp object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp object_like?({:builtin, _, _}), do: true
-  defp object_like?({:bound, _, _, _, _}), do: true
-  defp object_like?(_), do: false
 
   defp find_super_setter(proto_obj, key) do
     case find_super_property(proto_obj, key) do

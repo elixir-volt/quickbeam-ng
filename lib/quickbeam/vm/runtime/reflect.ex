@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
@@ -278,7 +278,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   defp reflect_get_from_prototype(proto, key, receiver), do: reflect_get(proto, key, receiver)
 
   defp reflect_set_prototype_of({:obj, ref} = obj, proto) do
-    unless proto == nil or object?(proto) do
+    unless proto == nil or Value.object_like?(proto) do
       JSThrow.type_error!("Reflect.setPrototypeOf prototype must be an object or null")
     end
 
@@ -338,19 +338,10 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   end
 
   defp require_object!(value, name) do
-    unless object?(value) do
+    unless Value.object_like?(value) do
       JSThrow.type_error!("#{name} called on non-object")
     end
   end
-
-  defp object?({:obj, _}), do: true
-  defp object?(%QuickBEAM.VM.Function{}), do: true
-  defp object?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp object?({:bound, _, _, _, _}), do: true
-  defp object?({:builtin, _, _}), do: true
-  defp object?({:regexp, _, _}), do: true
-  defp object?({:regexp, _, _, _}), do: true
-  defp object?(_), do: false
 
   defp prevent_extensions({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do

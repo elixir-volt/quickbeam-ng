@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Value}
   alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Runtime
@@ -230,7 +230,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp validate_zip_source!(source, message) do
-    unless object_like?(source) or is_list(source), do: JSThrow.type_error!(message)
+    unless Value.object_like?(source) or is_list(source), do: JSThrow.type_error!(message)
   end
 
   defp from_value(value) when is_binary(value) do
@@ -238,7 +238,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       method when method != :undefined ->
         iterator = Invocation.invoke_with_receiver(method, [], value)
 
-        unless object_like?(iterator),
+        unless Value.object_like?(iterator),
           do: JSThrow.type_error!("iterator method returned non-object")
 
         wrap_iterator(iterator)
@@ -253,7 +253,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp from_value(value) when is_list(value), do: list_iterator(value)
 
   defp from_value(value) do
-    unless object_like?(value), do: JSThrow.type_error!("Iterator.from requires an object")
+    unless Value.object_like?(value), do: JSThrow.type_error!("Iterator.from requires an object")
 
     iterator_method =
       string_object_iterator_method(value) || Get.get(value, {:symbol, "Symbol.iterator"})
@@ -263,7 +263,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
         Builtin.callable?(iterator_method) ->
           result = Invocation.invoke_with_receiver(iterator_method, [], value)
 
-          unless object_like?(result),
+          unless Value.object_like?(result),
             do: JSThrow.type_error!("iterator method returned non-object")
 
           result
@@ -383,14 +383,18 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   def drop(args, this) do
-    unless object_like?(this), do: JSThrow.type_error!("Iterator receiver must be an object")
+    unless Value.object_like?(this),
+      do: JSThrow.type_error!("Iterator receiver must be an object")
+
     remaining = non_negative_integer_limit_or_close(this, Builtin.arg(args, 0, :undefined))
     iterator = iterator_direct_record(this)
     helper_iterator(%{"kind" => :drop, "iterator" => iterator, "remaining" => remaining})
   end
 
   def take(args, this) do
-    unless object_like?(this), do: JSThrow.type_error!("Iterator receiver must be an object")
+    unless Value.object_like?(this),
+      do: JSThrow.type_error!("Iterator receiver must be an object")
+
     remaining = non_negative_integer_limit_or_close(this, Builtin.arg(args, 0, :undefined))
     iterator = iterator_direct_record(this)
     helper_iterator(%{"kind" => :take, "iterator" => iterator, "remaining" => remaining})
@@ -593,7 +597,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     do: JSThrow.type_error!("Iterator.zip options must be an object")
 
   defp zip_options_object(options) do
-    if object_like?(options) do
+    if Value.object_like?(options) do
       options
     else
       JSThrow.type_error!("Iterator.zip options must be an object")
@@ -633,12 +637,16 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp validate_padding(value, nil, count), do: validate_padding_iterable(value, count)
 
   defp validate_padding(value, keys, _count) do
-    unless object_like?(value), do: JSThrow.type_error!("Iterator.zip padding must be an object")
+    unless Value.object_like?(value),
+      do: JSThrow.type_error!("Iterator.zip padding must be an object")
+
     Enum.map(keys, &Get.get(value, &1))
   end
 
   defp validate_padding_iterable(value, count) do
-    unless object_like?(value), do: JSThrow.type_error!("Iterator.zip padding must be an object")
+    unless Value.object_like?(value),
+      do: JSThrow.type_error!("Iterator.zip padding must be an object")
+
     collect_padding_values(zip_outer_iterator(value), count, [])
   end
 
@@ -693,7 +701,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     do: value |> from_value() |> iterator_direct_record()
 
   defp zip_flattenable_record(value) do
-    unless object_like?(value), do: JSThrow.type_error!("Iterator.zip item must be an object")
+    unless Value.object_like?(value),
+      do: JSThrow.type_error!("Iterator.zip item must be an object")
 
     iterator_method = Get.get(value, {:symbol, "Symbol.iterator"})
 
@@ -702,7 +711,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
         Builtin.callable?(iterator_method) ->
           result = Invocation.invoke_with_receiver(iterator_method, [], value)
 
-          unless object_like?(result),
+          unless Value.object_like?(result),
             do: JSThrow.type_error!("iterator method returned non-object")
 
           result
@@ -718,7 +727,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp zip_outer_iterator(value) do
-    unless object_like?(value),
+    unless Value.object_like?(value),
       do: JSThrow.type_error!("Iterator.zip iterables must be an object")
 
     method = Get.get(value, {:symbol, "Symbol.iterator"})
@@ -727,7 +736,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       do: JSThrow.type_error!("Iterator.zip iterables must be iterable")
 
     iterator = Invocation.invoke_with_receiver(method, [], value)
-    unless object_like?(iterator), do: JSThrow.type_error!("iterator method returned non-object")
+
+    unless Value.object_like?(iterator),
+      do: JSThrow.type_error!("iterator method returned non-object")
+
     iterator_record(iterator)
   end
 
@@ -797,7 +809,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     do: value |> from_value() |> iterator_direct_record()
 
   defp zip_keyed_value_record(value) do
-    unless object_like?(value),
+    unless Value.object_like?(value),
       do: JSThrow.type_error!("Iterator.zipKeyed item must be an object")
 
     value |> from_value() |> iterator_direct_record()
@@ -807,7 +819,9 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp internal_key?(_), do: false
 
   defp concat_iterable_record(item) do
-    unless object_like?(item), do: JSThrow.type_error!("Iterator.concat item must be an object")
+    unless Value.object_like?(item),
+      do: JSThrow.type_error!("Iterator.concat item must be an object")
+
     method = Get.get(item, {:symbol, "Symbol.iterator"})
 
     unless Builtin.callable?(method),
@@ -992,7 +1006,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
        ) do
     %{"iterable" => iterable, "method" => method} = Enum.at(iterables, index)
     iterator = Invocation.invoke_with_receiver(method, [], iterable)
-    unless object_like?(iterator), do: JSThrow.type_error!("iterator method returned non-object")
+
+    unless Value.object_like?(iterator),
+      do: JSThrow.type_error!("iterator method returned non-object")
+
     record = iterator_record(iterator)
     Heap.put_obj(state_ref, %{state | "active" => record})
     concat_next(state_ref, Heap.get_obj(state_ref, %{}))
@@ -1141,7 +1158,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp flattenable_iterator_record(value) do
-    unless object_like?(value),
+    unless Value.object_like?(value),
       do: JSThrow.type_error!("Iterator mapper result must be an object")
 
     iterator_method = Get.get(value, {:symbol, "Symbol.iterator"})
@@ -1150,7 +1167,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       Builtin.callable?(iterator_method) ->
         result = Invocation.invoke_with_receiver(iterator_method, [], value)
 
-        unless object_like?(result),
+        unless Value.object_like?(result),
           do: JSThrow.type_error!("iterator method returned non-object")
 
         iterator_record(result)
@@ -1349,7 +1366,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp close_iterator_like(this) do
-    if object_like?(this) do
+    if Value.object_like?(this) do
       return_method = Get.get(this, "return")
 
       if Builtin.callable?(return_method) do
@@ -1368,14 +1385,15 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp iterator_direct_record(this) do
-    unless object_like?(this), do: JSThrow.type_error!("Iterator receiver must be an object")
+    unless Value.object_like?(this),
+      do: JSThrow.type_error!("Iterator receiver must be an object")
 
     next = Get.get(this, "next")
 
     if Builtin.callable?(next) do
       %{"iterator" => this, "next" => next}
     else
-      nested_next = if object_like?(next), do: Get.get(next, "next"), else: :undefined
+      nested_next = if Value.object_like?(next), do: Get.get(next, "next"), else: :undefined
 
       if Builtin.callable?(nested_next) do
         %{"iterator" => next, "next" => nested_next}
@@ -1388,7 +1406,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp iterator_next(%{"iterator" => iterator, "next" => next}) do
     unless Builtin.callable?(next), do: JSThrow.type_error!("Iterator next is not callable")
     result = Invocation.invoke_with_receiver(next, [], iterator)
-    unless object_like?(result), do: JSThrow.type_error!("Iterator result is not an object")
+    unless Value.object_like?(result), do: JSThrow.type_error!("Iterator result is not an object")
     result
   end
 
@@ -1466,7 +1484,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     {iterator, next} = wrapped_iterator_and_next!(this)
     unless Builtin.callable?(next), do: JSThrow.type_error!("Iterator next is not callable")
     result = Invocation.invoke_with_receiver(next, [], iterator)
-    unless object_like?(result), do: JSThrow.type_error!("Iterator result is not an object")
+    unless Value.object_like?(result), do: JSThrow.type_error!("Iterator result is not an object")
     result
   end
 
@@ -1512,13 +1530,4 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp prototype_chain_includes?(_, _), do: false
-
-  defp object_like?({:obj, _}), do: true
-  defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp object_like?({:builtin, _, _}), do: true
-  defp object_like?({:bound, _, _, _, _}), do: true
-  defp object_like?({:regexp, _, _}), do: true
-  defp object_like?({:regexp, _, _, _}), do: true
-  defp object_like?(_), do: false
 end
