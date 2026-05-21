@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 1]
   import QuickBEAM.VM.Value, only: [is_builtin: 1, is_closure: 1]
 
-  alias QuickBEAM.VM.{BytecodeParser, Heap, RuntimeState}
+  alias QuickBEAM.VM.{BytecodeParser, Heap, RuntimeState, Value}
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
@@ -664,13 +664,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
 
   def proxy(_, _), do: JSThrow.type_error!("Proxy target and handler are required")
 
-  defp proxy_object?({:obj, _}), do: true
-  defp proxy_object?({:closure, _, _}), do: true
-  defp proxy_object?({:builtin, _, _}), do: true
-  defp proxy_object?({:bound, _, _, _, _}), do: true
-  defp proxy_object?({:regexp, _, _}), do: true
-  defp proxy_object?({:regexp, _, _, _}), do: true
-  defp proxy_object?(_), do: false
+  defp proxy_object?(value), do: Value.object_like?(value)
 
   @doc "Helper for global constructor built-ins: `object`, `array`, `string`, `boolean`, and other wrapper constructors."
   def finalization_registry([_callback | _], _), do: finalization_registry_object()
