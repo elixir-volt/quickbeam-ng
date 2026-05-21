@@ -104,7 +104,8 @@ defmodule QuickBEAM.VM.Runtime.Array do
       "findLastIndex" => true,
       "toReversed" => true,
       "toSorted" => true,
-      "toSpliced" => true
+      "toSpliced" => true,
+      "__proto__" => :null_proto
     }
 
     sym_unscopables = {:symbol, "Symbol.unscopables"}
