@@ -7,10 +7,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
 
   import QuickBEAM.VM.Heap.Keys
   alias QuickBEAM.VM.{Heap, Invocation, JSThrow, Promise, RuntimeState}
-
-  @on_message_key :qb_beam_on_message
-  @monitors_key :qb_beam_monitors
-  @pending_messages_key :qb_beam_pending_messages
+  alias QuickBEAM.VM.Host.BeamAPI.State
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
@@ -33,11 +30,10 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
               JSThrow.type_error!("Beam.onMessage requires a function argument")
             end
 
-            Process.put(@on_message_key, handler)
+            State.put_handler(handler)
 
             # Deliver any pending messages
-            pending = Process.get(@pending_messages_key, [])
-            Process.delete(@pending_messages_key)
+            pending = State.take_pending_messages()
 
             Enum.each(pending, fn msg ->
               deliver_message(handler, msg)
@@ -131,8 +127,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
         case args do
           [pid, callback | _] when is_pid(pid) ->
             ref = Process.monitor(pid)
-            monitors = Process.get(@monitors_key, %{})
-            Process.put(@monitors_key, Map.put(monitors, ref, callback))
+            State.put_monitor(ref, callback)
             ref
 
           _ ->
@@ -144,8 +139,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
         case args do
           [ref | _] when is_reference(ref) ->
             Process.demonitor(ref, [:flush])
-            monitors = Process.get(@monitors_key, %{})
-            Process.put(@monitors_key, Map.delete(monitors, ref))
+            State.delete_monitor(ref)
             :undefined
 
           _ ->
@@ -173,7 +167,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
   end
 
   defp drain_beam_messages do
-    handler = Process.get(@on_message_key)
+    handler = State.handler()
 
     receive do
       {:beam_message, msg} ->
@@ -181,9 +175,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
         drain_beam_messages()
 
       {:DOWN, ref, :process, _pid, reason} ->
-        monitors = Process.get(@monitors_key, %{})
-
-        case Map.get(monitors, ref) do
+        case Map.get(State.monitors(), ref) do
           nil ->
             :ok
 
@@ -204,8 +196,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
               _, _ -> :ok
             end
 
-            monitors2 = Process.get(@monitors_key, %{})
-            Process.put(@monitors_key, Map.delete(monitors2, ref))
+            State.delete_monitor(ref)
         end
 
         drain_beam_messages()
@@ -252,13 +243,12 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
 
   @doc "Called from the Elixir side to deliver a message to JS"
   def deliver_beam_message(js_msg) do
-    handler = Process.get(@on_message_key)
+    handler = State.handler()
 
     if handler do
       deliver_message(handler, js_msg)
     else
-      pending = Process.get(@pending_messages_key, [])
-      Process.put(@pending_messages_key, pending ++ [js_msg])
+      State.append_pending_message(js_msg)
     end
   end
 end
