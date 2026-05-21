@@ -16,6 +16,23 @@ defmodule QuickBEAM.VM.Heap.Keys do
   @type_key "__type__"
   @offset "__offset__"
 
+  @internal_slots [
+    @proto,
+    @promise_state,
+    @promise_value,
+    @map_data,
+    @set_data,
+    @typed_array,
+    @date_ms,
+    @proxy_target,
+    @proxy_handler,
+    @buffer,
+    @key_order,
+    @primitive_value,
+    @type_key,
+    @offset
+  ]
+
   @doc "Internal object prototype property key."
   defmacro proto, do: @proto
   @doc "Internal promise state property key."
@@ -47,4 +64,9 @@ defmodule QuickBEAM.VM.Heap.Keys do
   @doc "Returns true when a property key is in QuickBEAM's reserved internal namespace."
   def internal_namespace?(key) when is_binary(key), do: String.starts_with?(key, "__")
   def internal_namespace?(_), do: false
+
+  @doc "Returns true when a key denotes VM internal slot storage rather than a JS-visible property."
+  def internal_slot?(key) when key in @internal_slots, do: true
+  def internal_slot?({:internal, _}), do: true
+  def internal_slot?(key), do: internal?(key)
 end

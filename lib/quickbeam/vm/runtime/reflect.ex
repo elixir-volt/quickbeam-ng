@@ -442,12 +442,5 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     indexed_keys ++ side_keys ++ ["length"]
   end
 
-  defp internal_key?(key)
-       when key in [key_order(), proto(), map_data(), proxy_target(), proxy_handler(), set_data()],
-       do: true
-
-  defp internal_key?(key) when is_binary(key),
-    do: internal?(key)
-
-  defp internal_key?(_), do: false
+  defp internal_key?(key), do: internal_slot?(key)
 end

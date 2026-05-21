@@ -1837,13 +1837,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp enumerable_symbol_keys(_ref, _data), do: []
 
-  defp assign_internal_key?(key) when key in [proto(), map_data(), set_data(), typed_array()],
-    do: true
-
-  defp assign_internal_key?(key) when is_binary(key),
-    do: internal?(key)
-
-  defp assign_internal_key?(_), do: false
+  defp assign_internal_key?(key), do: internal_slot?(key)
 
   defp define_property([{:obj, _} = obj, key, {:obj, desc_ref} = desc_obj | _]) do
     desc = Heap.get_obj(desc_ref, %{})
