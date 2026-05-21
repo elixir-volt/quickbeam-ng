@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
   import QuickBEAM.VM.Builtin, only: [object: 1]
 
   import QuickBEAM.VM.Heap.Keys
-  alias QuickBEAM.VM.{Heap, Invocation, JSThrow, Promise}
+  alias QuickBEAM.VM.{Heap, Invocation, JSThrow, Promise, RuntimeState}
 
   @on_message_key :qb_beam_on_message
   @monitors_key :qb_beam_monitors
@@ -20,7 +20,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
   defp beam_object do
     object do
       method "self" do
-        ctx = Heap.get_ctx()
+        ctx = RuntimeState.current()
         runtime_pid = if ctx, do: Map.get(ctx, :runtime_pid), else: nil
         runtime_pid || :undefined
       end
@@ -77,7 +77,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
       method "call" do
         case args do
           [handler_name | call_args] when is_binary(handler_name) ->
-            ctx = Heap.get_ctx()
+            ctx = RuntimeState.current()
             runtime_pid = if ctx, do: Map.get(ctx, :runtime_pid), else: nil
 
             handler_globals = Heap.get_handler_globals() || %{}

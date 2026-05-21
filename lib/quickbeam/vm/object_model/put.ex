@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
   alias QuickBEAM.VM.Execution.{RegexpState, SetterState}
-  alias QuickBEAM.VM.{Heap, Runtime}
+  alias QuickBEAM.VM.{Heap, Runtime, RuntimeState}
   alias QuickBEAM.VM.Interpreter.Closures
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
@@ -1025,7 +1025,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   end
 
   defp find_array_proto_accessor(str_key) do
-    with %{globals: globals} <- Heap.get_ctx(),
+    with %{globals: globals} <- RuntimeState.current(),
          array_ctor when array_ctor != nil <- Map.get(globals, "Array"),
          {:obj, _} = proto <- Map.get(Heap.get_ctor_statics(array_ctor), "prototype") do
       find_proto_accessor(proto, str_key)
@@ -1568,7 +1568,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   end
 
   defp sync_global_this?(obj, key, val) when is_binary(key) do
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %{globals: %{"globalThis" => ^obj}} ->
         globals = Heap.get_persistent_globals() || %{}
         Heap.put_persistent_globals(Map.put(globals, key, val))

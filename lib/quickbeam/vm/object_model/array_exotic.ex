@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
   @moduledoc "Array exotic object semantics for length, integer-indexed properties, and descriptors."
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, RuntimeState}
   alias QuickBEAM.VM.Interpreter.Closures
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, PropertyKey, Put, Semantics}
@@ -250,9 +250,9 @@ defmodule QuickBEAM.VM.ObjectModel.ArrayExotic do
   defp sync_arguments_index(ref, idx, value) do
     if Heap.get_array_prop(ref, "__arguments__") == true and not Semantics.strict_mode?() and
          not deleted_argument?(ref, idx) do
-      case Heap.get_ctx() do
+      case RuntimeState.current() do
         %{arg_buf: arg_buf} = ctx when idx < tuple_size(arg_buf) ->
-          Heap.put_ctx(%{ctx | arg_buf: put_elem(arg_buf, idx, value)})
+          RuntimeState.install(%{ctx | arg_buf: put_elem(arg_buf, idx, value)})
 
         _ ->
           :ok
