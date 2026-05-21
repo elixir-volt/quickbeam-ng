@@ -882,14 +882,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp object_extensible?(_), do: true
 
-  defp is_object_like?({:obj, _}), do: true
-  defp is_object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp is_object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp is_object_like?({:bound, _, _, _, _}), do: true
-  defp is_object_like?({:builtin, _, _}), do: true
-  defp is_object_like?({:regexp, _, _}), do: true
-  defp is_object_like?({:regexp, _, _, _}), do: true
-  defp is_object_like?(_), do: false
+  defp is_object_like?(value), do: Value.object_like?(value)
 
   defp property_value_for_descriptor(map, key) when is_map(map), do: Map.get(map, key)
   defp property_value_for_descriptor(_data, _key), do: :undefined
@@ -1913,11 +1906,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp normalize_well_known_symbol({:symbol, "Symbol." <> _ = name, _ref}), do: {:symbol, name}
   defp normalize_well_known_symbol(key), do: key
 
-  defp descriptor_object?({:regexp, _, _, _}), do: true
-  defp descriptor_object?({:builtin, _, _}), do: true
-  defp descriptor_object?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp descriptor_object?(%QuickBEAM.VM.Function{}), do: true
-  defp descriptor_object?(_), do: false
+  defp descriptor_object?(value), do: Value.object_like?(value)
 
   defp define_callable_property(fun, key, desc_ref) do
     define_static_property(fun, key, desc_ref)
