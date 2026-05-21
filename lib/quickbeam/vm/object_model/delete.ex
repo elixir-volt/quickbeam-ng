@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, Semantics, WrappedPrimitive}
 
   @doc "Deletes a property according to JavaScript delete semantics."
   def delete_property(nil, key) do
@@ -104,22 +104,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     end
   end
 
-  defp array_prototype_object?(raw) do
-    cond do
-      Heap.shape?(raw) ->
-        offsets = Heap.shape_offsets(raw)
-
-        Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
-          Map.has_key?(offsets, "pop")
-
-      is_map(raw) ->
-        Map.has_key?(raw, "constructor") and Map.has_key?(raw, "push") and
-          Map.has_key?(raw, "pop")
-
-      true ->
-        false
-    end
-  end
+  defp array_prototype_object?(raw), do: Semantics.array_prototype_object?(raw)
 
   defp wrapped_string_virtual_non_configurable?(map, "length") do
     match?({:ok, string} when is_binary(string), WrappedPrimitive.value(map, :string))

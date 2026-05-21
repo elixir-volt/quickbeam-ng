@@ -15,6 +15,14 @@ defmodule QuickBEAM.VM.ObjectModel.Semantics do
 
   def strict_mode?, do: RuntimeState.current() |> Value.strict_context?()
 
+  def array_prototype_object?(raw) do
+    cond do
+      Heap.shape?(raw) -> array_prototype_keys?(Heap.shape_offsets(raw))
+      is_map(raw) -> array_prototype_keys?(raw)
+      true -> false
+    end
+  end
+
   def descriptor_attrs(desc_obj, desc, existing_attrs, default) do
     PropertyDescriptor.attrs(
       writable: PropertyDescriptor.attribute(desc_obj, desc, "writable", existing_attrs, default),
@@ -23,6 +31,10 @@ defmodule QuickBEAM.VM.ObjectModel.Semantics do
       configurable:
         PropertyDescriptor.attribute(desc_obj, desc, "configurable", existing_attrs, default)
     )
+  end
+
+  defp array_prototype_keys?(keys) do
+    Map.has_key?(keys, "constructor") and Map.has_key?(keys, "push") and Map.has_key?(keys, "pop")
   end
 
   def enumerable_array_keys(ref, arr, side_keys) do
