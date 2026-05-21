@@ -24,4 +24,19 @@ defmodule QuickBEAM.VM.RuntimeState do
       restore(previous)
     end
   end
+
+  @doc "Runs a function while rooting values owned by a suspended interpreter frame."
+  def with_suspended_roots(roots, fun) when is_list(roots) and is_function(fun, 0) do
+    previous = Process.get(:qb_interpreter_suspended_roots, [])
+    Process.put(:qb_interpreter_suspended_roots, roots ++ previous)
+
+    try do
+      fun.()
+    after
+      case previous do
+        [] -> Process.delete(:qb_interpreter_suspended_roots)
+        _ -> Process.put(:qb_interpreter_suspended_roots, previous)
+      end
+    end
+  end
 end

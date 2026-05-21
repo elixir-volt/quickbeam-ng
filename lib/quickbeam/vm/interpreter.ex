@@ -1375,17 +1375,7 @@ defmodule QuickBEAM.VM.Interpreter do
       | stack
     ]
 
-    previous = Process.get(:qb_interpreter_suspended_roots, [])
-    Process.put(:qb_interpreter_suspended_roots, roots ++ previous)
-
-    try do
-      fun.()
-    after
-      case previous do
-        [] -> Process.delete(:qb_interpreter_suspended_roots)
-        _ -> Process.put(:qb_interpreter_suspended_roots, previous)
-      end
-    end
+    RuntimeState.with_suspended_roots(roots, fun)
   end
 
   @doc "Invokes a VM constructor through the interpreter fallback path."
