@@ -25,7 +25,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
         length: 0,
         phase: :collections,
         module: __MODULE__,
-        after_install: &__MODULE__.install_set_builtin/1
+        after_install: &__MODULE__.install_set_builtin/2
       },
       %Definition{
         name: "WeakSet",
@@ -33,14 +33,16 @@ defmodule QuickBEAM.VM.Runtime.Set do
         length: 0,
         phase: :collections,
         module: __MODULE__,
-        after_install: &__MODULE__.install_weak_set_builtin/1
+        after_install: &__MODULE__.install_weak_set_builtin/2
       }
     ]
   end
 
-  def install_set_builtin(ctor) do
+  def install_set_builtin(ctor, opts \\ []) do
+    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_object_parent(proto_ref, object_proto)
 
       InstallerHelpers.install_methods(proto_ref, __MODULE__, @set_methods,
         zero_length: @set_iterator_methods
@@ -55,11 +57,13 @@ defmodule QuickBEAM.VM.Runtime.Set do
     InstallerHelpers.install_species(ctor)
   end
 
-  def install_weak_set_builtin(ctor) do
+  def install_weak_set_builtin(ctor, opts \\ []) do
+    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_object_parent(proto_ref, object_proto)
       Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
 
       InstallerHelpers.install_methods_with(

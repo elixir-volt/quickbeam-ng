@@ -92,9 +92,12 @@ defmodule QuickBEAM.VM.Realm do
     data_view_ctor = make_constructor("DataView", &DataView.constructor/2, data_view_proto)
     Heap.put_obj_key(elem(data_view_proto, 1), "constructor", data_view_ctor)
 
-    map_proto = Heap.wrap(%{"__proto__" => object_proto})
-    map_ctor = make_constructor("Map", JSMap.constructor(), map_proto)
-    Heap.put_obj_key(elem(map_proto, 1), "constructor", map_ctor)
+    map_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(map_builtin_definition("Map"),
+        target: {:realm, object_proto: object_proto}
+      )
+
+    map_proto = Heap.get_class_proto(map_ctor)
 
     iterator_proto = Heap.wrap(%{"__proto__" => object_proto})
     iterator_ctor = make_constructor("Iterator", JSIterator.constructor(), iterator_proto)
@@ -119,21 +122,30 @@ defmodule QuickBEAM.VM.Realm do
 
     Heap.put_obj_key(elem(iterator_proto, 1), "constructor", iterator_ctor)
 
-    set_proto = Heap.wrap(%{"__proto__" => object_proto})
-    set_ctor = make_constructor("Set", JSSet.constructor(), set_proto)
-    Heap.put_obj_key(elem(set_proto, 1), "constructor", set_ctor)
+    set_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(set_builtin_definition("Set"),
+        target: {:realm, object_proto: object_proto}
+      )
+
+    set_proto = Heap.get_class_proto(set_ctor)
 
     promise_proto = Promise.prototype()
     promise_ctor = make_constructor("Promise", Promise.constructor(), promise_proto)
     Heap.put_obj_key(elem(promise_proto, 1), "constructor", promise_ctor)
 
-    weak_map_proto = Heap.wrap(%{"__proto__" => object_proto})
-    weak_map_ctor = make_constructor("WeakMap", JSMap.weak_constructor(), weak_map_proto)
-    Heap.put_obj_key(elem(weak_map_proto, 1), "constructor", weak_map_ctor)
+    weak_map_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(map_builtin_definition("WeakMap"),
+        target: {:realm, object_proto: object_proto}
+      )
 
-    weak_set_proto = Heap.wrap(%{"__proto__" => object_proto})
-    weak_set_ctor = make_constructor("WeakSet", JSSet.weak_constructor(), weak_set_proto)
-    Heap.put_obj_key(elem(weak_set_proto, 1), "constructor", weak_set_ctor)
+    weak_map_proto = Heap.get_class_proto(weak_map_ctor)
+
+    weak_set_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(set_builtin_definition("WeakSet"),
+        target: {:realm, object_proto: object_proto}
+      )
+
+    weak_set_proto = Heap.get_class_proto(weak_set_ctor)
 
     weak_ref_proto = Heap.wrap(%{"__proto__" => object_proto})
     weak_ref_ctor = make_constructor("WeakRef", JSWeakRef.constructor(), weak_ref_proto)
@@ -576,6 +588,12 @@ defmodule QuickBEAM.VM.Realm do
          _symbol_proto
        ),
        do: Heap.wrap(%{"__proto__" => object_proto})
+
+  defp map_builtin_definition(name),
+    do: Enum.find(JSMap.builtin_definitions(), &(&1.name == name))
+
+  defp set_builtin_definition(name),
+    do: Enum.find(JSSet.builtin_definitions(), &(&1.name == name))
 
   defp make_constructor(name, callback, proto) do
     make_constructor_token = make_ref()

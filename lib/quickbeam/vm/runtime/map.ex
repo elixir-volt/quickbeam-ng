@@ -22,7 +22,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
         length: 0,
         phase: :collections,
         module: __MODULE__,
-        after_install: &__MODULE__.install_map_builtin/1
+        after_install: &__MODULE__.install_map_builtin/2
       },
       %Definition{
         name: "WeakMap",
@@ -30,18 +30,20 @@ defmodule QuickBEAM.VM.Runtime.Map do
         length: 0,
         phase: :collections,
         module: __MODULE__,
-        after_install: &__MODULE__.install_weak_map_builtin/1
+        after_install: &__MODULE__.install_weak_map_builtin/2
       }
     ]
   end
 
-  def install_map_builtin(ctor) do
+  def install_map_builtin(ctor, opts \\ []) do
+    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
     install_static_group_by(ctor)
     InstallerHelpers.install_species(ctor)
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_object_parent(proto_ref, object_proto)
 
       InstallerHelpers.install_methods(proto_ref, __MODULE__, @map_methods,
         zero_length: @map_iterator_methods
@@ -54,11 +56,13 @@ defmodule QuickBEAM.VM.Runtime.Map do
     end)
   end
 
-  def install_weak_map_builtin(ctor) do
+  def install_weak_map_builtin(ctor, opts \\ []) do
+    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_object_parent(proto_ref, object_proto)
       Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
 
       InstallerHelpers.install_methods_with(
