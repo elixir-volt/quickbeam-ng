@@ -24,6 +24,24 @@ defmodule QuickBEAM.VM.Runtime.ArrayTest do
              QuickBEAM.eval(rt, code, mode: :beam, timeout: 30_000)
   end
 
+  test "array concat does not spread primitives with prototype spreadable flag", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S"""
+      Boolean.prototype[Symbol.isConcatSpreadable] = true;
+      Boolean.prototype.length = 1;
+      Boolean.prototype[0] = 'spread';
+      String.prototype[Symbol.isConcatSpreadable] = true;
+      String.prototype.length = 1;
+      String.prototype[0] = 'spread';
+      var bool = [].concat(true);
+      var string = [].concat('x');
+      [bool.length, bool[0], string.length, string[0]].join('|')
+      """,
+      "1|true|1|x"
+    )
+  end
+
   test "Array.from keeps custom constructor target rooted while mapper allocates", %{rt: rt} do
     code = ~S"""
     function CustomArray() { return []; }

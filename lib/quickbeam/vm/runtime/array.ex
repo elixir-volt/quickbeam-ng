@@ -1641,12 +1641,16 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp concat_spreadable?(value) do
-    spreadable = concat_spreadable_flag(value)
+    if concat_object_like?(value) or is_array(value) do
+      spreadable = concat_spreadable_flag(value)
 
-    if spreadable != :undefined do
-      Runtime.truthy?(spreadable)
+      if spreadable != :undefined do
+        Runtime.truthy?(spreadable)
+      else
+        is_array(value)
+      end
     else
-      is_array(value)
+      false
     end
   end
 
@@ -1691,6 +1695,15 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end
     end
   end
+
+  defp concat_object_like?({:obj, _}), do: true
+  defp concat_object_like?(%QuickBEAM.VM.Function{}), do: true
+  defp concat_object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
+  defp concat_object_like?({:builtin, _, _}), do: true
+  defp concat_object_like?({:bound, _, _, _, _}), do: true
+  defp concat_object_like?({:regexp, _, _}), do: true
+  defp concat_object_like?({:regexp, _, _, _}), do: true
+  defp concat_object_like?(_), do: false
 
   defp concat_length({:obj, ref} = value) do
     case Heap.get_obj(ref, %{}) do
