@@ -122,7 +122,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   defp wrapped_string_virtual_non_configurable?(_map, _key), do: false
 
   defp mark_wrapped_virtual_delete(ref, map, key) when is_binary(key) do
-    if WrappedPrimitive.type(map) != nil and
+    if WrappedPrimitive.any_type?(map) and
          key in ~w(toString valueOf toFixed toExponential toPrecision toLocaleString) do
       Heap.put_prop_desc(ref, key, :deleted)
     end

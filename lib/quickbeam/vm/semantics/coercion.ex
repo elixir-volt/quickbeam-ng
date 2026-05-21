@@ -427,10 +427,8 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
   defp primitive_wrapper_proto_method(_obj, _method), do: :missing
 
-  defp primitive_wrapper?(data) do
-    WrappedPrimitive.value(data, :symbol) != :error or
-      WrappedPrimitive.value(data, :bigint) != :error
-  end
+  defp primitive_wrapper?(data),
+    do: WrappedPrimitive.type?(data, :symbol) or WrappedPrimitive.type?(data, :bigint)
 
   defp unwrap_primitive(val) do
     if Value.object_like?(val), do: :none, else: {:ok, val}

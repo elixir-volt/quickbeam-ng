@@ -94,6 +94,12 @@ defmodule QuickBEAM.VM.ObjectModel.WrappedPrimitive do
 
   def value(_, _), do: :error
 
+  def type?(map, type) when is_map(map), do: Map.has_key?(map, slot(type))
+  def type?(_, _), do: false
+
+  def any_type?(map) when is_map(map), do: type(map) != nil
+  def any_type?(_), do: false
+
   def tag(map) when is_map(map) do
     case type(map) do
       nil -> nil
