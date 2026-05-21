@@ -16,7 +16,7 @@ defmodule QuickBEAM.VM.Invocation do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0, proxy_handler: 0, proxy_target: 0]
 
-  alias QuickBEAM.VM.{Builtin, Compiler, GlobalEnvironment, Heap, Runtime}
+  alias QuickBEAM.VM.{Builtin, Compiler, GlobalEnvironment, Heap, Runtime, RuntimeState}
   alias QuickBEAM.VM.Compiler.FunctionInfo
   alias QuickBEAM.VM.Compiler.Runner
   alias QuickBEAM.VM.Interpreter
@@ -61,17 +61,20 @@ defmodule QuickBEAM.VM.Invocation do
 
   def invoke_with_receiver(fun, args, gas, this_obj) do
     with_invoke_depth([fun, this_obj | args], fn ->
-      prev = Heap.get_ctx()
-      Heap.put_ctx(%{active_ctx() | this: this_obj} |> InvokeContext.attach_method_state())
+      prev = RuntimeState.current()
+
+      RuntimeState.install(
+        %{active_ctx() | this: this_obj}
+        |> InvokeContext.attach_method_state()
+      )
 
       try do
         invoke_receiver_target(fun, args, gas, this_obj)
       after
         if prev do
-          refreshed = GlobalEnvironment.refresh(prev)
-          Heap.put_ctx(refreshed)
+          prev |> GlobalEnvironment.refresh() |> RuntimeState.install()
         else
-          Heap.put_ctx(nil)
+          RuntimeState.restore(nil)
         end
       end
     end)
@@ -82,18 +85,18 @@ defmodule QuickBEAM.VM.Invocation do
     do: invoke_constructor(fun, args, Runtime.gas_budget(), this_obj, new_target)
 
   def invoke_constructor(fun, args, gas, this_obj, new_target) do
-    prev = Heap.get_ctx()
+    prev = RuntimeState.current()
 
     ctor_ctx =
       %{active_ctx() | this: this_obj, new_target: new_target}
       |> InvokeContext.attach_method_state()
 
-    Heap.put_ctx(ctor_ctx)
+    RuntimeState.install(ctor_ctx)
 
     try do
       dispatch(fun, args, gas, ctor_ctx, this_obj)
     after
-      if prev, do: Heap.put_ctx(prev), else: Heap.put_ctx(nil)
+      RuntimeState.restore(prev)
     end
   end
 
@@ -590,7 +593,7 @@ defmodule QuickBEAM.VM.Invocation do
   defp active_ctx do
     base_globals = GlobalEnvironment.base_globals()
 
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %Context{} = ctx when ctx.globals == %{} ->
         Context.mark_dirty(%{ctx | globals: base_globals})
 
@@ -614,10 +617,10 @@ defmodule QuickBEAM.VM.Invocation do
     if compiled_method_callable?(fun, this_obj) do
       case Runner.invoke_with_receiver(fun, args, this_obj) do
         {:ok, value} -> value
-        :error -> Interpreter.invoke_function_fallback(fun, args, gas, Heap.get_ctx())
+        :error -> Interpreter.invoke_function_fallback(fun, args, gas, RuntimeState.current())
       end
     else
-      Interpreter.invoke_function_fallback(fun, args, gas, Heap.get_ctx())
+      Interpreter.invoke_function_fallback(fun, args, gas, RuntimeState.current())
     end
   end
 
@@ -630,15 +633,15 @@ defmodule QuickBEAM.VM.Invocation do
     if compiled_method_callable?(inner, this_obj) do
       case Runner.invoke_with_receiver(closure, args, this_obj) do
         {:ok, value} -> value
-        :error -> Interpreter.invoke_closure_fallback(closure, args, gas, Heap.get_ctx())
+        :error -> Interpreter.invoke_closure_fallback(closure, args, gas, RuntimeState.current())
       end
     else
-      Interpreter.invoke_closure_fallback(closure, args, gas, Heap.get_ctx())
+      Interpreter.invoke_closure_fallback(closure, args, gas, RuntimeState.current())
     end
   end
 
   defp invoke_receiver_target(other, args, gas, this_obj),
-    do: dispatch(other, args, gas, Heap.get_ctx(), this_obj)
+    do: dispatch(other, args, gas, RuntimeState.current(), this_obj)
 
   defp callback_invoke(fun, args, ctx, on_throw \\ fn -> :undefined end)
 
@@ -801,16 +804,7 @@ defmodule QuickBEAM.VM.Invocation do
   defp unwrap_new_target({:builtin, _, _} = builtin), do: builtin
   defp unwrap_new_target(_), do: nil
 
-  defp with_ctx(ctx, fun) do
-    previous = Heap.get_ctx()
-    Heap.put_ctx(ctx)
-
-    try do
-      fun.()
-    after
-      if previous, do: Heap.put_ctx(previous), else: Heap.put_ctx(nil)
-    end
-  end
+  defp with_ctx(ctx, fun), do: RuntimeState.with_context(ctx, fun)
 
   defp reject_revoked_proxy_new_target!({:obj, ref}, proto) do
     if normalize_constructor_prototype(proto) == nil do
