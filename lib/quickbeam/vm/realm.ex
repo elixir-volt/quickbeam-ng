@@ -1,6 +1,7 @@
 defmodule QuickBEAM.VM.Realm do
   @moduledoc "Realm-specific global objects and intrinsic prototype lookup."
 
+  alias QuickBEAM.VM.Execution.RealmState
   alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.BigInt, as: JSBigInt
@@ -214,7 +215,7 @@ defmodule QuickBEAM.VM.Realm do
         target: {:realm, object_proto: object_proto, prototype: function_proto}
       )
 
-    Process.put({:qb_intrinsics, function_ctor}, function_intrinsics)
+    RealmState.associate_intrinsics(function_ctor, function_intrinsics)
 
     QuickBEAM.VM.Runtime.Function.install_realm_methods(function_proto, function_intrinsics)
 
@@ -258,27 +259,21 @@ defmodule QuickBEAM.VM.Realm do
       {:builtin, "eval", fn args, _ -> Functions.js_eval_global(args, global) end}
     )
 
-    Process.put({:qb_realm_global, realm_id}, global)
+    RealmState.put_global(realm_id, global)
     Heap.wrap(%{"global" => global})
   end
 
   def associate_intrinsics(function, intrinsics) do
-    Process.put({:qb_intrinsics, function}, intrinsics)
-    :ok
+    RealmState.associate_intrinsics(function, intrinsics)
   end
 
-  def global(function) do
-    case Process.get({:qb_intrinsics, function}) do
-      %{realm_id: realm_id} -> Process.get({:qb_realm_global, realm_id})
-      _ -> nil
-    end
-  end
+  def global(function), do: RealmState.global_for(function)
 
   def intrinsic({:bound, _, _, target, _}, intrinsic),
     do: intrinsic(target, intrinsic)
 
   def intrinsic(constructor, intrinsic) do
-    case Process.get({:qb_intrinsics, constructor}) do
+    case RealmState.intrinsics(constructor) do
       %{array_proto: array_proto} when intrinsic == :array ->
         array_proto
 
@@ -546,7 +541,7 @@ defmodule QuickBEAM.VM.Realm do
          fn args, call_this ->
            effective_this =
              if call_this in [nil, :undefined],
-               do: Process.get({:qb_realm_global, realm_id}),
+               do: RealmState.global(realm_id),
                else: call_this
 
            case run_function_body(realm_id, body, args, effective_this) do
@@ -564,7 +559,7 @@ defmodule QuickBEAM.VM.Realm do
       Heap.put_ctor_static(fun, "prototype", function_prototype)
       Heap.put_class_proto(fun, function_prototype)
 
-      Process.put({:qb_intrinsics, fun}, function_intrinsics)
+      RealmState.associate_intrinsics(fun, function_intrinsics)
 
       fun
     end
@@ -593,7 +588,7 @@ defmodule QuickBEAM.VM.Realm do
             body
           ) ->
         [_, name, source, flags] = match
-        global = Process.get({:qb_realm_global, realm_id})
+        global = RealmState.global(realm_id)
         Put.put(global, name, this_value)
         Constructors.regexp([source, flags], :undefined)
 
@@ -605,7 +600,7 @@ defmodule QuickBEAM.VM.Realm do
   defp run_function_side_effect(realm_id, body) do
     case Regex.run(~r/^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\+=\s*(-?\d+)\s*;?\s*$/, body) do
       [_, name, delta] ->
-        global = Process.get({:qb_realm_global, realm_id})
+        global = RealmState.global(realm_id)
         current = Get.get(global, name)
         {amount, _} = Integer.parse(delta)
         base = if is_number(current), do: current, else: 0
