@@ -1,6 +1,29 @@
 defmodule QuickBEAM.VM.Runtime.ArrayTest do
   use QuickBEAM.VM.TestCase, async: true
 
+  test "array map keeps result array rooted while callbacks allocate", %{rt: rt} do
+    code = ~S"""
+    var mapped = [1, 2, 3].map(function(value) {
+      var keep = [];
+      for (var i = 0; i < 210000; i++) {
+        keep.push({ index: i });
+      }
+      return value + 1;
+    });
+    [
+      Array.isArray(mapped),
+      Object.getPrototypeOf(mapped) === Array.prototype,
+      Object.prototype.toString.call(mapped),
+      Object.keys(mapped).join(','),
+      Object.getOwnPropertyDescriptor(mapped, 'length').enumerable,
+      mapped.join(',')
+    ].join('|')
+    """
+
+    assert {:ok, "true|true|[object Array]|0,1,2|false|2,3,4"} =
+             QuickBEAM.eval(rt, code, mode: :beam, timeout: 30_000)
+  end
+
   test "array callbacks skip sparse holes without missing high indexes", %{rt: rt} do
     assert_modes(
       rt,

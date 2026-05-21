@@ -540,6 +540,7 @@ defmodule QuickBEAM.VM.Heap do
   defdelegate gc_initial_threshold(), to: GC
   defdelegate gc_needed?(), to: GC
   defdelegate mark_and_sweep(roots), to: GC
+  defdelegate with_temp_roots(roots, fun), to: GC
 
   @doc "Clear all heap state. Used in test setup."
   def reset do

@@ -615,21 +615,23 @@ defmodule QuickBEAM.VM.Runtime.Array do
     this_arg = filter_this_arg(rest)
     target = map_target(this, len)
 
-    Enum.each(callback_iteration_indexes(this, len), fn idx ->
-      key = Integer.to_string(idx)
+    Heap.with_temp_roots(target, fn ->
+      Enum.each(callback_iteration_indexes(this, len), fn idx ->
+        key = Integer.to_string(idx)
 
-      if HasProperty.has_property?(this, key) do
-        value = find_value_at(this, idx)
+        if HasProperty.has_property?(this, key) do
+          value = find_value_at(this, idx)
 
-        mapped =
-          QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
+          mapped =
+            QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [value, idx, this], this_arg)
 
-        create_data_property_or_throw(target, key, mapped)
-      end
+          create_data_property_or_throw(target, key, mapped)
+        end
+      end)
+
+      Put.put(target, "length", len)
+      target
     end)
-
-    Put.put(target, "length", len)
-    target
   end
 
   defp map_array_like(this, _args) do

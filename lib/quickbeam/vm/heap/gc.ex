@@ -11,10 +11,26 @@ defmodule QuickBEAM.VM.Heap.GC do
   def gc_needed?, do: Process.get(:qb_gc_needed, false)
 
   def mark_and_sweep(roots) do
-    marked = mark(roots, MapSet.new())
+    marked = mark(List.wrap(roots) ++ temp_roots(), MapSet.new())
     sweep(marked)
     reset_gc_accounting(marked)
   end
+
+  def with_temp_roots(roots, fun) when is_function(fun, 0) do
+    previous_roots = temp_roots()
+    Process.put(:qb_temp_roots, List.wrap(roots) ++ previous_roots)
+
+    try do
+      fun.()
+    after
+      case previous_roots do
+        [] -> Process.delete(:qb_temp_roots)
+        _ -> Process.put(:qb_temp_roots, previous_roots)
+      end
+    end
+  end
+
+  def temp_roots, do: Process.get(:qb_temp_roots, [])
 
   @doc "Helper for mark-and-sweep garbage collector for the js object heap."
   def gc(extra_roots \\ []) do
@@ -22,7 +38,8 @@ defmodule QuickBEAM.VM.Heap.GC do
     persistent_roots = Context.get_persistent_globals() |> Map.values()
 
     all_roots =
-      List.wrap(extra_roots) ++ module_roots ++ persistent_roots ++ process_cache_roots()
+      List.wrap(extra_roots) ++
+        module_roots ++ persistent_roots ++ temp_roots() ++ process_cache_roots()
 
     marked = mark(all_roots, MapSet.new())
     sweep(marked)
