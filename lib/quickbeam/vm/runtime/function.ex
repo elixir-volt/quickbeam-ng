@@ -179,6 +179,26 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp typed_array_constructor_type("BigInt64Array"), do: :bigint64
   defp typed_array_constructor_type(_), do: nil
 
+  def install_realm_methods({:obj, ref} = proto, intrinsics) do
+    call_source = {:builtin, "call", fn _, _ -> :undefined end}
+    apply_source = {:builtin, "apply", fn _, _ -> :undefined end}
+
+    call = {:builtin, "call", fn args, this -> fn_call(this, args, call_source) end}
+    apply = {:builtin, "apply", fn args, this -> fn_apply(this, args, apply_source) end}
+
+    for method <- [call_source, apply_source, call, apply] do
+      Heap.put_ctor_static(method, "__proto__", proto)
+      Process.put({:qb_intrinsics, method}, intrinsics)
+    end
+
+    for {name, method} <- [{"call", call}, {"apply", apply}] do
+      Heap.put_obj_key(ref, name, method)
+      Heap.put_prop_desc(ref, name, PropertyDescriptor.method())
+    end
+  end
+
+  def install_realm_methods(_, _), do: :ok
+
   # ── Function prototype ──
 
   @doc "Returns a prototype property value for the given JavaScript property key."
@@ -314,14 +334,25 @@ defmodule QuickBEAM.VM.Runtime.Function do
   defp bound_function?({:bound, _, _, _, _}), do: true
   defp bound_function?(_), do: false
 
-  defp fn_call(fun, [this_arg | args], _this), do: invoke_fun(fun, args, this_arg)
-  defp fn_call(fun, [], _this), do: invoke_fun(fun, [], :undefined)
+  defp fn_call(fun, [this_arg | args], this), do: invoke_callable_fun(fun, args, this_arg, this)
+  defp fn_call(fun, [], this), do: invoke_callable_fun(fun, [], :undefined, this)
 
-  defp fn_apply(fun, [this_arg | rest], _this) do
-    invoke_fun(fun, apply_args(List.first(rest)), this_arg)
+  defp fn_apply(fun, [this_arg | rest], this) do
+    invoke_callable_fun(fun, apply_args(List.first(rest), this), this_arg, this)
   end
 
-  defp fn_apply(fun, [], _this), do: invoke_fun(fun, [], :undefined)
+  defp fn_apply(fun, [], this), do: invoke_callable_fun(fun, [], :undefined, this)
+
+  defp invoke_callable_fun(fun, args, this_arg, realm_source) do
+    if Builtin.callable?(fun) do
+      invoke_fun(fun, args, this_arg)
+    else
+      throw({:js_throw, realm_type_error(realm_source, "not a function")})
+    end
+  end
+
+  defp apply_args(value, _realm_source) when value in [nil, :undefined], do: []
+  defp apply_args(value, realm_source), do: apply_args(value, realm_source, value)
 
   defp apply_args(value) when value in [nil, :undefined], do: []
 
@@ -342,6 +373,43 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
   defp apply_args(_value),
     do: QuickBEAM.VM.JSThrow.type_error!("CreateListFromArrayLike called on non-object")
+
+  defp apply_args({:obj, _} = value, _realm_source, _original), do: apply_args(value)
+  defp apply_args({:qb_arr, _} = value, _realm_source, _original), do: apply_args(value)
+  defp apply_args(value, _realm_source, _original) when is_list(value), do: apply_args(value)
+
+  defp apply_args(%QuickBEAM.VM.Function{} = value, _realm_source, _original),
+    do: apply_args(value)
+
+  defp apply_args({:closure, _, %QuickBEAM.VM.Function{}} = value, _realm_source, _original),
+    do: apply_args(value)
+
+  defp apply_args({:bound, _, _, _, _} = value, _realm_source, _original), do: apply_args(value)
+  defp apply_args({:builtin, _, _} = value, _realm_source, _original), do: apply_args(value)
+
+  defp apply_args(_value, realm_source, _original),
+    do:
+      throw(
+        {:js_throw,
+         realm_type_error(realm_source, "CreateListFromArrayLike called on non-object")}
+      )
+
+  defp realm_type_error(realm_source, message) do
+    case Realm.intrinsic(realm_source, {:native_error, "TypeError"}) do
+      {:obj, _} = proto ->
+        Heap.wrap(%{
+          "message" => message,
+          "name" => "TypeError",
+          "stack" => "",
+          "__error_name__" => "TypeError",
+          "__proto__" => proto,
+          {:symbol, "Symbol.toStringTag"} => "Error"
+        })
+
+      _ ->
+        Heap.make_error(message, "TypeError")
+    end
+  end
 
   defp array_like_args(value) do
     length = value |> Get.get("length") |> QuickBEAM.VM.Runtime.to_number()

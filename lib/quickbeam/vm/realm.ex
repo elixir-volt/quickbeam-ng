@@ -163,6 +163,32 @@ defmodule QuickBEAM.VM.Realm do
         error_protos
       )
 
+    function_intrinsics =
+      intrinsics(
+        realm_id,
+        object_proto,
+        function_proto,
+        array_proto,
+        boolean_proto,
+        number_proto,
+        string_proto,
+        regexp_proto,
+        date_proto,
+        data_view_proto,
+        map_proto,
+        iterator_proto,
+        set_proto,
+        promise_proto,
+        weak_map_proto,
+        weak_set_proto,
+        weak_ref_proto,
+        finalization_registry_proto,
+        aggregate_error_proto,
+        error_protos
+      )
+
+    QuickBEAM.VM.Runtime.Function.install_realm_methods(function_proto, function_intrinsics)
+
     global =
       Heap.wrap(%{
         "Object" => object_ctor,

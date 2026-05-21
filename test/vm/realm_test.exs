@@ -52,5 +52,20 @@ defmodule QuickBEAM.VM.RealmTest do
              )
   end
 
+  test "realm Function apply throws realm TypeError", %{runtime: runtime} do
+    assert {:ok, "true|true"} =
+             eval(
+               runtime,
+               ~S"""
+               let g = $262.createRealm().global;
+               let fn = new g.Function();
+               let first, second;
+               try { fn.apply(null, false); } catch (e) { first = e.constructor === g.TypeError; }
+               try { g.Function.prototype.apply.call(undefined, {}, []); } catch (e) { second = e.constructor === g.TypeError; }
+               first + "|" + second
+               """
+             )
+  end
+
   defp eval(runtime, source), do: QuickBEAM.eval(runtime, source, mode: :beam)
 end
