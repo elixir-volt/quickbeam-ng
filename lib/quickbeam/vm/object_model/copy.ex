@@ -228,7 +228,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
        }) do
     keys =
       case Get.get(handler, "ownKeys") do
-        trap when trap != nil and trap != :undefined ->
+        trap when not is_nullish(trap) ->
           trap
           |> Runtime.call_callback([target])
           |> Heap.to_list()
@@ -241,7 +241,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
 
     Enum.reduce(keys, %{}, fn key, acc ->
       descriptor =
-        if descriptor_trap != nil and descriptor_trap != :undefined do
+        if not is_nullish(descriptor_trap) do
           Runtime.call_callback(descriptor_trap, [target, key])
         else
           :undefined
@@ -317,7 +317,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
       %{proxy_target() => _target, proxy_handler() => handler} ->
         own_keys_fn = Get.get(handler, "ownKeys")
 
-        if own_keys_fn != :undefined and own_keys_fn != nil do
+        if not is_nullish(own_keys_fn) do
           result = Runtime.call_callback(own_keys_fn, [obj])
           Heap.to_list(result) |> Enum.map(&to_string/1)
         else

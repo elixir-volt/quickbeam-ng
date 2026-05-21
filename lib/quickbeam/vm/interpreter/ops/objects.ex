@@ -617,7 +617,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
           fn ->
             has_instance = Get.get(ctor, {:symbol, "Symbol.hasInstance"})
 
-            if has_instance != :undefined and has_instance != nil and
+            if not Value.nullish?(has_instance) and
                  function_value?(has_instance) do
               result =
                 Invocation.invoke_with_receiver(has_instance, [obj], Runtime.gas_budget(), ctor)

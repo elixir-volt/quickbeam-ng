@@ -249,7 +249,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   def instanceof(obj, ctor) do
     has_instance = Get.get(ctor, {:symbol, "Symbol.hasInstance"})
 
-    if has_instance != :undefined and has_instance != nil and Builtin.callable?(has_instance) do
+    if not Value.nullish?(has_instance) and Builtin.callable?(has_instance) do
       has_instance
       |> Invocation.invoke_with_receiver([obj], Runtime.gas_budget(), ctor)
       |> Values.truthy?()

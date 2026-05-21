@@ -327,7 +327,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp test({:obj, _} = obj, [s | _]) when is_binary(s) do
     case Get.get(obj, "exec") do
-      exec_fun when exec_fun != nil and exec_fun != :undefined ->
+      exec_fun when not is_nullish(exec_fun) ->
         unless Builtin.callable?(exec_fun), do: JSThrow.type_error!("RegExp exec is not callable")
 
         case Invocation.invoke_with_receiver(exec_fun, [s], Runtime.gas_budget(), obj) do
@@ -2586,7 +2586,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       {:builtin, "exec", _} ->
         :default
 
-      exec_fun when exec_fun != nil and exec_fun != :undefined ->
+      exec_fun when not is_nullish(exec_fun) ->
         unless Builtin.callable?(exec_fun), do: JSThrow.type_error!("RegExp exec is not callable")
 
         case Invocation.invoke_with_receiver(exec_fun, [string], Runtime.gas_budget(), regexp) do

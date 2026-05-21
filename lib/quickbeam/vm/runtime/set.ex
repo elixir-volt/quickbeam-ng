@@ -582,7 +582,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   defp call_iterator_return(iterator) do
     return_fn = Get.get(iterator, "return")
 
-    if return_fn != :undefined and return_fn != nil do
+    if not is_nullish(return_fn) do
       call_with_this(return_fn, [], iterator)
     end
   end

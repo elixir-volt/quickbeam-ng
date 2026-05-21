@@ -282,7 +282,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
             other
         end
 
-      if to_prim != nil and to_prim != :undefined do
+      if not Value.nullish?(to_prim) do
         if not callable?(to_prim) do
           throw({:js_throw, Heap.make_error("Symbol.toPrimitive is not a function", "TypeError")})
         end
@@ -395,7 +395,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
     end
   end
 
-  defp invoke_primitive_method(fun, obj) when fun != nil and fun != :undefined do
+  defp invoke_primitive_method(fun, obj) when not is_nil(fun) and fun != :undefined do
     if callable?(fun) do
       unwrap_primitive(Invocation.invoke_with_receiver(fun, [], Runtime.gas_budget(), obj))
     else

@@ -1241,7 +1241,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp slice_end(args, len) do
     case Enum.fetch(args, 1) do
-      {:ok, value} when value != nil and value != :undefined ->
+      {:ok, value} when not is_nullish(value) ->
         value |> to_integer_or_infinity() |> slice_relative_index(len)
 
       _ ->
@@ -2402,7 +2402,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp from(args, constructor) do
     {source, map_fn} =
       case args do
-        [s, f | _] when f != :undefined and f != nil -> {s, f}
+        [s, f | _] when not is_nullish(f) -> {s, f}
         [s, _ | _] -> {s, nil}
         [s] -> {s, nil}
         _ -> {nil, nil}

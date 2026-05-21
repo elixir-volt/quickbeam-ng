@@ -325,7 +325,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp close_iterator(%Context{} = ctx, iter_obj) do
     return_fn = Get.get(iter_obj, "return")
 
-    if return_fn != :undefined and return_fn != nil do
+    if not Value.nullish?(return_fn) do
       ctx
       |> Invocation.invoke_method_runtime(return_fn, iter_obj, [])
       |> validate_iterator_close_result!()
@@ -337,7 +337,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp close_iterator(_ctx, iter_obj) do
     return_fn = Get.get(iter_obj, "return")
 
-    if return_fn != :undefined and return_fn != nil do
+    if not Value.nullish?(return_fn) do
       return_fn
       |> Invocation.invoke_method_runtime(iter_obj, [])
       |> validate_iterator_close_result!()

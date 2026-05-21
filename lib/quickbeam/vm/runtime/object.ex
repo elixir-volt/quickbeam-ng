@@ -1293,7 +1293,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp from_entries_property_key({:obj, _} = key) do
     case Get.get(key, {:symbol, "Symbol.toPrimitive"}) do
-      primitive_fn when primitive_fn != nil and primitive_fn != :undefined ->
+      primitive_fn when not is_nullish(primitive_fn) ->
         primitive =
           Invocation.invoke_with_receiver(primitive_fn, ["string"], Runtime.gas_budget(), key)
 
@@ -1309,7 +1309,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp entries_from_iterable({:obj, ref} = iterable) do
     iterator_method = Get.get(iterable, {:symbol, "Symbol.iterator"})
 
-    if iterator_method != :undefined and iterator_method != nil do
+    if not Value.nullish?(iterator_method) do
       iterator = invoke_with_this(iterator_method, [], iterable)
       {:iterator, iterator}
     else
@@ -1371,7 +1371,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp close_iterator(iterator) do
     case Get.get(iterator, "return") do
-      return_fn when return_fn != nil and return_fn != :undefined ->
+      return_fn when not is_nullish(return_fn) ->
         invoke_with_this(return_fn, [], iterator)
 
       _ ->
@@ -1788,7 +1788,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp proxy_assign_entries(source_obj, %{proxy_target() => target, proxy_handler() => handler}) do
     keys =
       case Get.get(handler, "ownKeys") do
-        trap when trap != nil and trap != :undefined ->
+        trap when not is_nullish(trap) ->
           trap |> Runtime.call_callback([target]) |> Heap.to_list()
 
         _ ->
@@ -1806,7 +1806,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp proxy_assign_enumerable?(target, descriptor_trap, key) do
     descriptor =
-      if descriptor_trap != nil and descriptor_trap != :undefined do
+      if not Value.nullish?(descriptor_trap) do
         Runtime.call_callback(descriptor_trap, [target, key])
       else
         get_own_property_descriptor([target, key])

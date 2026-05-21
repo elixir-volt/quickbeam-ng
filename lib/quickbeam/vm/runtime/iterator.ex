@@ -275,7 +275,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
           JSThrow.type_error!("iterator method is not callable")
       end
 
-    if iterator_method != :undefined and iterator_method != nil and iterator == value and
+    if not Value.nullish?(iterator_method) and iterator == value and
          iterator_instance?(iterator) do
       iterator
     else

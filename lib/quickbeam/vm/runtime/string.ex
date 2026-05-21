@@ -964,7 +964,7 @@ defmodule QuickBEAM.VM.Runtime.String do
       end
 
     is_regexp =
-      if matcher != nil and matcher != :undefined,
+      if not Value.nullish?(matcher),
         do: Values.truthy?(matcher),
         else: regexp_fallback
 

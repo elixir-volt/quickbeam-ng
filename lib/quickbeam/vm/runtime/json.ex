@@ -680,7 +680,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   end
 
   defp apply_replacer({:ordered_map, pairs}, replacer)
-       when replacer != nil and replacer != :undefined do
+       when not is_nil(replacer) and replacer != :undefined do
     if QuickBEAM.VM.Builtin.callable?(replacer) and Process.get(@replacer_function_key) == nil do
       filtered =
         Enum.reduce(pairs, [], fn {k, v}, acc ->
@@ -962,7 +962,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   defp invoke_to_json_hook(value, key) do
     case Get.get(value, "toJSON") do
-      fun when fun != nil and fun != :undefined ->
+      fun when not is_nil(fun) and fun != :undefined ->
         if QuickBEAM.VM.Builtin.callable?(fun),
           do: QuickBEAM.VM.Invocation.invoke_with_receiver(fun, [key], value),
           else: value

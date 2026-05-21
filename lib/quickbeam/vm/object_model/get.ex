@@ -1408,7 +1408,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         getter = get(desc, "get")
 
         cond do
-          getter != :undefined and getter != nil ->
+          not Value.nullish?(getter) ->
             {:found_from_accessor, call_getter(getter, receiver)}
 
           get(desc, "value") != :undefined ->
