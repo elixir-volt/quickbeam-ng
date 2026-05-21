@@ -9,6 +9,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
   alias QuickBEAM.VM.Runtime.Globals.Numeric
 
   @prototype_methods ~w(toString toFixed valueOf toExponential toPrecision toLocaleString)
+  @constant_properties ~w(NaN POSITIVE_INFINITY NEGATIVE_INFINITY MAX_SAFE_INTEGER MIN_SAFE_INTEGER EPSILON MAX_VALUE MIN_VALUE)
 
   builtin_definition("Number",
     constructor: &QuickBEAM.VM.Runtime.Globals.Constructors.number/2,
@@ -48,6 +49,11 @@ defmodule QuickBEAM.VM.Runtime.Number do
     Heap.put_ctor_static(ctor, "length", 1)
     Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+
+    for name <- @constant_properties do
+      Heap.put_ctor_static(ctor, name, static_property(name))
+      Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.prototype())
+    end
   end
 
   defp maybe_put_object_prototype(map) do
@@ -131,8 +137,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
   static_val("MAX_VALUE", 1.7976931348623157e+308)
   static_val("MIN_VALUE", 5.0e-324)
 
-  def static_property_meta(name)
-      when name in ~w(NaN POSITIVE_INFINITY NEGATIVE_INFINITY MAX_SAFE_INTEGER MIN_SAFE_INTEGER EPSILON MAX_VALUE MIN_VALUE) do
+  def static_property_meta(name) when name in @constant_properties do
     QuickBEAM.VM.Builtin.meta(name,
       writable: false,
       enumerable: false,
