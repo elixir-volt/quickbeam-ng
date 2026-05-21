@@ -28,6 +28,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   }
 
   alias QuickBEAM.VM.Runtime.Collections
+  alias QuickBEAM.VM.Runtime.FunctionKinds
 
   alias QuickBEAM.VM.ObjectModel.{
     OwnProperty,
@@ -1468,28 +1469,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 1} = fun) do
-    function_kind_constructor(
-      "GeneratorFunction",
-      &QuickBEAM.VM.Runtime.Globals.Constructors.generator_function/2,
-      fun
-    )
-  end
-
-  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 2} = fun) do
-    function_kind_constructor(
-      "AsyncFunction",
-      &QuickBEAM.VM.Runtime.Globals.Constructors.async_function/2,
-      fun
-    )
-  end
-
-  defp function_kind_constructor(%QuickBEAM.VM.Function{func_kind: 3} = fun) do
-    function_kind_constructor(
-      "AsyncGeneratorFunction",
-      &QuickBEAM.VM.Runtime.Globals.Constructors.async_generator_function/2,
-      fun
-    )
+  defp function_kind_constructor(%QuickBEAM.VM.Function{} = fun) do
+    case FunctionKinds.constructor(fun) do
+      {name, callback} -> function_kind_constructor(name, callback, fun)
+      nil -> fallback_to_function_proto(:undefined, :undefined, "constructor")
+    end
   end
 
   defp function_kind_constructor(_),
