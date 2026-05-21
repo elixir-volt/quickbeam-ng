@@ -44,18 +44,13 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns the raw fast-context tuple or the missing sentinel."
   def fast_ctx, do: Process.get(@fast_ctx_key, @missing)
 
-  def attach_method_state(
-        %Context{current_func: %QuickBEAM.VM.Function{need_home_object: false}} = ctx
-      ),
-      do: ctx
-
-  def attach_method_state(
-        %Context{current_func: {:closure, _, %QuickBEAM.VM.Function{need_home_object: false}}} =
-          ctx
-      ),
-      do: ctx
-
   def attach_method_state(%Context{current_func: current_func} = ctx) do
+    unless Functions.needs_home_object?(current_func),
+      do: ctx,
+      else: attach_home_object(ctx, current_func)
+  end
+
+  defp attach_home_object(ctx, current_func) do
     home_object = Functions.current_home_object(current_func)
 
     ctx
@@ -150,12 +145,13 @@ defmodule QuickBEAM.VM.Invocation.Context do
   @doc "Returns the current method home object used for `super` lookup."
   def current_home_object(current_func \\ current_func())
 
-  def current_home_object(%QuickBEAM.VM.Function{need_home_object: false}), do: :undefined
-
-  def current_home_object({:closure, _, %QuickBEAM.VM.Function{need_home_object: false}}),
-    do: :undefined
-
   def current_home_object(current_func) do
+    unless Functions.needs_home_object?(current_func),
+      do: :undefined,
+      else: current_home_object_for(current_func)
+  end
+
+  defp current_home_object_for(current_func) do
     case fast_ctx() do
       {_atoms, _globals, _current_func, _arg_buf, _this, _new_target, home_object, _super, _ctx} ->
         home_object

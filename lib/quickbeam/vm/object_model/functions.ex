@@ -40,7 +40,8 @@ defmodule QuickBEAM.VM.ObjectModel.Functions do
   def home_object_key(%QuickBEAM.VM.Function{} = fun), do: {:function, :erlang.phash2(fun)}
   def home_object_key(_), do: nil
 
-  defp needs_home_object?({:closure, _, %QuickBEAM.VM.Function{need_home_object: true}}), do: true
-  defp needs_home_object?(%QuickBEAM.VM.Function{need_home_object: true}), do: true
-  defp needs_home_object?(_), do: false
+  @doc "Returns whether a function value needs home-object metadata for super lookup."
+  def needs_home_object?({:closure, _, %QuickBEAM.VM.Function{need_home_object: true}}), do: true
+  def needs_home_object?(%QuickBEAM.VM.Function{need_home_object: true}), do: true
+  def needs_home_object?(_), do: false
 end
