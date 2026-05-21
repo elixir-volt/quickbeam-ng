@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
   @moduledoc "Call, construction, and direct-eval helpers for BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{Heap, Invocation, Names}
+  alias QuickBEAM.VM.{Heap, Invocation, Names, RuntimeState}
   alias QuickBEAM.VM.Compiler.Runner
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Context, Errors}
   alias QuickBEAM.VM.Environment.Captures, as: EnvCaptures
@@ -95,7 +95,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
         _ -> pending_this
       end
 
-    Heap.put_ctx(InterpreterContext.mark_dirty(%{parent_ctx | this: result}))
+    RuntimeState.install(InterpreterContext.mark_dirty(%{parent_ctx | this: result}))
     result
   end
 

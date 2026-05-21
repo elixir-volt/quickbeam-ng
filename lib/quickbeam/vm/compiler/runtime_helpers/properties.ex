@@ -4,12 +4,24 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
-  alias QuickBEAM.VM.{Heap, JSThrow, Names}
+  alias QuickBEAM.VM.{Heap, JSThrow, Names, RuntimeState}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
-  alias QuickBEAM.VM.ObjectModel.{Class, Copy, Define, Delete, Functions, Methods, Private, Put, Static}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    Class,
+    Copy,
+    Define,
+    Delete,
+    Functions,
+    Methods,
+    Private,
+    Put,
+    Static
+  }
+
   alias QuickBEAM.VM.Semantics.{Construction, PropertyAccess}
   alias QuickBEAM.VM.Semantics.Values
 
@@ -17,14 +29,25 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
   def get_field(object, key) when is_binary(key), do: PropertyAccess.get_property(object, key)
 
   def get_field(object, atom_idx),
-    do: PropertyAccess.get_property(object, Names.resolve_atom(InvokeContext.current_atoms(), atom_idx))
+    do:
+      PropertyAccess.get_property(
+        object,
+        Names.resolve_atom(InvokeContext.current_atoms(), atom_idx)
+      )
 
-  def get_field(ctx, object, key) when is_binary(key), do: PropertyAccess.get_property(ctx, object, key)
+  def get_field(ctx, object, key) when is_binary(key),
+    do: PropertyAccess.get_property(ctx, object, key)
 
   def get_field(ctx, object, atom_idx),
-    do: PropertyAccess.get_property(ctx, object, Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx))
+    do:
+      PropertyAccess.get_property(
+        ctx,
+        object,
+        Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx)
+      )
 
-  def get_array_el2(ctx \\ nil, object, idx), do: {PropertyAccess.get_property(ctx, object, idx), object}
+  def get_array_el2(ctx \\ nil, object, idx),
+    do: {PropertyAccess.get_property(ctx, object, idx), object}
 
   def get_private_field(_ctx, object, key) do
     case Private.get_field(object, key) do
@@ -60,7 +83,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
     :ok
   end
 
-  def define_array_el(_ctx \\ nil, object, idx, value), do: Put.define_array_el(object, idx, value)
+  def define_array_el(_ctx \\ nil, object, idx, value),
+    do: Put.define_array_el(object, idx, value)
 
   def define_field(_ctx, object, key, value) when is_binary(key) or is_number(key),
     do: define_field(object, key, value)
@@ -76,10 +100,18 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
   def define_field(object, atom_idx, value) when is_tuple(atom_idx),
     do: define_field(object, Names.resolve_atom(InvokeContext.current_atoms(), atom_idx), value)
 
-  def define_field(object, key, value), do: Define.create_data_property_or_throw(object, key, value)
+  def define_field(object, key, value),
+    do: Define.create_data_property_or_throw(object, key, value)
 
-  def define_static_method(ctx, ctor, atom_idx, method) when is_integer(atom_idx) or is_tuple(atom_idx),
-    do: define_static_method(ctx, ctor, Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx), method)
+  def define_static_method(ctx, ctor, atom_idx, method)
+      when is_integer(atom_idx) or is_tuple(atom_idx),
+      do:
+        define_static_method(
+          ctx,
+          ctor,
+          Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx),
+          method
+        )
 
   def define_static_method(_ctx, ctor, key, method) do
     Put.put_field(ctor, key, method)
@@ -180,10 +212,15 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
     end
   end
 
-  def delete_property(_ctx, {:builtin, _name, map} = fun, key) when is_map(map), do: Static.delete_static(fun, key)
+  def delete_property(_ctx, {:builtin, _name, map} = fun, key) when is_map(map),
+    do: Static.delete_static(fun, key)
+
   def delete_property(_ctx, {:builtin, _name, _} = fun, key), do: Static.delete_static(fun, key)
   def delete_property(_ctx, {:closure, _, _} = fun, key), do: Static.delete_static(fun, key)
-  def delete_property(_ctx, %QuickBEAM.VM.Function{} = fun, key), do: Static.delete_static(fun, key)
+
+  def delete_property(_ctx, %QuickBEAM.VM.Function{} = fun, key),
+    do: Static.delete_static(fun, key)
+
   def delete_property(_ctx, object, key), do: Delete.delete_property(object, key)
 
   def set_proto(ctx \\ nil, object, proto)
@@ -219,7 +256,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
       new_globals = Map.put(globals, key, value)
       Heap.put_persistent_globals(new_globals)
       Heap.put_base_globals(new_globals)
-      Heap.put_ctx(%{ctx | globals: new_globals} |> Context.mark_dirty())
+      RuntimeState.install(%{ctx | globals: new_globals} |> Context.mark_dirty())
     end
   end
 
@@ -227,14 +264,5 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
 
   defp with_runtime_ctx(nil, fun), do: fun.()
 
-  defp with_runtime_ctx(ctx, fun) do
-    previous_ctx = Heap.get_ctx()
-    Heap.put_ctx(ctx)
-
-    try do
-      fun.()
-    after
-      if previous_ctx, do: Heap.put_ctx(previous_ctx), else: Heap.put_ctx(nil)
-    end
-  end
+  defp with_runtime_ctx(ctx, fun), do: RuntimeState.with_context(ctx, fun)
 end

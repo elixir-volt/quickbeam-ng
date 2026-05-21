@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
   @moduledoc "Variable, global binding, and reference helpers used by BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{GlobalEnvironment, Heap, Invocation, JSThrow, Names}
+  alias QuickBEAM.VM.{GlobalEnvironment, Heap, Invocation, JSThrow, Names, RuntimeState}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Interpreter.{Closures, Context}
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
@@ -10,7 +10,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
   @doc "Reads a variable binding or throws a JavaScript ReferenceError when absent."
   def get_var(ctx, "arguments"), do: arguments_object(ctx)
   def get_var(ctx, name) when is_binary(name), do: fetch_ctx_var(ctx, name)
-  def get_var(ctx, atom_idx), do: get_var(ctx, Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx))
+
+  def get_var(ctx, atom_idx),
+    do: get_var(ctx, Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx))
 
   def get_var(name) when is_binary(name) do
     case GlobalEnvironment.fetch(name) do
@@ -22,7 +24,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
   def get_var(atom_idx), do: get_var(Names.resolve_atom(InvokeContext.current_atoms(), atom_idx))
 
   def get_var_undef(ctx, "arguments"), do: arguments_object(ctx)
-  def get_var_undef(ctx, name) when is_binary(name), do: get_global_undef(RuntimeContext.globals(ctx), name)
+
+  def get_var_undef(ctx, name) when is_binary(name),
+    do: get_global_undef(RuntimeContext.globals(ctx), name)
 
   def get_var_undef(ctx, atom_idx),
     do: get_var_undef(ctx, Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx))
@@ -67,33 +71,59 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
   def get_var_ref_check(idx), do: checked_var_ref(idx)
 
   @doc "Invokes a callable stored in a variable reference."
-  def invoke_var_ref(ctx, idx, args), do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), args)
+  def invoke_var_ref(ctx, idx, args),
+    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), args)
+
   def invoke_var_ref0(ctx, idx), do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [])
-  def invoke_var_ref1(ctx, idx, arg0), do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0])
+
+  def invoke_var_ref1(ctx, idx, arg0),
+    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0])
 
   @doc "Invokes a callable variable reference with two arguments."
-  def invoke_var_ref2(ctx, idx, arg0, arg1), do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0, arg1])
-  def invoke_var_ref3(ctx, idx, arg0, arg1, arg2), do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0, arg1, arg2])
-  def invoke_var_ref_check(ctx, idx, args), do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), args)
+  def invoke_var_ref2(ctx, idx, arg0, arg1),
+    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0, arg1])
+
+  def invoke_var_ref3(ctx, idx, arg0, arg1, arg2),
+    do: Invocation.invoke_runtime(ctx, get_var_ref(ctx, idx), [arg0, arg1, arg2])
+
+  def invoke_var_ref_check(ctx, idx, args),
+    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), args)
 
   @doc "Checks and invokes a callable variable reference with no arguments."
-  def invoke_var_ref_check0(ctx, idx), do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [])
-  def invoke_var_ref_check1(ctx, idx, arg0), do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0])
-  def invoke_var_ref_check2(ctx, idx, arg0, arg1), do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0, arg1])
+  def invoke_var_ref_check0(ctx, idx),
+    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [])
+
+  def invoke_var_ref_check1(ctx, idx, arg0),
+    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0])
+
+  def invoke_var_ref_check2(ctx, idx, arg0, arg1),
+    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0, arg1])
 
   @doc "Checks and invokes a callable variable reference with three arguments."
-  def invoke_var_ref_check3(ctx, idx, arg0, arg1, arg2), do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0, arg1, arg2])
+  def invoke_var_ref_check3(ctx, idx, arg0, arg1, arg2),
+    do: Invocation.invoke_runtime(ctx, checked_var_ref(ctx, idx), [arg0, arg1, arg2])
 
   def invoke_var_ref(idx, args), do: Invocation.invoke_runtime(get_var_ref(idx), args)
   def invoke_var_ref0(idx), do: Invocation.invoke_runtime(get_var_ref(idx), [])
   def invoke_var_ref1(idx, arg0), do: Invocation.invoke_runtime(get_var_ref(idx), [arg0])
-  def invoke_var_ref2(idx, arg0, arg1), do: Invocation.invoke_runtime(get_var_ref(idx), [arg0, arg1])
-  def invoke_var_ref3(idx, arg0, arg1, arg2), do: Invocation.invoke_runtime(get_var_ref(idx), [arg0, arg1, arg2])
+
+  def invoke_var_ref2(idx, arg0, arg1),
+    do: Invocation.invoke_runtime(get_var_ref(idx), [arg0, arg1])
+
+  def invoke_var_ref3(idx, arg0, arg1, arg2),
+    do: Invocation.invoke_runtime(get_var_ref(idx), [arg0, arg1, arg2])
+
   def invoke_var_ref_check(idx, args), do: Invocation.invoke_runtime(checked_var_ref(idx), args)
   def invoke_var_ref_check0(idx), do: Invocation.invoke_runtime(checked_var_ref(idx), [])
-  def invoke_var_ref_check1(idx, arg0), do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0])
-  def invoke_var_ref_check2(idx, arg0, arg1), do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0, arg1])
-  def invoke_var_ref_check3(idx, arg0, arg1, arg2), do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0, arg1, arg2])
+
+  def invoke_var_ref_check1(idx, arg0),
+    do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0])
+
+  def invoke_var_ref_check2(idx, arg0, arg1),
+    do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0, arg1])
+
+  def invoke_var_ref_check3(idx, arg0, arg1, arg2),
+    do: Invocation.invoke_runtime(checked_var_ref(idx), [arg0, arg1, arg2])
 
   def put_var_ref(ctx, idx, value) do
     write_var_ref(current_var_ref(ctx, idx), value)
@@ -116,7 +146,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
     value
   end
 
-  def make_var_ref(ctx, atom_idx), do: {:global_ref, Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx)}
+  def make_var_ref(ctx, atom_idx),
+    do: {:global_ref, Names.resolve_atom(RuntimeContext.atoms(ctx), atom_idx)}
 
   @doc "Returns or creates a mutable reference cell for an existing variable reference."
   def make_var_ref_ref(ctx, idx) do
@@ -161,7 +192,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
     ctx
   end
 
-  def put_ref_value(ctx, value, _key, {:global_ref, name}), do: GlobalEnvironment.put(RuntimeContext.ensure(ctx), name, value)
+  def put_ref_value(ctx, value, _key, {:global_ref, name}),
+    do: GlobalEnvironment.put(RuntimeContext.ensure(ctx), name, value)
 
   def put_ref_value(ctx, value, key, object) when is_binary(key) do
     Put.put(object, key, value)
@@ -184,7 +216,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
       }),
       do: strict
 
-  def current_strict_mode?(%Context{current_func: %QuickBEAM.VM.Function{is_strict_mode: strict}}), do: strict
+  def current_strict_mode?(%Context{
+        current_func: %QuickBEAM.VM.Function{is_strict_mode: strict}
+      }), do: strict
+
   def current_strict_mode?(_ctx), do: false
 
   defp arguments_object(ctx) do
@@ -231,8 +266,11 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
     case RuntimeContext.current_func(ctx) do
       {:closure, captured, %QuickBEAM.VM.Function{} = fun} ->
         case capture_keys_tuple(fun) do
-          keys when idx >= 0 and idx < tuple_size(keys) -> Map.get(captured, elem(keys, idx), :undefined)
-          _ -> :undefined
+          keys when idx >= 0 and idx < tuple_size(keys) ->
+            Map.get(captured, elem(keys, idx), :undefined)
+
+          _ ->
+            :undefined
         end
 
       _ ->
@@ -265,7 +303,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
       {:cell, _} = cell ->
         value = Closures.read_cell(cell)
 
-        if value == :__tdz__ and var_ref_name(ctx, idx) == "this" and derived_this_uninitialized?(ctx) do
+        if value == :__tdz__ and var_ref_name(ctx, idx) == "this" and
+             derived_this_uninitialized?(ctx) do
           JSThrow.reference_error!("this is not initialized")
         end
 
@@ -289,7 +328,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
 
   defp var_ref_name(ctx, idx) do
     case RuntimeContext.current_func(ctx) do
-      {:closure, _, %QuickBEAM.VM.Function{closure_vars: vars}} when idx >= 0 and idx < length(vars) ->
+      {:closure, _, %QuickBEAM.VM.Function{closure_vars: vars}}
+      when idx >= 0 and idx < length(vars) ->
         vars
         |> Enum.at(idx)
         |> Map.get(:name)
@@ -304,13 +344,18 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
 
   defp derived_this_uninitialized?(ctx) do
     case RuntimeContext.this(ctx) do
-      this when this == :uninitialized or (is_tuple(this) and tuple_size(this) == 2 and elem(this, 0) == :uninitialized) -> true
-      _ -> false
+      this
+      when this == :uninitialized or
+             (is_tuple(this) and tuple_size(this) == 2 and elem(this, 0) == :uninitialized) ->
+        true
+
+      _ ->
+        false
     end
   end
 
   defp current_context do
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %Context{} = ctx -> ctx
       map when is_map(map) -> RuntimeContext.struct_context(map)
       _ -> %Context{atoms: Heap.get_atoms(), globals: GlobalEnvironment.base_globals()}

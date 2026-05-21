@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
   @moduledoc "Error construction and compiled stack formatting for BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{Heap, SourcePosition}
+  alias QuickBEAM.VM.{Heap, RuntimeState, SourcePosition}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.ObjectModel.Get
 
@@ -23,15 +23,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
   end
 
   def make_error_with_ctx(ctx, message, name, stack_override \\ nil) do
-    previous_ctx = Heap.get_ctx()
-    Heap.put_ctx(RuntimeContext.ensure(ctx))
-
-    try do
+    RuntimeState.with_context(RuntimeContext.ensure(ctx), fn ->
       Heap.make_error(message, name)
       |> ensure_compiled_stack(ctx, stack_override)
-    after
-      if previous_ctx, do: Heap.put_ctx(previous_ctx), else: Heap.put_ctx(nil)
-    end
+    end)
   end
 
   def compiled_stack(ctx) do
