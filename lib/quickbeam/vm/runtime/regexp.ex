@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime, Value}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put}
@@ -126,8 +126,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
-  defp regexp_constructor_object?({:obj, _}), do: true
-  defp regexp_constructor_object?(value), do: Builtin.callable?(value)
+  defp regexp_constructor_object?(value), do: Value.object_like?(value)
 
   def proto_accessor("source") do
     {:accessor,
