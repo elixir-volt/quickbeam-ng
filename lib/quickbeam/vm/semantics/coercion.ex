@@ -363,11 +363,8 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
     end
   end
 
-  defp callable?({:closure, _, _}), do: true
-  defp callable?({:builtin, _, cb}) when is_function(cb), do: true
-  defp callable?({:bound, _, _, _, _}), do: true
-  defp callable?(%QuickBEAM.VM.Function{}), do: true
-  defp callable?(_), do: false
+  defp callable?({:builtin, _, cb}) when not is_function(cb), do: false
+  defp callable?(value), do: Value.function_like?(value)
 
   defp throw_object_to_primitive_error do
     throw({:js_throw, Heap.make_error("Cannot convert object to primitive value", "TypeError")})
