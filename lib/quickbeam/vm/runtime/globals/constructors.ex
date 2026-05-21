@@ -264,9 +264,9 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   def bigint([{:bigint, n} | _], _), do: {:bigint, n}
 
   def bigint([string | _], _) when is_binary(string) do
-    case Integer.parse(string) do
-      {n, ""} -> {:bigint, n}
-      _ -> JSThrow.syntax_error!("Cannot convert to BigInt")
+    case QuickBEAM.VM.Runtime.BigInt.parse_bigint_string(String.trim(string)) do
+      {:ok, n} -> {:bigint, n}
+      :error -> JSThrow.syntax_error!("Cannot convert to BigInt")
     end
   end
 
