@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
 
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime, Value}
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{Copy, Get, HasProperty, OwnProperty}
@@ -204,7 +204,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
       Builtin.callable?(iter_fn) ->
         collect_custom_iterator(obj, iter_fn)
 
-      iter_fn not in [nil, :undefined] ->
+      not Value.nullish?(iter_fn) ->
         not_iterable!()
 
       Map.has_key?(map, "__set_data__") ->
@@ -302,7 +302,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
       Builtin.callable?(iter_fn) ->
         invoke_custom_iter(ctx, iter_fn, obj_ref)
 
-      iter_fn not in [nil, :undefined] ->
+      not Value.nullish?(iter_fn) ->
         throw({:js_throw, Heap.make_error("[Symbol.iterator] is not a function", "TypeError")})
 
       Map.has_key?(map, "next") ->

@@ -488,7 +488,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     set_trap = Get.get(handler, "set")
 
     cond do
-      set_trap in [nil, :undefined] ->
+      Value.nullish?(set_trap) ->
         put(target, key, val)
 
       not QuickBEAM.VM.Builtin.callable?(set_trap) ->
@@ -508,7 +508,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     set_trap = Get.get(handler, "set")
 
     cond do
-      set_trap in [nil, :undefined] ->
+      Value.nullish?(set_trap) ->
         set(target, key, val, receiver)
 
       not QuickBEAM.VM.Builtin.callable?(set_trap) ->

@@ -151,7 +151,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     get_trap = get(handler, "get")
 
     cond do
-      get_trap in [nil, :undefined] ->
+      Value.nullish?(get_trap) ->
         get(target, key, receiver)
 
       not QuickBEAM.VM.Builtin.callable?(get_trap) ->
@@ -563,7 +563,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         get_trap = get(handler, "get")
 
         cond do
-          get_trap in [nil, :undefined] ->
+          Value.nullish?(get_trap) ->
             get(target, key)
 
           not QuickBEAM.VM.Builtin.callable?(get_trap) ->

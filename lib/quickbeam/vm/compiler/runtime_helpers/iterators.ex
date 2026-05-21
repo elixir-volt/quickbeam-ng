@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   @moduledoc "Iterator and argument-rest helpers used by BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{Heap, Invocation, Runtime, RuntimeState}
+  alias QuickBEAM.VM.{Heap, Invocation, Runtime, RuntimeState, Value}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Properties
   alias QuickBEAM.VM.Interpreter.Context
@@ -34,7 +34,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
     method_name = if Bitwise.band(flags, 1) == 1, do: "throw", else: "return"
     method = Get.get(iter_obj, method_name)
 
-    if method == :undefined or method == nil do
+    if Value.nullish?(method) do
       {true, val, catch_offset, next_fn, iter_obj}
     else
       args = if Bitwise.band(flags, 2) == 2, do: [], else: [val]

@@ -742,7 +742,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         trap = Get.get(handler, "preventExtensions")
 
         cond do
-          trap == :undefined or trap == nil ->
+          Value.nullish?(trap) ->
             prevent_extensions_object(target)
 
           not Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target])) ->
@@ -865,7 +865,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
       %{proxy_target() => target, proxy_handler() => handler} ->
         trap = Get.get(handler, "isExtensible")
 
-        if trap == :undefined or trap == nil do
+        if Value.nullish?(trap) do
           object_extensible?(target)
         else
           Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target]))
@@ -1012,7 +1012,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     trap = Get.get(handler, "getPrototypeOf")
 
     result =
-      if trap == :undefined or trap == nil do
+      if Value.nullish?(trap) do
         Prototype.get(target)
       else
         Invocation.invoke_callback_or_throw(trap, [target], handler)
@@ -1041,7 +1041,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     trap = Get.get(handler, "setPrototypeOf")
 
     success? =
-      if trap == :undefined or trap == nil do
+      if Value.nullish?(trap) do
         set_own_prototype(target, new_proto)
         true
       else

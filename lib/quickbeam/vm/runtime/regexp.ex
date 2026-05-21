@@ -120,7 +120,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
           do: JSThrow.type_error!("RegExp constructor is not an object")
 
         case Get.get(constructor, {:symbol, "Symbol.species"}) do
-          value when value in [nil, :undefined] -> default
+          value when value == nil or value == :undefined -> default
           species -> species
         end
     end
@@ -326,7 +326,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp test({:obj, _} = obj, [s | _]) when is_binary(s) do
     case Get.get(obj, "exec") do
-      exec_fun when exec_fun not in [nil, :undefined] ->
+      exec_fun when exec_fun != nil and exec_fun != :undefined ->
         unless Builtin.callable?(exec_fun), do: JSThrow.type_error!("RegExp exec is not callable")
 
         case Invocation.invoke_with_receiver(exec_fun, [s], Runtime.gas_budget(), obj) do
@@ -2149,7 +2149,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
       {:obj, _} = ctor ->
         case Get.get(ctor, {:symbol, "Symbol.species"}) do
-          value when value in [nil, :undefined] -> default
+          value when value == nil or value == :undefined -> default
           species -> species
         end
 
@@ -2158,7 +2158,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
           do: JSThrow.type_error!("RegExp constructor is not an object")
 
         case Get.get(ctor, {:symbol, "Symbol.species"}) do
-          value when value in [nil, :undefined] -> default
+          value when value == nil or value == :undefined -> default
           species -> species
         end
     end
@@ -2585,7 +2585,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       {:builtin, "exec", _} ->
         :default
 
-      exec_fun when exec_fun not in [nil, :undefined] ->
+      exec_fun when exec_fun != nil and exec_fun != :undefined ->
         unless Builtin.callable?(exec_fun), do: JSThrow.type_error!("RegExp exec is not callable")
 
         case Invocation.invoke_with_receiver(exec_fun, [string], Runtime.gas_budget(), regexp) do
