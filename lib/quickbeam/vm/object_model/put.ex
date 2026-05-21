@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
   alias QuickBEAM.VM.Execution.{RegexpState, SetterState}
-  alias QuickBEAM.VM.{Heap, Runtime, RuntimeState}
+  alias QuickBEAM.VM.{Heap, Runtime, RuntimeState, Value}
   alias QuickBEAM.VM.Interpreter.Closures
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
@@ -1524,13 +1524,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     do: list ++ List.duplicate(:undefined, max(0, i - length(list))) ++ [val]
 
   defp restricted_function_property?({:bound, _, _, _, _}), do: true
-
-  defp restricted_function_property?(%QuickBEAM.VM.Function{is_strict_mode: true}), do: true
-
-  defp restricted_function_property?({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}),
-    do: true
-
-  defp restricted_function_property?(_), do: false
+  defp restricted_function_property?(fun), do: Value.strict_function?(fun)
 
   defp reject_failed_write! do
     if Semantics.strict_mode?(), do: JSThrow.type_error!("Cannot assign to read only property")

@@ -292,9 +292,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
   def proto_property(_fun, _), do: :undefined
 
-  defp strict_function?(%QuickBEAM.VM.Function{is_strict_mode: true}), do: true
-  defp strict_function?({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}), do: true
-  defp strict_function?(_), do: false
+  defp strict_function?(fun), do: Value.strict_function?(fun)
 
   defp strict_active_caller?(fun) do
     fun = raw_function(fun)
