@@ -11,6 +11,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.ObjectModel.{Class, Functions}
   alias QuickBEAM.VM.Promise
+  alias QuickBEAM.VM.Value
 
   @doc "Invokes the runtime object represented by this module."
   def invoke(%QuickBEAM.VM.Function{} = fun, args), do: invoke(fun, args, nil)
@@ -352,9 +353,7 @@ defmodule QuickBEAM.VM.Compiler.Runner do
     |> Context.mark_dirty()
   end
 
-  defp strict_function?({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}), do: strict
-  defp strict_function?(%QuickBEAM.VM.Function{is_strict_mode: strict}), do: strict
-  defp strict_function?(_), do: false
+  defp strict_function?(fun), do: Value.strict_function?(fun)
 
   defp invocation_this(overrides, _base_ctx, %QuickBEAM.VM.Function{is_strict_mode: true}) do
     if Keyword.has_key?(overrides, :this), do: Keyword.fetch!(overrides, :this), else: :undefined

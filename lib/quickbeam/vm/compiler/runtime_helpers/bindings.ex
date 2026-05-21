@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
   @moduledoc "Variable, global binding, and reference helpers used by BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{GlobalEnvironment, Heap, Invocation, JSThrow, Names, RuntimeState}
+  alias QuickBEAM.VM.{GlobalEnvironment, Heap, Invocation, JSThrow, Names, RuntimeState, Value}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Interpreter.{Closures, Context}
   alias QuickBEAM.VM.Invocation.Context, as: InvokeContext
@@ -211,17 +211,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
     end
   end
 
-  def current_strict_mode?(%Context{
-        current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}
-      }),
-      do: strict
-
-  def current_strict_mode?(%Context{
-        current_func: %QuickBEAM.VM.Function{is_strict_mode: strict}
-      }),
-      do: strict
-
-  def current_strict_mode?(_ctx), do: false
+  def current_strict_mode?(ctx), do: Value.strict_context?(ctx)
 
   defp arguments_object(ctx) do
     case Map.fetch(RuntimeContext.globals(ctx), "arguments") do

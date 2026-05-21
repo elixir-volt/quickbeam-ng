@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.ObjectModel.Semantics do
   @moduledoc "Shared object-model semantic helpers."
 
-  alias QuickBEAM.VM.{Heap, RuntimeState}
+  alias QuickBEAM.VM.{Heap, RuntimeState, Value}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime
@@ -13,13 +13,7 @@ defmodule QuickBEAM.VM.ObjectModel.Semantics do
   def same_value?(:nan, :nan), do: true
   def same_value?(a, b), do: a === b
 
-  def strict_mode? do
-    case RuntimeState.current() do
-      %{current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}} -> true
-      %{current_func: %QuickBEAM.VM.Function{is_strict_mode: true}} -> true
-      _ -> false
-    end
-  end
+  def strict_mode?, do: RuntimeState.current() |> Value.strict_context?()
 
   def descriptor_attrs(desc_obj, desc, existing_attrs, default) do
     PropertyDescriptor.attrs(

@@ -49,6 +49,15 @@ defmodule QuickBEAM.VM.Value do
   defguard is_builtin(v) when is_tuple(v) and tuple_size(v) == 3 and elem(v, 0) == :builtin
   defguard is_nullish(v) when v == nil or v == :undefined
 
+  @doc "Returns true when a VM function value executes in strict mode."
+  def strict_function?({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}), do: strict
+  def strict_function?(%QuickBEAM.VM.Function{is_strict_mode: strict}), do: strict
+  def strict_function?(_), do: false
+
+  @doc "Returns true when an execution context is currently strict."
+  def strict_context?(%{current_func: current_func}), do: strict_function?(current_func)
+  def strict_context?(_), do: false
+
   @doc "Returns true when the VM value is represented as a callable/function object."
   def function_like?({:closure, _, _}), do: true
   def function_like?({:builtin, _, _}), do: true

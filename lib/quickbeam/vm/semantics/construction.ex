@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Semantics.Construction do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.ObjectModel.{Class, Functions}
 
   def new_object do
@@ -60,7 +60,5 @@ defmodule QuickBEAM.VM.Semantics.Construction do
     )
   end
 
-  defp strict_function?({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}), do: strict
-  defp strict_function?(%QuickBEAM.VM.Function{is_strict_mode: strict}), do: strict
-  defp strict_function?(_), do: false
+  defp strict_function?(fun), do: Value.strict_function?(fun)
 end

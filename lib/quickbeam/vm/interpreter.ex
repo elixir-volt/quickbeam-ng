@@ -15,7 +15,8 @@ defmodule QuickBEAM.VM.Interpreter do
     PredefinedAtoms,
     Runtime,
     RuntimeState,
-    Stacktrace
+    Stacktrace,
+    Value
   }
 
   alias QuickBEAM.JS.Error, as: JSError
@@ -357,17 +358,8 @@ defmodule QuickBEAM.VM.Interpreter do
     end
   end
 
-  defp current_strict_mode?(%{
-         current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: s}}
-       }),
-       do: s
-
-  defp current_strict_mode?(%{current_func: %QuickBEAM.VM.Function{is_strict_mode: s}}), do: s
-  defp current_strict_mode?(_), do: false
-
-  defp strict_function?({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: strict}}), do: strict
-  defp strict_function?(%QuickBEAM.VM.Function{is_strict_mode: strict}), do: strict
-  defp strict_function?(_), do: false
+  defp current_strict_mode?(ctx), do: Value.strict_context?(ctx)
+  defp strict_function?(fun), do: Value.strict_function?(fun)
 
   defp maybe_refresh_error_stack({:obj, ref} = error) do
     case Heap.get_obj(ref, %{}) do
