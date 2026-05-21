@@ -15,6 +15,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     Get,
     HasProperty,
     OwnProperty,
+    Static,
     PropertyDescriptor,
     PropertyKey,
     Semantics,
@@ -729,7 +730,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
     cond do
       QuickBEAM.VM.Builtin.callable?(callable) and key in ["length", "name"] and
-        (not own? or Map.get(statics, key) == :deleted) and
+        (not own? or Static.deleted?(callable, key)) and
           not static_class_method_definition?(callable, key) ->
         reject_failed_write!()
 

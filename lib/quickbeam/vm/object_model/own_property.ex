@@ -72,22 +72,21 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   def present?({:regexp, _, _, ref}, key), do: RegexpState.has_property?(ref, key)
 
-  def present?({:builtin, "Object", _} = builtin, "assign") do
-    not match?(%{"assign" => :deleted}, Heap.get_ctor_statics(builtin))
-  end
+  def present?({:builtin, "Object", _} = builtin, "assign"),
+    do: not Static.deleted?(builtin, "assign")
 
   def present?({:builtin, _, _} = builtin, key) when key in ["name", "length"] do
-    Builtin.callable?(builtin) and not match?(%{^key => :deleted}, Heap.get_ctor_statics(builtin))
+    Builtin.callable?(builtin) and not Static.deleted?(builtin, key)
   end
 
   def present?({:builtin, _, map} = builtin, key) do
-    case Heap.get_ctor_statics(builtin) do
-      %{^key => :deleted} ->
-        false
+    if Static.deleted?(builtin, key) do
+      false
+    else
+      statics = Heap.get_ctor_statics(builtin)
 
-      statics ->
-        (is_map(map) and Map.has_key?(map, key)) or Map.has_key?(statics, key) or
-          module_static_present?(Map.get(statics, :__module__), key)
+      (is_map(map) and Map.has_key?(map, key)) or Map.has_key?(statics, key) or
+        module_static_present?(Map.get(statics, :__module__), key)
     end
   end
 
@@ -97,10 +96,8 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   def present?(_target, _key), do: false
 
   defp callable_present?(target, key) do
-    case Heap.get_ctor_statics(target) do
-      %{^key => :deleted} -> false
-      statics -> Map.has_key?(statics, key) or virtual_callable_property?(target, key)
-    end
+    not Static.deleted?(target, key) and
+      (Map.has_key?(Heap.get_ctor_statics(target), key) or virtual_callable_property?(target, key))
   end
 
   defp virtual_callable_property?(target, "prototype"), do: has_prototype?(target)
