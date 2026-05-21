@@ -8,9 +8,7 @@ defmodule QuickBEAM.VM.Host.Web.ConsoleAPI do
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 1]
 
   alias QuickBEAM.VM.{Heap, Runtime}
-
-  @timer_key :qb_console_timers
-  @count_key :qb_console_counts
+  alias QuickBEAM.VM.Host.Web.ConsoleAPI.State
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
@@ -81,8 +79,7 @@ defmodule QuickBEAM.VM.Host.Web.ConsoleAPI do
             _ -> "default"
           end
 
-        timers = Process.get(@timer_key, %{})
-        Process.put(@timer_key, Map.put(timers, label, System.monotonic_time(:millisecond)))
+        State.put_timer(label, System.monotonic_time(:millisecond))
         :undefined
       end
 
@@ -93,17 +90,15 @@ defmodule QuickBEAM.VM.Host.Web.ConsoleAPI do
             _ -> "default"
           end
 
-        timers = Process.get(@timer_key, %{})
         now = System.monotonic_time(:millisecond)
 
-        case Map.get(timers, label) do
+        case State.pop_timer(label) do
           nil ->
             Logger.warning("Timer '#{label}' does not exist")
 
           start ->
             elapsed = now - start
             Logger.info("#{label}: #{elapsed}ms")
-            Process.put(@timer_key, Map.delete(timers, label))
         end
 
         :undefined
@@ -116,10 +111,9 @@ defmodule QuickBEAM.VM.Host.Web.ConsoleAPI do
             _ -> "default"
           end
 
-        timers = Process.get(@timer_key, %{})
         now = System.monotonic_time(:millisecond)
 
-        case Map.get(timers, label) do
+        case State.timer(label) do
           nil ->
             Logger.warning("Timer '#{label}' does not exist")
 
@@ -140,9 +134,7 @@ defmodule QuickBEAM.VM.Host.Web.ConsoleAPI do
             _ -> "default"
           end
 
-        counts = Process.get(@count_key, %{})
-        n = Map.get(counts, label, 0) + 1
-        Process.put(@count_key, Map.put(counts, label, n))
+        n = State.increment_count(label)
         Logger.info("#{label}: #{n}")
         :undefined
       end
@@ -154,11 +146,7 @@ defmodule QuickBEAM.VM.Host.Web.ConsoleAPI do
             _ -> "default"
           end
 
-        counts = Process.get(@count_key, %{})
-
-        if Map.has_key?(counts, label) do
-          Process.put(@count_key, Map.put(counts, label, 0))
-        else
+        unless State.reset_count(label) do
           Logger.warning("Count for '#{label}' does not exist")
         end
 
