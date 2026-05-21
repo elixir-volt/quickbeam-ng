@@ -2,7 +2,9 @@ defmodule QuickBEAM.VM.Heap.Store do
   @moduledoc "Low-level process-dictionary storage for JS heap objects: objects, arrays, cells, atoms, and GC roots."
 
   import QuickBEAM.VM.Heap.Keys
+
   alias QuickBEAM.VM.Heap.{Arrays, Shapes}
+  alias QuickBEAM.VM.Value
 
   # ── Raw storage (bypasses shape→map reconstruction) ──
 
@@ -135,8 +137,7 @@ defmodule QuickBEAM.VM.Heap.Store do
 
   def put_property_preserving_order(map, key, val) do
     if not Map.has_key?(map, key) and
-         (is_binary(key) or is_integer(key) or match?({:symbol, _}, key) or
-            match?({:symbol, _, _}, key)) do
+         (is_binary(key) or is_integer(key) or Value.symbol?(key)) do
       order = Map.get(map, key_order(), [])
       Map.put(Map.put(map, key, val), key_order(), [key | order])
     else

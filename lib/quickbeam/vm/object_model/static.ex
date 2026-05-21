@@ -1,13 +1,13 @@
 defmodule QuickBEAM.VM.ObjectModel.Static do
   @moduledoc "Shared helpers for function/static object property semantics."
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty}
 
   def delete_static(fun, key) do
     prop_key =
-      if is_binary(key) or match?({:symbol, _}, key), do: key, else: Values.stringify(key)
+      if is_binary(key) or Value.symbol?(key), do: key, else: Values.stringify(key)
 
     statics = Heap.get_ctor_statics(fun)
 

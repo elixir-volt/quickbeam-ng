@@ -3146,7 +3146,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   defp from_code_point(n) do
-    if match?({:symbol, _}, n) or match?({:symbol, _, _}, n) do
+    if Value.symbol?(n) do
       throw(
         {:js_throw, Heap.make_error("Cannot convert a Symbol value to a number", "TypeError")}
       )
