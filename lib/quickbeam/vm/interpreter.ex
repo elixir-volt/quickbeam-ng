@@ -1324,37 +1324,67 @@ defmodule QuickBEAM.VM.Interpreter do
 
   defp call_function(pc, frame, stack, argc, gas, ctx) do
     {args, [fun | rest]} = Enum.split(stack, argc)
-    gas = check_gas(pc, frame, rest, gas, ctx)
+    gas = check_gas(pc, frame, [fun | args] ++ rest, gas, ctx)
 
-    catch_and_dispatch(
-      pc,
-      frame,
-      rest,
-      gas,
-      ctx,
-      fn ->
-        dispatch_call(fun, Enum.reverse(args), gas, ctx, nil)
-      end,
-      true
-    )
+    with_suspended_roots(frame, stack, ctx, fn ->
+      catch_and_dispatch(
+        pc,
+        frame,
+        rest,
+        gas,
+        ctx,
+        fn ->
+          dispatch_call(fun, Enum.reverse(args), gas, ctx, nil)
+        end,
+        true
+      )
+    end)
   end
 
   defp call_method(pc, frame, stack, argc, gas, ctx) do
     {args, [fun, obj | rest]} = Enum.split(stack, argc)
-    gas = check_gas(pc, frame, rest, gas, ctx)
+    gas = check_gas(pc, frame, [obj, fun | args] ++ rest, gas, ctx)
     method_ctx = Context.mark_dirty(%{ctx | this: obj})
 
-    catch_and_dispatch(
-      pc,
-      frame,
-      rest,
-      gas,
-      ctx,
-      fn ->
-        dispatch_call(fun, Enum.reverse(args), gas, method_ctx, obj)
-      end,
-      true
-    )
+    with_suspended_roots(frame, stack, ctx, fn ->
+      catch_and_dispatch(
+        pc,
+        frame,
+        rest,
+        gas,
+        ctx,
+        fn ->
+          dispatch_call(fun, Enum.reverse(args), gas, method_ctx, obj)
+        end,
+        true
+      )
+    end)
+  end
+
+  defp with_suspended_roots(frame, stack, ctx, fun) do
+    roots = [
+      elem(frame, Frame.locals()),
+      elem(frame, Frame.var_refs()),
+      elem(frame, Frame.constants()),
+      ctx.this,
+      ctx.current_func,
+      ctx.arg_buf,
+      ctx.catch_stack,
+      ctx.globals
+      | stack
+    ]
+
+    previous = Process.get(:qb_interpreter_suspended_roots, [])
+    Process.put(:qb_interpreter_suspended_roots, roots ++ previous)
+
+    try do
+      fun.()
+    after
+      case previous do
+        [] -> Process.delete(:qb_interpreter_suspended_roots)
+        _ -> Process.put(:qb_interpreter_suspended_roots, previous)
+      end
+    end
   end
 
   @doc "Invokes a VM constructor through the interpreter fallback path."
