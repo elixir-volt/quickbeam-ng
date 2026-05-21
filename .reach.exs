@@ -20,8 +20,6 @@ process_state_owners = [
   "QuickBEAM.VM.Realm"
 ]
 
-interpreter_bridges = []
-
 global_constructor_bridges = [
   "QuickBEAM.VM.ObjectModel.Get",
   "QuickBEAM.VM.ObjectModel.Prototype"
@@ -39,14 +37,14 @@ global_constructor_bridges = [
       {"QuickBEAM.VM.*", ["QuickBEAM.VM.Builtin.Installer.install"], except: builtin_installers},
       {"QuickBEAM.VM.*", ["QuickBEAM.VM.Builtin.named_meta"], except: ["QuickBEAM.VM.Builtin"]},
       {"QuickBEAM.VM.ObjectModel.*", ["QuickBEAM.VM.Compiler.*"]},
-      {"QuickBEAM.VM.ObjectModel.*", ["QuickBEAM.VM.Interpreter.*"], except: interpreter_bridges},
+      {"QuickBEAM.VM.ObjectModel.*", ["QuickBEAM.VM.Interpreter.*"]},
       {"QuickBEAM.VM.ObjectModel.*", ["QuickBEAM.VM.Runtime.Globals.*"],
        except: global_constructor_bridges},
       {"QuickBEAM.VM.Semantics.*", ["QuickBEAM.VM.Compiler.*", "QuickBEAM.VM.Interpreter.*"]},
       {"QuickBEAM.VM.Compiler.*", ["QuickBEAM.VM.Host.*"]},
       {"QuickBEAM.VM.Interpreter.*", ["QuickBEAM.VM.Host.Test262.*"]},
       {"QuickBEAM.VM.Runtime.*", ["QuickBEAM.VM.Compiler.*"]},
-      {"QuickBEAM.VM.Runtime.*", ["QuickBEAM.VM.Interpreter.*"], except: interpreter_bridges},
+      {"QuickBEAM.VM.Runtime.*", ["QuickBEAM.VM.Interpreter.*"]},
       {"QuickBEAM.VM.Runtime.Globals.Registry", ["QuickBEAM.VM.Host.*"]}
     ]
   ],
