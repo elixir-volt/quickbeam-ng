@@ -129,9 +129,12 @@ defmodule QuickBEAM.VM.Realm do
 
     set_proto = Heap.get_class_proto(set_ctor)
 
-    promise_proto = Promise.prototype()
-    promise_ctor = make_constructor("Promise", Promise.constructor(), promise_proto)
-    Heap.put_obj_key(elem(promise_proto, 1), "constructor", promise_ctor)
+    promise_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(Promise.builtin_definition(),
+        target: {:realm, object_proto: object_proto}
+      )
+
+    promise_proto = Heap.get_class_proto(promise_ctor)
 
     weak_map_ctor =
       QuickBEAM.VM.Builtin.Installer.install(map_builtin_definition("WeakMap"),

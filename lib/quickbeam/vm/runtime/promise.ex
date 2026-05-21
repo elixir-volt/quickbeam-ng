@@ -15,16 +15,18 @@ defmodule QuickBEAM.VM.Runtime.Promise do
     constructor: constructor(),
     length: 1,
     phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/1
+    after_install: &__MODULE__.install_builtin/2
   )
 
-  def install_builtin(ctor) do
-    Constructors.put_prototype(ctor, prototype())
+  def install_builtin(ctor, opts \\ []) do
+    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+
+    Constructors.put_prototype(ctor, prototype(object_proto))
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
     InstallerHelpers.install_species(ctor)
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_object_parent(proto_ref, object_proto)
 
       for name <- ~w(then catch finally) do
         Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
@@ -111,12 +113,20 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   end
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
-  def prototype do
-    object do
-      prop("then", {:builtin, "then", &Promise.promise_then/2})
-      prop("catch", {:builtin, "catch", &Promise.promise_catch/2})
-      prop("finally", {:builtin, "finally", &Promise.promise_finally/2})
-    end
+  def prototype(object_proto \\ Heap.get_object_prototype()) do
+    base = %{
+      "then" => {:builtin, "then", &Promise.promise_then/2},
+      "catch" => {:builtin, "catch", &Promise.promise_catch/2},
+      "finally" => {:builtin, "finally", &Promise.promise_finally/2}
+    }
+
+    base =
+      case object_proto do
+        {:obj, _} -> Map.put(base, "__proto__", object_proto)
+        _ -> base
+      end
+
+    Heap.wrap(base)
   end
 
   static "resolve" do
@@ -273,7 +283,8 @@ defmodule QuickBEAM.VM.Runtime.Promise do
     if index >= length do
       {true, :undefined, :undefined}
     else
-      {false, QuickBEAM.VM.ObjectModel.Get.get(obj, Integer.to_string(index)), {:array_iter, obj, index + 1}}
+      {false, QuickBEAM.VM.ObjectModel.Get.get(obj, Integer.to_string(index)),
+       {:array_iter, obj, index + 1}}
     end
   end
 
