@@ -32,15 +32,17 @@ defmodule QuickBEAM.VM.Runtime.Object do
     length: 1,
     phase: :core,
     prototype_parent: nil,
-    after_install: &__MODULE__.install_builtin/1
+    after_install: &__MODULE__.install_builtin/2
   )
 
-  def install_builtin(ctor) do
+  def install_builtin(ctor, opts \\ []) do
     obj_proto =
-      case Heap.get_object_prototype() do
-        nil -> build_prototype()
-        existing -> existing
-      end
+      Keyword.get_lazy(opts, :prototype, fn ->
+        case Heap.get_object_prototype() do
+          nil -> build_prototype()
+          existing -> existing
+        end
+      end)
 
     ConstructorRegistry.put_prototype(ctor, obj_proto)
 
@@ -55,6 +57,125 @@ defmodule QuickBEAM.VM.Runtime.Object do
         :ok
     end
   end
+
+  def realm_constructor(
+        object_proto,
+        boolean_proto,
+        number_proto,
+        bigint_proto,
+        string_proto,
+        symbol_proto
+      ) do
+    fn
+      [value | _], _this ->
+        object_value(
+          value,
+          object_proto,
+          boolean_proto,
+          number_proto,
+          bigint_proto,
+          string_proto,
+          symbol_proto
+        )
+
+      [], {:obj, _} = this ->
+        this
+
+      [], _this ->
+        Heap.wrap(%{"__proto__" => object_proto})
+    end
+  end
+
+  defp object_value(
+         {:obj, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
+       ),
+       do: value
+
+  defp object_value(
+         value,
+         _object_proto,
+         boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
+       )
+       when is_boolean(value),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:boolean) => value, "__proto__" => boolean_proto})
+
+  defp object_value(
+         value,
+         _object_proto,
+         _boolean_proto,
+         number_proto,
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
+       )
+       when is_number(value),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:number) => value, "__proto__" => number_proto})
+
+  defp object_value(
+         {:bigint, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         bigint_proto,
+         _string_proto,
+         _symbol_proto
+       ),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:bigint) => value, "__proto__" => bigint_proto})
+
+  defp object_value(
+         value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         string_proto,
+         _symbol_proto
+       )
+       when is_binary(value),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => string_proto})
+
+  defp object_value(
+         {:symbol, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         symbol_proto
+       ),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
+
+  defp object_value(
+         {:symbol, _, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         symbol_proto
+       ),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
+
+  defp object_value(
+         _value,
+         object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
+       ),
+       do: Heap.wrap(%{"__proto__" => object_proto})
 
   @doc "Builds prototype data for object static methods."
   def build_prototype do

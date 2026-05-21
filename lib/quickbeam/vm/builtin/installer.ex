@@ -48,12 +48,19 @@ defmodule QuickBEAM.VM.Builtin.Installer do
     end
 
     proto =
-      %{"constructor" => ctor}
-      |> maybe_put_prototype_parent(
-        Keyword.fetch!(opts, :object_proto),
-        definition.prototype_parent
-      )
-      |> Heap.wrap()
+      case Keyword.get(opts, :prototype) do
+        {:obj, _} = existing ->
+          Heap.put_obj_key(elem(existing, 1), "constructor", ctor)
+          existing
+
+        _ ->
+          %{"constructor" => ctor}
+          |> maybe_put_prototype_parent(
+            Keyword.fetch!(opts, :object_proto),
+            definition.prototype_parent
+          )
+          |> Heap.wrap()
+      end
 
     Constructors.put_prototype(ctor, proto)
     ctor

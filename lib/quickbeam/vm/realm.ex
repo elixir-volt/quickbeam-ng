@@ -19,7 +19,7 @@ defmodule QuickBEAM.VM.Realm do
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.Number, as: JSNumber
   alias QuickBEAM.VM.Runtime.String, as: JSString
-  alias QuickBEAM.VM.ObjectModel.{Get, Prototype, Put, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.{Get, Prototype, Put}
   alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
 
   def create do
@@ -68,16 +68,21 @@ defmodule QuickBEAM.VM.Realm do
     symbol_proto = Heap.get_class_proto(symbol_ctor)
 
     object_ctor =
-      object_constructor(
-        object_proto,
-        boolean_proto,
-        number_proto,
-        bigint_proto,
-        string_proto,
-        symbol_proto
+      QuickBEAM.VM.Runtime.Object.builtin_definition()
+      |> Map.put(
+        :constructor,
+        QuickBEAM.VM.Runtime.Object.realm_constructor(
+          object_proto,
+          boolean_proto,
+          number_proto,
+          bigint_proto,
+          string_proto,
+          symbol_proto
+        )
       )
-
-    Heap.put_obj_key(elem(object_proto, 1), "constructor", object_ctor)
+      |> QuickBEAM.VM.Builtin.Installer.install(
+        target: {:realm, object_proto: object_proto, prototype: object_proto}
+      )
 
     regexp_ctor =
       QuickBEAM.VM.Builtin.Installer.install(JSRegExp.builtin_definition(),
@@ -415,129 +420,6 @@ defmodule QuickBEAM.VM.Realm do
       {:symbol, "Symbol.toStringTag"} => "Error"
     })
   end
-
-  defp object_constructor(
-         object_proto,
-         boolean_proto,
-         number_proto,
-         bigint_proto,
-         string_proto,
-         symbol_proto
-       ) do
-    callback = fn
-      [value | _], _this ->
-        object_value(
-          value,
-          object_proto,
-          boolean_proto,
-          number_proto,
-          bigint_proto,
-          string_proto,
-          symbol_proto
-        )
-
-      [], {:obj, _} = this ->
-        this
-
-      [], _this ->
-        Heap.wrap(%{"__proto__" => object_proto})
-    end
-
-    ctor = {:builtin, "Object", callback}
-    ConstructorRegistry.put_prototype(ctor, object_proto)
-    ctor
-  end
-
-  defp object_value(
-         {:obj, _} = value,
-         _object_proto,
-         _boolean_proto,
-         _number_proto,
-         _bigint_proto,
-         _string_proto,
-         _symbol_proto
-       ),
-       do: value
-
-  defp object_value(
-         value,
-         _object_proto,
-         boolean_proto,
-         _number_proto,
-         _bigint_proto,
-         _string_proto,
-         _symbol_proto
-       )
-       when is_boolean(value),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:boolean) => value, "__proto__" => boolean_proto})
-
-  defp object_value(
-         value,
-         _object_proto,
-         _boolean_proto,
-         number_proto,
-         _bigint_proto,
-         _string_proto,
-         _symbol_proto
-       )
-       when is_number(value),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:number) => value, "__proto__" => number_proto})
-
-  defp object_value(
-         {:bigint, _} = value,
-         _object_proto,
-         _boolean_proto,
-         _number_proto,
-         bigint_proto,
-         _string_proto,
-         _symbol_proto
-       ),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:bigint) => value, "__proto__" => bigint_proto})
-
-  defp object_value(
-         value,
-         _object_proto,
-         _boolean_proto,
-         _number_proto,
-         _bigint_proto,
-         string_proto,
-         _symbol_proto
-       )
-       when is_binary(value),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => string_proto})
-
-  defp object_value(
-         {:symbol, _} = value,
-         _object_proto,
-         _boolean_proto,
-         _number_proto,
-         _bigint_proto,
-         _string_proto,
-         symbol_proto
-       ),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
-
-  defp object_value(
-         {:symbol, _, _} = value,
-         _object_proto,
-         _boolean_proto,
-         _number_proto,
-         _bigint_proto,
-         _string_proto,
-         symbol_proto
-       ),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
-
-  defp object_value(
-         _value,
-         object_proto,
-         _boolean_proto,
-         _number_proto,
-         _bigint_proto,
-         _string_proto,
-         _symbol_proto
-       ),
-       do: Heap.wrap(%{"__proto__" => object_proto})
 
   defp map_builtin_definition(name),
     do: Enum.find(JSMap.builtin_definitions(), &(&1.name == name))
