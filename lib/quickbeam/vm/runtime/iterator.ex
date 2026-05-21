@@ -88,8 +88,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp static_method(name, length, callback) do
     fun = {:builtin, name, callback}
-    Heap.put_ctor_static(fun, "length", length)
-    Heap.put_ctor_static(fun, "name", name)
+    Builtin.put_function_metadata(fun, name, length)
     Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
     fun
@@ -119,8 +118,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp method(name, length, callback) do
     fun = {:builtin, name, callback}
-    Heap.put_ctor_static(fun, "length", length)
-    Heap.put_ctor_static(fun, "name", name)
+    Builtin.put_function_metadata(fun, name, length)
     Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
     fun

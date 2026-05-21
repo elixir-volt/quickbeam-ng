@@ -62,8 +62,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
     Heap.put_obj_key(proto_ref, sym_iterator, iterator)
     Heap.put_prop_desc(proto_ref, sym_iterator, PropertyDescriptor.method())
-    Heap.put_ctor_static(iterator, "length", 0)
-    Heap.put_ctor_static(iterator, "name", "[Symbol.iterator]")
+    Builtin.put_function_metadata(iterator, "[Symbol.iterator]", 0)
     Heap.put_ctor_prop_desc(iterator, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(iterator, "name", PropertyDescriptor.hidden_readonly())
   end

@@ -967,8 +967,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
 
   defp capability_executor(callback) when is_function(callback, 1) do
     fun = {:builtin, "__promiseCapabilityExecutor", fn args, _ -> callback.(args) end}
-    Heap.put_ctor_static(fun, "length", 2)
-    Heap.put_ctor_static(fun, "name", "")
+    QuickBEAM.VM.Builtin.put_function_metadata(fun, "", 2)
     Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
     fun
@@ -976,8 +975,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
 
   defp resolving_function(callback) when is_function(callback, 1) do
     fun = {:builtin, "resolve", fn args, _ -> callback.(args) end}
-    Heap.put_ctor_static(fun, "length", 1)
-    Heap.put_ctor_static(fun, "name", "")
+    QuickBEAM.VM.Builtin.put_function_metadata(fun, "", 1)
     Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
     fun

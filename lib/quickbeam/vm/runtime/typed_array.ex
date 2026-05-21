@@ -171,8 +171,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp prototype_method(name, length, callback) do
     method = {:builtin, name, callback}
-    Heap.put_ctor_static(method, "length", length)
-    Heap.put_ctor_static(method, "name", name)
+    QuickBEAM.VM.Builtin.put_function_metadata(method, name, length)
     Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(method, "name", PropertyDescriptor.hidden_readonly())
     method

@@ -17,8 +17,7 @@ defmodule QuickBEAM.VM.Runtime.Proxy do
   def install_builtin(ctor) do
     revocable = {:builtin, "revocable", &revocable/2}
     Heap.put_ctor_static(ctor, "revocable", revocable)
-    Heap.put_ctor_static(revocable, "length", 2)
-    Heap.put_ctor_static(revocable, "name", "revocable")
+    QuickBEAM.VM.Builtin.put_function_metadata(revocable, "revocable", 2)
 
     Heap.put_ctor_prop_desc(revocable, "length", %{
       writable: false,

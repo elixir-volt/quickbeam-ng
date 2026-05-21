@@ -114,6 +114,13 @@ defmodule QuickBEAM.VM.Builtin do
     end
   end
 
+  @doc "Stores JavaScript-visible function name and length metadata."
+  def put_function_metadata(function, name, length) do
+    Heap.put_ctor_static(function, "length", length)
+    Heap.put_ctor_static(function, "name", name)
+    function
+  end
+
   @doc "Returns built-in function metadata by JavaScript-visible function name."
   def named_meta("Object"), do: meta("Object", [length: 1, constructable: true], :constructor)
   def named_meta("Function"), do: meta("Function", [length: 1, constructable: true], :constructor)
