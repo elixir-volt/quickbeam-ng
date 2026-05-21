@@ -166,12 +166,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp array_prototype_raw?(raw) do
-    keys = if Heap.shape?(raw), do: Heap.shape_offsets(raw), else: raw
-
-    is_map(keys) and Map.has_key?(keys, "constructor") and Map.has_key?(keys, "push") and
-      Map.has_key?(keys, "pop")
-  end
+  defp array_prototype_raw?(raw), do: Semantics.array_prototype_object?(raw)
 
   defp raw_keys(raw) when is_map(raw), do: Map.keys(raw)
   defp raw_keys(raw), do: raw |> Heap.shape_offsets() |> Map.keys()

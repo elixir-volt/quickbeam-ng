@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
 
   alias QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, Semantics}
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Heap, Value}
 
@@ -139,14 +139,10 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   defp object_map_prototype_value(ref, map) do
     cond do
       Map.has_key?(map, :__internal_proto__) -> Map.get(map, :__internal_proto__)
-      array_prototype_map?(map) -> Heap.get_object_prototype()
+      Semantics.array_prototype_object?(map) -> Heap.get_object_prototype()
       Heap.get_prop_desc(ref, proto()) -> Heap.get_object_prototype()
       true -> Map.get(map, proto(), Heap.get_object_prototype())
     end
-  end
-
-  defp array_prototype_map?(map) do
-    Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
   end
 
   defp function_kind_prototype(%QuickBEAM.VM.Function{func_kind: 1}, _callable) do

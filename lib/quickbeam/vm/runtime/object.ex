@@ -485,7 +485,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_storage_to_string_tag(map, _ref) when is_map(map) do
     cond do
       Map.has_key?(map, proxy_target()) -> builtin_to_string_tag(Map.fetch!(map, proxy_target()))
-      array_prototype_map?(map) -> "Array"
+      Semantics.array_prototype_object?(map) -> "Array"
       Map.has_key?(map, date_ms()) -> "Date"
       Map.has_key?(map, "__error_name__") -> "Error"
       true -> wrapped_or_ordinary_object_tag(map)
@@ -517,10 +517,6 @@ defmodule QuickBEAM.VM.Runtime.Object do
     this
     |> then(&QuickBEAM.VM.Invocation.invoke_with_receiver(to_string_fn, [], &1))
     |> Runtime.stringify()
-  end
-
-  defp array_prototype_map?(map) do
-    Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and Map.has_key?(map, "pop")
   end
 
   static "keys", length: 1 do

@@ -119,12 +119,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
-  defp array_prototype_raw?(raw) do
-    keys = if Heap.shape?(raw), do: Heap.shape_offsets(raw), else: raw
-
-    is_map(keys) and Map.has_key?(keys, "constructor") and Map.has_key?(keys, "push") and
-      Map.has_key?(keys, "pop")
-  end
+  defp array_prototype_raw?(raw), do: Semantics.array_prototype_object?(raw)
 
   defp put_virtual_array_length(ref, old_len, new_len) do
     if new_len == old_len do
