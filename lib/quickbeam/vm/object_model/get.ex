@@ -28,8 +28,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     TypedArray
   }
 
-  alias QuickBEAM.VM.Runtime.Map, as: JSMap
-  alias QuickBEAM.VM.Runtime.Set, as: JSSet
+  alias QuickBEAM.VM.Runtime.Collections
 
   alias QuickBEAM.VM.ObjectModel.{
     OwnProperty,
@@ -1100,17 +1099,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
             match?({:found, _}, proto_result) ->
               proto_result
 
-            Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) ->
-              JSMap.weak_proto_property(key)
-
-            Map.has_key?(map, map_data()) ->
-              JSMap.proto_property(key)
-
-            Map.has_key?(map, set_data()) and Map.has_key?(map, :weak) ->
-              JSSet.weak_proto_property(key)
-
-            Map.has_key?(map, set_data()) ->
-              JSSet.proto_property(key)
+            (collection = Collections.proto_property(map, key)) != :not_collection ->
+              collection
 
             Map.has_key?(map, date_ms()) ->
               JSDate.proto_property(key)
@@ -1203,17 +1193,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
               QuickBEAM.VM.Builtin.callable?(Map.get(map, proxy_target())) ->
             fallback_to_function_proto(:undefined, Map.get(map, proxy_target()), key)
 
-          Map.has_key?(map, map_data()) and Map.has_key?(map, :weak) ->
-            JSMap.weak_proto_property(key)
-
-          Map.has_key?(map, map_data()) ->
-            JSMap.proto_property(key)
-
-          Map.has_key?(map, set_data()) and Map.has_key?(map, :weak) ->
-            JSSet.weak_proto_property(key)
-
-          Map.has_key?(map, set_data()) ->
-            JSSet.proto_property(key)
+          (collection = Collections.proto_property(map, key)) != :not_collection ->
+            collection
 
           Map.has_key?(map, :__internal_proto__) ->
             prototype_property_with_receiver(Map.get(map, :__internal_proto__), key, {:obj, ref})
