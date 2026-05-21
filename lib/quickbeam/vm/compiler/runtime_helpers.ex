@@ -10,7 +10,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     Heap,
     Invocation,
     JSThrow,
-    Names
+    Names,
+    Value
   }
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings
@@ -105,7 +106,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   def bit_not(_ctx \\ nil, a), do: Values.bnot(a)
 
   def in_operator(_ctx \\ nil, key, obj) do
-    unless object_like?(obj) do
+    unless instanceof_object?(obj) do
       JSThrow.type_error!("right-hand side of 'in' should be an object")
     end
 
@@ -275,7 +276,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     end
 
     cond do
-      not object_like?(obj) ->
+      not instanceof_object?(obj) ->
         false
 
       special_builtin_instance?(obj, ctor) ->
@@ -321,15 +322,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     QuickBEAM.VM.Promise.rejected(Heap.make_error("Invalid module specifier", "TypeError"))
   end
 
-  defp object_like?({:obj, _}), do: true
-  defp object_like?({:qb_arr, _}), do: true
-  defp object_like?(value) when is_map(value), do: true
-  defp object_like?(value) when is_list(value), do: true
-  defp object_like?({:builtin, _, _}), do: true
-  defp object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp object_like?({:bound, _, _, _, _}), do: true
-  defp object_like?(_), do: false
+  defp instanceof_object?({:qb_arr, _}), do: true
+  defp instanceof_object?(value) when is_map(value), do: true
+  defp instanceof_object?(value) when is_list(value), do: true
+  defp instanceof_object?(value), do: Value.object_like?(value)
 
   defp callable_instanceof_target?({:builtin, _, map}) when is_map(map), do: false
   defp callable_instanceof_target?({:obj, ref}), do: Get.get({:obj, ref}, "call") != :undefined
