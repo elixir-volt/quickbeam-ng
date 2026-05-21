@@ -44,31 +44,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
   @doc "Reads a JavaScript property, including own lookup, prototype lookup, and getter invocation."
-  def get(value, key) when is_binary(key) do
-    case get_own(value, key) do
-      :undefined ->
-        if explicit_undefined_own?(value, key) do
-          :undefined
-        else
-          result = get_prototype_raw(value, key)
-
-          case result do
-            {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
-            {:accessor, nil, _} -> :undefined
-            _ -> result
-          end
-        end
-
-      {:accessor, getter, _} when getter != nil ->
-        call_getter(getter, value)
-
-      {:accessor, nil, _} ->
-        :undefined
-
-      val ->
-        val
-    end
-  end
+  def get(value, key) when is_binary(key), do: get(value, key, value)
 
   def get(value, key) when is_integer(key),
     do: get(value, Integer.to_string(key))
@@ -104,6 +80,90 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     do: get(value, PropertyKey.normalize(sym_key))
 
   def get(_, _), do: :undefined
+
+  def get(value, key, receiver) when is_integer(key),
+    do: get(value, Integer.to_string(key), receiver)
+
+  def get({:obj, ref} = value, key, receiver) when is_binary(key) do
+    case Heap.get_obj_raw(ref) do
+      %{proxy_target() => target, proxy_handler() => handler} = proxy ->
+        proxy_get(proxy, target, handler, key, receiver)
+
+      _ ->
+        ordinary_get(value, key, receiver)
+    end
+  end
+
+  def get(value, key, receiver) when is_binary(key), do: ordinary_get(value, key, receiver)
+
+  defp ordinary_get(value, key, receiver) do
+    case get_own_with_receiver(value, key, receiver) do
+      :undefined ->
+        if explicit_undefined_own?(value, key) do
+          :undefined
+        else
+          result = get_prototype_raw(value, key)
+
+          case result do
+            {:accessor, getter, _} when getter != nil -> call_getter(getter, receiver)
+            {:accessor, nil, _} -> :undefined
+            _ -> result
+          end
+        end
+
+      {:accessor, getter, _} when getter != nil ->
+        call_getter(getter, receiver)
+
+      {:accessor, nil, _} ->
+        :undefined
+
+      val ->
+        val
+    end
+  end
+
+  defp get_own_with_receiver({:obj, ref} = value, key, receiver) do
+    case Heap.get_obj_raw(ref) do
+      map when is_map(map) ->
+        case Map.fetch(map, key) do
+          {:ok, {:accessor, getter, _setter}} when getter != nil -> call_getter(getter, receiver)
+          {:ok, {:accessor, nil, _setter}} -> :undefined
+          _ -> get_own(value, key)
+        end
+
+      _ ->
+        get_own(value, key)
+    end
+  end
+
+  defp get_own_with_receiver(value, key, _receiver), do: get_own(value, key)
+
+  defp proxy_get(proxy, target, handler, key, receiver) do
+    if Map.get(proxy, "__proxy_revoked__") == true do
+      JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+    end
+
+    unless object_value?(handler) do
+      JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
+    end
+
+    get_trap = get(handler, "get")
+
+    cond do
+      get_trap in [nil, :undefined] ->
+        get(target, key, receiver)
+
+      not QuickBEAM.VM.Builtin.callable?(get_trap) ->
+        JSThrow.type_error!("proxy get trap is not callable")
+
+      true ->
+        validate_proxy_get_invariant(
+          target,
+          key,
+          Invocation.invoke_callback_or_throw(get_trap, [target, key, receiver], handler)
+        )
+    end
+  end
 
   defp array_prototype_raw?(raw) do
     keys = if Heap.shape?(raw), do: Heap.shape_offsets(raw), else: raw
@@ -944,6 +1004,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
     cond do
       match?(%{configurable: false, writable: false}, desc) and
+        not match?({:accessor, _, _}, target_value) and
           not Semantics.same_value?(trap_result, target_value) ->
         JSThrow.type_error!("proxy get trap violates invariant")
 
@@ -1310,31 +1371,39 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp prototype_property_lookup_with_receiver(nil, _key, _receiver), do: :not_found
 
   defp prototype_property_lookup_with_receiver({:obj, ref} = target, key, receiver) do
-    case descriptor_property_with_receiver(target, key, receiver) do
-      {:found_from_accessor, value} ->
-        {:found, value}
+    raw = Heap.get_obj_raw(ref)
+
+    case raw do
+      %{proxy_target() => _, proxy_handler() => _} ->
+        {:found, get(target, key, receiver)}
 
       _ ->
-        case raw_own_property(Heap.get_obj_raw(ref), key) do
-          {:ok, {:accessor, getter, _}} when getter != nil ->
-            {:found, call_getter(getter, receiver)}
-
-          {:ok, {:accessor, nil, _}} ->
-            {:found, :undefined}
-
-          {:ok, value} ->
+        case descriptor_property_with_receiver(target, key, receiver) do
+          {:found_from_accessor, value} ->
             {:found, value}
 
-          :error ->
-            case descriptor_property_with_receiver(target, key, receiver) do
-              :not_found ->
-                prototype_property_lookup_with_receiver(Prototype.get(target), key, receiver)
+          _ ->
+            case raw_own_property(raw, key) do
+              {:ok, {:accessor, getter, _}} when getter != nil ->
+                {:found, call_getter(getter, receiver)}
 
-              {:found_from_accessor, value} ->
+              {:ok, {:accessor, nil, _}} ->
+                {:found, :undefined}
+
+              {:ok, value} ->
                 {:found, value}
 
-              found ->
-                found
+              :error ->
+                case descriptor_property_with_receiver(target, key, receiver) do
+                  :not_found ->
+                    prototype_property_lookup_with_receiver(Prototype.get(target), key, receiver)
+
+                  {:found_from_accessor, value} ->
+                    {:found, value}
+
+                  found ->
+                    found
+                end
             end
         end
     end

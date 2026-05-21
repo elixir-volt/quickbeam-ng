@@ -2082,6 +2082,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     OwnProperty.descriptor(target, key)
   end
 
+  defp get_own_property_descriptor([target]), do: OwnProperty.descriptor(target, :undefined)
   defp get_own_property_descriptor(_), do: :undefined
 
   defp array_indices(list) do

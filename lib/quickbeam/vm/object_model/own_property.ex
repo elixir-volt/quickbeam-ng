@@ -870,6 +870,12 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     target = Map.fetch!(proxy_map, proxy_target())
     handler = Map.fetch!(proxy_map, proxy_handler())
 
+    if Map.get(proxy_map, "__proxy_revoked__") == true do
+      throw(
+        {:js_throw, Heap.make_error("Cannot perform operation on a revoked proxy", "TypeError")}
+      )
+    end
+
     unless object_value?(handler) do
       throw(
         {:js_throw,
@@ -897,8 +903,14 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp validate_proxy_descriptor_result(target, prop_name, :undefined) do
     case target_descriptor_flags(target, prop_name) do
-      %{configurable: false} -> proxy_descriptor_invariant_error()
-      _ -> :undefined
+      %{configurable: false} ->
+        proxy_descriptor_invariant_error()
+
+      nil ->
+        :undefined
+
+      _flags ->
+        if target_extensible?(target), do: :undefined, else: proxy_descriptor_invariant_error()
     end
   end
 
