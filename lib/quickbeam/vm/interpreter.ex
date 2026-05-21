@@ -14,6 +14,7 @@ defmodule QuickBEAM.VM.Interpreter do
     Names,
     PredefinedAtoms,
     Runtime,
+    RuntimeState,
     Stacktrace
   }
 
@@ -108,8 +109,8 @@ defmodule QuickBEAM.VM.Interpreter do
 
     Heap.put_atoms(atoms)
     Setup.store_function_atoms(fun, atoms)
-    prev_ctx = Heap.get_ctx()
-    Heap.put_ctx(ctx)
+    prev_ctx = RuntimeState.current()
+    RuntimeState.install(ctx)
 
     if Heap.get_builtin_names() == nil do
       Heap.put_builtin_names(MapSet.new(Map.keys(Runtime.global_bindings())))
@@ -141,7 +142,7 @@ defmodule QuickBEAM.VM.Interpreter do
           try do
             result = run(0, frame, args, gas, ctx)
             Promise.drain_microtasks()
-            {:ok, unwrap_promise(result), Heap.get_ctx()}
+            {:ok, unwrap_promise(result), RuntimeState.current()}
           catch
             {:js_throw, val} -> {:error, {:js_throw, val}}
             {:error, _} = err -> err
@@ -153,7 +154,7 @@ defmodule QuickBEAM.VM.Interpreter do
           err
       end
     after
-      if prev_ctx, do: Heap.put_ctx(prev_ctx), else: Heap.put_ctx(nil)
+      RuntimeState.restore(prev_ctx)
     end
   end
 
