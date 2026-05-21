@@ -27,7 +27,9 @@ defmodule QuickBEAM.VM.Realm do
     array_ctor = make_constructor("Array", &Constructors.array/2, array_proto)
     Heap.put_obj_key(elem(array_proto, 1), "constructor", array_ctor)
 
-    boolean_proto = Heap.wrap(%{"__proto__" => object_proto})
+    boolean_proto =
+      Heap.wrap(%{"__proto__" => object_proto, WrappedPrimitive.slot(:boolean) => false})
+
     boolean_ctor = make_constructor("Boolean", JSBoolean.constructor(), boolean_proto)
     Heap.put_obj_key(elem(boolean_proto, 1), "constructor", boolean_ctor)
 
@@ -310,6 +312,7 @@ defmodule QuickBEAM.VM.Realm do
   end
 
   def default_prototype({:builtin, "Array", _}, new_target), do: intrinsic(new_target, :array)
+  def default_prototype({:builtin, "Boolean", _}, new_target), do: intrinsic(new_target, :boolean)
   def default_prototype({:builtin, "Number", _}, new_target), do: intrinsic(new_target, :number)
   def default_prototype({:builtin, "String", _}, new_target), do: intrinsic(new_target, :string)
   def default_prototype({:builtin, "Date", _}, new_target), do: intrinsic(new_target, :date)

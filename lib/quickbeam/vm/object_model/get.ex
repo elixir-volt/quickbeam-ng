@@ -356,7 +356,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         wrapped_string_property(string, key)
 
       match?({:ok, _}, Heap.raw_fetch(raw, WrappedPrimitive.slot(:boolean))) ->
-        Boolean.proto_property(key)
+        boolean_proto_property(Heap.shape_to_map(raw), key)
 
       true ->
         :undefined
@@ -414,6 +414,25 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
+  defp boolean_proto_property(map, key) when is_map(map) do
+    case Map.get(map, proto()) do
+      {:obj, _} = prototype -> get(prototype, key)
+      _ -> boolean_proto_property(key)
+    end
+  end
+
+  defp boolean_proto_property(key) do
+    case Runtime.global_class_proto("Boolean") do
+      {:obj, ref} = proto ->
+        if Heap.get_prop_desc(ref, key) == :deleted,
+          do: get_default_object_prototype(proto, key),
+          else: Boolean.proto_property(key)
+
+      _ ->
+        Boolean.proto_property(key)
+    end
+  end
+
   defp wrapped_proto_property(map, key) do
     case WrappedPrimitive.type(map) do
       :symbol ->
@@ -428,7 +447,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         wrapped_string_property(value, key)
 
       :boolean ->
-        Boolean.proto_property(key)
+        boolean_proto_property(map, key)
 
       :bigint ->
         {:ok, value} = WrappedPrimitive.value(map, :bigint)

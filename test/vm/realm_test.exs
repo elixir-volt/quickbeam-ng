@@ -52,6 +52,19 @@ defmodule QuickBEAM.VM.RealmTest do
              )
   end
 
+  test "cross-realm Boolean construction uses new target realm prototype", %{runtime: runtime} do
+    assert {:ok, true} =
+             eval(
+               runtime,
+               ~S"""
+               let g = $262.createRealm().global;
+               let C = new g.Function();
+               C.prototype = null;
+               Object.getPrototypeOf(Reflect.construct(Boolean, [], C)) === g.Boolean.prototype
+               """
+             )
+  end
+
   test "realm Function apply throws realm TypeError", %{runtime: runtime} do
     assert {:ok, "true|true"} =
              eval(

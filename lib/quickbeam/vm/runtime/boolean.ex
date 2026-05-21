@@ -2,6 +2,7 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
   @moduledoc "JavaScript `Boolean` constructor and prototype builtins."
 
   use QuickBEAM.VM.Builtin
+  alias QuickBEAM.VM.{Heap, JSThrow}
   alias QuickBEAM.VM.ObjectModel.WrappedPrimitive
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.InstallerHelpers
@@ -16,6 +17,7 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
   def install_builtin(ctor) do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref)
+      Heap.put_obj_key(proto_ref, WrappedPrimitive.slot(:boolean), false)
       InstallerHelpers.install_methods(proto_ref, __MODULE__, ~w(toString valueOf))
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
     end)
@@ -30,13 +32,16 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
   end
 
   defp unwrap_boolean({:obj, ref}) do
-    case QuickBEAM.VM.Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:boolean) do
+    case Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:boolean) do
       {:ok, value} -> value
-      :error -> true
+      :error -> JSThrow.type_error!("Boolean method called on incompatible receiver")
     end
   end
 
-  defp unwrap_boolean(value), do: Runtime.truthy?(value)
+  defp unwrap_boolean(value) when is_boolean(value), do: value
+
+  defp unwrap_boolean(_value),
+    do: JSThrow.type_error!("Boolean method called on incompatible receiver")
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor do
