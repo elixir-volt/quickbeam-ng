@@ -12,6 +12,7 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
   execution, not the full Environment Record hierarchy.
   """
 
+  alias QuickBEAM.VM.Execution.GlobalBindingState
   alias QuickBEAM.VM.{Heap, JSThrow, Names, Runtime, RuntimeState}
   alias QuickBEAM.VM.Interpreter.Context
 
@@ -70,7 +71,7 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
       JSThrow.reference_error!("Cannot access variable before initialization")
     end
 
-    if const_global?(name) and not init? do
+    if GlobalBindingState.const?(name) and not init? do
       JSThrow.type_error!("Assignment to constant variable")
     end
 
@@ -94,8 +95,8 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
     lexical? = lexical_global_flags?(flags)
     initial = if lexical?, do: :__tdz__, else: :undefined
     Heap.put_var(name, initial)
-    mark_const_global(name, const_global_flags?(flags))
-    mark_lexical_global(name, lexical?)
+    GlobalBindingState.mark_const(name, const_global_flags?(flags))
+    GlobalBindingState.mark_lexical(name, lexical?)
     globals = Map.put_new(ctx.globals, name, initial)
 
     unless lexical? do
@@ -128,15 +129,7 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
   defp const_global_flags?(flags) when is_integer(flags), do: Bitwise.band(flags, 0x82) == 0x80
   defp const_global_flags?(_flags), do: false
 
-  defp mark_const_global(name, true), do: Process.put({:qb_const_global, name}, true)
-  defp mark_const_global(name, false), do: Process.delete({:qb_const_global, name})
-
-  defp const_global?(name), do: Process.get({:qb_const_global, name}) == true
-
-  defp mark_lexical_global(name, true), do: Process.put({:qb_lexical_global, name}, true)
-  defp mark_lexical_global(name, false), do: Process.delete({:qb_lexical_global, name})
-
-  def lexical_global?(name), do: Process.get({:qb_lexical_global, name}) == true
+  def lexical_global?(name), do: GlobalBindingState.lexical?(name)
 
   defp sync_global_this_property(_globals, "globalThis", _val), do: :ok
 

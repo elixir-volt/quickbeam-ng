@@ -16,7 +16,6 @@ process_state_owners = [
   "QuickBEAM.VM.RuntimeState",
   "QuickBEAM.VM.Execution.*",
   "QuickBEAM.VM.Invocation.Context",
-  "QuickBEAM.VM.GlobalEnvironment",
   "QuickBEAM.VM.Host.*",
   "QuickBEAM.VM.Realm",
   "QuickBEAM.VM.ObjectModel.ArrayExotic"
