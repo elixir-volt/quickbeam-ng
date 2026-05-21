@@ -22,6 +22,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   alias QuickBEAM.VM.Promise
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Value
   alias QuickBEAM.VM.Runtime.InstallerHelpers
 
   @max_array_length 4_294_967_295
@@ -1690,14 +1691,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end
   end
 
-  defp concat_object_like?({:obj, _}), do: true
-  defp concat_object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp concat_object_like?({:closure, _, %QuickBEAM.VM.Function{}}), do: true
-  defp concat_object_like?({:builtin, _, _}), do: true
-  defp concat_object_like?({:bound, _, _, _, _}), do: true
-  defp concat_object_like?({:regexp, _, _}), do: true
-  defp concat_object_like?({:regexp, _, _, _}), do: true
-  defp concat_object_like?(_), do: false
+  defp concat_object_like?(value), do: Value.object_like?(value)
 
   defp concat_length({:obj, ref} = value) do
     case Heap.get_obj(ref, %{}) do

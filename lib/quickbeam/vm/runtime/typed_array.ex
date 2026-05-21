@@ -12,6 +12,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Value
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
@@ -1573,12 +1574,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp species_constructor_object?({:obj, _}), do: true
-  defp species_constructor_object?({:builtin, _, _}), do: true
-  defp species_constructor_object?({:closure, _, _}), do: true
-  defp species_constructor_object?({:bound, _, _, _, _}), do: true
-  defp species_constructor_object?(%QuickBEAM.VM.Function{}), do: true
-  defp species_constructor_object?(_), do: false
+  defp species_constructor_object?(value), do: Value.object_like?(value)
 
   defp typed_array_species_create(obj, default_type, length) do
     case construct_typed_array_species(obj, default_type, [length]) do
