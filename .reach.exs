@@ -14,9 +14,19 @@ process_state_owners = [
   "QuickBEAM.VM.Heap",
   "QuickBEAM.VM.Heap.*",
   "QuickBEAM.VM.RuntimeState",
-  "QuickBEAM.VM.Execution.*",
   "QuickBEAM.VM.Invocation.Context",
-  "QuickBEAM.VM.Host.*"
+  "QuickBEAM.VM.Host.*",
+  "QuickBEAM.VM.Execution.ConstructorStack",
+  "QuickBEAM.VM.Execution.DefinitionState",
+  "QuickBEAM.VM.Execution.GlobalBindingState",
+  "QuickBEAM.VM.Execution.IteratorState",
+  "QuickBEAM.VM.Execution.JSONState",
+  "QuickBEAM.VM.Execution.PrimitivePrototypeState",
+  "QuickBEAM.VM.Execution.PrototypeState",
+  "QuickBEAM.VM.Execution.RealmState",
+  "QuickBEAM.VM.Execution.RegexpState",
+  "QuickBEAM.VM.Execution.SetterState",
+  "QuickBEAM.VM.Execution.Trace"
 ]
 
 [
