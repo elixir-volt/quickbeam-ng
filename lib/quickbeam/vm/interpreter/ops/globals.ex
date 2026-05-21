@@ -118,7 +118,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
           :error ->
             key = {:qb_arguments_object, ctx.current_func, ctx.arg_buf}
 
-            case Process.get(key) do
+            case RuntimeState.get_arguments_object(key) do
               nil ->
                 arguments =
                   Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
@@ -127,8 +127,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
                     mapped: mapped_argument_cells(ctx, frame)
                   )
 
-                Process.put(key, arguments)
-                arguments
+                RuntimeState.put_arguments_object(key, arguments)
 
               arguments ->
                 arguments

@@ -528,7 +528,7 @@ defmodule QuickBEAM.VM.Interpreter do
                 :error ->
                   key = {:qb_arguments_object, ctx.current_func, ctx.arg_buf}
 
-                  case Process.get(key) do
+                  case RuntimeState.get_arguments_object(key) do
                     nil ->
                       arguments =
                         Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
@@ -536,7 +536,7 @@ defmodule QuickBEAM.VM.Interpreter do
                           callee: ctx.current_func
                         )
 
-                      Process.put(key, arguments)
+                      RuntimeState.put_arguments_object(key, arguments)
                       {arguments, true}
 
                     arguments ->

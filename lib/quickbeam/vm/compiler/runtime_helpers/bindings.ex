@@ -218,7 +218,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
 
   def current_strict_mode?(%Context{
         current_func: %QuickBEAM.VM.Function{is_strict_mode: strict}
-      }), do: strict
+      }),
+      do: strict
 
   def current_strict_mode?(_ctx), do: false
 
@@ -232,7 +233,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
         key = {:qb_compiled_arguments_object, current_func, RuntimeContext.arg_buf(ctx)}
         fallback_key = {:qb_compiled_arguments_object, current_func}
 
-        case Process.get(key) || Process.get(fallback_key) do
+        case RuntimeState.get_arguments_object(key) ||
+               RuntimeState.get_arguments_object(fallback_key) do
           nil ->
             arguments =
               Heap.wrap_arguments(Tuple.to_list(RuntimeContext.arg_buf(ctx)),
@@ -240,9 +242,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
                 callee: current_func
               )
 
-            Process.put(key, arguments)
-            Process.put(fallback_key, arguments)
-            arguments
+            RuntimeState.put_arguments_object([key, fallback_key], arguments)
 
           arguments ->
             arguments

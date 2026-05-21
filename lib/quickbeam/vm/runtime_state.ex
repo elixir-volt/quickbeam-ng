@@ -25,6 +25,20 @@ defmodule QuickBEAM.VM.RuntimeState do
     end
   end
 
+  @doc "Returns a cached arguments object for a process-local key."
+  def get_arguments_object(key), do: Process.get(key)
+
+  @doc "Caches an arguments object for one or more process-local keys."
+  def put_arguments_object(keys, arguments) when is_list(keys) do
+    Enum.each(keys, &Process.put(&1, arguments))
+    arguments
+  end
+
+  def put_arguments_object(key, arguments) do
+    Process.put(key, arguments)
+    arguments
+  end
+
   @doc "Runs a function while rooting values owned by a suspended interpreter frame."
   def with_suspended_roots(roots, fun) when is_list(roots) and is_function(fun, 0) do
     previous = Process.get(:qb_interpreter_suspended_roots, [])
