@@ -331,6 +331,12 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       RegexpState.put_internal(ref, "flags", canonical_regexp_flags(flags))
       RegexpState.put(ref, "lastIndex", 0)
 
+      Heap.put_prop_desc(ref, "lastIndex", %{
+        writable: true,
+        enumerable: false,
+        configurable: false
+      })
+
       case this do
         {:obj, this_ref} ->
           case Heap.get_obj(this_ref, %{}) do

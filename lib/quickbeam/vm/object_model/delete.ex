@@ -45,7 +45,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   def delete_property({:regexp, _, _, ref}, key) do
-    if match?(%{configurable: false}, Heap.get_prop_desc(ref, key)) do
+    if key == "lastIndex" or match?(%{configurable: false}, Heap.get_prop_desc(ref, key)) do
       false
     else
       RegexpState.delete(ref, key)
@@ -176,10 +176,11 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   defp remove_key_order_entry(map, _key), do: map
 
   defp delete_static_property(target, key) do
-    if match?(
-         %{configurable: false},
-         Heap.get_prop_desc(target, key) || Heap.get_ctor_prop_desc(target, key)
-       ) do
+    if non_configurable_static_prototype?(target, key) or
+         match?(
+           %{configurable: false},
+           Heap.get_prop_desc(target, key) || Heap.get_ctor_prop_desc(target, key)
+         ) do
       false
     else
       Heap.put_ctor_static(target, key, :deleted)
@@ -222,6 +223,23 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   defp object_value?({:regexp, _, _}), do: true
   defp object_value?({:regexp, _, _, _}), do: true
   defp object_value?(_), do: false
+
+  defp non_configurable_static_prototype?(
+         %QuickBEAM.VM.Function{has_prototype: true},
+         "prototype"
+       ),
+       do: true
+
+  defp non_configurable_static_prototype?(
+         {:closure, _, %QuickBEAM.VM.Function{has_prototype: true}},
+         "prototype"
+       ),
+       do: true
+
+  defp non_configurable_static_prototype?(target, "prototype"),
+    do: Map.has_key?(Heap.get_ctor_statics(target), "prototype")
+
+  defp non_configurable_static_prototype?(_target, _key), do: false
 
   defp proxy_delete_invariant_violation?({:obj, ref}, key) do
     raw = Heap.get_obj(ref, %{})

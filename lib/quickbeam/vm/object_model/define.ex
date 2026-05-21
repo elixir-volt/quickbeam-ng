@@ -6,8 +6,62 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
   alias QuickBEAM.VM.{Heap, Invocation, JSThrow}
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Semantics.Values
-  alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor, PropertyKey, Semantics}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    ArrayExotic,
+    Get,
+    PropertyDescriptor,
+    PropertyKey,
+    Semantics,
+    WrappedPrimitive
+  }
+
   alias QuickBEAM.VM.Runtime.TypedArray
+
+  def property(callable, key, desc_obj, raw_desc)
+      when is_function(callable) or is_struct(callable) or
+             (is_tuple(callable) and elem(callable, 0) in [:builtin, :closure, :bound]) do
+    desc = if is_map(raw_desc), do: raw_desc, else: %{}
+    prop_name = property_name(key)
+    existing = Heap.get_ctor_statics(callable)
+
+    if static_incompatible_descriptor?(callable, existing, prop_name, desc) do
+      throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
+    end
+
+    fields = descriptor_fields(desc_obj, desc)
+    validate_descriptor_fields!(fields)
+    existing_value = Map.get(existing, prop_name, :undefined)
+
+    cond do
+      fields.getter_present or fields.setter_present ->
+        {old_get, old_set} = accessor_pair(existing_value)
+        new_get = PropertyDescriptor.accessor_slot(fields.getter_present, fields.getter, old_get)
+        new_set = PropertyDescriptor.accessor_slot(fields.setter_present, fields.setter, old_set)
+        Heap.put_ctor_static(callable, prop_name, {:accessor, new_get, new_set})
+
+      fields.value_present or fields.writable_present or not Map.has_key?(existing, prop_name) ->
+        Heap.put_ctor_static(
+          callable,
+          prop_name,
+          PropertyDescriptor.field(desc_obj, desc, "value", existing_value)
+        )
+
+      true ->
+        :ok
+    end
+
+    existing_attrs =
+      Heap.get_prop_desc(callable, prop_name) || Heap.get_ctor_prop_desc(callable, prop_name)
+
+    Heap.put_ctor_prop_desc(
+      callable,
+      prop_name,
+      descriptor_attrs(desc_obj, desc, existing_attrs, false)
+    )
+
+    callable
+  end
 
   def property({:regexp, _, _, ref} = regexp, key, desc_obj, raw_desc) do
     desc = if is_map(raw_desc), do: raw_desc, else: %{}
@@ -52,6 +106,10 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
     desc = if is_map(raw_desc), do: raw_desc, else: %{}
     prop_name = property_name(key)
     existing = Heap.get_obj(ref, %{})
+
+    if wrapped_string_virtual_incompatible?(existing, prop_name, desc) do
+      throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
+    end
 
     if is_map(existing) and Map.get(existing, "__proxy_revoked__") == true and
          Map.has_key?(existing, proxy_target()) do
@@ -191,6 +249,57 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
         })
 
         obj
+    end
+  end
+
+  defp wrapped_string_virtual_incompatible?(map, prop_name, desc) when is_map(map) do
+    case WrappedPrimitive.value(map, :string) do
+      {:ok, string} when is_binary(string) ->
+        wrapped_string_descriptor_incompatible?(string, prop_name, desc)
+
+      _ ->
+        false
+    end
+  end
+
+  defp wrapped_string_virtual_incompatible?(_map, _prop_name, _desc), do: false
+
+  defp wrapped_string_descriptor_incompatible?(string, "length", desc) do
+    descriptor_incompatible_with_virtual?(desc, Get.string_length(string), false, false)
+  end
+
+  defp wrapped_string_descriptor_incompatible?(string, prop_name, desc) do
+    length = Get.string_length(string)
+
+    case PropertyKey.array_index(prop_name) do
+      {:ok, index} when index >= 0 and index < length ->
+        value = string |> String.graphemes() |> Enum.at(index)
+        descriptor_incompatible_with_virtual?(desc, value, false, true)
+
+      _ ->
+        false
+    end
+  end
+
+  defp descriptor_incompatible_with_virtual?(desc, value, writable, enumerable) do
+    cond do
+      Map.get(desc, "configurable") == true ->
+        true
+
+      Map.get(desc, "writable") != nil and Map.get(desc, "writable") != writable ->
+        true
+
+      Map.get(desc, "enumerable") != nil and Map.get(desc, "enumerable") != enumerable ->
+        true
+
+      Map.has_key?(desc, "value") and not Semantics.same_value?(Map.get(desc, "value"), value) ->
+        true
+
+      Map.has_key?(desc, "get") or Map.has_key?(desc, "set") ->
+        true
+
+      true ->
+        false
     end
   end
 
@@ -436,6 +545,55 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
   end
 
   defp incompatible_existing_descriptor?(_ref, _existing, _prop_name, _desc), do: false
+
+  defp static_descriptor(%QuickBEAM.VM.Function{has_prototype: true}, "prototype") do
+    PropertyDescriptor.attrs(writable: true, enumerable: false, configurable: false)
+  end
+
+  defp static_descriptor({:closure, _, %QuickBEAM.VM.Function{has_prototype: true}}, "prototype") do
+    PropertyDescriptor.attrs(writable: true, enumerable: false, configurable: false)
+  end
+
+  defp static_descriptor(callable, prop_name) do
+    Heap.get_prop_desc(callable, prop_name) || Heap.get_ctor_prop_desc(callable, prop_name)
+  end
+
+  defp static_incompatible_descriptor?(callable, existing, prop_name, desc) do
+    current_desc = static_descriptor(callable, prop_name)
+
+    current_value = Map.get(existing, prop_name, :undefined)
+
+    cond do
+      current_desc in [nil, :deleted] ->
+        false
+
+      current_desc.configurable == false and Map.get(desc, "configurable") == true ->
+        true
+
+      current_desc.configurable == false and Map.has_key?(desc, "enumerable") and
+          Map.get(desc, "enumerable") != current_desc.enumerable ->
+        true
+
+      current_desc.configurable == false and
+          accessor_data_descriptor_conflict?(current_value, desc) ->
+        true
+
+      current_desc.configurable == false and accessor_descriptor_conflict?(current_value, desc) ->
+        true
+
+      current_desc.configurable == false and current_desc.writable == false and
+          Map.get(desc, "writable") == true ->
+        true
+
+      current_desc.configurable == false and current_desc.writable == false and
+        Map.has_key?(desc, "value") and
+          not Semantics.same_value?(Map.get(desc, "value"), current_value) ->
+        true
+
+      true ->
+        false
+    end
+  end
 
   defp accessor_data_descriptor_conflict?({:accessor, _, _}, desc) do
     Map.has_key?(desc, "value") or Map.has_key?(desc, "writable")
