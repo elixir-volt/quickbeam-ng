@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   @moduledoc "Iterator and argument-rest helpers used by BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.{Heap, Invocation, Runtime, RuntimeState}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Properties
   alias QuickBEAM.VM.Interpreter.Context
@@ -18,7 +18,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
 
   def next_result(ctx \\ nil, next_fn, iter_obj, val) do
     {result, next_iter} = IteratorSemantics.iterator_next_result(ctx, next_fn, iter_obj, val)
-    Process.put({:qb_iterator_result_owner, result}, iter_obj)
+    RuntimeState.put_iterator_result_owner(result, iter_obj)
     {result, next_iter}
   end
 
@@ -113,7 +113,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   end
 
   defp close_iterator_result_owner(result) do
-    case Process.get({:qb_iterator_result_owner, result}) do
+    case RuntimeState.get_iterator_result_owner(result) do
       nil ->
         :ok
 

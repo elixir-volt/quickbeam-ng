@@ -137,7 +137,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
 
         case result do
           {:ok, {result, next_iter}} ->
-            Process.put({:qb_iterator_result_owner, result}, iter_obj)
+            RuntimeState.put_iterator_result_owner(result, iter_obj)
             ctx = refresh_persistent_iterator_globals(ctx)
             run(pc + 1, frame, [result, catch_offset, next_fn, next_iter | rest], gas, ctx)
 
@@ -171,7 +171,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
       end
 
       defp close_iterator_result_owner(result, ctx) do
-        case Process.get({:qb_iterator_result_owner, result}) do
+        case RuntimeState.get_iterator_result_owner(result) do
           nil ->
             :ok
 
