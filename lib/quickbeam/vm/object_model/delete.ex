@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, WrappedPrimitive}
@@ -189,7 +189,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   defp delete_proxy_property(target, handler, key) do
-    unless object_value?(handler) do
+    unless Value.object_like?(handler) do
       throw(
         {:js_throw,
          Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
@@ -215,14 +215,6 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
         true
     end
   end
-
-  defp object_value?({:obj, _}), do: true
-  defp object_value?({:closure, _, _}), do: true
-  defp object_value?({:builtin, _, _}), do: true
-  defp object_value?({:bound, _, _, _, _}), do: true
-  defp object_value?({:regexp, _, _}), do: true
-  defp object_value?({:regexp, _, _, _}), do: true
-  defp object_value?(_), do: false
 
   defp non_configurable_static_prototype?(
          %QuickBEAM.VM.Function{has_prototype: true},

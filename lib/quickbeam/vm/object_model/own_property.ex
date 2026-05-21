@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime, Value}
   alias QuickBEAM.VM.Execution.RegexpState
 
   alias QuickBEAM.VM.ObjectModel.{
@@ -876,7 +876,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
       )
     end
 
-    unless object_value?(handler) do
+    unless Value.object_like?(handler) do
       throw(
         {:js_throw,
          Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
@@ -892,14 +892,6 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
       validate_proxy_descriptor_result(target, prop_name, result)
     end
   end
-
-  defp object_value?({:obj, _}), do: true
-  defp object_value?({:closure, _, _}), do: true
-  defp object_value?({:builtin, _, _}), do: true
-  defp object_value?({:bound, _, _, _, _}), do: true
-  defp object_value?({:regexp, _, _}), do: true
-  defp object_value?({:regexp, _, _, _}), do: true
-  defp object_value?(_), do: false
 
   defp validate_proxy_descriptor_result(target, prop_name, :undefined) do
     case target_descriptor_flags(target, prop_name) do

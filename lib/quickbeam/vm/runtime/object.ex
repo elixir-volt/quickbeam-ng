@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Semantics.{Iterators, Values}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
@@ -1013,7 +1013,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp proxy_get_prototype_of(target, handler) do
-    unless object_value?(handler) do
+    unless Value.object_like?(handler) do
       throw(
         {:js_throw,
          Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
@@ -1042,7 +1042,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp proxy_set_prototype_of(target, handler, new_proto) do
-    unless object_value?(handler) do
+    unless Value.object_like?(handler) do
       throw(
         {:js_throw,
          Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
@@ -1066,14 +1066,6 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
     success?
   end
-
-  defp object_value?({:obj, _}), do: true
-  defp object_value?({:closure, _, _}), do: true
-  defp object_value?({:builtin, _, _}), do: true
-  defp object_value?({:bound, _, _, _, _}), do: true
-  defp object_value?({:regexp, _, _}), do: true
-  defp object_value?({:regexp, _, _, _}), do: true
-  defp object_value?(_), do: false
 
   defp prototype_value?(nil), do: true
   defp prototype_value?({:obj, _}), do: true

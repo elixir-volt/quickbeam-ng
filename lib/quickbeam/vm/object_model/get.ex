@@ -13,7 +13,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Interpreter.Closures
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Runtime
@@ -143,7 +143,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       JSThrow.type_error!("Cannot perform operation on a revoked proxy")
     end
 
-    unless object_value?(handler) do
+    unless Value.object_like?(handler) do
       JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
     end
 
@@ -560,7 +560,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
           JSThrow.type_error!("Cannot perform operation on a revoked proxy")
         end
 
-        unless object_value?(handler) do
+        unless Value.object_like?(handler) do
           JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
         end
 
@@ -907,14 +907,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp builtin_function_property(_builtin, _key), do: :undefined
-
-  defp object_value?({:obj, _}), do: true
-  defp object_value?({:closure, _, _}), do: true
-  defp object_value?({:builtin, _, _}), do: true
-  defp object_value?({:bound, _, _, _, _}), do: true
-  defp object_value?({:regexp, _, _}), do: true
-  defp object_value?({:regexp, _, _, _}), do: true
-  defp object_value?(_), do: false
 
   defp regexp_state_value({:accessor, getter, _}, receiver) when getter != nil,
     do: call_getter(getter, receiver)

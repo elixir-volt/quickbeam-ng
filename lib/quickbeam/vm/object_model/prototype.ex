@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Execution.RegexpState
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, Value}
 
   def get({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
@@ -101,7 +101,7 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
     target = Map.fetch!(map, proxy_target())
     handler = Map.fetch!(map, proxy_handler())
 
-    unless object_value?(handler) do
+    unless Value.object_like?(handler) do
       throw(
         {:js_throw,
          Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
@@ -116,14 +116,6 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
       Invocation.invoke_callback_or_throw(trap, [target], handler)
     end
   end
-
-  defp object_value?({:obj, _}), do: true
-  defp object_value?({:closure, _, _}), do: true
-  defp object_value?({:builtin, _, _}), do: true
-  defp object_value?({:bound, _, _, _, _}), do: true
-  defp object_value?({:regexp, _, _}), do: true
-  defp object_value?({:regexp, _, _, _}), do: true
-  defp object_value?(_), do: false
 
   defp array_like_prototype(ref) do
     if Heap.get_array_prop(ref, "__arguments__") == true do

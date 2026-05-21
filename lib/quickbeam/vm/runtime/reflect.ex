@@ -143,7 +143,9 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     end
 
     method "defineProperty" do
-      [obj, key, descriptor | _] = args
+      obj = List.first(args, :undefined)
+      key = Enum.at(args, 1, :undefined)
+      descriptor = Enum.at(args, 2, :undefined)
       require_object!(obj, "Reflect.defineProperty")
 
       try do
