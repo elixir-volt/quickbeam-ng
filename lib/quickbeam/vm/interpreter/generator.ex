@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
 
   import QuickBEAM.VM.Builtin, only: [object: 1]
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, RuntimeState}
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Promise, as: Promise
 
@@ -43,14 +43,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
   defp next(gen_ref, arg) do
     case Heap.get_obj(gen_ref) do
       %{state: :suspended} = s ->
-        prev_ctx = Heap.get_ctx()
-        Heap.put_ctx(s.ctx)
-
-        try do
-          resume_sync(gen_ref, s, arg)
-        after
-          if prev_ctx, do: Heap.put_ctx(prev_ctx), else: Heap.put_ctx(nil)
-        end
+        RuntimeState.with_context(s.ctx, fn -> resume_sync(gen_ref, s, arg) end)
 
       _ ->
         done_result(:undefined)
@@ -84,14 +77,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
   defp async_next(gen_ref, arg) do
     case Heap.get_obj(gen_ref) do
       %{state: :suspended} = s ->
-        prev_ctx = Heap.get_ctx()
-        Heap.put_ctx(s.ctx)
-
-        try do
-          resume_async(gen_ref, s, arg)
-        after
-          if prev_ctx, do: Heap.put_ctx(prev_ctx), else: Heap.put_ctx(nil)
-        end
+        RuntimeState.with_context(s.ctx, fn -> resume_async(gen_ref, s, arg) end)
 
       _ ->
         Promise.resolved(done_result(:undefined))
@@ -125,14 +111,7 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
         done_result(val)
 
       %{state: :suspended} = s ->
-        prev_ctx = Heap.get_ctx()
-        Heap.put_ctx(s.ctx)
-
-        try do
-          resume_return(gen_ref, s, val)
-        after
-          if prev_ctx, do: Heap.put_ctx(prev_ctx), else: Heap.put_ctx(nil)
-        end
+        RuntimeState.with_context(s.ctx, fn -> resume_return(gen_ref, s, val) end)
 
       _ ->
         done_result(val)
