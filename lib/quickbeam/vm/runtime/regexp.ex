@@ -8,6 +8,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Runtime, Value}
+  alias QuickBEAM.VM.Execution.IteratorState
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put}
@@ -2038,8 +2039,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_string_iterator(items, regexp, string) do
     iter = Heap.wrap_iterator(items)
-    state_ref = make_ref()
-    Process.put(state_ref, false)
+    state_ref = IteratorState.new(false)
 
     raw_next =
       case iter do
@@ -2097,19 +2097,19 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp custom_regexp_exec?(exec), do: Builtin.callable?(exec)
 
   defp regexp_string_iterator_exec_next(state_ref, regexp, string, exec) do
-    if Process.get(state_ref) do
+    if IteratorState.get(state_ref, false) do
       iterator_result(:undefined, true)
     else
       case Invocation.invoke_with_receiver(exec, [string], regexp) do
         nil ->
-          Process.put(state_ref, true)
+          IteratorState.put(state_ref, true)
           iterator_result(:undefined, true)
 
         match when is_tuple(match) and elem(match, 0) == :obj ->
           if regexp_match_all_global?(regexp) do
             maybe_advance_empty_match(regexp, string, match)
           else
-            Process.put(state_ref, true)
+            IteratorState.put(state_ref, true)
           end
 
           iterator_result(match, false)
