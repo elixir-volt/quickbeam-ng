@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.BigInt do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
+  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Semantics.Coercion
@@ -20,6 +20,7 @@ defmodule QuickBEAM.VM.Runtime.BigInt do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref)
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
+      InstallerHelpers.install_methods(proto_ref, __MODULE__, ~w(toString valueOf))
       InstallerHelpers.install_to_string_tag(proto_ref, "BigInt")
     end)
 
@@ -36,6 +37,14 @@ defmodule QuickBEAM.VM.Runtime.BigInt do
     Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_static(ctor, name, fun)
     Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.method())
+  end
+
+  proto "toString", length: 1 do
+    bigint_to_string(unwrap_bigint(this), args)
+  end
+
+  proto "valueOf" do
+    {:bigint, unwrap_bigint(this)}
   end
 
   def as_int_n(args, _this) do
@@ -91,6 +100,42 @@ defmodule QuickBEAM.VM.Runtime.BigInt do
     case Integer.parse(digits, base) do
       {value, ""} -> {:ok, value}
       _ -> :error
+    end
+  end
+
+  defp unwrap_bigint({:bigint, value}), do: value
+
+  defp unwrap_bigint({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:bigint) do
+      {:ok, {:bigint, value}} -> value
+      {:ok, value} when is_integer(value) -> value
+      :error -> JSThrow.type_error!("BigInt method called on incompatible receiver")
+    end
+  end
+
+  defp unwrap_bigint(_), do: JSThrow.type_error!("BigInt method called on incompatible receiver")
+
+  defp bigint_to_string(value, [:undefined | _]), do: Integer.to_string(value)
+  defp bigint_to_string(value, []), do: Integer.to_string(value)
+
+  defp bigint_to_string(value, [radix | _]) do
+    radix = to_radix(radix)
+    value |> Integer.to_string(radix) |> String.downcase()
+  end
+
+  defp to_radix(:undefined), do: 10
+
+  defp to_radix({:bigint, _}),
+    do: JSThrow.type_error!("Cannot convert a BigInt value to a number")
+
+  defp to_radix({:obj, _} = value), do: value |> Coercion.to_primitive("number") |> to_radix()
+
+  defp to_radix(value) do
+    case Runtime.to_number(value) do
+      n when n in [:nan, :undefined] -> 10
+      n when is_integer(n) and n >= 2 and n <= 36 -> n
+      n when is_float(n) and trunc(n) >= 2 and trunc(n) <= 36 -> trunc(n)
+      _ -> JSThrow.range_error!("radix out of range")
     end
   end
 

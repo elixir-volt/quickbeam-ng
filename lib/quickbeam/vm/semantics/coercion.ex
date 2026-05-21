@@ -221,7 +221,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
   defp call_string_hint_method(obj, data, name) do
     fun =
-      case symbol_wrapper_proto_method(obj, name) do
+      case primitive_wrapper_proto_method(obj, name) do
         {:ok, method} -> method
         _ -> own_or_inherited_method(obj, data, name)
       end
@@ -396,7 +396,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   end
 
   defp get_to_primitive(obj, method) do
-    case symbol_wrapper_proto_method(obj, method) do
+    case primitive_wrapper_proto_method(obj, method) do
       {:ok, fun} ->
         invoke_primitive_method(fun, obj)
 
@@ -418,8 +418,10 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
   defp invoke_primitive_method(_fun, _obj), do: :none
 
-  defp symbol_wrapper_proto_method({:obj, ref} = obj, method) do
-    with {:ok, _symbol} <- Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:symbol),
+  defp primitive_wrapper_proto_method({:obj, ref} = obj, method) do
+    data = Heap.get_obj(ref, %{})
+
+    with true <- primitive_wrapper?(data),
          {:obj, _} = proto <- Prototype.get(obj),
          {:obj, _} = desc <- OwnProperty.descriptor(proto, method) do
       getter = Get.get(desc, "get")
@@ -431,11 +433,17 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
         true -> :none
       end
     else
+      false -> :missing
       _ -> :missing
     end
   end
 
-  defp symbol_wrapper_proto_method(_obj, _method), do: :missing
+  defp primitive_wrapper_proto_method(_obj, _method), do: :missing
+
+  defp primitive_wrapper?(data) do
+    WrappedPrimitive.value(data, :symbol) != :error or
+      WrappedPrimitive.value(data, :bigint) != :error
+  end
 
   defp unwrap_primitive(val) do
     if object_like?(val), do: :none, else: {:ok, val}

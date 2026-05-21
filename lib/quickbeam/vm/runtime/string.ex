@@ -202,7 +202,7 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   proto "concat" do
-    coerce_string_this(this) <> Enum.map_join(args, &Runtime.stringify/1)
+    coerce_string_this(this) <> Enum.map_join(args, &Coercion.to_string_val/1)
   end
 
   proto "toString" do

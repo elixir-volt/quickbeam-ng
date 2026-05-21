@@ -257,25 +257,34 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   defp stringify_arg(val) when is_binary(val), do: val
   defp stringify_arg(val), do: QuickBEAM.VM.Semantics.Values.stringify(val)
 
-  def bigint(_args, {:obj, _}), do: JSThrow.type_error!("BigInt is not a constructor")
-  def bigint([:undefined | _], _), do: JSThrow.type_error!("Cannot convert to BigInt")
-  def bigint([:infinity | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
-  def bigint([:neg_infinity | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
-  def bigint([:nan | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
-  def bigint([n | _], _) when is_integer(n), do: {:bigint, number_integer_to_bigint(n)}
-  def bigint([{:bigint, n} | _], _), do: {:bigint, n}
+  def bigint(args, this) do
+    case Heap.get_ctx() do
+      %{new_target: new_target} when new_target not in [nil, :undefined] ->
+        JSThrow.type_error!("BigInt is not a constructor")
 
-  def bigint([string | _], _) when is_binary(string) do
+      _ ->
+        bigint_call(args, this)
+    end
+  end
+
+  defp bigint_call([:undefined | _], _), do: JSThrow.type_error!("Cannot convert to BigInt")
+  defp bigint_call([:infinity | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
+  defp bigint_call([:neg_infinity | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
+  defp bigint_call([:nan | _], _), do: JSThrow.range_error!("Cannot convert to BigInt")
+  defp bigint_call([n | _], _) when is_integer(n), do: {:bigint, number_integer_to_bigint(n)}
+  defp bigint_call([{:bigint, n} | _], _), do: {:bigint, n}
+
+  defp bigint_call([string | _], _) when is_binary(string) do
     case QuickBEAM.VM.Runtime.BigInt.parse_bigint_string(String.trim(string)) do
       {:ok, n} -> {:bigint, n}
       :error -> JSThrow.syntax_error!("Cannot convert to BigInt")
     end
   end
 
-  def bigint([{:obj, _} = value | _], _),
-    do: bigint([QuickBEAM.VM.Semantics.Coercion.to_primitive(value, "number")], nil)
+  defp bigint_call([{:obj, _} = value | _], _),
+    do: bigint_call([QuickBEAM.VM.Semantics.Coercion.to_primitive(value, "number")], nil)
 
-  def bigint([value | _], _) do
+  defp bigint_call([value | _], _) do
     case Runtime.to_number(value) do
       n when is_integer(n) -> {:bigint, number_integer_to_bigint(n)}
       n when is_float(n) and n == trunc(n) -> {:bigint, trunc(n)}
@@ -285,7 +294,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
     end
   end
 
-  def bigint(_, _) do
+  defp bigint_call(_, _) do
     JSThrow.type_error!("Cannot convert to BigInt")
   end
 
