@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
   use QuickBEAM.VM.Builtin
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation, Value}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation, RuntimeState, Value}
   alias QuickBEAM.VM.Execution.Trace
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
@@ -284,7 +284,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
   end
 
   def proto_property(_fun, "constructor") do
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %{globals: globals} -> Map.get(globals, "Function", :undefined)
       _ -> :undefined
     end

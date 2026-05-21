@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 1]
   import QuickBEAM.VM.Value, only: [is_builtin: 1, is_closure: 1]
 
-  alias QuickBEAM.VM.{BytecodeParser, Heap}
+  alias QuickBEAM.VM.{BytecodeParser, Heap, RuntimeState}
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
@@ -193,7 +193,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   def async_generator_function(args, _), do: dynamic_function(args, "async function*")
 
   defp dynamic_function(args, prefix) do
-    ctx = Heap.get_ctx()
+    ctx = RuntimeState.current()
 
     if ctx && ctx.runtime_pid do
       {params, body} =
@@ -258,7 +258,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
   defp stringify_arg(val), do: QuickBEAM.VM.Semantics.Values.stringify(val)
 
   def bigint(args, this) do
-    case Heap.get_ctx() do
+    case RuntimeState.current() do
       %{new_target: new_target} when new_target not in [nil, :undefined] ->
         JSThrow.type_error!("BigInt is not a constructor")
 

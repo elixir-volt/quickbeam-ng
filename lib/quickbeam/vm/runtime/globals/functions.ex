@@ -1,14 +1,14 @@
 defmodule QuickBEAM.VM.Runtime.Globals.Functions do
   @moduledoc "Implementations for global JavaScript functions such as `eval`, `require`, and `queueMicrotask`."
 
-  alias QuickBEAM.VM.{BytecodeParser, Heap}
+  alias QuickBEAM.VM.{BytecodeParser, Heap, RuntimeState}
   alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Runtime
 
   @doc "Implements global `eval` for source strings by compiling and evaluating them in the current runtime."
   def js_eval([code | _], _) when is_binary(code) do
-    ctx = Heap.get_ctx()
+    ctx = RuntimeState.current()
 
     with %{runtime_pid: pid} when pid != nil <- ctx,
          {:ok, bytecode} <- QuickBEAM.Runtime.compile(pid, code),
@@ -34,7 +34,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
   def js_eval(_, _), do: :undefined
 
   def js_eval_global([code | _], {:obj, ref}) when is_binary(code) do
-    ctx = Heap.get_ctx()
+    ctx = RuntimeState.current()
     globals = Heap.get_obj(ref, %{})
     pre_globals = Heap.get_persistent_globals()
 

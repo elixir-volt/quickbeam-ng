@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   use QuickBEAM.VM.Builtin
 
-  alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
+  alias QuickBEAM.VM.{Heap, JSThrow, Runtime, RuntimeState}
   alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.Globals.Numeric
@@ -173,7 +173,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
   defp to_string_with_radix(n, _), do: Runtime.stringify(n)
 
   defp format_float_with_runtime(n, radix) do
-    case QuickBEAM.VM.Heap.get_ctx() do
+    case RuntimeState.current() do
       %{runtime_pid: runtime_pid} when runtime_pid != nil ->
         literal = :erlang.float_to_binary(n, [:short])
 
@@ -408,7 +408,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
   end
 
   defp format_precision_with_runtime(n, precision) do
-    case QuickBEAM.VM.Heap.get_ctx() do
+    case RuntimeState.current() do
       %{runtime_pid: runtime_pid} when runtime_pid != nil ->
         literal = :erlang.float_to_binary(n * 1.0, [:short])
 
