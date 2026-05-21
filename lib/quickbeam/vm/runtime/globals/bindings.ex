@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Bindings do
 
   import QuickBEAM.VM.Builtin, only: [object: 1]
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Builtin, Heap}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Globals.Numeric
   alias QuickBEAM.VM.Runtime.Globals.Functions
@@ -33,7 +33,11 @@ defmodule QuickBEAM.VM.Runtime.Globals.Bindings do
     }
   end
 
-  defp builtin(name, fun), do: {:builtin, name, fun}
+  defp builtin(name, fun) do
+    value = {:builtin, name, fun}
+    Heap.put_ctor_static(value, :__builtin_meta__, Builtin.meta(name, constructable: false))
+    value
+  end
 
   defp structured_clone([val | _], _this), do: QuickBEAM.VM.Runtime.StructuredClone.clone(val)
   defp structured_clone([], _this), do: nil

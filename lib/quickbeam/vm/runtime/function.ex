@@ -475,6 +475,9 @@ defmodule QuickBEAM.VM.Runtime.Function do
           Builtin.call(builtin, args, this_arg)
         end
 
+      {:obj, _} = object ->
+        Invocation.invoke_with_receiver(object, args, this_arg)
+
       other ->
         Builtin.call(other, args, this_arg)
     end

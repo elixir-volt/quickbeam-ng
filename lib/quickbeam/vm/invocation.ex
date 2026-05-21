@@ -480,7 +480,7 @@ defmodule QuickBEAM.VM.Invocation do
           result =
             dispatch(
               construct_trap,
-              [target, Heap.wrap_arguments(args), new_target],
+              [target, Heap.wrap(args), new_target],
               ctx.gas,
               ctx,
               handler
@@ -526,7 +526,7 @@ defmodule QuickBEAM.VM.Invocation do
         else
           dispatch(
             apply_trap,
-            [target, this || :undefined, Heap.wrap_arguments(args)],
+            [target, this || :undefined, Heap.wrap(args)],
             ctx.gas,
             ctx,
             handler
@@ -579,7 +579,8 @@ defmodule QuickBEAM.VM.Invocation do
   defp dispatch_context(%QuickBEAM.VM.Function{is_strict_mode: true}, ctx, nil),
     do: Context.mark_dirty(%{ctx | this: :undefined})
 
-  defp dispatch_context(_fun, ctx, _this), do: ctx
+  defp dispatch_context(_fun, ctx, nil), do: ctx
+  defp dispatch_context(_fun, ctx, this), do: Context.mark_dirty(%{ctx | this: this})
 
   defp runtime_call_context(%QuickBEAM.VM.Function{is_strict_mode: true}, ctx),
     do: Context.mark_dirty(%{ctx | this: :undefined})

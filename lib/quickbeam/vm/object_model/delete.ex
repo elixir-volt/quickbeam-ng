@@ -188,13 +188,20 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   defp delete_proxy_property(target, handler, key) do
+    unless object_value?(handler) do
+      throw(
+        {:js_throw,
+         Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
+      )
+    end
+
     trap = Get.get(handler, "deleteProperty")
 
     cond do
       trap == :undefined or trap == nil ->
         delete_property(target, key)
 
-      not Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target, key])) ->
+      not Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target, key], handler)) ->
         false
 
       proxy_delete_invariant_violation?(target, key) ->
@@ -208,11 +215,37 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     end
   end
 
+  defp object_value?({:obj, _}), do: true
+  defp object_value?({:closure, _, _}), do: true
+  defp object_value?({:builtin, _, _}), do: true
+  defp object_value?({:bound, _, _, _, _}), do: true
+  defp object_value?({:regexp, _, _}), do: true
+  defp object_value?({:regexp, _, _, _}), do: true
+  defp object_value?(_), do: false
+
   defp proxy_delete_invariant_violation?({:obj, ref}, key) do
-    match?(%{configurable: false}, Heap.get_prop_desc(ref, key))
+    raw = Heap.get_obj(ref, %{})
+
+    match?(%{configurable: false}, Heap.get_prop_desc(ref, key)) or
+      (property_present?(raw, key) and not Heap.extensible?(ref))
   end
 
   defp proxy_delete_invariant_violation?(_target, _key), do: false
+
+  defp property_present?(map, key) when is_map(map), do: Map.has_key?(map, key)
+
+  defp property_present?(list, key) when is_list(list),
+    do: array_index_present?(key, length(list))
+
+  defp property_present?({:qb_arr, arr}, key), do: array_index_present?(key, :array.size(arr))
+  defp property_present?(_raw, _key), do: false
+
+  defp array_index_present?(key, length) do
+    case PropertyKey.array_index(key) do
+      {:ok, index} -> index < length
+      :error -> false
+    end
+  end
 
   defp visible_array_length(ref) do
     case Heap.get_array_prop(ref, "length") do

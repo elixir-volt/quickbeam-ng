@@ -3,15 +3,60 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.{Heap, Invocation}
+  alias QuickBEAM.VM.{Heap, Invocation, JSThrow}
+  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{ArrayExotic, Get, PropertyDescriptor, PropertyKey, Semantics}
   alias QuickBEAM.VM.Runtime.TypedArray
+
+  def property({:regexp, _, _, ref} = regexp, key, desc_obj, raw_desc) do
+    desc = if is_map(raw_desc), do: raw_desc, else: %{}
+    prop_name = property_name(key)
+    existing = RegexpState.get(ref)
+
+    if non_extensible_new_property?(ref, existing, prop_name) or
+         incompatible_existing_descriptor?(ref, existing, prop_name, desc) do
+      throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
+    end
+
+    fields = descriptor_fields(desc_obj, desc)
+    validate_descriptor_fields!(fields)
+
+    existing_value = Map.get(existing, prop_name, :undefined)
+
+    cond do
+      fields.getter_present or fields.setter_present ->
+        {old_get, old_set} = accessor_pair(existing_value)
+        new_get = PropertyDescriptor.accessor_slot(fields.getter_present, fields.getter, old_get)
+        new_set = PropertyDescriptor.accessor_slot(fields.setter_present, fields.setter, old_set)
+        RegexpState.put(ref, prop_name, {:accessor, new_get, new_set})
+
+      fields.value_present or fields.writable_present or
+          not RegexpState.has_property?(ref, prop_name) ->
+        RegexpState.put(
+          ref,
+          prop_name,
+          PropertyDescriptor.field(desc_obj, desc, "value", existing_value)
+        )
+
+      true ->
+        :ok
+    end
+
+    existing_attrs = existing_map_attrs(ref, existing, prop_name)
+    Heap.put_prop_desc(ref, prop_name, descriptor_attrs(desc_obj, desc, existing_attrs, false))
+    regexp
+  end
 
   def property({:obj, ref} = obj, key, desc_obj, raw_desc) do
     desc = if is_map(raw_desc), do: raw_desc, else: %{}
     prop_name = property_name(key)
     existing = Heap.get_obj(ref, %{})
+
+    if is_map(existing) and Map.get(existing, "__proxy_revoked__") == true and
+         Map.has_key?(existing, proxy_target()) do
+      JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+    end
 
     if is_map(existing) and Map.has_key?(existing, proxy_target()) do
       throw({:early_return, proxy_property(obj, existing, key, prop_name, desc_obj)})
@@ -163,6 +208,14 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
   defp proxy_property(proxy, proxy_map, key, prop_name, desc_obj) do
     target = Map.fetch!(proxy_map, proxy_target())
     handler = Map.fetch!(proxy_map, proxy_handler())
+
+    unless object_value?(handler) do
+      throw(
+        {:js_throw,
+         Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
+      )
+    end
+
     trap = Get.get(handler, "defineProperty")
 
     cond do
@@ -170,7 +223,9 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
         property(target, key, desc_obj, descriptor_map(desc_obj))
         proxy
 
-      not Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target, prop_name, desc_obj])) ->
+      not Values.truthy?(
+        Invocation.invoke_callback_or_throw(trap, [target, prop_name, desc_obj], handler)
+      ) ->
         throw(
           {:js_throw, Heap.make_error("proxy defineProperty trap returned false", "TypeError")}
         )
@@ -195,6 +250,14 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   defp descriptor_map(_), do: %{}
 
+  defp object_value?({:obj, _}), do: true
+  defp object_value?({:closure, _, _}), do: true
+  defp object_value?({:builtin, _, _}), do: true
+  defp object_value?({:bound, _, _, _, _}), do: true
+  defp object_value?({:regexp, _, _}), do: true
+  defp object_value?({:regexp, _, _, _}), do: true
+  defp object_value?(_), do: false
+
   defp proxy_define_property_invariant_violation?({:obj, target_ref}, prop_name, desc) do
     existing = Heap.get_obj(target_ref, %{})
     current_desc = Heap.get_prop_desc(target_ref, prop_name)
@@ -208,6 +271,10 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
         true
 
       incompatible_existing_descriptor?(target_ref, existing, prop_name, desc) ->
+        true
+
+      match?(%{configurable: false, writable: true}, current_desc) and
+          Map.get(desc, "writable") == false ->
         true
 
       true ->
