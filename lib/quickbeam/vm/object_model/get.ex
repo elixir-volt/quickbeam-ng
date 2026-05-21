@@ -36,6 +36,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     PropertyKey,
     Prototype,
     Semantics,
+    Static,
     WrappedPrimitive
   }
 
@@ -1281,7 +1282,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     do: function_kind_to_string_tag(f, key)
 
   defp get_from_prototype(%QuickBEAM.VM.Function{} = f, key) when key in ["length", "name"] do
-    if Map.get(Heap.get_ctor_statics(f), key) == :deleted,
+    if Static.deleted?(f, key),
       do: fallback_to_function_proto(:undefined, f, key),
       else: Function.proto_property(f, key)
   end
@@ -1304,10 +1305,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f} = c, key)
        when key in ["length", "name"] do
-    if Map.get(Heap.get_ctor_statics(c), key) == :deleted or
-         Map.get(Heap.get_ctor_statics(f), key) == :deleted,
-       do: fallback_to_function_proto(:undefined, c, key),
-       else: Function.proto_property(c, key)
+    if Static.deleted?(c, key) or Static.deleted?(f, key),
+      do: fallback_to_function_proto(:undefined, c, key),
+      else: Function.proto_property(c, key)
   end
 
   defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f} = c, key) do

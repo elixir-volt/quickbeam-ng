@@ -10,6 +10,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     ArrayExotic,
     Get,
     Semantics,
+    Static,
     PropertyDescriptor,
     PropertyKey,
     WrappedPrimitive
@@ -113,8 +114,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   defp has_prototype?({:closure, _, %QuickBEAM.VM.Function{func_kind: 1}}), do: true
   defp has_prototype?(_), do: false
 
-  defp deleted_static?(target, key),
-    do: Map.get(Heap.get_ctor_statics(target), key) == :deleted
+  defp deleted_static?(target, key), do: Static.deleted?(target, key)
 
   defp module_static_present?(module, key) when is_atom(module) do
     module_static_value(module, key) != :undefined

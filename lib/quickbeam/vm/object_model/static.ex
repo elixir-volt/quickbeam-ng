@@ -5,6 +5,9 @@ defmodule QuickBEAM.VM.ObjectModel.Static do
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty}
 
+  @doc "Returns whether a callable/static property has been deleted from constructor statics."
+  def deleted?(target, key), do: Map.get(Heap.get_ctor_statics(target), key) == :deleted
+
   def delete_static(fun, key) do
     prop_key =
       if is_binary(key) or Value.symbol?(key), do: key, else: Values.stringify(key)
