@@ -25,6 +25,18 @@ defmodule QuickBEAM.VM.RuntimeState do
     end
   end
 
+  @doc "Returns the global/cache key for an interpreter arguments object."
+  def arguments_object_key(current_func, arg_buf),
+    do: {:qb_arguments_object, current_func, arg_buf}
+
+  @doc "Returns the primary process-cache key for a compiled arguments object."
+  def compiled_arguments_object_key(current_func, arg_buf),
+    do: {:qb_compiled_arguments_object, current_func, arg_buf}
+
+  @doc "Returns the fallback process-cache key for a compiled arguments object."
+  def compiled_arguments_object_key(current_func),
+    do: {:qb_compiled_arguments_object, current_func}
+
   @doc "Returns a cached arguments object for a process-local key."
   def get_arguments_object(key), do: Process.get(key)
 

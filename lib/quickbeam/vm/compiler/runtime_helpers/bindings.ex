@@ -230,8 +230,11 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
 
       :error ->
         current_func = RuntimeContext.current_func(ctx)
-        key = {:qb_compiled_arguments_object, current_func, RuntimeContext.arg_buf(ctx)}
-        fallback_key = {:qb_compiled_arguments_object, current_func}
+
+        key =
+          RuntimeState.compiled_arguments_object_key(current_func, RuntimeContext.arg_buf(ctx))
+
+        fallback_key = RuntimeState.compiled_arguments_object_key(current_func)
 
         case RuntimeState.get_arguments_object(key) ||
                RuntimeState.get_arguments_object(fallback_key) do

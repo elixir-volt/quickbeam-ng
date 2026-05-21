@@ -513,7 +513,7 @@ defmodule QuickBEAM.VM.Interpreter do
 
         merged_globals = Map.merge(base_globals, scoped_globals)
 
-        arguments_key = {:qb_arguments_object, ctx.current_func, ctx.arg_buf}
+        arguments_key = RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf)
 
         {arguments_obj, created_arguments?} =
           case Map.fetch(merged_globals, arguments_key) do
@@ -526,7 +526,7 @@ defmodule QuickBEAM.VM.Interpreter do
                   {arguments, false}
 
                 :error ->
-                  key = {:qb_arguments_object, ctx.current_func, ctx.arg_buf}
+                  key = RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf)
 
                   case RuntimeState.get_arguments_object(key) do
                     nil ->

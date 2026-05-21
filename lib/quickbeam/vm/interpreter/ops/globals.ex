@@ -58,7 +58,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
                 globals =
                   ctx.globals
                   |> Map.put("arguments", arguments)
-                  |> Map.put({:qb_arguments_object, ctx.current_func, ctx.arg_buf}, arguments)
+                  |> Map.put(
+                    RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf),
+                    arguments
+                  )
 
                 {arguments, %{ctx | globals: globals}}
             end
@@ -111,12 +114,15 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
       end
 
       defp make_arguments_object(ctx, frame) do
-        case Map.fetch(ctx.globals, {:qb_arguments_object, ctx.current_func, ctx.arg_buf}) do
+        case Map.fetch(
+               ctx.globals,
+               RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf)
+             ) do
           {:ok, arguments} ->
             arguments
 
           :error ->
-            key = {:qb_arguments_object, ctx.current_func, ctx.arg_buf}
+            key = RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf)
 
             case RuntimeState.get_arguments_object(key) do
               nil ->

@@ -353,7 +353,12 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
           if type in [0, 1] do
             %{
               ctx
-              | globals: Map.put(ctx.globals, {:qb_arguments_object, current_func, arg_buf}, val)
+              | globals:
+                  Map.put(
+                    ctx.globals,
+                    RuntimeState.arguments_object_key(current_func, arg_buf),
+                    val
+                  )
             }
           else
             ctx
@@ -363,12 +368,12 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       end
 
       defp special_object_arguments_object(ctx, frame, arg_buf, current_func) do
-        case Map.fetch(ctx.globals, {:qb_arguments_object, current_func, arg_buf}) do
+        case Map.fetch(ctx.globals, RuntimeState.arguments_object_key(current_func, arg_buf)) do
           {:ok, arguments} ->
             arguments
 
           :error ->
-            key = {:qb_arguments_object, current_func, arg_buf}
+            key = RuntimeState.arguments_object_key(current_func, arg_buf)
 
             case RuntimeState.get_arguments_object(key) do
               nil ->
