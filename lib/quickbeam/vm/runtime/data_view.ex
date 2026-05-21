@@ -23,16 +23,18 @@ defmodule QuickBEAM.VM.Runtime.DataView do
     constructor: &__MODULE__.constructor/2,
     length: 1,
     phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/1
+    after_install: &__MODULE__.install_builtin/2
   )
 
-  def install_builtin(ctor) do
+  def install_builtin(ctor, opts \\ []) do
+    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+
     Heap.put_ctor_static(ctor, "length", 1)
     Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_object_parent(proto_ref, object_proto)
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
 
       for name <- ~w(buffer byteLength byteOffset) do

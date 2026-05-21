@@ -88,9 +88,12 @@ defmodule QuickBEAM.VM.Realm do
     date_ctor = make_constructor("Date", &JSDate.constructor/2, date_proto)
     Heap.put_obj_key(elem(date_proto, 1), "constructor", date_ctor)
 
-    data_view_proto = Heap.wrap(%{"__proto__" => object_proto})
-    data_view_ctor = make_constructor("DataView", &DataView.constructor/2, data_view_proto)
-    Heap.put_obj_key(elem(data_view_proto, 1), "constructor", data_view_ctor)
+    data_view_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(DataView.builtin_definition(),
+        target: {:realm, object_proto: object_proto}
+      )
+
+    data_view_proto = Heap.get_class_proto(data_view_ctor)
 
     map_ctor =
       QuickBEAM.VM.Builtin.Installer.install(map_builtin_definition("Map"),
