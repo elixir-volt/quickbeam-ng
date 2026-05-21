@@ -22,8 +22,7 @@ process_state_owners = [
 
 interpreter_bridges = [
   "QuickBEAM.VM.Runtime.Globals.Constructors",
-  "QuickBEAM.VM.Runtime.Globals.Functions",
-  "QuickBEAM.VM.Runtime.Reflect"
+  "QuickBEAM.VM.Runtime.Globals.Functions"
 ]
 
 global_constructor_bridges = [

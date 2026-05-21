@@ -6,7 +6,6 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.{Heap, JSThrow, Value}
-  alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
 
@@ -85,12 +84,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
       call_args = create_list_from_array_like(args_array)
 
-      Interpreter.invoke_with_receiver(
-        target,
-        call_args,
-        Runtime.gas_budget(),
-        this_arg
-      )
+      Invocation.invoke_with_receiver(target, call_args, Runtime.gas_budget(), this_arg)
     end
 
     method "construct" do
