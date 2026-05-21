@@ -262,6 +262,11 @@ defmodule QuickBEAM.VM.Realm do
     Heap.wrap(%{"global" => global})
   end
 
+  def associate_intrinsics(function, intrinsics) do
+    Process.put({:qb_intrinsics, function}, intrinsics)
+    :ok
+  end
+
   def global(function) do
     case Process.get({:qb_intrinsics, function}) do
       %{realm_id: realm_id} -> Process.get({:qb_realm_global, realm_id})

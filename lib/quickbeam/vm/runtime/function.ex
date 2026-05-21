@@ -162,7 +162,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
     for method <- [call_source, apply_source, call, apply] do
       Heap.put_ctor_static(method, "__proto__", proto)
-      Process.put({:qb_intrinsics, method}, intrinsics)
+      Realm.associate_intrinsics(method, intrinsics)
     end
 
     for {name, method} <- [{"call", call}, {"apply", apply}] do
