@@ -178,6 +178,7 @@ defmodule QuickBEAM.VM.Semantics.Values do
 
   @doc "Applies JavaScript strict equality semantics."
   defdelegate strict_eq(a, b), to: Equality
+  defdelegate same_value_zero?(a, b), to: Equality
   @doc "Applies JavaScript abstract equality semantics."
   defdelegate eq(a, b), to: Equality
   @doc "Applies JavaScript abstract inequality semantics."

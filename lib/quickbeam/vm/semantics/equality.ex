@@ -15,6 +15,10 @@ defmodule QuickBEAM.VM.Semantics.Equality do
   def strict_eq(a, b) when is_number(a) and is_number(b), do: a == b
   def strict_eq(a, b), do: a === b
 
+  @doc "Applies JavaScript SameValueZero semantics."
+  def same_value_zero?(:nan, :nan), do: true
+  def same_value_zero?(a, b), do: strict_eq(a, b) or (nan_number?(a) and nan_number?(b))
+
   @doc "Applies JavaScript abstract equality semantics."
   def eq({:bigint, a}, {:bigint, b}), do: a == b
   def eq(a, b), do: abstract_eq(a, b)
@@ -128,4 +132,15 @@ defmodule QuickBEAM.VM.Semantics.Equality do
   def abstract_eq({:symbol, _, ref1}, {:symbol, _, ref2}), do: ref1 === ref2
   def abstract_eq({:symbol, a}, {:symbol, b}), do: a === b
   def abstract_eq(_, _), do: false
+
+  defp nan_number?(:nan), do: true
+
+  defp nan_number?(value) when is_float(value) do
+    <<bits::64>> = <<value::float-64>>
+    exponent = Bitwise.band(Bitwise.bsr(bits, 52), 0x7FF)
+    mantissa = Bitwise.band(bits, 0xFFFFFFFFFFFFF)
+    exponent == 0x7FF and mantissa != 0
+  end
+
+  defp nan_number?(_), do: false
 end

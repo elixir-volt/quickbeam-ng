@@ -11,6 +11,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Semantics.Coercion
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
@@ -1255,14 +1256,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp same_value_zero?(:nan, :nan), do: true
-  defp same_value_zero?(a, b) when is_float(a) and is_float(b), do: a == b or (a != a and b != b)
-  defp same_value_zero?(a, b), do: a == b
-
-  defp strict_same_value?(:nan, _), do: false
-  defp strict_same_value?(_, :nan), do: false
-  defp strict_same_value?(a, b) when is_float(a) and is_float(b) and (a != a or b != b), do: false
-  defp strict_same_value?(a, b), do: a == b
+  defp same_value_zero?(a, b), do: Values.same_value_zero?(a, b)
+  defp strict_same_value?(a, b), do: Values.strict_eq(a, b)
 
   defp find(ref, [cb | rest], this) do
     callback!(cb)

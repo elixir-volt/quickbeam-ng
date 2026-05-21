@@ -21,6 +21,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   alias QuickBEAM.VM.Promise
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Runtime.InstallerHelpers
 
   @max_array_length 4_294_967_295
@@ -1047,11 +1048,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp index_of_array_like(this, []), do: index_of_array_like(this, [:undefined])
   defp index_of_array_like(_this, _args), do: -1
 
-  defp strict_equal_for_index?(left, right) do
-    not (nan_number?(left) or nan_number?(right)) and
-      (Runtime.strict_equal?(left, right) or
-         (is_number(left) and is_number(right) and left == right))
-  end
+  defp strict_equal_for_index?(left, right), do: Values.strict_eq(left, right)
 
   defp index_of_indexes(_this, len, start) when start >= len, do: []
 
@@ -1183,20 +1180,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp search_start_from(value, len) when value >= len, do: :past_end
   defp search_start_from(value, len), do: max(len + value, 0)
 
-  defp same_value_zero?(left, right) do
-    Runtime.strict_equal?(left, right) or (is_number(left) and is_number(right) and left == right) or
-      (nan_number?(left) and nan_number?(right))
-  end
-
-  defp nan_number?(value) when is_float(value) do
-    <<bits::64>> = <<value::float-64>>
-    exponent = Bitwise.band(Bitwise.bsr(bits, 52), 0x7FF)
-    mantissa = Bitwise.band(bits, 0xFFFFFFFFFFFFF)
-    exponent == 0x7FF and mantissa != 0
-  end
-
-  defp nan_number?(:nan), do: true
-  defp nan_number?(_), do: false
+  defp same_value_zero?(left, right), do: Values.same_value_zero?(left, right)
 
   # ── Slice / splice ──
 
