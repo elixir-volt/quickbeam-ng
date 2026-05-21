@@ -51,7 +51,7 @@ defmodule QuickBEAM.VM.ObjectModel.WrappedPrimitive do
     data =
       case Map.fetch(@constructors, type) do
         {:ok, constructor_name} ->
-          case Constructors.class_proto(constructor_name) do
+          case active_class_proto(constructor_name) do
             {:obj, _} = proto -> %{slot => value, "__proto__" => proto}
             _ -> %{slot => value}
           end
@@ -61,6 +61,16 @@ defmodule QuickBEAM.VM.ObjectModel.WrappedPrimitive do
       end
 
     Heap.wrap(data)
+  end
+
+  defp active_class_proto(constructor_name) do
+    case QuickBEAM.VM.GlobalEnvironment.current() do
+      %{^constructor_name => ctor} ->
+        Heap.get_class_proto(ctor) || Constructors.class_proto(constructor_name)
+
+      _ ->
+        Constructors.class_proto(constructor_name)
+    end
   end
 
   def type(map) when is_map(map) do

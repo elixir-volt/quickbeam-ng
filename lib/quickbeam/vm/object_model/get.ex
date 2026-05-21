@@ -1209,8 +1209,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_from_prototype(false, key),
     do: primitive_or_class_proto(Boolean.proto_property(key), key, "Boolean", false)
 
-  defp get_from_prototype({:symbol, _, _}, key), do: primitive_class_proto(key, "Symbol")
-  defp get_from_prototype({:symbol, _}, key), do: primitive_class_proto(key, "Symbol")
+  defp get_from_prototype({:symbol, _, _} = receiver, key),
+    do: primitive_or_class_proto(:undefined, key, "Symbol", receiver)
+
+  defp get_from_prototype({:symbol, _} = receiver, key),
+    do: primitive_or_class_proto(:undefined, key, "Symbol", receiver)
 
   defp get_from_prototype({:bigint, _} = receiver, key),
     do: primitive_or_class_proto(:undefined, key, "BigInt", receiver)
@@ -1361,19 +1364,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     case QuickBEAM.VM.GlobalEnvironment.current() do
       %{^class_name => ctor} -> get(ctor, "prototype")
       _ -> Runtime.global_class_proto(class_name)
-    end
-  end
-
-  defp primitive_class_proto(key, class_name) do
-    case active_class_proto(class_name) do
-      {:obj, _} = proto ->
-        case get(proto, key) do
-          :undefined -> get_own(Heap.get_object_prototype(), key)
-          value -> value
-        end
-
-      _ ->
-        get_own(Heap.get_object_prototype(), key)
     end
   end
 

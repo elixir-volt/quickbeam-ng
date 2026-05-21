@@ -48,7 +48,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
 
         result =
           try do
-            PropertyAccess.set_property(obj, name, val)
+            PropertyAccess.set_property(ctx, obj, name, val)
             :ok
           catch
             {:js_throw, error} -> {:throw, error}
@@ -93,7 +93,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
 
       defp run({@op_put_array_el, []}, pc, frame, [val, idx, obj | rest], gas, ctx) do
         try do
-          PropertyAccess.set_property(obj, idx, val)
+          PropertyAccess.set_property(ctx, obj, idx, val)
 
           ctx =
             case Heap.get_persistent_globals() do

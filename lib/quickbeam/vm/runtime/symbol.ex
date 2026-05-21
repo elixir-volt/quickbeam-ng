@@ -4,7 +4,10 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.{Heap, JSThrow}
+
+  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.InstallerHelpers
+  alias QuickBEAM.VM.Semantics.Values
 
   @well_known_symbol_names ~w(iterator toPrimitive hasInstance toStringTag asyncIterator asyncDispose dispose isConcatSpreadable species match matchAll replace search split unscopables)
 
@@ -21,11 +24,45 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref, object_proto)
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
+      install_prototype_properties(proto_ref)
     end)
 
     for name <- static_property_names() do
       install_static_property(ctor, name)
     end
+  end
+
+  defp install_prototype_properties(proto_ref) do
+    InstallerHelpers.install_methods(proto_ref, __MODULE__, ~w(toString valueOf))
+
+    primitive = {:builtin, "[Symbol.toPrimitive]", fn _args, this -> symbol_value(this) end}
+    Heap.put_obj_key(proto_ref, {:symbol, "Symbol.toPrimitive"}, primitive)
+
+    Heap.put_prop_desc(
+      proto_ref,
+      {:symbol, "Symbol.toPrimitive"},
+      PropertyDescriptor.hidden_readonly()
+    )
+
+    Heap.put_ctor_static(primitive, "length", 1)
+    Heap.put_ctor_prop_desc(primitive, "length", PropertyDescriptor.hidden_readonly())
+
+    Heap.put_obj_key(
+      proto_ref,
+      "description",
+      {:accessor, {:builtin, "get description", fn _args, this -> symbol_description(this) end},
+       nil}
+    )
+
+    Heap.put_prop_desc(proto_ref, "description", PropertyDescriptor.accessor())
+
+    Heap.put_obj_key(proto_ref, {:symbol, "Symbol.toStringTag"}, "Symbol")
+
+    Heap.put_prop_desc(
+      proto_ref,
+      {:symbol, "Symbol.toStringTag"},
+      PropertyDescriptor.hidden_readonly()
+    )
   end
 
   defp install_static_property(ctor, name) do
@@ -37,6 +74,15 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
 
     case value do
       {:builtin, _, _} ->
+        Heap.put_ctor_static(
+          value,
+          :__builtin_meta__,
+          QuickBEAM.VM.Builtin.meta(name,
+            length: QuickBEAM.VM.Builtin.length(meta),
+            constructable: false
+          )
+        )
+
         Heap.put_ctor_static(value, "length", QuickBEAM.VM.Builtin.length(meta))
 
         Heap.put_ctor_prop_desc(value, "length", %{
@@ -73,10 +119,23 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
       args, _this ->
         desc =
           case args do
-            [] -> :undefined
-            [:undefined | _] -> :undefined
-            [s | _] when is_binary(s) -> s
-            [value | _] -> QuickBEAM.VM.Semantics.Values.stringify(value)
+            [] ->
+              :undefined
+
+            [:undefined | _] ->
+              :undefined
+
+            [s | _] when is_binary(s) ->
+              s
+
+            [{:symbol, _} | _] ->
+              JSThrow.type_error!("Cannot convert a Symbol value to a string")
+
+            [{:symbol, _, _} | _] ->
+              JSThrow.type_error!("Cannot convert a Symbol value to a string")
+
+            [value | _] ->
+              QuickBEAM.VM.Semantics.Values.stringify(value)
           end
 
         {:symbol, desc, make_ref()}
@@ -99,6 +158,14 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
   static_val("split", {:symbol, "Symbol.split"})
   static_val("unscopables", {:symbol, "Symbol.unscopables"})
 
+  proto "toString" do
+    symbol_value(this) |> Values.stringify()
+  end
+
+  proto "valueOf" do
+    symbol_value(this)
+  end
+
   def well_known_symbol_names, do: @well_known_symbol_names
 
   def static_property_meta(name) when name in @well_known_symbol_names do
@@ -109,8 +176,37 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
     )
   end
 
+  defp symbol_value({:symbol, _} = symbol), do: symbol
+  defp symbol_value({:symbol, _, _} = symbol), do: symbol
+
+  defp symbol_value({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:symbol) do
+      {:ok, symbol} -> symbol
+      :error -> JSThrow.type_error!("Symbol.prototype method called on incompatible receiver")
+    end
+  end
+
+  defp symbol_value(_),
+    do: JSThrow.type_error!("Symbol.prototype method called on incompatible receiver")
+
+  defp symbol_description(this) do
+    case symbol_value(this) do
+      {:symbol, :undefined} -> :undefined
+      {:symbol, :undefined, _} -> :undefined
+      {:symbol, description} -> description
+      {:symbol, description, _} -> description
+    end
+  end
+
   static "for", length: 1 do
-    key = args |> arg(0, :undefined) |> QuickBEAM.VM.Semantics.Values.stringify()
+    value = arg(args, 0, :undefined)
+
+    key =
+      case value do
+        {:symbol, _} -> JSThrow.type_error!("Cannot convert a Symbol value to a string")
+        {:symbol, _, _} -> JSThrow.type_error!("Cannot convert a Symbol value to a string")
+        other -> QuickBEAM.VM.Semantics.Values.stringify(other)
+      end
 
     case Heap.get_symbol(key) do
       nil ->

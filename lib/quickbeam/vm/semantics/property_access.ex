@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Semantics.PropertyAccess do
   @moduledoc "Shared JavaScript property-access boundary for nullish checks and key conversion."
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Function, Heap}
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, Put}
 
   def require_object_for_property!(nil, key),
@@ -24,10 +24,28 @@ defmodule QuickBEAM.VM.Semantics.PropertyAccess do
     Get.get(receiver, prop_key)
   end
 
-  def set_property(_ctx \\ nil, receiver, key, value) do
+  def set_property(ctx \\ nil, receiver, key, value) do
     prop_key = to_property_key_for_access(receiver, key)
-    Put.put_element(receiver, prop_key, value)
+
+    if symbol_primitive?(receiver) and strict_context?(ctx) do
+      throw(
+        {:js_throw, Heap.make_error("Cannot create property on Symbol primitive", "TypeError")}
+      )
+    else
+      Put.put_element(receiver, prop_key, value)
+    end
   end
+
+  defp symbol_primitive?({:symbol, _}), do: true
+  defp symbol_primitive?({:symbol, _, _}), do: true
+  defp symbol_primitive?(_), do: false
+
+  defp strict_context?(%{current_func: %Function{is_strict_mode: strict}}), do: strict
+
+  defp strict_context?(%{current_func: {:closure, _, %Function{is_strict_mode: strict}}}),
+    do: strict
+
+  defp strict_context?(_), do: false
 
   defp nullish_property_error!(nullish, key) do
     throw(

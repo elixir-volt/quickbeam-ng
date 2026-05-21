@@ -18,6 +18,9 @@ defmodule QuickBEAM.VM.Runtime.Globals.Constructors do
       {:symbol, _, _} = symbol ->
         WrappedPrimitive.wrap(symbol)
 
+      {:symbol, _} = symbol ->
+        WrappedPrimitive.wrap(symbol)
+
       {:obj, _} = obj ->
         if subclass_object_this?(this), do: this, else: obj
 

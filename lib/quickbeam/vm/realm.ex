@@ -42,11 +42,6 @@ defmodule QuickBEAM.VM.Realm do
     bigint_ctor = make_constructor("BigInt", &Constructors.bigint/2, bigint_proto)
     Heap.put_obj_key(elem(bigint_proto, 1), "constructor", bigint_ctor)
 
-    object_ctor =
-      object_constructor(object_proto, boolean_proto, number_proto, bigint_proto)
-
-    Heap.put_obj_key(elem(object_proto, 1), "constructor", object_ctor)
-
     string_proto = Heap.wrap(%{"__proto__" => object_proto})
     string_ctor = make_constructor("String", &Constructors.string/2, string_proto)
     Heap.put_obj_key(elem(string_proto, 1), "constructor", string_ctor)
@@ -57,6 +52,18 @@ defmodule QuickBEAM.VM.Realm do
       )
 
     symbol_proto = Heap.get_class_proto(symbol_ctor)
+
+    object_ctor =
+      object_constructor(
+        object_proto,
+        boolean_proto,
+        number_proto,
+        bigint_proto,
+        string_proto,
+        symbol_proto
+      )
+
+    Heap.put_obj_key(elem(object_proto, 1), "constructor", object_ctor)
 
     regexp_proto = Heap.wrap(%{"__proto__" => object_proto})
     regexp_ctor = make_constructor("RegExp", &Constructors.regexp/2, regexp_proto)
@@ -433,10 +440,25 @@ defmodule QuickBEAM.VM.Realm do
     })
   end
 
-  defp object_constructor(object_proto, boolean_proto, number_proto, bigint_proto) do
+  defp object_constructor(
+         object_proto,
+         boolean_proto,
+         number_proto,
+         bigint_proto,
+         string_proto,
+         symbol_proto
+       ) do
     callback = fn
       [value | _], _this ->
-        object_value(value, object_proto, boolean_proto, number_proto, bigint_proto)
+        object_value(
+          value,
+          object_proto,
+          boolean_proto,
+          number_proto,
+          bigint_proto,
+          string_proto,
+          symbol_proto
+        )
 
       [], {:obj, _} = this ->
         this
@@ -455,15 +477,33 @@ defmodule QuickBEAM.VM.Realm do
          _object_proto,
          _boolean_proto,
          _number_proto,
-         _bigint_proto
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
        ),
        do: value
 
-  defp object_value(value, _object_proto, boolean_proto, _number_proto, _bigint_proto)
+  defp object_value(
+         value,
+         _object_proto,
+         boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
+       )
        when is_boolean(value),
        do: Heap.wrap(%{WrappedPrimitive.slot(:boolean) => value, "__proto__" => boolean_proto})
 
-  defp object_value(value, _object_proto, _boolean_proto, number_proto, _bigint_proto)
+  defp object_value(
+         value,
+         _object_proto,
+         _boolean_proto,
+         number_proto,
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
+       )
        when is_number(value),
        do: Heap.wrap(%{WrappedPrimitive.slot(:number) => value, "__proto__" => number_proto})
 
@@ -472,16 +512,56 @@ defmodule QuickBEAM.VM.Realm do
          _object_proto,
          _boolean_proto,
          _number_proto,
-         bigint_proto
+         bigint_proto,
+         _string_proto,
+         _symbol_proto
        ),
        do: Heap.wrap(%{WrappedPrimitive.slot(:bigint) => value, "__proto__" => bigint_proto})
 
-  defp object_value(value, object_proto, _boolean_proto, _number_proto, _bigint_proto)
+  defp object_value(
+         value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         string_proto,
+         _symbol_proto
+       )
        when is_binary(value),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => object_proto})
+       do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => string_proto})
 
-  defp object_value(_value, object_proto, _boolean_proto, _number_proto, _bigint_proto),
-    do: Heap.wrap(%{"__proto__" => object_proto})
+  defp object_value(
+         {:symbol, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         symbol_proto
+       ),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
+
+  defp object_value(
+         {:symbol, _, _} = value,
+         _object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         symbol_proto
+       ),
+       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
+
+  defp object_value(
+         _value,
+         object_proto,
+         _boolean_proto,
+         _number_proto,
+         _bigint_proto,
+         _string_proto,
+         _symbol_proto
+       ),
+       do: Heap.wrap(%{"__proto__" => object_proto})
 
   defp make_constructor(name, callback, proto) do
     make_constructor_token = make_ref()

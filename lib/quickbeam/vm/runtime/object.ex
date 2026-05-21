@@ -878,6 +878,12 @@ defmodule QuickBEAM.VM.Runtime.Object do
       [value | _] when is_boolean(value) ->
         Prototype.get(value)
 
+      [{:symbol, _} = value | _] ->
+        Prototype.get(value)
+
+      [{:symbol, _, _} = value | _] ->
+        Prototype.get(value)
+
       _ ->
         throw(
           {:js_throw, Heap.make_error("Object.getPrototypeOf called on non-object", "TypeError")}
