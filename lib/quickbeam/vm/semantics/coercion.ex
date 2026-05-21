@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
-  alias QuickBEAM.VM.{Heap, Invocation, Runtime}
+  alias QuickBEAM.VM.{Heap, Invocation, Runtime, Value}
   alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, Prototype, WrappedPrimitive}
 
   @doc "Coerces a VM value using JavaScript ToNumber semantics."
@@ -26,7 +26,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
   def to_number({:obj, _} = obj) do
     prim = to_primitive(obj)
-    if object_like?(prim), do: throw_object_to_primitive_error(), else: to_number(prim)
+    if Value.object_like?(prim), do: throw_object_to_primitive_error(), else: to_number(prim)
   end
 
   def to_number({:symbol, _}),
@@ -49,7 +49,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
   def to_number({:obj, _} = obj, hint) do
     prim = to_primitive(obj, hint)
-    if object_like?(prim), do: throw_object_to_primitive_error(), else: to_number(prim)
+    if Value.object_like?(prim), do: throw_object_to_primitive_error(), else: to_number(prim)
   end
 
   def to_number(val, _hint), do: to_number(val)
@@ -228,7 +228,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
     if callable?(fun) do
       result = Invocation.invoke_with_receiver(fun, [], Runtime.gas_budget(), obj)
-      if object_like?(result), do: :object, else: result
+      if Value.object_like?(result), do: :object, else: result
     else
       :object
     end
@@ -289,7 +289,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
 
         result = Invocation.invoke_with_receiver(to_prim, [hint], Runtime.gas_budget(), obj)
 
-        if object_like?(result) do
+        if Value.object_like?(result) do
           throw(
             {:js_throw, Heap.make_error("Cannot convert object to primitive value", "TypeError")}
           )
@@ -325,14 +325,14 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
     result =
       if callable?(vo) do
         r = Invocation.invoke_with_receiver(vo, [], Runtime.gas_budget(), fun)
-        if function_like?(r), do: nil, else: r
+        if Value.function_like?(r), do: nil, else: r
       end
 
     result =
       result ||
         if callable?(ts) do
           r = Invocation.invoke_with_receiver(ts, [], Runtime.gas_budget(), fun)
-          if function_like?(r), do: nil, else: r
+          if Value.function_like?(r), do: nil, else: r
         end
 
     result || to_string_val(fun)
@@ -358,7 +358,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   def coerce_to_primitive(val) do
     cond do
       is_object(val) -> to_primitive(val)
-      function_like?(val) -> fn_to_primitive(val)
+      Value.function_like?(val) -> fn_to_primitive(val)
       true -> val
     end
   end
@@ -368,16 +368,6 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   defp callable?({:bound, _, _, _, _}), do: true
   defp callable?(%QuickBEAM.VM.Function{}), do: true
   defp callable?(_), do: false
-
-  defp function_like?({:closure, _, _}), do: true
-  defp function_like?(%QuickBEAM.VM.Function{}), do: true
-  defp function_like?({:bound, _, _, _, _}), do: true
-  defp function_like?({:builtin, _, _}), do: true
-  defp function_like?(_), do: false
-
-  defp object_like?({:regexp, _, _}), do: true
-  defp object_like?({:regexp, _, _, _}), do: true
-  defp object_like?(value), do: is_object(value) or function_like?(value)
 
   defp throw_object_to_primitive_error do
     throw({:js_throw, Heap.make_error("Cannot convert object to primitive value", "TypeError")})
@@ -446,7 +436,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   end
 
   defp unwrap_primitive(val) do
-    if object_like?(val), do: :none, else: {:ok, val}
+    if Value.object_like?(val), do: :none, else: {:ok, val}
   end
 
   defp format_float(n) do

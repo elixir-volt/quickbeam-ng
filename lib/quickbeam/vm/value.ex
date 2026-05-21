@@ -49,13 +49,16 @@ defmodule QuickBEAM.VM.Value do
   defguard is_builtin(v) when is_tuple(v) and tuple_size(v) == 3 and elem(v, 0) == :builtin
   defguard is_nullish(v) when v == nil or v == :undefined
 
+  @doc "Returns true when the VM value is represented as a callable/function object."
+  def function_like?({:closure, _, _}), do: true
+  def function_like?({:builtin, _, _}), do: true
+  def function_like?({:bound, _, _, _, _}), do: true
+  def function_like?(%QuickBEAM.VM.Function{}), do: true
+  def function_like?(_), do: false
+
   @doc "Returns true when the VM value has ECMAScript object semantics."
   def object_like?({:obj, _}), do: true
-  def object_like?({:closure, _, _}), do: true
-  def object_like?({:builtin, _, _}), do: true
-  def object_like?({:bound, _, _, _, _}), do: true
   def object_like?({:regexp, _, _}), do: true
   def object_like?({:regexp, _, _, _}), do: true
-  def object_like?(%QuickBEAM.VM.Function{}), do: true
-  def object_like?(_), do: false
+  def object_like?(value), do: function_like?(value)
 end

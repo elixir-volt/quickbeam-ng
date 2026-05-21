@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Semantics.Values do
   @moduledoc "JS type coercion, arithmetic, comparison, and equality operations."
 
-  alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Semantics.{Arithmetic, Bitwise, Coercion, Comparison, Equality}
 
   @compile {:inline,
@@ -99,7 +99,7 @@ defmodule QuickBEAM.VM.Semantics.Values do
   def to_number({:obj, _} = obj) do
     prim = Coercion.to_primitive(obj)
 
-    if object_like?(prim) do
+    if Value.object_like?(prim) do
       throw({:js_throw, Heap.make_error("Cannot convert object to primitive value", "TypeError")})
     else
       to_number(prim)
@@ -123,13 +123,6 @@ defmodule QuickBEAM.VM.Semantics.Values do
   def to_number({:bound, _, _, _, _} = f), do: to_number(Coercion.fn_to_primitive(f))
   def to_number({:builtin, _, _} = f), do: to_number(Coercion.fn_to_primitive(f))
   def to_number(_), do: :nan
-
-  defp object_like?({:obj, _}), do: true
-  defp object_like?({:closure, _, _}), do: true
-  defp object_like?(%QuickBEAM.VM.Function{}), do: true
-  defp object_like?({:bound, _, _, _, _}), do: true
-  defp object_like?({:builtin, _, _}), do: true
-  defp object_like?(_), do: false
 
   @doc "Coerces a VM value using JavaScript ToInt32 semantics."
   def to_int32(val), do: Coercion.to_int32(val)
