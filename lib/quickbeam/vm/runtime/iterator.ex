@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   use QuickBEAM.VM.Builtin
 
-  import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
+  import QuickBEAM.VM.Heap.Keys, only: [internal_namespace?: 1, key_order: 0]
 
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Value}
   alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyDescriptor, Put, WrappedPrimitive}
@@ -815,8 +815,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     value |> from_value() |> iterator_direct_record()
   end
 
-  defp internal_key?(key) when is_binary(key), do: String.starts_with?(key, "__")
-  defp internal_key?(_), do: false
+  defp internal_key?(key), do: internal_namespace?(key)
 
   defp concat_iterable_record(item) do
     unless Value.object_like?(item),

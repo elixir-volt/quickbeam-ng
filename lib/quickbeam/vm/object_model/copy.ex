@@ -2,7 +2,14 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   @moduledoc "Object spread and property copying: `append_spread`, `copy_data_properties`, and array/iterator flattening."
 
   import QuickBEAM.VM.Heap.Keys,
-    only: [internal?: 1, key_order: 0, proto: 0, proxy_handler: 0, proxy_target: 0]
+    only: [
+      internal?: 1,
+      internal_namespace?: 1,
+      key_order: 0,
+      proto: 0,
+      proxy_handler: 0,
+      proxy_target: 0
+    ]
 
   import QuickBEAM.VM.Value, only: [is_symbol: 1]
 
@@ -356,7 +363,7 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
     |> Heap.get_array_props()
     |> Map.keys()
     |> Enum.filter(fn key ->
-      is_binary(key) and not String.starts_with?(key, "__") and
+      is_binary(key) and not internal_namespace?(key) and
         not match?(%{enumerable: false}, Heap.get_prop_desc(ref, key))
     end)
   end

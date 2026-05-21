@@ -229,9 +229,7 @@ defmodule QuickBEAM.VM.Host.BeamAPI do
         map
         |> Map.drop([key_order()])
         |> Map.new(fn {k, v} -> {js_to_elixir_key(k), js_to_elixir(v)} end)
-        |> Map.reject(fn {k, _} ->
-          is_binary(k) and String.starts_with?(k, "__") and String.ends_with?(k, "__")
-        end)
+        |> Map.reject(fn {k, _} -> internal?(k) end)
 
       _ ->
         nil

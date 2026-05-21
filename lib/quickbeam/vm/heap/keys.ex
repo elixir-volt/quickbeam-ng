@@ -43,4 +43,8 @@ defmodule QuickBEAM.VM.Heap.Keys do
     do: String.starts_with?(key, "__") and String.ends_with?(key, "__")
 
   def internal?(_), do: false
+
+  @doc "Returns true when a property key is in QuickBEAM's reserved internal namespace."
+  def internal_namespace?(key) when is_binary(key), do: String.starts_with?(key, "__")
+  def internal_namespace?(_), do: false
 end

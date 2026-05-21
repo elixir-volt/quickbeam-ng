@@ -1594,7 +1594,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
     raw_key = if raw_key != :error and Map.has_key?(map, raw_key), do: raw_key, else: key
 
-    is_binary(key) and not String.starts_with?(key, "__") and Map.has_key?(map, raw_key) and
+    is_binary(key) and not internal_namespace?(key) and Map.has_key?(map, raw_key) and
       not match?(%{enumerable: false}, Heap.get_prop_desc(ref, raw_key))
   end
 
