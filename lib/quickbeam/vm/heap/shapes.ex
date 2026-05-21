@@ -15,7 +15,7 @@ defmodule QuickBEAM.VM.Heap.Shapes do
   non-plain deopt back to regular maps.
   """
 
-  import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
+  import QuickBEAM.VM.Heap.Keys, only: [internal?: 1, key_order: 0]
 
   @empty_shape 0
 
@@ -212,9 +212,7 @@ defmodule QuickBEAM.VM.Heap.Shapes do
 
   # ── Eligibility ──
 
-  defp internal_key?(key) when is_binary(key),
-    do: String.starts_with?(key, "__") and String.ends_with?(key, "__") and byte_size(key) > 2
-
+  defp internal_key?(key) when is_binary(key), do: internal?(key) and byte_size(key) > 2
   defp internal_key?(_), do: false
 
   defp simple_value?({:accessor, _, _}), do: false

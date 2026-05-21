@@ -6,6 +6,8 @@ defmodule QuickBEAM.VM.Host.Web.URL do
   import QuickBEAM.VM.Builtin,
     only: [arg: 3, argv: 2, iterator_from: 1, object: 1, object: 2]
 
+  import QuickBEAM.VM.Heap.Keys, only: [internal_namespace?: 1]
+
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.Get
@@ -317,7 +319,7 @@ defmodule QuickBEAM.VM.Host.Web.URL do
 
             is_map(raw) ->
               raw
-              |> Enum.reject(fn {k, _} -> not is_binary(k) or String.starts_with?(k, "__") end)
+              |> Enum.reject(fn {k, _} -> not is_binary(k) or internal_namespace?(k) end)
               |> Enum.map(fn {k, v} -> [to_string(k), to_string(v)] end)
 
             true ->

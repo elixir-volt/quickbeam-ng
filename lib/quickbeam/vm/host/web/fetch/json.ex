@@ -1,6 +1,8 @@
 defmodule QuickBEAM.VM.Host.Web.Fetch.JSON do
   @moduledoc "JSON conversion helpers for Fetch body methods."
 
+  import QuickBEAM.VM.Heap.Keys, only: [internal_namespace?: 1]
+
   alias QuickBEAM.VM.{Heap, JSThrow}
 
   @doc "Parses a JSON string into QuickBEAM VM values."
@@ -26,7 +28,7 @@ defmodule QuickBEAM.VM.Host.Web.Fetch.JSON do
       map when is_map(map) ->
         map
         |> Enum.reject(fn {key, _value} ->
-          not is_binary(key) or String.starts_with?(key, "__")
+          not is_binary(key) or internal_namespace?(key)
         end)
         |> Map.new(fn {key, value} -> {key, to_elixir(value)} end)
 

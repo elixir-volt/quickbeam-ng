@@ -4,6 +4,7 @@ defmodule QuickBEAM.VM.Host.Web.Headers do
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
   import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, iterator_from: 1, object: 1]
+  import QuickBEAM.VM.Heap.Keys, only: [internal_namespace?: 1]
 
   alias Mint.Core.Headers, as: MintHeaders
   alias QuickBEAM.VM.Heap
@@ -129,7 +130,7 @@ defmodule QuickBEAM.VM.Host.Web.Headers do
           _ ->
             raw
             |> Enum.reject(fn {key, value} ->
-              not is_binary(key) or String.starts_with?(key, "__") or
+              not is_binary(key) or internal_namespace?(key) or
                 internal_header_value?(value, skip_internal_values?)
             end)
             |> Enum.map(fn {key, value} -> {header_name(key), to_string(value)} end)
