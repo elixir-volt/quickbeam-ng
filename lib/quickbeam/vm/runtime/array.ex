@@ -1989,28 +1989,30 @@ defmodule QuickBEAM.VM.Runtime.Array do
     this_arg = filter_this_arg(rest)
     target = filter_target(this)
 
-    result =
-      if len == 0 do
-        []
-      else
-        0..(len - 1)
-        |> Enum.flat_map(fn idx ->
-          key = Integer.to_string(idx)
+    Heap.with_temp_roots(target, fn ->
+      result =
+        if len == 0 do
+          []
+        else
+          0..(len - 1)
+          |> Enum.flat_map(fn idx ->
+            key = Integer.to_string(idx)
 
-          if HasProperty.has_property?(this, key) do
-            value = find_value_at(this, idx)
+            if HasProperty.has_property?(this, key) do
+              value = find_value_at(this, idx)
 
-            fun
-            |> flat_map_callback()
-            |> QuickBEAM.VM.Invocation.invoke_with_receiver([value, idx, this], this_arg)
-            |> flat_item()
-          else
-            []
-          end
-        end)
-      end
+              fun
+              |> flat_map_callback()
+              |> QuickBEAM.VM.Invocation.invoke_with_receiver([value, idx, this], this_arg)
+              |> flat_item()
+            else
+              []
+            end
+          end)
+        end
 
-    populate_flat_result(target, result)
+      populate_flat_result(target, result)
+    end)
   end
 
   defp flat_map_array_like(this, _args) do

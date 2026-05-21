@@ -24,6 +24,29 @@ defmodule QuickBEAM.VM.Runtime.ArrayTest do
              QuickBEAM.eval(rt, code, mode: :beam, timeout: 30_000)
   end
 
+  test "array flatMap keeps result array rooted while callbacks allocate", %{rt: rt} do
+    code = ~S"""
+    var mapped = [1, 2, 3].flatMap(function(value) {
+      var keep = [];
+      for (var i = 0; i < 210000; i++) {
+        keep.push({ index: i });
+      }
+      return [value, value + 10];
+    });
+    [
+      Array.isArray(mapped),
+      Object.getPrototypeOf(mapped) === Array.prototype,
+      Object.prototype.toString.call(mapped),
+      Object.keys(mapped).join(','),
+      Object.getOwnPropertyDescriptor(mapped, 'length').enumerable,
+      mapped.join(',')
+    ].join('|')
+    """
+
+    assert {:ok, "true|true|[object Array]|0,1,2,3,4,5|false|1,11,2,12,3,13"} =
+             QuickBEAM.eval(rt, code, mode: :beam, timeout: 30_000)
+  end
+
   test "array callbacks skip sparse holes without missing high indexes", %{rt: rt} do
     assert_modes(
       rt,
