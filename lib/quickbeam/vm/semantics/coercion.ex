@@ -415,7 +415,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
       value = Get.get(desc, "value")
 
       cond do
-        getter not in [nil, :undefined] -> {:ok, Get.call_getter(getter, obj)}
+        not Value.nullish?(getter) -> {:ok, Get.call_getter(getter, obj)}
         value != :undefined -> {:ok, value}
         true -> :none
       end

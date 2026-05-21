@@ -5,6 +5,7 @@ defmodule QuickBEAM.VM.ObjectModel.Private do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.Functions
+  alias QuickBEAM.VM.Value
 
   @doc "Creates an internal symbol for a JavaScript private name."
   def private_symbol(name) when is_binary(name), do: {:private_symbol, name, make_ref()}
@@ -113,7 +114,7 @@ defmodule QuickBEAM.VM.ObjectModel.Private do
     home_object = Functions.current_home_object(brand)
 
     brand in target_brands or
-      (home_object not in [nil, :undefined] and
+      (not Value.nullish?(home_object) and
          (home_object in target_brands or brand_home_match?(target, home_object)))
   end
 

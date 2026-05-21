@@ -11,7 +11,8 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         Invocation,
         Names,
         Runtime,
-        RuntimeState
+        RuntimeState,
+        Value
       }
 
       alias QuickBEAM.VM.Interpreter.{Context, Frame}
@@ -297,7 +298,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         do: run(pc + 1, frame, [a == nil | rest], gas, ctx)
 
       defp run({@op_is_undefined_or_null, []}, pc, frame, [a | rest], gas, ctx),
-        do: run(pc + 1, frame, [a == :undefined or a == nil | rest], gas, ctx)
+        do: run(pc + 1, frame, [Value.nullish?(a) | rest], gas, ctx)
 
       defp run({@op_invalid, []}, _pc, _frame, _stack, _gas, _ctx),
         do: throw({:error, :invalid_opcode})
@@ -485,7 +486,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       end
 
       defp run({@op_typeof_is_undefined, []}, pc, frame, [val | rest], gas, ctx) do
-        result = val == :undefined or val == nil
+        result = Value.nullish?(val)
         run(pc + 1, frame, [result | rest], gas, ctx)
       end
 
