@@ -354,25 +354,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
 
   defp special_builtin_instance?(_, _), do: false
 
-  defp typed_array_instance?(%{"__typed_array__" => true, "__type__" => type}, constructor_name) do
-    typed_array_constructor_type(constructor_name) == type
-  end
-
-  defp typed_array_instance?(_, _), do: false
-
-  defp typed_array_constructor_type("Uint8Array"), do: :uint8
-  defp typed_array_constructor_type("Int8Array"), do: :int8
-  defp typed_array_constructor_type("Uint16Array"), do: :uint16
-  defp typed_array_constructor_type("Int16Array"), do: :int16
-  defp typed_array_constructor_type("Uint32Array"), do: :uint32
-  defp typed_array_constructor_type("Int32Array"), do: :int32
-  defp typed_array_constructor_type("Float16Array"), do: :float16
-  defp typed_array_constructor_type("Float32Array"), do: :float32
-  defp typed_array_constructor_type("Float64Array"), do: :float64
-  defp typed_array_constructor_type("Uint8ClampedArray"), do: :uint8_clamped
-  defp typed_array_constructor_type("BigUint64Array"), do: :biguint64
-  defp typed_array_constructor_type("BigInt64Array"), do: :bigint64
-  defp typed_array_constructor_type(_), do: nil
+  defp typed_array_instance?(map, constructor_name),
+    do: QuickBEAM.VM.Runtime.TypedArray.instance_for_constructor?(map, constructor_name)
 
   def with_has_property(_ctx, obj, key), do: Static.with_has_property?(obj, key)
 

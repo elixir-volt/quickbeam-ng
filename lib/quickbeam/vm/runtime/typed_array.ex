@@ -67,6 +67,19 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   @doc "Returns typed-array type descriptors supported by the runtime."
   def types, do: @types
 
+  @doc "Returns the typed-array element type for a constructor name, when known."
+  def constructor_type(name) when is_binary(name), do: Map.get(@types, name)
+  def constructor_type(_), do: nil
+
+  @doc "Returns whether an object map stores a typed-array instance for a constructor name."
+  def instance_for_constructor?(
+        %{"__typed_array__" => true, "__type__" => type},
+        constructor_name
+      ),
+      do: constructor_type(constructor_name) == type
+
+  def instance_for_constructor?(_, _), do: false
+
   @doc "Returns the byte width for a typed-array element type."
   def elem_size(:uint8), do: 1
   def elem_size(:int8), do: 1

@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
   alias QuickBEAM.VM.Execution.Trace
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put, WrappedPrimitive}
   alias QuickBEAM.VM.Runtime.Constructors, as: ConstructorRegistry
+  alias QuickBEAM.VM.Runtime.TypedArray
   alias QuickBEAM.VM.Realm
 
   builtin_definition("Function",
@@ -144,32 +145,11 @@ defmodule QuickBEAM.VM.Runtime.Function do
     |> Invocation.invoke_callback_or_throw([obj])
   end
 
-  defp typed_array_builtin_instance?({:obj, ref}, {:builtin, constructor_name, _})
-       when is_binary(constructor_name) do
-    case Heap.get_obj(ref, %{}) do
-      %{"__typed_array__" => true, "__type__" => type} ->
-        typed_array_constructor_type(constructor_name) == type
-
-      _ ->
-        false
-    end
+  defp typed_array_builtin_instance?({:obj, ref}, {:builtin, constructor_name, _}) do
+    ref |> Heap.get_obj(%{}) |> TypedArray.instance_for_constructor?(constructor_name)
   end
 
   defp typed_array_builtin_instance?(_, _), do: false
-
-  defp typed_array_constructor_type("Uint8Array"), do: :uint8
-  defp typed_array_constructor_type("Int8Array"), do: :int8
-  defp typed_array_constructor_type("Uint16Array"), do: :uint16
-  defp typed_array_constructor_type("Int16Array"), do: :int16
-  defp typed_array_constructor_type("Uint32Array"), do: :uint32
-  defp typed_array_constructor_type("Int32Array"), do: :int32
-  defp typed_array_constructor_type("Float16Array"), do: :float16
-  defp typed_array_constructor_type("Float32Array"), do: :float32
-  defp typed_array_constructor_type("Float64Array"), do: :float64
-  defp typed_array_constructor_type("Uint8ClampedArray"), do: :uint8_clamped
-  defp typed_array_constructor_type("BigUint64Array"), do: :biguint64
-  defp typed_array_constructor_type("BigInt64Array"), do: :bigint64
-  defp typed_array_constructor_type(_), do: nil
 
   def install_realm_methods({:obj, ref} = proto, intrinsics) do
     call_source = {:builtin, "call", fn _, _ -> :undefined end}
