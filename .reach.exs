@@ -1,6 +1,6 @@
 host_boundary_callers = [
   "QuickBEAM.VM.Host.*",
-  "QuickBEAM.VM.Interpreter",
+  "QuickBEAM.VM.Execution.EventLoop",
   "QuickBEAM.VM.Runtime.Globals.Builder"
 ]
 

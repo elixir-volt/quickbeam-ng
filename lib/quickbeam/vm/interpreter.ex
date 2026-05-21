@@ -434,9 +434,7 @@ defmodule QuickBEAM.VM.Interpreter do
   defp drain_pending(_ref, obj, elapsed_ms) when elapsed_ms > @max_timer_drain_ms, do: obj
 
   defp drain_pending(ref, obj, elapsed_ms) do
-    did_fire = QuickBEAM.VM.Host.Web.Timers.drain_timers()
-    QuickBEAM.VM.Host.Web.Worker.drain_all_worker_messages()
-    QuickBEAM.VM.Host.Web.EventSourceAPI.drain_all_event_sources()
+    did_fire = QuickBEAM.VM.Execution.EventLoop.drain_host_tasks()
     Promise.drain_microtasks()
 
     case Heap.get_obj(ref, %{}) do
@@ -451,7 +449,7 @@ defmodule QuickBEAM.VM.Interpreter do
           if did_fire do
             0
           else
-            QuickBEAM.VM.Host.Web.Timers.next_timer_delay_ms() || 1
+            QuickBEAM.VM.Execution.EventLoop.next_delay_ms() || 1
           end
 
         if sleep_ms > 0, do: :timer.sleep(sleep_ms)
