@@ -9,7 +9,6 @@ defmodule QuickBEAM.VM.Runtime.Set do
   alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.Execution.IteratorState
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Interpreter
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
@@ -375,21 +374,11 @@ defmodule QuickBEAM.VM.Runtime.Set do
     end
   end
 
-  defp call_with_this(fun, args, this) do
-    case fun do
-      {:builtin, _, callback} when is_function(callback) ->
-        callback.(args, this)
+  defp call_with_this({:builtin, _, callback}, args, this) when is_function(callback),
+    do: callback.(args, this)
 
-      %QuickBEAM.VM.Function{} = function ->
-        Interpreter.invoke_with_receiver(function, args, Runtime.gas_budget(), this)
-
-      {:closure, _, %QuickBEAM.VM.Function{}} = closure ->
-        Interpreter.invoke_with_receiver(closure, args, Runtime.gas_budget(), this)
-
-      _ ->
-        Invocation.invoke_with_receiver(fun, args, this)
-    end
-  end
+  defp call_with_this(fun, args, this),
+    do: Invocation.invoke_with_receiver(fun, args, Runtime.gas_budget(), this)
 
   defp difference([other | _], this),
     do: this |> require_strong_set_ref!() |> set_difference(other)
