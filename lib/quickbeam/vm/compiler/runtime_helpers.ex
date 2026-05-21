@@ -90,7 +90,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   @doc "Returns whether a value is JavaScript `undefined`."
   def undefined?(_ctx \\ nil, val), do: val == :undefined
   def null?(_ctx \\ nil, val), do: val == nil
-  def typeof_is_undefined(_ctx \\ nil, val), do: val == :undefined or val == nil
+  def typeof_is_undefined(_ctx \\ nil, val), do: Value.nullish?(val)
   def typeof_is_function(_ctx \\ nil, val), do: Builtin.callable?(val)
 
   def strict_neq(_ctx \\ nil, a, b), do: not Values.strict_eq(a, b)
@@ -365,7 +365,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
   # ── Misc ──
 
   @doc "Returns whether a value is either `undefined` or `null`."
-  def undefined_or_null?(val), do: val == :undefined or val == nil
+  def undefined_or_null?(val), do: Value.nullish?(val)
 
   def set_name_computed(_ctx \\ nil, fun, name_val),
     do: Functions.set_name_computed(fun, name_val)

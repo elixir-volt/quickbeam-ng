@@ -49,6 +49,9 @@ defmodule QuickBEAM.VM.Value do
   defguard is_builtin(v) when is_tuple(v) and tuple_size(v) == 3 and elem(v, 0) == :builtin
   defguard is_nullish(v) when v == nil or v == :undefined
 
+  @doc "Returns true when the VM value is null or undefined."
+  def nullish?(value), do: value == nil or value == :undefined
+
   @doc "Returns true when the VM value is a Symbol primitive."
   def symbol?({:symbol, _}), do: true
   def symbol?({:symbol, _, _}), do: true
