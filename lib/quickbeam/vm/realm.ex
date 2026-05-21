@@ -79,10 +79,12 @@ defmodule QuickBEAM.VM.Realm do
 
     Heap.put_obj_key(elem(object_proto, 1), "constructor", object_ctor)
 
-    regexp_proto = Heap.wrap(%{"__proto__" => object_proto})
-    regexp_ctor = make_constructor("RegExp", &Constructors.regexp/2, regexp_proto)
-    Heap.put_obj_key(elem(regexp_proto, 1), "constructor", regexp_ctor)
-    Heap.put_ctor_static(regexp_ctor, "escape", JSRegExp.static_property("escape"))
+    regexp_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(JSRegExp.builtin_definition(),
+        target: {:realm, object_proto: object_proto}
+      )
+
+    regexp_proto = Heap.get_class_proto(regexp_ctor)
 
     date_ctor =
       QuickBEAM.VM.Builtin.Installer.install(JSDate.builtin_definition(),

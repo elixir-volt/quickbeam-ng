@@ -14,8 +14,8 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
   @han_ideograph <<0x20BB7::utf8>>
-  @family_emoji <<0x1F468::utf8, 0x200D::utf8, 0x1F469::utf8, 0x200D::utf8,
-                  0x1F467::utf8, 0x200D::utf8, 0x1F466::utf8>>
+  @family_emoji <<0x1F468::utf8, 0x200D::utf8, 0x1F469::utf8, 0x200D::utf8, 0x1F467::utf8,
+                  0x200D::utf8, 0x1F466::utf8>>
   @family_emoji_class "[#{@family_emoji}]"
   @family_emoji_first <<0x1F468::utf8>>
 
@@ -33,10 +33,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     constructor: &QuickBEAM.VM.Runtime.Globals.Constructors.regexp/2,
     length: 2,
     phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/1
+    after_install: &__MODULE__.install_builtin/2
   )
 
-  def install_builtin(ctor) do
+  def install_builtin(ctor, _opts \\ []) do
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
     InstallerHelpers.install_species(ctor)
 
@@ -373,7 +373,9 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       ]
 
   defp ascii_property_escape_test("^\\p{ASCII}+$", string), do: ascii_only_string?(string)
-  defp ascii_property_escape_test("^\\P{ASCII}+$", string), do: string != "" and not ascii_only_string?(string)
+
+  defp ascii_property_escape_test("^\\P{ASCII}+$", string),
+    do: string != "" and not ascii_only_string?(string)
 
   defp ascii_property_escape_test(source, string)
        when source in ["^\\p{ASCII_Hex_Digit}+$", "^\\p{AHex}+$"],
@@ -384,13 +386,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
        do: string != "" and not ascii_hex_digit_string?(string)
 
   defp ascii_only_string?(string),
-    do: string != "" and (string |> :binary.bin_to_list() |> Enum.all?(&(&1 <= 0x7F)))
+    do: string != "" and string |> :binary.bin_to_list() |> Enum.all?(&(&1 <= 0x7F))
 
   defp ascii_hex_digit_string?(string) do
     string != "" and
-      (string
-       |> :binary.bin_to_list()
-       |> Enum.all?(fn ch -> ch in ?0..?9 or ch in ?A..?F or ch in ?a..?f end))
+      string
+      |> :binary.bin_to_list()
+      |> Enum.all?(fn ch -> ch in ?0..?9 or ch in ?A..?F or ch in ?a..?f end)
   end
 
   defp rgi_emoji_source?(source), do: source == "^\\p{RGI_Emoji}+$"
@@ -473,9 +475,16 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp unicode_set_take_operand("\\d" <> rest), do: {:ok, digit_tokens(), rest}
   defp unicode_set_take_operand("[0-9]" <> rest), do: {:ok, digit_tokens(), rest}
   defp unicode_set_take_operand("_" <> rest), do: {:ok, ["_"], rest}
-  defp unicode_set_take_operand("\\p{ASCII_Hex_Digit}" <> rest), do: {:ok, ascii_hex_tokens(), rest}
-  defp unicode_set_take_operand("\\p{Emoji_Keycap_Sequence}" <> rest), do: {:ok, emoji_keycap_tokens(), rest}
-  defp unicode_set_take_operand("\\q{0|2|4|9\\uFE0F\\u20E3}" <> rest), do: {:ok, ["0", "2", "4", "9️⃣"], rest}
+
+  defp unicode_set_take_operand("\\p{ASCII_Hex_Digit}" <> rest),
+    do: {:ok, ascii_hex_tokens(), rest}
+
+  defp unicode_set_take_operand("\\p{Emoji_Keycap_Sequence}" <> rest),
+    do: {:ok, emoji_keycap_tokens(), rest}
+
+  defp unicode_set_take_operand("\\q{0|2|4|9\\uFE0F\\u20E3}" <> rest),
+    do: {:ok, ["0", "2", "4", "9️⃣"], rest}
+
   defp unicode_set_take_operand(_), do: :error
 
   defp unicode_string_literal_union_source?(source),
@@ -491,17 +500,26 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp unicode_string_literal_union_test("^[\\q{0|2|4|9\\uFE0F\\u20E3}[0-9]]+$", string),
     do: consume_unicode_set_tokens?(string, digit_tokens() ++ ["9️⃣"])
 
-  defp unicode_string_literal_union_test("^[\\q{0|2|4|9\\uFE0F\\u20E3}\\p{ASCII_Hex_Digit}]+$", string),
-    do: consume_unicode_set_tokens?(string, ascii_hex_tokens() ++ ["9️⃣"])
+  defp unicode_string_literal_union_test(
+         "^[\\q{0|2|4|9\\uFE0F\\u20E3}\\p{ASCII_Hex_Digit}]+$",
+         string
+       ),
+       do: consume_unicode_set_tokens?(string, ascii_hex_tokens() ++ ["9️⃣"])
 
   defp unicode_string_literal_union_test("^[\\q{0|2|4|9\\uFE0F\\u20E3}_]+$", string),
     do: consume_unicode_set_tokens?(string, ["_", "0", "2", "4", "9️⃣"])
 
-  defp unicode_string_literal_union_test("^[\\q{0|2|4|9\\uFE0F\\u20E3}\\p{Emoji_Keycap_Sequence}]+$", string),
-    do: consume_unicode_set_tokens?(string, emoji_keycap_tokens() ++ ["0", "2", "4"])
+  defp unicode_string_literal_union_test(
+         "^[\\q{0|2|4|9\\uFE0F\\u20E3}\\p{Emoji_Keycap_Sequence}]+$",
+         string
+       ),
+       do: consume_unicode_set_tokens?(string, emoji_keycap_tokens() ++ ["0", "2", "4"])
 
-  defp unicode_string_literal_union_test("^[\\q{0|2|4|9\\uFE0F\\u20E3}\\q{0|2|4|9\\uFE0F\\u20E3}]+$", string),
-    do: consume_unicode_set_tokens?(string, ["0", "2", "4", "9️⃣"])
+  defp unicode_string_literal_union_test(
+         "^[\\q{0|2|4|9\\uFE0F\\u20E3}\\q{0|2|4|9\\uFE0F\\u20E3}]+$",
+         string
+       ),
+       do: consume_unicode_set_tokens?(string, ["0", "2", "4", "9️⃣"])
 
   defp consume_unicode_set_tokens?("", _tokens), do: false
   defp consume_unicode_set_tokens?(string, tokens), do: consume_unicode_set_tokens(string, tokens)
@@ -518,7 +536,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   defp digit_tokens, do: Enum.map(?0..?9, &<<&1>>)
-  defp ascii_hex_tokens, do: digit_tokens() ++ Enum.map(?A..?F, &<<&1>>) ++ Enum.map(?a..?f, &<<&1>>)
+
+  defp ascii_hex_tokens,
+    do: digit_tokens() ++ Enum.map(?A..?F, &<<&1>>) ++ Enum.map(?a..?f, &<<&1>>)
+
   defp emoji_keycap_tokens, do: Enum.map(["#", "*"] ++ digit_tokens(), &(&1 <> "️⃣"))
 
   defp unicode_set_difference_source?(source),
@@ -765,7 +786,11 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec(_, _), do: nil
 
   defp dot_indices_exec(source, flags, string) do
-    len = if unicode_flags?(flags), do: JSString.utf16_length(String.slice(string, 0, 1) || ""), else: 1
+    len =
+      if unicode_flags?(flags),
+        do: JSString.utf16_length(String.slice(string, 0, 1) || ""),
+        else: 1
+
     match = capture_string(string, 0, len, flags)
     captures = [{0, len}]
     ref = make_ref()
@@ -778,9 +803,10 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec_stateless(bytecode, source, flags, s) do
     case decoded_simple_escape(source) do
       literal when is_binary(literal) ->
-        if String.contains?(flags, "d") or (unicode_flags?(flags) and lone_surrogate_wtf8?(literal)),
-          do: exec_nif(bytecode, source, flags, s),
-          else: literal_exec_decoded(s, literal)
+        if String.contains?(flags, "d") or
+             (unicode_flags?(flags) and lone_surrogate_wtf8?(literal)),
+           do: exec_nif(bytecode, source, flags, s),
+           else: literal_exec_decoded(s, literal)
 
       :error ->
         exec_nif(bytecode, source, flags, s)
@@ -1512,7 +1538,11 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       [_all, _name, "."] ->
         case string do
           <<_::utf8, _::binary>> ->
-            len = if unicode_flags?(flags), do: JSString.utf16_length(String.slice(string, 0, 1) || ""), else: 1
+            len =
+              if unicode_flags?(flags),
+                do: JSString.utf16_length(String.slice(string, 0, 1) || ""),
+                else: 1
+
             {:ok, [{0, len}, {0, len}]}
 
           _ ->
@@ -1786,7 +1816,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp exec_result(strings, index, input) do
     ref = make_ref()
     Heap.put_obj(ref, strings)
-    materialize_regexp_result_props(ref, %{"index" => index, "input" => input, "groups" => :undefined})
+
+    materialize_regexp_result_props(ref, %{
+      "index" => index,
+      "input" => input,
+      "groups" => :undefined
+    })
+
     {:obj, ref}
   end
 
@@ -1839,17 +1875,23 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp terminal_special_match_results("\\p{Script=Han}", flags, string)
        when is_binary(flags) do
-    if unicode_flags?(flags), do: codepoint_results(string, true, &(&1 == @han_ideograph)), else: :none
+    if unicode_flags?(flags),
+      do: codepoint_results(string, true, &(&1 == @han_ideograph)),
+      else: :none
   end
 
   defp terminal_special_match_results("\\p{ASCII}", flags, string)
        when is_binary(flags) do
-    if unicode_flags?(flags), do: codepoint_results(string, false, &(byte_size(&1) == 1)), else: :none
+    if unicode_flags?(flags),
+      do: codepoint_results(string, false, &(byte_size(&1) == 1)),
+      else: :none
   end
 
   defp terminal_special_match_results("\\P{ASCII}", flags, string)
        when is_binary(flags) do
-    if unicode_flags?(flags), do: codepoint_results(string, true, &(byte_size(&1) > 1)), else: :none
+    if unicode_flags?(flags),
+      do: codepoint_results(string, true, &(byte_size(&1) > 1)),
+      else: :none
   end
 
   defp terminal_special_match_results(@family_emoji, _flags, string),
@@ -1867,15 +1909,21 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     do: literal_unicode_results(string, @han_ideograph, global?)
 
   defp special_match_results("\\p{Script=Han}", flags, string, global?) do
-    if unicode_flags?(flags), do: codepoint_results(string, global?, &(&1 == @han_ideograph)), else: :none
+    if unicode_flags?(flags),
+      do: codepoint_results(string, global?, &(&1 == @han_ideograph)),
+      else: :none
   end
 
   defp special_match_results("\\p{ASCII}", flags, string, global?) do
-    if unicode_flags?(flags), do: codepoint_results(string, global?, &(byte_size(&1) == 1)), else: :none
+    if unicode_flags?(flags),
+      do: codepoint_results(string, global?, &(byte_size(&1) == 1)),
+      else: :none
   end
 
   defp special_match_results("\\P{ASCII}", flags, string, global?) do
-    if unicode_flags?(flags), do: codepoint_results(string, global?, &(byte_size(&1) > 1)), else: :none
+    if unicode_flags?(flags),
+      do: codepoint_results(string, global?, &(byte_size(&1) > 1)),
+      else: :none
   end
 
   defp special_match_results(@family_emoji, _flags, string, global?),
