@@ -1307,23 +1307,32 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp prototype_property_lookup_with_receiver(nil, _key, _receiver), do: :not_found
 
   defp prototype_property_lookup_with_receiver({:obj, ref} = target, key, receiver) do
-    case raw_own_property(Heap.get_obj_raw(ref), key) do
-      {:ok, {:accessor, getter, _}} when getter != nil ->
-        {:found, call_getter(getter, receiver)}
-
-      {:ok, {:accessor, nil, _}} ->
-        {:found, :undefined}
-
-      {:ok, value} ->
+    case descriptor_property_with_receiver(target, key, receiver) do
+      {:found_from_accessor, value} ->
         {:found, value}
 
-      :error ->
-        case descriptor_property_with_receiver(target, key, receiver) do
-          :not_found ->
-            prototype_property_lookup_with_receiver(Prototype.get(target), key, receiver)
+      _ ->
+        case raw_own_property(Heap.get_obj_raw(ref), key) do
+          {:ok, {:accessor, getter, _}} when getter != nil ->
+            {:found, call_getter(getter, receiver)}
 
-          found ->
-            found
+          {:ok, {:accessor, nil, _}} ->
+            {:found, :undefined}
+
+          {:ok, value} ->
+            {:found, value}
+
+          :error ->
+            case descriptor_property_with_receiver(target, key, receiver) do
+              :not_found ->
+                prototype_property_lookup_with_receiver(Prototype.get(target), key, receiver)
+
+              {:found_from_accessor, value} ->
+                {:found, value}
+
+              found ->
+                found
+            end
         end
     end
   end
@@ -1341,9 +1350,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         getter = get(desc, "get")
 
         cond do
-          getter != :undefined and getter != nil -> {:found, call_getter(getter, receiver)}
-          get(desc, "value") != :undefined -> {:found, get(desc, "value")}
-          true -> {:found, :undefined}
+          getter != :undefined and getter != nil ->
+            {:found_from_accessor, call_getter(getter, receiver)}
+
+          get(desc, "value") != :undefined ->
+            {:found, get(desc, "value")}
+
+          true ->
+            {:found, :undefined}
         end
 
       :undefined ->

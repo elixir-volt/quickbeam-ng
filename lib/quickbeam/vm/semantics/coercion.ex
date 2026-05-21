@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   import QuickBEAM.VM.Value, only: [is_object: 1]
 
   alias QuickBEAM.VM.{Heap, Invocation, Runtime}
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, Prototype, WrappedPrimitive}
 
   @doc "Coerces a VM value using JavaScript ToNumber semantics."
   def to_number(val) when is_number(val), do: val
@@ -220,7 +220,11 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   defp to_string_val_without_overrides({:bound, _, _, _, _}), do: "function () { [native code] }"
 
   defp call_string_hint_method(obj, data, name) do
-    fun = own_or_inherited_method(obj, data, name)
+    fun =
+      case symbol_wrapper_proto_method(obj, name) do
+        {:ok, method} -> method
+        _ -> own_or_inherited_method(obj, data, name)
+      end
 
     if callable?(fun) do
       result = Invocation.invoke_with_receiver(fun, [], Runtime.gas_budget(), obj)
@@ -392,18 +396,46 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   end
 
   defp get_to_primitive(obj, method) do
-    case Get.get(obj, method) do
-      fun when fun != nil and fun != :undefined ->
-        if callable?(fun) do
-          unwrap_primitive(Invocation.invoke_with_receiver(fun, [], Runtime.gas_budget(), obj))
-        else
-          :none
-        end
+    case symbol_wrapper_proto_method(obj, method) do
+      {:ok, fun} ->
+        invoke_primitive_method(fun, obj)
 
-      _ ->
+      :none ->
         :none
+
+      :missing ->
+        invoke_primitive_method(Get.get(obj, method), obj)
     end
   end
+
+  defp invoke_primitive_method(fun, obj) when fun != nil and fun != :undefined do
+    if callable?(fun) do
+      unwrap_primitive(Invocation.invoke_with_receiver(fun, [], Runtime.gas_budget(), obj))
+    else
+      :none
+    end
+  end
+
+  defp invoke_primitive_method(_fun, _obj), do: :none
+
+  defp symbol_wrapper_proto_method({:obj, ref} = obj, method) do
+    with {:ok, _symbol} <- Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:symbol),
+         {:obj, _} = proto <- Prototype.get(obj),
+         {:obj, _} = desc <- OwnProperty.descriptor(proto, method) do
+      getter = Get.get(desc, "get")
+      value = Get.get(desc, "value")
+
+      cond do
+        getter not in [nil, :undefined] -> {:ok, Get.call_getter(getter, obj)}
+        value != :undefined -> {:ok, value}
+        true -> :none
+      end
+    else
+      _ -> :missing
+    end
+  end
+
+  defp symbol_wrapper_proto_method(_obj, _method), do: :missing
 
   defp unwrap_primitive(val) do
     if object_like?(val), do: :none, else: {:ok, val}

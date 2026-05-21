@@ -36,7 +36,12 @@ defmodule QuickBEAM.VM.Builtin.Installer do
   end
 
   defp make_constructor(definition, {:realm, opts}) when is_list(opts) do
-    ctor = {:builtin, definition.name, definition.constructor}
+    constructor_token = make_ref()
+    constructor = definition.constructor
+
+    ctor =
+      {:builtin, definition.name,
+       fn args, this -> {constructor_token, constructor.(args, this)} |> elem(1) end}
 
     if definition.module do
       Heap.put_ctor_static(ctor, :__module__, definition.module)
