@@ -99,28 +99,12 @@ defmodule QuickBEAM.VM.Realm do
 
     map_proto = Heap.get_class_proto(map_ctor)
 
-    iterator_proto = Heap.wrap(%{"__proto__" => object_proto})
-    iterator_ctor = make_constructor("Iterator", JSIterator.constructor(), iterator_proto)
+    iterator_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(JSIterator.builtin_definition(),
+        target: {:realm, object_proto: object_proto}
+      )
 
-    Heap.put_obj_key(
-      elem(iterator_proto, 1),
-      "constructor",
-      JSIterator.proto_property("constructor")
-    )
-
-    Heap.put_prop_desc(elem(iterator_proto, 1), "constructor", %{
-      writable: false,
-      enumerable: false,
-      configurable: true
-    })
-
-    Heap.put_obj_key(
-      elem(iterator_proto, 1),
-      {:symbol, "Symbol.toStringTag"},
-      JSIterator.proto_property({:symbol, "Symbol.toStringTag"})
-    )
-
-    Heap.put_obj_key(elem(iterator_proto, 1), "constructor", iterator_ctor)
+    iterator_proto = Heap.get_class_proto(iterator_ctor)
 
     set_ctor =
       QuickBEAM.VM.Builtin.Installer.install(set_builtin_definition("Set"),

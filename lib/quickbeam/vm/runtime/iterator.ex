@@ -16,10 +16,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     length: 0,
     phase: :fundamental,
     prototype_parent: nil,
-    after_install: &__MODULE__.install_builtin/1
+    after_install: &__MODULE__.install_builtin/2
   )
 
-  def install_builtin(ctor) do
+  def install_builtin(ctor, _opts \\ []) do
     for name <- ~w(concat from zip zipKeyed) do
       Heap.put_ctor_static(ctor, name, static_property(name))
       Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.method())
