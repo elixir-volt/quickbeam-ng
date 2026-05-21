@@ -198,22 +198,8 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
     end
   end
 
-  defp array_prototype_length_property?(raw, "length") do
-    cond do
-      Heap.shape?(raw) ->
-        offsets = Heap.shape_offsets(raw)
-
-        Map.has_key?(offsets, "constructor") and Map.has_key?(offsets, "push") and
-          Map.has_key?(offsets, "pop")
-
-      is_map(raw) ->
-        Map.has_key?(raw, "constructor") and Map.has_key?(raw, "push") and
-          Map.has_key?(raw, "pop")
-
-      true ->
-        false
-    end
-  end
+  defp array_prototype_length_property?(raw, "length"),
+    do: Semantics.array_prototype_object?(raw)
 
   defp array_prototype_length_property?(_, _), do: false
 

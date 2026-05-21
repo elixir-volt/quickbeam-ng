@@ -637,8 +637,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         end
 
       map when is_map(map) and key == "length" ->
-        if Map.has_key?(map, "constructor") and Map.has_key?(map, "push") and
-             Map.has_key?(map, "pop") do
+        if Semantics.array_prototype_object?(map) do
           array_prototype_length(ref) || 0
         else
           case prototype_object_property(map, key) do
