@@ -166,7 +166,7 @@ defmodule QuickBEAM.VM.Realm do
 
     error_protos =
       for name <-
-            ~w(EvalError RangeError ReferenceError SyntaxError TypeError URIError AggregateError SuppressedError),
+            ~w(Error EvalError RangeError ReferenceError SyntaxError TypeError URIError AggregateError SuppressedError),
           into: %{},
           do: {name, Heap.get_class_proto(Map.fetch!(error_bindings, name))}
 
@@ -370,6 +370,9 @@ defmodule QuickBEAM.VM.Realm do
   def default_prototype({:builtin, "Promise", _}, new_target), do: intrinsic(new_target, :promise)
   def default_prototype({:builtin, "RegExp", _}, new_target), do: intrinsic(new_target, :regexp)
 
+  def default_prototype({:builtin, "Error", _}, new_target),
+    do: intrinsic(new_target, {:native_error, "Error"}) || Runtime.global_class_proto("Error")
+
   def default_prototype({:builtin, "WeakMap", _}, new_target),
     do: intrinsic(new_target, :weak_map)
 
@@ -398,50 +401,7 @@ defmodule QuickBEAM.VM.Realm do
 
   def default_prototype(_ctor, new_target), do: intrinsic(new_target, :object)
 
-  defp error_bindings(object_proto) do
-    base = Errors.bindings()
-    base_error_proto = Heap.get_class_proto(Map.fetch!(base, "Error"))
-    error_proto = clone_error_proto(base_error_proto, object_proto)
-
-    errors =
-      for {name, {:builtin, _base_name, callback} = ctor} <- base, into: %{} do
-        proto =
-          if name == "Error" do
-            error_proto
-          else
-            ctor
-            |> Heap.get_class_proto()
-            |> clone_error_proto(error_proto)
-          end
-
-        ctor = make_constructor(name, callback, proto)
-        Heap.put_obj_key(elem(proto, 1), "constructor", ctor)
-
-        ctor
-        |> Heap.get_ctor_statics()
-        |> Enum.reject(fn {key, _value} -> key == "prototype" end)
-        |> Enum.each(fn {key, value} -> Heap.put_ctor_static(ctor, key, value) end)
-
-        {name, ctor}
-      end
-
-    case Map.fetch(errors, "Error") do
-      {:ok, error_ctor} ->
-        for {name, ctor} <- errors, name != "Error" do
-          Heap.put_ctor_static(ctor, "__proto__", error_ctor)
-        end
-
-      :error ->
-        :ok
-    end
-
-    errors
-  end
-
-  defp clone_error_proto({:obj, ref}, parent) do
-    map = ref |> Heap.get_obj(%{}) |> Map.put("__proto__", parent)
-    Heap.wrap(map)
-  end
+  defp error_bindings(object_proto), do: Errors.realm_bindings(object_proto)
 
   defp error_object(type_error_ctor, message) do
     proto = Heap.get_class_proto(type_error_ctor)

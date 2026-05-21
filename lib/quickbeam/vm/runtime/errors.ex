@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
   alias QuickBEAM.VM.{Heap, Invocation}
+  alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, HasProperty, PropertyDescriptor}
@@ -16,6 +17,156 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   alias QuickBEAM.VM.Stacktrace
 
   @error_types ~w(Error TypeError RangeError SyntaxError ReferenceError URIError EvalError AggregateError SuppressedError)
+
+  def builtin_definitions do
+    Enum.map(@error_types, fn name ->
+      %Definition{
+        name: name,
+        constructor: fn args, this -> construct_error(name, args, this) end,
+        length: if(name == "AggregateError", do: 2, else: 1),
+        phase: :fundamental,
+        module: __MODULE__,
+        auto_install?: false
+      }
+    end)
+  end
+
+  def realm_bindings(object_proto) do
+    error_ctor =
+      install_error_definition("Error", object_proto, fn ctor, _opts ->
+        install_error_builtin(ctor, object_proto)
+      end)
+
+    derived =
+      @error_types
+      |> Enum.reject(&(&1 == "Error"))
+      |> Map.new(fn name ->
+        ctor =
+          install_error_definition(name, object_proto, fn ctor, _opts ->
+            install_derived_error_builtin(ctor, name, error_ctor)
+          end)
+
+        {name, ctor}
+      end)
+
+    Map.put(derived, "Error", error_ctor)
+  end
+
+  defp install_error_definition(name, object_proto, after_install) do
+    name
+    |> error_definition()
+    |> Map.put(:after_install, after_install)
+    |> QuickBEAM.VM.Builtin.Installer.install(target: {:realm, object_proto: object_proto})
+  end
+
+  defp error_definition(name), do: Enum.find(builtin_definitions(), &(&1.name == name))
+
+  defp install_error_builtin(ctor, object_proto) do
+    Constructors.put_prototype(ctor, Heap.get_ctor_statics(ctor)["prototype"])
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+
+    with {:obj, proto_ref} <- Heap.get_class_proto(ctor) do
+      Heap.put_obj_key(proto_ref, "__proto__", object_proto)
+      Heap.put_obj_key(proto_ref, "name", "Error")
+      Heap.put_obj_key(proto_ref, "message", "")
+      Heap.put_obj_key(proto_ref, "toString", error_to_string_method())
+
+      for key <- ["name", "message", "constructor", "toString"] do
+        Heap.put_prop_desc(proto_ref, key, PropertyDescriptor.method())
+      end
+    end
+
+    install_error_statics(ctor)
+  end
+
+  defp install_derived_error_builtin(ctor, name, error_ctor) do
+    Constructors.put_prototype(ctor, Heap.get_ctor_statics(ctor)["prototype"])
+    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+    Heap.put_ctor_static(ctor, "__proto__", error_ctor)
+
+    with {:obj, proto_ref} <- Heap.get_class_proto(ctor),
+         {:obj, _} = error_proto <- Heap.get_class_proto(error_ctor) do
+      Heap.put_obj_key(proto_ref, "__proto__", error_proto)
+      Heap.put_obj_key(proto_ref, "name", name)
+      Heap.put_obj_key(proto_ref, "message", "")
+
+      for key <- ["name", "message", "constructor"] do
+        Heap.put_prop_desc(proto_ref, key, PropertyDescriptor.method())
+      end
+    end
+  end
+
+  defp install_error_statics(ctor) do
+    Heap.put_ctor_static(ctor, "isError", error_is_error_method())
+    Heap.put_ctor_prop_desc(ctor, "isError", PropertyDescriptor.method())
+    Heap.put_ctor_static(ctor, "captureStackTrace", capture_stack_trace_method())
+    Heap.put_ctor_prop_desc(ctor, "captureStackTrace", PropertyDescriptor.method())
+    Heap.put_ctor_static(ctor, "prepareStackTrace", :undefined)
+    Heap.put_ctor_static(ctor, "stackTraceLimit", 10)
+  end
+
+  defp error_to_string_method do
+    {:builtin, "toString",
+     fn _args, this ->
+       unless match?({:obj, _}, this) do
+         JSThrow.type_error!("Error.prototype.toString called on non-object")
+       end
+
+       name =
+         case QuickBEAM.VM.ObjectModel.Get.get(this, "name") do
+           nil -> "Error"
+           :undefined -> "Error"
+           n -> stringify_error_slot(n)
+         end
+
+       msg =
+         case QuickBEAM.VM.ObjectModel.Get.get(this, "message") do
+           nil -> ""
+           :undefined -> ""
+           m -> stringify_error_slot(m)
+         end
+
+       cond do
+         name == "" -> msg
+         msg == "" -> name
+         true -> name <> ": " <> msg
+       end
+     end}
+  end
+
+  defp error_is_error_method do
+    {:builtin, "isError",
+     fn args, _ ->
+       case arg(args, 0, :undefined) do
+         {:obj, ref} ->
+           case Heap.get_obj(ref, %{}) do
+             map when is_map(map) -> Map.has_key?(map, "__error_name__")
+             _ -> false
+           end
+
+         _ ->
+           false
+       end
+     end}
+  end
+
+  defp capture_stack_trace_method do
+    {:builtin, "captureStackTrace",
+     fn
+       [], _ ->
+         JSThrow.type_error!("Cannot convert undefined to object")
+
+       [obj | rest], _ ->
+         filter_fun = arg(rest, 0, nil)
+
+         case obj do
+           {:obj, _} -> Stacktrace.attach_stack(obj, filter_fun)
+           _ -> :ok
+         end
+
+         :undefined
+     end}
+  end
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
