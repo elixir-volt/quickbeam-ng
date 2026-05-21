@@ -13,8 +13,8 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
   end
 
   @doc "Sets a prototype object's parent to Object.prototype."
-  def install_object_parent(proto_ref) do
-    Heap.put_obj_key(proto_ref, "__proto__", Heap.get_object_prototype())
+  def install_object_parent(proto_ref, parent \\ Heap.get_object_prototype()) do
+    Heap.put_obj_key(proto_ref, "__proto__", parent)
   end
 
   @doc "Installs prototype methods using a runtime module's proto_property/1 callback."

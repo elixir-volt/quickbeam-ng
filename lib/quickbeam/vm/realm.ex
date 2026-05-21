@@ -27,11 +27,12 @@ defmodule QuickBEAM.VM.Realm do
     array_ctor = make_constructor("Array", &Constructors.array/2, array_proto)
     Heap.put_obj_key(elem(array_proto, 1), "constructor", array_ctor)
 
-    boolean_proto =
-      Heap.wrap(%{"__proto__" => object_proto, WrappedPrimitive.slot(:boolean) => false})
+    boolean_ctor =
+      QuickBEAM.VM.Builtin.Installer.install(JSBoolean.builtin_definition(),
+        target: {:realm, object_proto: object_proto}
+      )
 
-    boolean_ctor = make_constructor("Boolean", JSBoolean.constructor(), boolean_proto)
-    Heap.put_obj_key(elem(boolean_proto, 1), "constructor", boolean_ctor)
+    boolean_proto = Heap.get_class_proto(boolean_ctor)
 
     number_proto = Heap.wrap(%{"__proto__" => object_proto})
     number_ctor = make_constructor("Number", &Constructors.number/2, number_proto)

@@ -11,12 +11,14 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
     constructor: constructor(),
     length: 1,
     phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/1
+    after_install: &__MODULE__.install_builtin/2
   )
 
-  def install_builtin(ctor) do
+  def install_builtin(ctor, opts \\ []) do
+    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref)
+      InstallerHelpers.install_object_parent(proto_ref, object_proto)
       Heap.put_obj_key(proto_ref, WrappedPrimitive.slot(:boolean), false)
       InstallerHelpers.install_methods(proto_ref, __MODULE__, ~w(toString valueOf))
       InstallerHelpers.install_constructor_link(proto_ref, ctor)

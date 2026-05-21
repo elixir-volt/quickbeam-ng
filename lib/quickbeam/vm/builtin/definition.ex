@@ -26,7 +26,7 @@ defmodule QuickBEAM.VM.Builtin.Definition do
           prototype_descriptor: descriptor(),
           prototype_properties: [prototype_property()],
           intrinsic_key: atom() | nil,
-          after_install: (term() -> term()) | nil,
+          after_install: (term() -> term()) | (term(), keyword() -> term()) | nil,
           auto_install?: boolean()
         }
 
