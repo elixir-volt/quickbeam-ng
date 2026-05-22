@@ -146,26 +146,23 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
       end
 
       defp run({@op_iterator_get_value_done, []}, pc, frame, [result | rest], gas, ctx) do
-        next =
-          try do
-            done = Get.get(result, "done")
-
-            if Runtime.truthy?(done) do
-              {:ok, [true, :undefined | rest]}
-            else
-              {:ok, [false, Get.get(result, "value") | rest]}
-            end
-          catch
-            {:js_throw, error} -> {:throw, error}
-          end
-
-        case next do
-          {:ok, stack} ->
+        case Completion.capture(ctx, fn -> iterator_value_done_stack(result, rest) end) do
+          {:ok, stack, ctx} ->
             run(pc + 1, frame, stack, gas, ctx)
 
-          {:throw, error} ->
+          {:throw, error, ctx} ->
             close_iterator_result_owner(result, ctx)
             throw_or_catch(frame, error, gas, ctx)
+        end
+      end
+
+      defp iterator_value_done_stack(result, rest) do
+        done = Get.get(result, "done")
+
+        if Runtime.truthy?(done) do
+          [true, :undefined | rest]
+        else
+          [false, Get.get(result, "value") | rest]
         end
       end
 
@@ -263,41 +260,44 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
         sym_async_iter = {:symbol, "Symbol.asyncIterator"}
         sym_iter = {:symbol, "Symbol.iterator"}
 
-        {iter_obj, next_fn} =
-          case obj do
-            {:obj, ref} ->
-              stored = Heap.get_obj(ref, [])
+        case Completion.capture(ctx, fn -> for_await_start_pair(obj, sym_async_iter, sym_iter) end) do
+          {:ok, {iter_obj, next_fn}, ctx} ->
+            run(pc + 1, frame, [0, next_fn, iter_obj | rest], gas, ctx)
 
-              cond do
-                match?({:qb_arr, _}, stored) ->
-                  make_list_iterator(Heap.to_list({:obj, ref}))
-
-                is_list(stored) ->
-                  make_list_iterator(stored)
-
-                is_map(stored) and Map.has_key?(stored, sym_async_iter) ->
-                  async_iter_fn = Map.get(stored, sym_async_iter)
-                  iter = Invocation.invoke_callback_or_throw(async_iter_fn, [], obj)
-                  {iter, Get.get(iter, "next")}
-
-                is_map(stored) and Map.has_key?(stored, sym_iter) ->
-                  iter_fn = Map.get(stored, sym_iter)
-                  iter = Invocation.invoke_callback_or_throw(iter_fn, [], obj)
-                  {iter, Get.get(iter, "next")}
-
-                is_map(stored) and Map.has_key?(stored, "next") ->
-                  {obj, Get.get(obj, "next")}
-
-                true ->
-                  {obj, :undefined}
-              end
-
-            _ ->
-              {obj, :undefined}
-          end
-
-        run(pc + 1, frame, [0, next_fn, iter_obj | rest], gas, ctx)
+          {:throw, error, ctx} ->
+            throw_or_catch(frame, error, gas, ctx)
+        end
       end
+
+      defp for_await_start_pair({:obj, ref} = obj, sym_async_iter, sym_iter) do
+        stored = Heap.get_obj(ref, [])
+
+        cond do
+          match?({:qb_arr, _}, stored) ->
+            make_list_iterator(Heap.to_list({:obj, ref}))
+
+          is_list(stored) ->
+            make_list_iterator(stored)
+
+          is_map(stored) and Map.has_key?(stored, sym_async_iter) ->
+            async_iter_fn = Map.get(stored, sym_async_iter)
+            iter = Invocation.invoke_callback_or_throw(async_iter_fn, [], obj)
+            {iter, Get.get(iter, "next")}
+
+          is_map(stored) and Map.has_key?(stored, sym_iter) ->
+            iter_fn = Map.get(stored, sym_iter)
+            iter = Invocation.invoke_callback_or_throw(iter_fn, [], obj)
+            {iter, Get.get(iter, "next")}
+
+          is_map(stored) and Map.has_key?(stored, "next") ->
+            {obj, Get.get(obj, "next")}
+
+          true ->
+            {obj, :undefined}
+        end
+      end
+
+      defp for_await_start_pair(obj, _sym_async_iter, _sym_iter), do: {obj, :undefined}
     end
   end
 end

@@ -21,20 +21,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
         else
           val = GlobalEnvironment.get(ctx, atom_idx, :undefined)
 
-          val =
-            if val == :undefined do
-              name = Names.resolve_atom(ctx, atom_idx)
-              global_this = Map.get(ctx.globals, "globalThis")
-
-              case global_this do
-                {:obj, _} -> Get.get(global_this, name)
-                _ -> :undefined
-              end
-            else
-              val
-            end
-
-          run(pc + 1, frame, [val | stack], gas, ctx)
+          case maybe_global_this_get(ctx, atom_idx, val) do
+            {:ok, value, ctx} -> run(pc + 1, frame, [value | stack], gas, ctx)
+            {:throw, error, ctx} -> throw_or_catch(frame, error, gas, ctx)
+          end
         end
       end
 
@@ -79,28 +69,20 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
               name = Names.resolve_atom(ctx, atom_idx)
               global_this = Map.get(ctx.globals, "globalThis")
 
-              case global_this do
-                {:obj, _} ->
-                  val = Get.get(global_this, name)
-
-                  if val != :undefined do
-                    run(pc + 1, frame, [val | stack], gas, ctx)
-                  else
-                    throw_or_catch(
-                      frame,
-                      Heap.make_error("#{name} is not defined", "ReferenceError"),
-                      gas,
-                      ctx
-                    )
-                  end
-
-                _ ->
+              case global_this_get(ctx, global_this, name) do
+                {:ok, :undefined, ctx} ->
                   throw_or_catch(
                     frame,
                     Heap.make_error("#{name} is not defined", "ReferenceError"),
                     gas,
                     ctx
                   )
+
+                {:ok, val, ctx} ->
+                  run(pc + 1, frame, [val | stack], gas, ctx)
+
+                {:throw, error, ctx} ->
+                  throw_or_catch(frame, error, gas, ctx)
               end
           end
         end
@@ -108,6 +90,18 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
       defp make_arguments_object(ctx, frame),
         do: ArgumentsObject.get(ctx, frame, var_ref_offset: :raw)
+
+      defp maybe_global_this_get(ctx, atom_idx, :undefined) do
+        name = Names.resolve_atom(ctx, atom_idx)
+        global_this_get(ctx, Map.get(ctx.globals, "globalThis"), name)
+      end
+
+      defp maybe_global_this_get(ctx, _atom_idx, val), do: {:ok, val, ctx}
+
+      defp global_this_get(ctx, {:obj, _} = global_this, name),
+        do: Completion.capture(ctx, fn -> Get.get(global_this, name) end)
+
+      defp global_this_get(ctx, _global_this, _name), do: {:ok, :undefined, ctx}
 
       defp delay_object_define_value?(pc, frame, [_key, {:obj, _} | _]) do
         instructions = elem(frame, Frame.insns())
