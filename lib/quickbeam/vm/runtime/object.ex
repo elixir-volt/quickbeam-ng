@@ -573,9 +573,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   static "isExtensible", length: 1 do
     case hd(args) do
-      {:obj, ref} -> Heap.extensible?(ref)
       {:builtin, "ThrowTypeError", _} -> false
-      value -> if is_object_like?(value), do: Heap.extensible?(value), else: false
+      value -> if is_object_like?(value), do: InternalMethods.extensible?(value), else: false
     end
   end
 

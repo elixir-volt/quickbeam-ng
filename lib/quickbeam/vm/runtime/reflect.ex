@@ -14,11 +14,9 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     Get,
     HasProperty,
     InternalMethods,
-    OwnProperty,
     PropertyDescriptor,
     PropertyKey,
     Prototype,
-    ProxyTrap,
     Put
   }
 
@@ -173,7 +171,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     method "isExtensible" do
       obj = hd(args)
       require_object!(obj, "Reflect.isExtensible")
-      extensible?(obj)
+      InternalMethods.extensible?(obj)
     end
 
     method "has" do
@@ -185,7 +183,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     method "ownKeys" do
       obj = hd(args)
       require_object!(obj, "Reflect.ownKeys")
-      Heap.wrap(own_keys_for(obj))
+      Heap.wrap(InternalMethods.own_keys(obj))
     end
   end
 
@@ -309,7 +307,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
           not Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target])) ->
             false
 
-          extensible?(target) ->
+          InternalMethods.extensible?(target) ->
             JSThrow.type_error!("proxy preventExtensions trap violates invariant")
 
           true ->
@@ -321,87 +319,4 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
         true
     end
   end
-
-  defp extensible?({:obj, ref}) do
-    case Heap.get_obj(ref, %{}) do
-      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
-        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-
-      %{proxy_target() => _target, proxy_handler() => handler}
-      when not is_map(handler) and not is_tuple(handler) ->
-        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
-
-      %{proxy_target() => target, proxy_handler() => handler} ->
-        trap = Get.get(handler, "isExtensible")
-
-        if Value.nullish?(trap) do
-          extensible?(target)
-        else
-          trap_result = Values.truthy?(ProxyTrap.call(trap, [target], handler))
-          target_result = extensible?(target)
-
-          if trap_result == target_result do
-            trap_result
-          else
-            JSThrow.type_error!("proxy isExtensible trap violates invariant")
-          end
-        end
-
-      _ ->
-        Heap.extensible?(ref)
-    end
-  end
-
-  defp own_keys_for({:obj, ref}) do
-    case Heap.get_obj(ref, %{}) do
-      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
-        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-
-      %{proxy_target() => target, proxy_handler() => handler} ->
-        own_keys_trap = Get.get(handler, "ownKeys")
-
-        if Value.nullish?(own_keys_trap) do
-          own_keys_for(target)
-        else
-          own_keys_trap
-          |> Runtime.call_callback([target])
-          |> Heap.to_list()
-          |> OwnProperty.validate_proxy_own_keys_invariant(target)
-        end
-
-      {:qb_arr, arr} ->
-        sparse_array_keys(ref, :array.to_list(arr))
-
-      list when is_list(list) ->
-        sparse_array_keys(ref, list)
-
-      map when is_map(map) ->
-        OwnProperty.own_keys({:obj, ref})
-
-      _ ->
-        OwnProperty.own_keys({:obj, ref})
-    end
-  end
-
-  defp own_keys_for(target) when is_tuple(target) or is_struct(target) do
-    OwnProperty.own_keys(target)
-  end
-
-  defp sparse_array_keys(ref, list) do
-    indexed_keys =
-      list
-      |> Enum.with_index()
-      |> Enum.reject(fn {value, _index} -> value == :undefined end)
-      |> Enum.map(fn {_value, index} -> Integer.to_string(index) end)
-
-    side_keys =
-      ref
-      |> Heap.get_array_props()
-      |> Map.keys()
-      |> Enum.reject(&(&1 == "length" or internal_key?(&1)))
-
-    indexed_keys ++ side_keys ++ ["length"]
-  end
-
-  defp internal_key?(key), do: internal_slot?(key)
 end
