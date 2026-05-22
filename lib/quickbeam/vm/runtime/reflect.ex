@@ -10,14 +10,11 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   alias QuickBEAM.VM.Invocation
 
   alias QuickBEAM.VM.ObjectModel.{
-    Delete,
     Get,
-    HasProperty,
     InternalMethods,
     PropertyDescriptor,
     PropertyKey,
-    Prototype,
-    Put
+    Prototype
   }
 
   alias QuickBEAM.VM.Runtime
@@ -108,13 +105,13 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       key = PropertyKey.to_property_key(key)
       val = arg(rest, 0, :undefined)
       receiver = arg(rest, 1, obj)
-      Values.truthy?(Put.set(obj, key, val, receiver))
+      Values.truthy?(InternalMethods.set(obj, key, val, receiver))
     end
 
     method "deleteProperty" do
       [obj, key | _] = args
       require_object!(obj, "Reflect.deleteProperty")
-      Delete.delete_property(obj, PropertyKey.to_property_key(key))
+      InternalMethods.delete(obj, PropertyKey.to_property_key(key))
     end
 
     method "getOwnPropertyDescriptor" do
@@ -177,7 +174,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
     method "has" do
       [obj, key | _] = args
       require_object!(obj, "Reflect.has")
-      HasProperty.has_property?(obj, PropertyKey.to_property_key(key))
+      InternalMethods.has_property(obj, PropertyKey.to_property_key(key))
     end
 
     method "ownKeys" do
