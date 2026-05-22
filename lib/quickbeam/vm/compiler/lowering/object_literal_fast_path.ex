@@ -39,10 +39,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          Builder.remote_call(QuickBEAM.VM.Heap, :wrap_keyed_object_literal, [
-            keys_tuple,
-            vals_tuple
-          ])
+          State.abi_call(state, :wrap_keyed_object_literal, [keys_tuple, vals_tuple])
         )
 
       {:ok, Emit.push(state, obj, {:shaped_object, ct_offsets, value_map}), skip_to}

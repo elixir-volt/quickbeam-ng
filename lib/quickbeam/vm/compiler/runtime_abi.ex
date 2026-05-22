@@ -140,6 +140,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def new_object(ctx), do: Properties.new_object(ctx)
 
+  def wrap_keyed_object_literal(_ctx, keys, values),
+    do: QuickBEAM.VM.Heap.wrap_keyed_object_literal(keys, values)
+
   def set_proto(ctx, obj, proto), do: Properties.set_proto(ctx, obj, proto)
 
   def define_array_el(ctx, obj, index, value),
