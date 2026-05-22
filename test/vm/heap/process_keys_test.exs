@@ -1,19 +1,47 @@
 defmodule QuickBEAM.VM.Heap.ProcessKeysTest do
   use ExUnit.Case, async: false
 
+  alias QuickBEAM.VM.Execution.IteratorState
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Heap.ProcessKeys
+  alias QuickBEAM.VM.Host.Web.Worker.State, as: WorkerState
 
   test "owned? classifies heap process dictionary keys" do
     assert ProcessKeys.owned?(1)
     refute ProcessKeys.owned?(make_ref())
     assert ProcessKeys.owned?(:qb_ctx)
     assert ProcessKeys.owned?({:qb_prop_desc, 1, "a"})
+    assert ProcessKeys.owned?({:qb_iterator_state, make_ref()})
+    assert ProcessKeys.owned?({:qb_worker_listeners, make_ref()})
 
     refute ProcessKeys.owned?(0)
     refute ProcessKeys.owned?(:not_quickbeam)
     refute ProcessKeys.owned?(QuickBEAM.VM.Heap)
     refute ProcessKeys.owned?({"qb_not_an_atom", 1})
+  end
+
+  test "Heap.reset removes reference-backed VM state stored under owned keys" do
+    iterator_ref = IteratorState.new({[1, 2], 0})
+    onmessage_ref = make_ref()
+    onerror_ref = make_ref()
+    listeners_ref = make_ref()
+
+    WorkerState.init_callbacks(onmessage_ref, onerror_ref, listeners_ref)
+    WorkerState.put_listener_callback(onmessage_ref, :callback)
+    WorkerState.put_error_callback(onerror_ref, :error_callback)
+    WorkerState.add_listener(listeners_ref, :listener)
+
+    assert Process.get({:qb_iterator_state, iterator_ref}) == {[1, 2], 0}
+    assert Process.get({:qb_worker_onmessage, onmessage_ref}) == :callback
+    assert Process.get({:qb_worker_onerror, onerror_ref}) == :error_callback
+    assert Process.get({:qb_worker_listeners, listeners_ref}) == [:listener]
+
+    assert Heap.reset() == :ok
+
+    refute Process.get({:qb_iterator_state, iterator_ref})
+    refute Process.get({:qb_worker_onmessage, onmessage_ref})
+    refute Process.get({:qb_worker_onerror, onerror_ref})
+    refute Process.get({:qb_worker_listeners, listeners_ref})
   end
 
   test "Heap.reset removes registered heap keys only" do
