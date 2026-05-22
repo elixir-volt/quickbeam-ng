@@ -14,8 +14,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
     Class,
     Copy,
     Define,
-    Delete,
     Functions,
+    InternalMethods,
     Methods,
     Private,
     Put,
@@ -221,7 +221,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Properties do
   def delete_property(_ctx, %QuickBEAM.VM.Function{} = fun, key),
     do: Static.delete_static(fun, key)
 
-  def delete_property(_ctx, object, key), do: Delete.delete_property(object, key)
+  def delete_property(_ctx, object, key), do: InternalMethods.delete(object, key)
 
   def set_proto(ctx \\ nil, object, proto)
 
