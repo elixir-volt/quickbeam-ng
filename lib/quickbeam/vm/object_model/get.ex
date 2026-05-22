@@ -26,11 +26,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     TypedArray
   }
 
-  alias QuickBEAM.VM.Runtime.Collections
   alias QuickBEAM.VM.Runtime.FunctionKinds
 
   alias QuickBEAM.VM.ObjectModel.{
     ArrayExoticGet,
+    BuiltinExoticGet,
     OwnProperty,
     PrimitiveWrapperGet,
     PropertyKey,
@@ -926,17 +926,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
             match?({:found, _}, proto_result) ->
               proto_result
 
-            (collection = Collections.proto_property(map, key)) != :not_collection ->
-              collection
-
-            Map.has_key?(map, date_ms()) ->
-              JSDate.proto_property(key)
-
-            Map.has_key?(map, buffer()) and not Map.has_key?(map, typed_array()) ->
-              ArrayBuffer.proto_property(key)
-
             true ->
-              :undefined
+              BuiltinExoticGet.map_proto_property(map, key)
           end
 
         case type_result do
@@ -1020,8 +1011,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
               QuickBEAM.VM.Builtin.callable?(Map.get(map, proxy_target())) ->
             fallback_to_function_proto(:undefined, Map.get(map, proxy_target()), key)
 
-          (collection = Collections.proto_property(map, key)) != :not_collection ->
-            collection
+          (builtin = BuiltinExoticGet.map_proto_property(map, key)) != :undefined ->
+            builtin
 
           Map.has_key?(map, :__internal_proto__) ->
             prototype_property_with_receiver(Map.get(map, :__internal_proto__), key, {:obj, ref})
