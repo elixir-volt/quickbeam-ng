@@ -13,7 +13,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.Execution.{ClosureCells, PrototypeState, RegexpState}
-  alias QuickBEAM.VM.{Heap, JSThrow, Value}
+  alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Runtime
 
@@ -32,6 +32,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     ArrayExoticGet,
     BuiltinExoticGet,
     DateExoticGet,
+    FunctionExoticGet,
     OwnProperty,
     PrimitiveWrapperGet,
     PropertyKey,
@@ -617,79 +618,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_own({:regexp, _, _}, key), do: regexp_prototype_property(key)
 
-  defp get_own(%QuickBEAM.VM.Function{} = f, "prototype") do
-    case Map.get(Heap.get_ctor_statics(f), "prototype", :not_set) do
-      :not_set -> Heap.get_or_create_prototype(f)
-      {:accessor, getter, _} when getter != nil -> call_getter(getter, f)
-      val -> val
-    end
-  end
+  defp get_own(%QuickBEAM.VM.Function{} = fun, key),
+    do: FunctionExoticGet.own_property(fun, key, &call_getter/2)
 
-  defp get_own(%QuickBEAM.VM.Function{is_strict_mode: true}, key)
-       when key in ["caller", "arguments"] do
-    JSThrow.type_error!(
-      "'caller' and 'arguments' are restricted function properties and cannot be accessed in this context."
-    )
-  end
-
-  defp get_own(%QuickBEAM.VM.Function{} = f, key) do
-    case Map.get(Heap.get_ctor_statics(f), key, :not_found) do
-      :not_found when key in ["length", "name", "caller", "arguments"] ->
-        Function.proto_property(f, key)
-
-      :not_found ->
-        :undefined
-
-      :deleted ->
-        :undefined
-
-      val ->
-        val
-    end
-  end
-
-  defp get_own({:closure, _, %QuickBEAM.VM.Function{}} = c, "prototype") do
-    case Map.get(Heap.get_ctor_statics(c), "prototype", :not_set) do
-      :not_set -> Heap.get_or_create_prototype(c)
-      {:accessor, getter, _} when getter != nil -> call_getter(getter, c)
-      val -> val
-    end
-  end
-
-  defp get_own({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}, key)
-       when key in ["caller", "arguments"] do
-    JSThrow.type_error!(
-      "'caller' and 'arguments' are restricted function properties and cannot be accessed in this context."
-    )
-  end
-
-  defp get_own({:closure, _, %QuickBEAM.VM.Function{} = f} = c, key) do
-    case Map.get(Heap.get_ctor_statics(c), key, :not_found) do
-      :not_found ->
-        case Map.get(Heap.get_ctor_statics(f), key, :not_found) do
-          :not_found when key in ["length", "name", "caller", "arguments"] ->
-            Function.proto_property(c, key)
-
-          :not_found ->
-            :undefined
-
-          :deleted ->
-            :undefined
-
-          val ->
-            val
-        end
-
-      :deleted ->
-        :undefined
-
-      {:accessor, getter, _} when getter != nil ->
-        call_getter(getter, c)
-
-      val ->
-        val
-    end
-  end
+  defp get_own({:closure, _, %QuickBEAM.VM.Function{}} = closure, key),
+    do: FunctionExoticGet.own_property(closure, key, &call_getter/2)
 
   defp get_own({:symbol, desc}, "toString"),
     do: {:builtin, "toString", fn _, _ -> symbol_to_string(desc) end}
@@ -704,14 +637,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own({:symbol, desc}, "description"), do: desc
   defp get_own({:symbol, desc, _}, "description"), do: desc
 
-  defp get_own({:bound, _, _, _, _} = b, key) do
-    case Map.get(Heap.get_ctor_statics(b), key, :undefined) do
-      :undefined -> Function.proto_property(b, key)
-      {:accessor, getter, _} when getter != nil -> call_getter(getter, b)
-      {:accessor, nil, _} -> :undefined
-      val -> val
-    end
-  end
+  defp get_own({:bound, _, _, _, _} = bound, key),
+    do: FunctionExoticGet.own_property(bound, key, &call_getter/2)
 
   defp get_own(_, _), do: :undefined
 
