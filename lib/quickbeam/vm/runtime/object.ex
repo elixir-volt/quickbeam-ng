@@ -1140,7 +1140,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         )
 
       [target, key | _] ->
-        OwnProperty.present?(target, PropertyKey.to_property_key(key))
+        InternalMethods.own_property(target, PropertyKey.to_property_key(key)) != :undefined
 
       _ ->
         false
