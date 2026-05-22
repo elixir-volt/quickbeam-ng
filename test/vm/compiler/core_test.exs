@@ -1099,6 +1099,16 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, "set"} = Compiler.invoke(with_set, [])
     end
 
+    test "compiled global accessor reads fall back to global object", %{rt: rt} do
+      fun =
+        compile_and_decode(
+          rt,
+          ~S[Object.defineProperty(globalThis,"reviewRead",{get(){return "ok"},configurable:true}); reviewRead]
+        ).value
+
+      assert {:ok, "ok"} = Compiler.invoke(fun, [])
+    end
+
     test "compiled global setter throw can be caught", %{rt: rt} do
       fun =
         compile_and_decode(
