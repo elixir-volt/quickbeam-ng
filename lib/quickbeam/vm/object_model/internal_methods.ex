@@ -31,7 +31,34 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     do: Define.property(obj, key, descriptor, descriptor)
 
   def delete(obj, key), do: Delete.delete_property(obj, key)
-  def own_keys(obj), do: OwnProperty.own_keys(obj)
+
+  def own_keys({:obj, ref} = obj) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
+      %{proxy_target() => _target, proxy_handler() => handler}
+      when not is_map(handler) and not is_tuple(handler) ->
+        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
+
+      %{proxy_target() => target, proxy_handler() => handler} ->
+        trap = Get.get(handler, "ownKeys")
+
+        if Value.nullish?(trap) do
+          own_keys(target)
+        else
+          trap
+          |> ProxyTrap.call([target], handler)
+          |> OwnProperty.proxy_own_keys_list()
+          |> OwnProperty.validate_proxy_own_keys_invariant(target)
+        end
+
+      _ ->
+        OwnProperty.ordinary_own_keys(obj)
+    end
+  end
+
+  def own_keys(obj), do: OwnProperty.ordinary_own_keys(obj)
 
   def extensible?({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do

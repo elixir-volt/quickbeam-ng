@@ -9,6 +9,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   alias QuickBEAM.VM.ObjectModel.{
     ArrayExotic,
     Get,
+    InternalMethods,
     Semantics,
     Static,
     PropertyDescriptor,
@@ -214,23 +215,10 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   def descriptor_keys(target), do: own_keys(target)
 
-  def own_keys({:obj, ref}) do
+  def own_keys(target), do: InternalMethods.own_keys(target)
+
+  def ordinary_own_keys({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
-      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
-        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-
-      %{proxy_target() => target, proxy_handler() => handler} ->
-        trap = Get.get(handler, "ownKeys")
-
-        if Value.nullish?(trap) do
-          own_keys(target)
-        else
-          trap
-          |> Runtime.call_callback([target])
-          |> proxy_own_keys_list()
-          |> validate_proxy_own_keys_invariant(target)
-        end
-
       {:qb_arr, arr} ->
         array_present_indices(ref, :array.size(arr)) ++ ["length"] ++ array_property_keys(ref)
 
@@ -245,28 +233,28 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     end
   end
 
-  def own_keys(%QuickBEAM.VM.Function{} = fun), do: callable_descriptor_keys(fun)
+  def ordinary_own_keys(%QuickBEAM.VM.Function{} = fun), do: callable_descriptor_keys(fun)
 
-  def own_keys({:closure, _, %QuickBEAM.VM.Function{}} = fun),
+  def ordinary_own_keys({:closure, _, %QuickBEAM.VM.Function{}} = fun),
     do: callable_descriptor_keys(fun)
 
-  def own_keys({:builtin, _, map} = builtin) do
+  def ordinary_own_keys({:builtin, _, map} = builtin) do
     if Builtin.callable?(builtin),
       do: callable_descriptor_keys(builtin, map),
       else: builtin_namespace_descriptor_keys(builtin, map)
   end
 
-  def own_keys({:bound, _, _, _, _} = bound), do: callable_descriptor_keys(bound)
+  def ordinary_own_keys({:bound, _, _, _, _} = bound), do: callable_descriptor_keys(bound)
 
-  def own_keys({:regexp, _, _, ref}) do
+  def ordinary_own_keys({:regexp, _, _, ref}) do
     keys = RegexpState.get(ref) |> Map.keys() |> Enum.reject(&descriptor_internal_key?/1)
     (["lastIndex"] ++ (Enum.reverse(keys) -- ["lastIndex"])) |> Enum.uniq()
   end
 
-  def own_keys(string) when is_binary(string),
+  def ordinary_own_keys(string) when is_binary(string),
     do: array_indices(Get.string_length(string)) ++ ["length"]
 
-  def own_keys(_), do: []
+  def ordinary_own_keys(_), do: []
 
   defp builtin_namespace_descriptor_keys(builtin, inline_map) do
     statics = Heap.get_ctor_statics(builtin)
@@ -338,7 +326,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
 
   defp non_extensible_key_mismatch?(_target, _target_keys, _trap_keys), do: false
 
-  defp proxy_own_keys_list(result) do
+  def proxy_own_keys_list(result) do
     length = Get.get(result, "length")
 
     if is_integer(length) and length > 0 do
