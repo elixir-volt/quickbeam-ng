@@ -26,9 +26,20 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI.Bindings do
   def put_ref_value(ctx, value, key, ref), do: RuntimeBindings.put_ref_value(ctx, value, key, ref)
 
   defp get_global_binding_or_property(ctx, name, missing) do
-    case RuntimeBindings.get_global_undef(ctx.globals, name) do
-      :undefined -> get_global_object_property(ctx, name, missing)
-      value -> value
+    case fetch_global_binding(ctx.globals, name) do
+      {:ok, :__tdz__} -> QuickBEAM.VM.JSThrow.reference_error!("#{name} is not initialized")
+      {:ok, value} -> value
+      :error -> get_global_object_property(ctx, name, missing)
+    end
+  end
+
+  defp fetch_global_binding(globals, name) do
+    persistent = QuickBEAM.VM.Heap.get_persistent_globals() || %{}
+
+    if Map.has_key?(persistent, name) do
+      Map.fetch(persistent, name)
+    else
+      Map.fetch(globals, name)
     end
   end
 
