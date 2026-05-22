@@ -22,6 +22,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     HasProperty,
     OwnProperty,
     Static,
+    InternalMethods,
     PropertyDescriptor,
     PropertyKey,
     Semantics,
@@ -472,7 +473,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   defp wrapped_string_virtual_readonly?(_map, _key), do: false
 
   @doc "Writes a property using an explicit receiver, for Reflect.set semantics."
-  def set({:obj, ref}, key, val, receiver) do
+  def set(target, key, val, receiver), do: InternalMethods.set(target, key, val, receiver)
+
+  def ordinary_set({:obj, ref}, key, val, receiver) do
     key = normalize_key(key)
     raw = Heap.get_obj_raw(ref)
 
@@ -488,7 +491,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
-  def set(target, key, val, _receiver), do: put(target, key, val)
+  def ordinary_set(target, key, val, _receiver), do: put(target, key, val)
 
   defp invoke_proxy_set_trap_or_put(target, handler, key, val, receiver) do
     set_trap = Get.get(handler, "set")
@@ -510,30 +513,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
-  defp invoke_proxy_set_trap_or_set(target, handler, key, val, receiver) do
-    set_trap = Get.get(handler, "set")
-
-    cond do
-      Value.nullish?(set_trap) ->
-        set(target, key, val, receiver)
-
-      not QuickBEAM.VM.Builtin.callable?(set_trap) ->
-        JSThrow.type_error!("proxy set trap is not callable")
-
-      true ->
-        validate_proxy_set_invariant(
-          target,
-          key,
-          val,
-          Invocation.invoke_callback_or_throw(set_trap, [target, key, val, receiver], handler)
-        )
-    end
-  end
-
   defp set_property(ref, raw, key, val, receiver) do
     case raw do
-      %{proxy_target() => proxy_target, proxy_handler() => handler} ->
-        invoke_proxy_set_trap_or_set(proxy_target, handler, key, val, receiver)
+      %{proxy_target() => _proxy_target, proxy_handler() => _handler} ->
+        set({:obj, ref}, key, val, receiver)
 
       raw when is_tuple(raw) ->
         if Heap.shape?(raw) do
@@ -1528,7 +1511,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     :ok
   end
 
-  defp validate_proxy_set_invariant({:obj, target_ref} = target, key, val, trap_result) do
+  def validate_proxy_set_invariant({:obj, target_ref} = target, key, val, trap_result) do
     if Values.truthy?(trap_result) do
       desc = Heap.get_prop_desc(target_ref, key)
       target_value = Get.get(target, key)
@@ -1549,7 +1532,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
-  defp validate_proxy_set_invariant(_target, _key, _val, trap_result), do: trap_result
+  def validate_proxy_set_invariant(_target, _key, _val, trap_result), do: trap_result
 
   defp getter_only_accessor?(target_ref, key) do
     case Heap.raw_fetch(Heap.get_obj_raw(target_ref), key) do
