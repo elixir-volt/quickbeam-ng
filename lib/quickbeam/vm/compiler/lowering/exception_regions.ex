@@ -3,9 +3,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
 
   alias QuickBEAM.VM.Compiler.Analysis.CFG
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Driver, Emit, Ops, Slots, State}
-  alias QuickBEAM.VM.OpcodeFamily
-
-  require OpcodeFamily
+  alias QuickBEAM.VM.OpcodeSpec
 
   @doc "Lowers a catch instruction and its protected suffix."
   def catch_suffix(
@@ -145,8 +143,25 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
               callbacks
             )
 
-          {:ok, name} when OpcodeFamily.is_finally_control(name) ->
-            {:error, {:unsupported_finally_opcode, name, idx}}
+          {:ok, name} ->
+            if OpcodeSpec.control_flow_family(name) == :finally_control do
+              {:error, {:unsupported_finally_opcode, name, idx}}
+            else
+              lower_finally_instruction(
+                instructions,
+                size,
+                instruction,
+                idx,
+                state,
+                stack_depths,
+                constants,
+                entries,
+                inline_targets,
+                finally_entry,
+                continuation,
+                callbacks
+              )
+            end
 
           _ ->
             lower_finally_instruction(
@@ -201,14 +216,33 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
               callbacks
             )
 
-          {:ok, name} when OpcodeFamily.is_goto(name) ->
-            target = hd(elem(instruction, 1))
+          {:ok, name} ->
+            if OpcodeSpec.control_flow_family(name) == :goto do
+              target = hd(elem(instruction, 1))
 
-            if finally_internal_target?(instructions, size, finally_entry, target) do
-              lower_finally_inline(
+              if finally_internal_target?(instructions, size, finally_entry, target) do
+                lower_finally_inline(
+                  instructions,
+                  size,
+                  target,
+                  state,
+                  stack_depths,
+                  constants,
+                  entries,
+                  inline_targets,
+                  finally_entry,
+                  continuation,
+                  callbacks
+                )
+              else
+                State.goto(state, target, stack_depths)
+              end
+            else
+              lower_finally_instruction(
                 instructions,
                 size,
-                target,
+                instruction,
+                idx,
                 state,
                 stack_depths,
                 constants,
@@ -218,8 +252,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
                 continuation,
                 callbacks
               )
-            else
-              State.goto(state, target, stack_depths)
             end
 
           _ ->
