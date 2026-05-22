@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
       alias QuickBEAM.VM.{GlobalEnvironment, Heap, Names, Runtime, RuntimeState}
       alias QuickBEAM.VM.Interpreter.{ArgumentsObject, Closures, Completion, Context, Frame}
       alias QuickBEAM.VM.JSThrow
-      alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, Put}
+      alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods}
       alias QuickBEAM.VM.Promise, as: Promise
 
       # ── Globals: get_var, put_var, define_var, eval ──
@@ -160,7 +160,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
           unless GlobalEnvironment.lexical_global?(name) do
             case Map.get(ctx.globals, "globalThis") do
-              {:obj, _} = gt -> Put.put(gt, name, val)
+              {:obj, _} = gt -> InternalMethods.set(gt, name, val)
               _ -> :ok
             end
           end
@@ -318,7 +318,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
             Heap.put_base_globals(new_globals)
 
             case Map.get(ctx.globals, "globalThis") do
-              {:obj, _} = gt -> Put.put(gt, prop_name, val)
+              {:obj, _} = gt -> InternalMethods.set(gt, prop_name, val)
               _ -> :ok
             end
 
@@ -342,7 +342,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
           )
         else
           try do
-            Put.put(obj, key, val)
+            InternalMethods.set(obj, key, val)
             frame = sync_setter_globals_to_frame(frame, ctx)
             run(pc + 1, frame, rest, gas, ctx)
           catch
@@ -435,7 +435,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
         key = Names.resolve_atom(ctx, atom_idx)
 
         if with_has_property?(obj, key) do
-          Put.put(obj, key, val)
+          InternalMethods.set(obj, key, val)
           frame = sync_setter_globals_to_frame(frame, ctx)
           run(target, frame, rest, gas, ctx)
         else
