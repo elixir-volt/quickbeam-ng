@@ -18,6 +18,31 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops do
     WithScope
   }
 
+  @family_modules %{
+    arithmetic: Arithmetic,
+    calls: Calls,
+    classes: Classes,
+    control: Control,
+    generators: Generators,
+    globals: Globals,
+    iterators: Iterators,
+    locals: Locals,
+    objects: Objects,
+    stack: Stack,
+    with_scope: WithScope
+  }
+
+  @coverage_errors for {name, _num} <- OpcodeSpec.all_opcodes(),
+                       family = OpcodeSpec.lowering_family(name),
+                       family != nil,
+                       module = Map.fetch!(@family_modules, family),
+                       name not in module.registered_opcodes(),
+                       do: {family, name, module}
+
+  if @coverage_errors != [] do
+    raise "lowering family opcodes missing registered handlers: #{inspect(@coverage_errors)}"
+  end
+
   @doc "Lowers one VM instruction into compiler state changes."
   def lower_instruction(
         {op, args},
