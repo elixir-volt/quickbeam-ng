@@ -14,6 +14,13 @@ defmodule QuickBEAM.VM.Compiler.BEAMFormsTest do
 
     assert BEAMForms.map_get(left, right) ==
              {:call, 1, {:remote, 1, {:atom, 0, :erlang}, {:atom, 1, :map_get}}, [right, left]}
+
+    assert BEAMForms.map_put(left, right, BEAMForms.integer(1)) ==
+             {:call, 1, {:remote, 1, {:atom, 0, :maps}, {:atom, 1, :put}},
+              [right, {:integer, 1, 1}, left]}
+
+    assert BEAMForms.map_update(left, right, BEAMForms.integer(1)) ==
+             {:map, 1, left, [{:map_field_exact, 1, right, {:integer, 1, 1}}]}
   end
 
   test "builds binary and function forms" do
@@ -24,5 +31,8 @@ defmodule QuickBEAM.VM.Compiler.BEAMFormsTest do
 
     assert BEAMForms.function(:identity, [arg], [], [arg]) ==
              {:function, 1, :identity, 1, [{:clause, 1, [arg], [], [arg]}]}
+
+    assert BEAMForms.anonymous_fun([arg], [], [arg]) ==
+             {:fun, 1, {:clauses, [{:clause, 1, [arg], [], [arg]}]}}
   end
 end

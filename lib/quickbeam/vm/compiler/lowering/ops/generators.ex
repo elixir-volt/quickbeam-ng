@@ -126,9 +126,9 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
           ctx | slots ++ stack ++ captures
         ])
 
-      {:fun, 1, {:clauses, [{:clause, 1, [arg_var], [], [call]}]}}
+      Builder.anonymous_fun([arg_var], [], [call])
     else
-      {:fun, 1, {:clauses, [{:clause, 1, [arg_var], [], [Builder.atom(:undefined)]}]}}
+      Builder.anonymous_fun([arg_var], [], [Builder.atom(:undefined)])
     end
   end
 
@@ -146,7 +146,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
         ctx | slots ++ stack ++ captures
       ])
 
-    {:fun, 1, {:clauses, [{:clause, 1, [arg_var], [], [call]}]}}
+    Builder.anonymous_fun([arg_var], [], [call])
   end
 
   defp yield_continuation(state, next_entry, stack_depths) do

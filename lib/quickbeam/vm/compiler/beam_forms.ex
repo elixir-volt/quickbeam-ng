@@ -39,6 +39,10 @@ defmodule QuickBEAM.VM.Compiler.BEAMForms do
 
   def map_get(map, key), do: remote_call(:erlang, :map_get, [key, map])
 
+  def map_put(map, key, value), do: remote_call(:maps, :put, [key, value, map])
+
+  def map_update(map, key, value), do: {:map, @line, map, [{:map_field_exact, @line, key, value}]}
+
   def remote_call?(expr, mod, fun) do
     match?({:call, _, {:remote, _, {:atom, _, ^mod}, {:atom, _, ^fun}}, _args}, expr)
   end
@@ -52,6 +56,10 @@ defmodule QuickBEAM.VM.Compiler.BEAMForms do
   def clause(patterns, guards \\ [], body), do: {:clause, @line, patterns, guards, body}
   def false_clause(body), do: clause([atom(false)], [], body)
   def true_clause(body), do: clause([atom(true)], [], body)
+
+  def anonymous_fun(clauses), do: {:fun, @line, {:clauses, clauses}}
+
+  def anonymous_fun(args, guards, body), do: anonymous_fun([clause(args, guards, body)])
 
   def function(name, arity, clauses), do: {:function, @line, name, arity, clauses}
 

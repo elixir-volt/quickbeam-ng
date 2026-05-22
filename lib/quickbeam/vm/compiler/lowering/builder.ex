@@ -36,6 +36,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Builder do
 
   def list_expr(values), do: BEAMForms.list(values)
 
+  def anonymous_fun(args, guards, body), do: BEAMForms.anonymous_fun(args, guards, body)
+
   def remote_call(mod, fun, args), do: BEAMForms.remote_call(mod, fun, args)
 
   @doc "Builds an Erlang abstract-format local call expression."
