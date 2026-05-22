@@ -3,71 +3,83 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
 
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Slots, State}
+  alias QuickBEAM.VM.OpcodeSpec
+
+  @handlers %{
+    initial_yield: :initial_yield,
+    yield: :yield,
+    yield_star: :yield_star,
+    async_yield_star: :yield_star,
+    await: :await,
+    return_async: :return_async
+  }
+
+  @extra_handler_opcodes [:return_async]
+  @invalid_handlers for {name, _handler} <- @handlers,
+                        OpcodeSpec.lowering_family(name) != :generators and
+                          name not in @extra_handler_opcodes,
+                        do: name
+
+  if @invalid_handlers != [] do
+    raise "generator lowering handlers registered for non-generator opcodes: #{inspect(@invalid_handlers)}"
+  end
+
+  def registered_opcodes, do: Map.keys(@handlers)
 
   @doc "Lowers a VM instruction or function into compiler IR."
-  def lower(state, next_entry, stack_depths, name_args) do
-    case name_args do
-      {{:ok, :initial_yield}, []} ->
-        initial_yield_throw(state, next_entry, stack_depths)
-
-      {{:ok, :yield}, []} ->
-        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
-          yield_throw(state, val, next_entry, stack_depths)
-        end
-
-      {{:ok, :yield_star}, []} ->
-        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
-          {:done,
-           Enum.reverse([
-             Builder.remote_call(:erlang, :throw, [
-               Builder.tuple_expr([
-                 Builder.atom(:generator_yield_star),
-                 val,
-                 yield_star_continuation(state, next_entry)
-               ])
-             ])
-             | state.body
-           ])}
-        end
-
-      {{:ok, :async_yield_star}, []} ->
-        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
-          {:done,
-           Enum.reverse([
-             Builder.remote_call(:erlang, :throw, [
-               Builder.tuple_expr([
-                 Builder.atom(:generator_yield_star),
-                 val,
-                 yield_star_continuation(state, next_entry)
-               ])
-             ])
-             | state.body
-           ])}
-        end
-
-      {{:ok, :await}, []} ->
-        with {:ok, val, _type, state} <- Emit.pop_typed(state) do
-          LoweringEffects.effectful_push(
-            state,
-            State.abi_call(state, :await, [val])
-          )
-        end
-
-      {{:ok, :return_async}, []} ->
-        with {:ok, val, _state} <- Emit.pop(state) do
-          {:done,
-           Enum.reverse([
-             Builder.remote_call(:erlang, :throw, [
-               Builder.tuple_expr([Builder.atom(:generator_return), val])
-             ])
-             | state.body
-           ])}
-        end
-
-      _ ->
-        :not_handled
+  def lower(state, next_entry, stack_depths, {{:ok, name}, args}) do
+    case Map.get(@handlers, name) do
+      nil -> :not_handled
+      handler -> lower_handler(handler, state, next_entry, stack_depths, args)
     end
   end
+
+  def lower(_state, _next_entry, _stack_depths, _name_args), do: :not_handled
+
+  defp lower_handler(:initial_yield, state, next_entry, stack_depths, []),
+    do: initial_yield_throw(state, next_entry, stack_depths)
+
+  defp lower_handler(:yield, state, next_entry, stack_depths, []) do
+    with {:ok, val, _type, state} <- Emit.pop_typed(state) do
+      yield_throw(state, val, next_entry, stack_depths)
+    end
+  end
+
+  defp lower_handler(:yield_star, state, next_entry, _stack_depths, []) do
+    with {:ok, val, _type, state} <- Emit.pop_typed(state) do
+      {:done,
+       Enum.reverse([
+         Builder.remote_call(:erlang, :throw, [
+           Builder.tuple_expr([
+             Builder.atom(:generator_yield_star),
+             val,
+             yield_star_continuation(state, next_entry)
+           ])
+         ])
+         | state.body
+       ])}
+    end
+  end
+
+  defp lower_handler(:await, state, _next_entry, _stack_depths, []) do
+    with {:ok, val, _type, state} <- Emit.pop_typed(state) do
+      LoweringEffects.effectful_push(state, State.abi_call(state, :await, [val]))
+    end
+  end
+
+  defp lower_handler(:return_async, state, _next_entry, _stack_depths, []) do
+    with {:ok, val, _state} <- Emit.pop(state) do
+      {:done,
+       Enum.reverse([
+         Builder.remote_call(:erlang, :throw, [
+           Builder.tuple_expr([Builder.atom(:generator_return), val])
+         ])
+         | state.body
+       ])}
+    end
+  end
+
+  defp lower_handler(_handler, _state, _next_entry, _stack_depths, _args), do: :not_handled
 
   defp initial_yield_throw(state, next_entry, stack_depths) do
     {:done,
