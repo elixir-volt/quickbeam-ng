@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.LoweringRegistryTest do
   use ExUnit.Case, async: true
 
-  alias QuickBEAM.VM.Compiler.Lowering.Ops.{Arithmetic, Locals, Objects, Stack}
+  alias QuickBEAM.VM.Compiler.Lowering.Ops.{Arithmetic, Globals, Locals, Objects, Stack}
   alias QuickBEAM.VM.OpcodeSpec
 
   test "stack handlers match stack lowering family" do
@@ -19,6 +19,42 @@ defmodule QuickBEAM.VM.Compiler.LoweringRegistryTest do
 
   test "object handlers match object lowering family" do
     assert_registered_family(Objects.registered_opcodes(), :objects)
+  end
+
+  test "global handlers match globals lowering family" do
+    var_ref_opcodes =
+      MapSet.new([
+        :get_var_ref,
+        :get_var_ref0,
+        :get_var_ref1,
+        :get_var_ref2,
+        :get_var_ref3,
+        :get_var_ref_check,
+        :put_var_ref,
+        :put_var_ref0,
+        :put_var_ref1,
+        :put_var_ref2,
+        :put_var_ref3,
+        :put_var_ref_check,
+        :put_var_ref_check_init,
+        :set_var_ref,
+        :set_var_ref0,
+        :set_var_ref1,
+        :set_var_ref2,
+        :set_var_ref3
+      ])
+
+    unexpected =
+      Globals.registered_opcodes()
+      |> Enum.reject(
+        &(OpcodeSpec.lowering_family(&1) == :globals or MapSet.member?(var_ref_opcodes, &1))
+      )
+      |> Enum.sort()
+
+    assert unexpected == []
+
+    assert Enum.sort(Globals.registered_opcodes()) ==
+             Enum.uniq(Enum.sort(Globals.registered_opcodes()))
   end
 
   defp assert_registered_family(opcodes, family, aliases \\ %{}) do

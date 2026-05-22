@@ -4,118 +4,170 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Slots, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings
+  alias QuickBEAM.VM.OpcodeSpec
+
+  @handlers %{
+    get_var: :get_var,
+    get_var_undef: :get_var_undef,
+    put_var: {:put_var, false},
+    put_var_init: {:put_var, true},
+    define_func: {:put_var, true},
+    define_var: :define_var,
+    check_define_var: :check_define_var,
+    get_var_ref: :get_var_ref,
+    get_var_ref0: :get_var_ref,
+    get_var_ref1: :get_var_ref,
+    get_var_ref2: :get_var_ref,
+    get_var_ref3: :get_var_ref,
+    get_var_ref_check: :get_var_ref_check,
+    put_var_ref: :put_var_ref,
+    put_var_ref0: :put_var_ref,
+    put_var_ref1: :put_var_ref,
+    put_var_ref2: :put_var_ref,
+    put_var_ref3: :put_var_ref,
+    put_var_ref_check: :put_var_ref,
+    put_var_ref_check_init: :put_var_ref,
+    set_var_ref: :set_var_ref,
+    set_var_ref0: :set_var_ref,
+    set_var_ref1: :set_var_ref,
+    set_var_ref2: :set_var_ref,
+    set_var_ref3: :set_var_ref,
+    make_loc_ref: :make_loc_ref,
+    make_arg_ref: :make_arg_ref,
+    make_var_ref: :make_var_ref,
+    make_var_ref_ref: :make_var_ref_ref,
+    get_ref_value: :get_ref_value,
+    put_ref_value: :put_ref_value,
+    delete_var: :delete_var
+  }
+
+  @var_ref_opcodes [
+    :get_var_ref,
+    :get_var_ref0,
+    :get_var_ref1,
+    :get_var_ref2,
+    :get_var_ref3,
+    :get_var_ref_check,
+    :put_var_ref,
+    :put_var_ref0,
+    :put_var_ref1,
+    :put_var_ref2,
+    :put_var_ref3,
+    :put_var_ref_check,
+    :put_var_ref_check_init,
+    :set_var_ref,
+    :set_var_ref0,
+    :set_var_ref1,
+    :set_var_ref2,
+    :set_var_ref3
+  ]
+
+  @invalid_handlers for {name, _handler} <- @handlers,
+                        OpcodeSpec.lowering_family(name) != :globals and
+                          name not in @var_ref_opcodes,
+                        do: name
+
+  if @invalid_handlers != [] do
+    raise "global lowering handlers registered for non-global opcodes: #{inspect(@invalid_handlers)}"
+  end
+
+  def registered_opcodes, do: Map.keys(@handlers)
 
   @doc "Lowers a VM instruction or function into compiler IR."
-  def lower(state, name_args) do
-    case name_args do
-      {{:ok, :get_var}, [atom_idx]} ->
-        name = Builder.atom_name(state, atom_idx)
-
-        if is_binary(name) do
-          LoweringEffects.effectful_push(state, inline_get_var(state, name))
-        else
-          LoweringEffects.effectful_push(
-            state,
-            State.abi_call(state, :get_var, [Builder.literal(name)])
-          )
-        end
-
-      {{:ok, :get_var_undef}, [atom_idx]} ->
-        name = Builder.atom_name(state, atom_idx)
-
-        if is_binary(name) do
-          LoweringEffects.effectful_push(state, inline_get_var_undef(state, name))
-        else
-          LoweringEffects.effectful_push(
-            state,
-            State.abi_call(state, :get_var_undef, [Builder.literal(name)])
-          )
-        end
-
-      {{:ok, :put_var}, [atom_idx]} ->
-        lower_put_var(state, atom_idx, false)
-
-      {{:ok, :put_var_init}, [atom_idx]} ->
-        lower_put_var(state, atom_idx, true)
-
-      {{:ok, :define_func}, [atom_idx, _flags]} ->
-        lower_put_var(state, atom_idx, true)
-
-      {{:ok, :define_var}, [atom_idx, scope]} ->
-        {:ok,
-         State.update_ctx(
-           state,
-           State.abi_call(state, :define_var, [
-             Builder.literal(atom_idx),
-             Builder.literal(scope)
-           ])
-         )}
-
-      {{:ok, :check_define_var}, [atom_idx, _scope]} ->
-        {:ok,
-         State.update_ctx(
-           state,
-           State.abi_call(state, :check_define_var, [Builder.literal(atom_idx)])
-         )}
-
-      {{:ok, name}, [idx]}
-      when name in [:get_var_ref, :get_var_ref0, :get_var_ref1, :get_var_ref2, :get_var_ref3] ->
-        {expr, state} = State.inline_get_var_ref(state, idx)
-        LoweringEffects.effectful_push(state, expr)
-
-      {{:ok, :get_var_ref_check}, [idx]} ->
-        {expr, state} = State.inline_get_var_ref(state, idx)
-        LoweringEffects.effectful_push(state, expr)
-
-      {{:ok, name}, [idx]}
-      when name in [
-             :put_var_ref,
-             :put_var_ref0,
-             :put_var_ref1,
-             :put_var_ref2,
-             :put_var_ref3,
-             :put_var_ref_check,
-             :put_var_ref_check_init
-           ] ->
-        lower_put_var_ref(state, idx)
-
-      {{:ok, name}, [idx]}
-      when name in [:set_var_ref, :set_var_ref0, :set_var_ref1, :set_var_ref2, :set_var_ref3] ->
-        lower_set_var_ref(state, idx)
-
-      {{:ok, :make_loc_ref}, [atom_idx, var_idx]} ->
-        lower_make_loc_ref(state, atom_idx, var_idx)
-
-      {{:ok, :make_arg_ref}, [atom_idx, var_idx]} ->
-        lower_make_arg_ref(state, atom_idx, var_idx)
-
-      {{:ok, :make_var_ref}, [atom_idx]} ->
-        lower_make_var_ref(state, atom_idx)
-
-      {{:ok, :make_var_ref}, [atom_idx, var_idx]} ->
-        lower_make_loc_ref(state, atom_idx, var_idx)
-
-      {{:ok, :make_var_ref_ref}, [atom_idx, var_idx]} ->
-        lower_make_var_ref_ref(state, atom_idx, var_idx)
-
-      {{:ok, :get_ref_value}, []} ->
-        lower_get_ref_value(state)
-
-      {{:ok, :put_ref_value}, []} ->
-        lower_put_ref_value(state)
-
-      {{:ok, :delete_var}, [atom_idx]} ->
-        {:ok,
-         Emit.push(
-           state,
-           State.abi_call(state, :delete_var, [Builder.literal(atom_idx)]),
-           :boolean
-         )}
-
-      _ ->
-        :not_handled
+  def lower(state, {{:ok, name}, args}) do
+    case Map.get(@handlers, name) do
+      nil -> :not_handled
+      handler -> lower_handler(handler, state, args)
     end
   end
+
+  def lower(_state, _name_args), do: :not_handled
+
+  defp lower_handler(:get_var, state, [atom_idx]) do
+    name = Builder.atom_name(state, atom_idx)
+
+    if is_binary(name) do
+      LoweringEffects.effectful_push(state, inline_get_var(state, name))
+    else
+      LoweringEffects.effectful_push(
+        state,
+        State.abi_call(state, :get_var, [Builder.literal(name)])
+      )
+    end
+  end
+
+  defp lower_handler(:get_var_undef, state, [atom_idx]) do
+    name = Builder.atom_name(state, atom_idx)
+
+    if is_binary(name) do
+      LoweringEffects.effectful_push(state, inline_get_var_undef(state, name))
+    else
+      LoweringEffects.effectful_push(
+        state,
+        State.abi_call(state, :get_var_undef, [Builder.literal(name)])
+      )
+    end
+  end
+
+  defp lower_handler({:put_var, init?}, state, [atom_idx | _rest]),
+    do: lower_put_var(state, atom_idx, init?)
+
+  defp lower_handler(:define_var, state, [atom_idx, scope]) do
+    {:ok,
+     State.update_ctx(
+       state,
+       State.abi_call(state, :define_var, [Builder.literal(atom_idx), Builder.literal(scope)])
+     )}
+  end
+
+  defp lower_handler(:check_define_var, state, [atom_idx | _rest]) do
+    {:ok,
+     State.update_ctx(
+       state,
+       State.abi_call(state, :check_define_var, [Builder.literal(atom_idx)])
+     )}
+  end
+
+  defp lower_handler(:get_var_ref, state, [idx]) do
+    {expr, state} = State.inline_get_var_ref(state, idx)
+    LoweringEffects.effectful_push(state, expr)
+  end
+
+  defp lower_handler(:get_var_ref_check, state, [idx]) do
+    {expr, state} = State.inline_get_var_ref(state, idx)
+    LoweringEffects.effectful_push(state, expr)
+  end
+
+  defp lower_handler(:put_var_ref, state, [idx]), do: lower_put_var_ref(state, idx)
+  defp lower_handler(:set_var_ref, state, [idx]), do: lower_set_var_ref(state, idx)
+
+  defp lower_handler(:make_loc_ref, state, [atom_idx, var_idx]),
+    do: lower_make_loc_ref(state, atom_idx, var_idx)
+
+  defp lower_handler(:make_arg_ref, state, [atom_idx, var_idx]),
+    do: lower_make_arg_ref(state, atom_idx, var_idx)
+
+  defp lower_handler(:make_var_ref, state, [atom_idx]), do: lower_make_var_ref(state, atom_idx)
+
+  defp lower_handler(:make_var_ref, state, [atom_idx, var_idx]),
+    do: lower_make_loc_ref(state, atom_idx, var_idx)
+
+  defp lower_handler(:make_var_ref_ref, state, [atom_idx, var_idx]),
+    do: lower_make_var_ref_ref(state, atom_idx, var_idx)
+
+  defp lower_handler(:get_ref_value, state, []), do: lower_get_ref_value(state)
+  defp lower_handler(:put_ref_value, state, []), do: lower_put_ref_value(state)
+
+  defp lower_handler(:delete_var, state, [atom_idx]) do
+    {:ok,
+     Emit.push(
+       state,
+       State.abi_call(state, :delete_var, [Builder.literal(atom_idx)]),
+       :boolean
+     )}
+  end
+
+  defp lower_handler(_handler, _state, _args), do: :not_handled
 
   defp lower_put_var(state, atom_idx, init?) do
     with {:ok, val, _type, state} <- Emit.pop_typed(state) do
