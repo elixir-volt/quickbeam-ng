@@ -8,29 +8,29 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Host.Callback
+  alias QuickBEAM.VM.Host.Web.FormData.State
   alias QuickBEAM.VM.Host.WebAPIs
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
-    %{"FormData" => WebAPIs.register("FormData", &build_form_data/2)}
+    WebAPIs.register_constructors([{"FormData", &build_form_data/2}])
   end
 
   defp build_form_data(_args, _this) do
-    entries_ref = make_ref()
-    Heap.put_obj(entries_ref, %{list: []})
+    entries_ref = State.new()
 
     object do
       method "append" do
         [name, value, filename] = argv(args, [nil, nil, nil])
         entry = {to_string(name), coerce_entry_value(value, filename)}
-        save_fd_entries(entries_ref, load_fd_entries(entries_ref) ++ [entry])
+        State.append(entries_ref, entry)
         :undefined
       end
 
       method "get" do
         name = args |> arg(0, nil) |> to_string()
 
-        case Enum.find(load_fd_entries(entries_ref), fn {key, _value} -> key == name end) do
+        case Enum.find(State.entries(entries_ref), fn {key, _value} -> key == name end) do
           {_key, value} -> value
           nil -> nil
         end
@@ -40,7 +40,7 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
         name = args |> arg(0, nil) |> to_string()
 
         entries_ref
-        |> load_fd_entries()
+        |> State.entries()
         |> Enum.filter(fn {key, _value} -> key == name end)
         |> Enum.map(fn {_key, value} -> value end)
         |> Heap.wrap()
@@ -51,36 +51,26 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
         name = to_string(name)
         entry = {name, coerce_entry_value(value, filename)}
 
-        entries =
-          entries_ref
-          |> load_fd_entries()
-          |> Enum.reject(fn {key, _value} -> key == name end)
-
-        save_fd_entries(entries_ref, entries ++ [entry])
+        State.replace(entries_ref, name, entry)
         :undefined
       end
 
       method "delete" do
         name = args |> arg(0, nil) |> to_string()
 
-        entries =
-          entries_ref
-          |> load_fd_entries()
-          |> Enum.reject(fn {key, _value} -> key == name end)
-
-        save_fd_entries(entries_ref, entries)
+        State.delete(entries_ref, name)
         :undefined
       end
 
       method "has" do
         name = args |> arg(0, nil) |> to_string()
-        Enum.any?(load_fd_entries(entries_ref), fn {key, _value} -> key == name end)
+        Enum.any?(State.entries(entries_ref), fn {key, _value} -> key == name end)
       end
 
       method "forEach" do
         callback = arg(args, 0, nil)
 
-        Enum.each(load_fd_entries(entries_ref), fn {key, value} ->
+        Enum.each(State.entries(entries_ref), fn {key, value} ->
           Callback.safe_invoke(callback, [value, key, this])
         end)
 
@@ -89,28 +79,28 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
 
       method "entries" do
         entries_ref
-        |> load_fd_entries()
+        |> State.entries()
         |> entry_pairs()
         |> iterator_from()
       end
 
       method "keys" do
         entries_ref
-        |> load_fd_entries()
+        |> State.entries()
         |> Enum.map(&elem(&1, 0))
         |> iterator_from()
       end
 
       method "values" do
         entries_ref
-        |> load_fd_entries()
+        |> State.entries()
         |> Enum.map(&elem(&1, 1))
         |> iterator_from()
       end
 
       symbol_method "Symbol.iterator" do
         entries_ref
-        |> load_fd_entries()
+        |> State.entries()
         |> entry_pairs()
         |> iterator_from()
       end
@@ -200,7 +190,7 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
   def encode_multipart(entries_ref) do
     fields =
       entries_ref
-      |> load_fd_entries()
+      |> State.entries()
       |> Enum.map(fn {name, value} ->
         case value do
           {:obj, _} = obj ->
@@ -220,17 +210,6 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
     # Capitalize headers to match browser FormData behavior
     binary = body |> IO.iodata_to_binary() |> capitalize_multipart_headers()
     {binary, content_type}
-  end
-
-  defp load_fd_entries(ref) do
-    case Heap.get_obj(ref, %{}) do
-      %{list: list} when is_list(list) -> list
-      _ -> []
-    end
-  end
-
-  defp save_fd_entries(ref, entries) do
-    Heap.put_obj(ref, %{list: entries})
   end
 
   defp capitalize_multipart_headers(body) do

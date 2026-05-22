@@ -94,7 +94,8 @@ process_state_owners = [
       "QuickBEAM.VM.Host.Web.ConsoleAPI.State",
       "QuickBEAM.VM.Host.Web.EventSourceAPI.State",
       "QuickBEAM.VM.Host.Web.Worker.State",
-      "QuickBEAM.VM.Host.Web.Streams.State"
+      "QuickBEAM.VM.Host.Web.Streams.State",
+      "QuickBEAM.VM.Host.Web.FormData.State"
     ],
     internal_callers: [
       {"QuickBEAM.VM.Host.Test262", ["QuickBEAM.VM.Host.*"]},
@@ -115,7 +116,8 @@ process_state_owners = [
       {"QuickBEAM.VM.Host.Web.ConsoleAPI.State", ["QuickBEAM.VM.Host.Web.ConsoleAPI"]},
       {"QuickBEAM.VM.Host.Web.EventSourceAPI.State", ["QuickBEAM.VM.Host.Web.EventSourceAPI"]},
       {"QuickBEAM.VM.Host.Web.Worker.State", ["QuickBEAM.VM.Host.Web.Worker"]},
-      {"QuickBEAM.VM.Host.Web.Streams.State", ["QuickBEAM.VM.Host.Web.Streams"]}
+      {"QuickBEAM.VM.Host.Web.Streams.State", ["QuickBEAM.VM.Host.Web.Streams"]},
+      {"QuickBEAM.VM.Host.Web.FormData.State", ["QuickBEAM.VM.Host.Web.FormData"]}
     ]
   ],
   tests: [
