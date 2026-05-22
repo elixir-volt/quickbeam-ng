@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
       alias QuickBEAM.VM.{GlobalEnvironment, Heap, Names, Runtime, RuntimeState}
       alias QuickBEAM.VM.Interpreter.{ArgumentsObject, Closures, Context, Frame}
       alias QuickBEAM.VM.JSThrow
-      alias QuickBEAM.VM.ObjectModel.{Delete, Get, InternalMethods, Put}
+      alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, Put}
       alias QuickBEAM.VM.Promise, as: Promise
 
       # ── Globals: get_var, put_var, define_var, eval ──
@@ -455,7 +455,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
         key = Names.resolve_atom(ctx, atom_idx)
 
         if with_has_property?(obj, key) do
-          Delete.delete_property(obj, key)
+          InternalMethods.delete(obj, key)
           run(target, frame, [true | rest], gas, ctx)
         else
           run(pc + 1, frame, rest, gas, ctx)

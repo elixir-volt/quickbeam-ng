@@ -23,7 +23,6 @@ defmodule QuickBEAM.VM.Interpreter do
   alias QuickBEAM.VM.ObjectModel.{
     Class,
     Copy,
-    Delete,
     Functions,
     Get,
     Methods,
