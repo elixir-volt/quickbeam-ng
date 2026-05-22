@@ -69,8 +69,7 @@ defmodule QuickBEAM.VM.Interpreter do
     - bigint:    `{:bigint, integer()}`
   """
 
-  @compile {:inline,
-            put_local: 3, list_iterator_next: 1, make_list_iterator: 1, check_prototype_chain: 2}
+  @compile {:inline, put_local: 3, list_iterator_next: 1, make_list_iterator: 1}
 
   for {num, {name, _, _, _, _}} <- QuickBEAM.VM.Opcodes.table() do
     Module.put_attribute(__MODULE__, :"op_#{name}", num)
@@ -923,67 +922,6 @@ defmodule QuickBEAM.VM.Interpreter do
   defp template_constant_elements({:array, elems}) when is_list(elems), do: elems
   defp template_constant_elements(elems) when is_list(elems), do: elems
   defp template_constant_elements(value), do: [value]
-
-  defp function_value?({:closure, _, _}), do: true
-  defp function_value?(%QuickBEAM.VM.Function{}), do: true
-  defp function_value?({:builtin, _, _}), do: true
-  defp function_value?({:bound, _, _, _, _}), do: true
-  defp function_value?(_), do: false
-
-  @dialyzer {:nowarn_function, check_prototype_chain: 2}
-  defp check_prototype_chain(_, :undefined), do: false
-  defp check_prototype_chain(_, nil), do: false
-
-  defp check_prototype_chain({:obj, ref}, target) do
-    case Heap.get_obj(ref, %{}) do
-      map when is_map(map) ->
-        case Map.get(map, proto()) do
-          ^target -> true
-          nil -> false
-          :undefined -> false
-          proto -> check_prototype_chain(proto, target)
-        end
-
-      data when is_list(data) ->
-        array_proto_matches?(target)
-
-      {:qb_arr, _} ->
-        array_proto_matches?(target)
-
-      _ ->
-        false
-    end
-  end
-
-  defp check_prototype_chain(_, _), do: false
-
-  defp array_proto_matches?(target) do
-    case RuntimeState.current() do
-      %{globals: globals} ->
-        array_ctor = Map.get(globals, "Array")
-
-        if array_ctor do
-          array_proto = Get.get(array_ctor, "prototype")
-
-          if array_proto == target do
-            true
-          else
-            object_ctor = Map.get(globals, "Object")
-
-            if object_ctor do
-              Get.get(object_ctor, "prototype") == target
-            else
-              false
-            end
-          end
-        else
-          false
-        end
-
-      _ ->
-        false
-    end
-  end
 
   defp with_has_property?(obj, key), do: Static.with_has_property?(obj, key)
 

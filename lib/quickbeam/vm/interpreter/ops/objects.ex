@@ -4,15 +4,13 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
   @doc "Installs the Object creation, field access, array element access, and misc object stubs helpers into the caller module."
   defmacro __using__(_opts) do
     quote location: :keep do
-      import QuickBEAM.VM.Value, only: [is_object: 1, is_closure: 1, is_nullish: 1]
+      import QuickBEAM.VM.Value, only: [is_object: 1, is_nullish: 1]
 
       alias QuickBEAM.VM.{
         Builtin,
         GlobalEnvironment,
         Heap,
-        Invocation,
         Names,
-        Runtime,
         RuntimeState,
         Value
       }
@@ -20,8 +18,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       alias QuickBEAM.VM.Interpreter.{Context, Frame}
       alias QuickBEAM.VM.Interpreter.Ops.CopyDataProperties, as: CopyOp
       alias QuickBEAM.VM.Interpreter.Ops.Delete, as: DeleteOp
-      alias QuickBEAM.VM.Interpreter.Ops.{ObjectLiterals, PropertyKeys}
-      alias QuickBEAM.VM.Semantics.Values
+      alias QuickBEAM.VM.Interpreter.Ops.{InOperator, InstanceOf, ObjectLiterals, PropertyKeys}
 
       alias QuickBEAM.VM.ObjectModel.{
         Class,
@@ -582,107 +579,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
           rest,
           gas,
           ctx,
-          fn ->
-            has_instance = Get.get(ctor, {:symbol, "Symbol.hasInstance"})
-
-            if not Value.nullish?(has_instance) and
-                 function_value?(has_instance) do
-              result =
-                Invocation.invoke_with_receiver(has_instance, [obj], Runtime.gas_budget(), ctor)
-
-              Values.truthy?(result)
-            else
-              is_obj = function_value?(ctor) or is_object(ctor)
-
-              unless is_obj do
-                throw(
-                  {:js_throw,
-                   Heap.make_error("Right-hand side of instanceof is not callable", "TypeError")}
-                )
-              end
-
-              is_callable_ctor =
-                case ctor do
-                  {:builtin, _, map} when is_map(map) -> false
-                  {:obj, ref} -> Get.get({:obj, ref}, "call") != :undefined
-                  _ -> true
-                end
-
-              unless is_callable_ctor do
-                throw(
-                  {:js_throw,
-                   Heap.make_error("Right-hand side of instanceof is not callable", "TypeError")}
-                )
-              end
-
-              obj_is_object = is_object(obj) or function_value?(obj)
-
-              if obj_is_object do
-                builtin_instance? =
-                  case {obj, ctor} do
-                    {{:obj, ref}, {:builtin, "Array", _}} ->
-                      data = Heap.get_obj(ref)
-                      match?({:qb_arr, _}, data) or is_list(data)
-
-                    {{:obj, ref}, {:builtin, "BigInt", _}} ->
-                      match?(
-                        {:ok, _},
-                        QuickBEAM.VM.ObjectModel.WrappedPrimitive.value(
-                          Heap.get_obj(ref, %{}),
-                          :bigint
-                        )
-                      )
-
-                    {{:obj, ref}, {:builtin, name, _}} when is_binary(name) ->
-                      data = Heap.get_obj(ref, %{})
-
-                      typed_array_instance?(data, name) or
-                        (name == "Date" and Map.has_key?(data, date_ms()))
-
-                    {{:obj, _}, {:builtin, "Object", _}} ->
-                      true
-
-                    {value, {:builtin, name, _}} ->
-                      function_value?(value) and name in ["Function", "Object"]
-
-                    _ ->
-                      false
-                  end
-
-                if builtin_instance? do
-                  true
-                else
-                  ctor_proto = Get.get(ctor, "prototype")
-
-                  case ctor_proto do
-                    {:obj, _} ->
-                      check_prototype_chain(obj, ctor_proto)
-
-                    _ ->
-                      if is_object(ctor) do
-                        throw(
-                          {:js_throw,
-                           Heap.make_error(
-                             "Right-hand side of instanceof is not callable",
-                             "TypeError"
-                           )}
-                        )
-                      else
-                        throw(
-                          {:js_throw,
-                           Heap.make_error(
-                             "Function has non-object prototype '#{Values.stringify(ctor_proto)}' in instanceof check",
-                             "TypeError"
-                           )}
-                        )
-                      end
-                  end
-                end
-              else
-                false
-              end
-            end
-          end,
+          fn -> InstanceOf.evaluate(obj, ctor) end,
           true
         )
       end
@@ -726,9 +623,6 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         run(pc + 1, frame, [result | stack], gas, ctx)
       end
 
-      defp typed_array_instance?(map, constructor_name),
-        do: QuickBEAM.VM.Runtime.TypedArray.instance_for_constructor?(map, constructor_name)
-
       # ── in operator ──
 
       defp run({@op_in, []}, pc, frame, [obj, key | rest], gas, ctx) do
@@ -738,30 +632,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
           rest,
           gas,
           ctx,
-          fn ->
-            unless is_object(obj) or match?({:builtin, _, _}, obj) or
-                     is_closure(obj) or match?(%QuickBEAM.VM.Function{}, obj) or
-                     match?({:bound, _, _, _, _}, obj) or match?({:qb_arr, _}, obj) or
-                     is_list(obj) or is_map(obj) do
-              throw(
-                {:js_throw,
-                 Heap.make_error(
-                   "Cannot use 'in' operator to search for '#{Values.stringify(key)}' in #{Values.stringify(obj)}",
-                   "TypeError"
-                 )}
-              )
-            end
-
-            coerced_key =
-              case key do
-                {:symbol, _} -> key
-                {:symbol, _, _} -> key
-                key when is_binary(key) or is_integer(key) -> key
-                _ -> Values.stringify(key)
-              end
-
-            QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, coerced_key)
-          end,
+          fn -> InOperator.evaluate(key, obj) end,
           false
         )
       end

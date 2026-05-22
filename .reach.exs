@@ -70,6 +70,8 @@ process_state_owners = [
     vm_interpreter_ops_helpers: [
       "QuickBEAM.VM.Interpreter.Ops.CopyDataProperties",
       "QuickBEAM.VM.Interpreter.Ops.Delete",
+      "QuickBEAM.VM.Interpreter.Ops.InOperator",
+      "QuickBEAM.VM.Interpreter.Ops.InstanceOf",
       "QuickBEAM.VM.Interpreter.Ops.ObjectLiterals",
       "QuickBEAM.VM.Interpreter.Ops.PropertyKeys"
     ],
@@ -145,6 +147,8 @@ process_state_owners = [
       "QuickBEAM.VM.Interpreter.Ops.ObjectLiterals",
       "QuickBEAM.VM.Interpreter.Ops.CopyDataProperties",
       "QuickBEAM.VM.Interpreter.Ops.Delete",
+      "QuickBEAM.VM.Interpreter.Ops.InOperator",
+      "QuickBEAM.VM.Interpreter.Ops.InstanceOf",
       "QuickBEAM.VM.ObjectModel.ProxyTrap",
       "QuickBEAM.VM.Interpreter.Ops.PropertyKeys",
       "QuickBEAM.VM.Host.BeamAPI.State",
@@ -171,6 +175,8 @@ process_state_owners = [
       {"QuickBEAM.VM.Interpreter.Ops.CopyDataProperties",
        ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
       {"QuickBEAM.VM.Interpreter.Ops.Delete", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
+      {"QuickBEAM.VM.Interpreter.Ops.InOperator", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
+      {"QuickBEAM.VM.Interpreter.Ops.InstanceOf", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
       {"QuickBEAM.VM.ObjectModel.ProxyTrap",
        [
          "QuickBEAM.VM.ObjectModel.*",
