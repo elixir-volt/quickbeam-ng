@@ -483,7 +483,7 @@ defmodule QuickBEAM.VM.Interpreter do
 
         assigned_names = Eval.simple_assigned_names(code)
         DirectEval.reject_lexical_conflicts!(ctx, declared_names)
-        eval_globals = collect_caller_locals(caller_frame, ctx)
+        eval_globals = DirectEval.collect_caller_locals(elem(caller_frame, Frame.locals()), ctx)
         captured_globals = DirectEval.collect_captured_globals(ctx.current_func)
 
         eval_scope_globals =
@@ -736,44 +736,6 @@ defmodule QuickBEAM.VM.Interpreter do
           :ok
       end
     end
-  end
-
-  defp collect_caller_locals(frame, ctx) do
-    locals = elem(frame, Frame.locals())
-
-    case ctx.current_func do
-      {:closure, _, %QuickBEAM.VM.Function{locals: local_defs, arg_count: ac}} ->
-        build_local_map(local_defs, ac, locals, ctx)
-
-      %QuickBEAM.VM.Function{locals: local_defs, arg_count: ac} ->
-        build_local_map(local_defs, ac, locals, ctx)
-
-      _ ->
-        %{}
-    end
-  end
-
-  defp build_local_map(local_defs, arg_count, locals, ctx) do
-    arg_buf = ctx.arg_buf
-
-    local_defs
-    |> Enum.with_index()
-    |> Enum.reduce(%{}, fn {vd, idx}, acc ->
-      with name when is_binary(name) <- vd.name,
-           val when val != :undefined <- local_value(idx, arg_count, arg_buf, locals) do
-        Map.put(acc, name, val)
-      else
-        _ -> acc
-      end
-    end)
-  end
-
-  defp local_value(idx, _arg_count, arg_buf, _locals) when idx < tuple_size(arg_buf) do
-    elem(arg_buf, idx)
-  end
-
-  defp local_value(idx, _arg_count, _arg_buf, locals) do
-    if idx < tuple_size(locals), do: elem(locals, idx), else: :undefined
   end
 
   defp materialize_constant({:template_object, elems, raw}) when is_list(elems) do

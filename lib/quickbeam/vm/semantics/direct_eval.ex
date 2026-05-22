@@ -101,6 +101,19 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
 
   def collect_captured_globals(_), do: %{}
 
+  def collect_caller_locals(locals, %{current_func: current_func, arg_buf: arg_buf}) do
+    case current_func do
+      {:closure, _, %Function{locals: local_defs, arg_count: arg_count}} ->
+        build_local_map(local_defs, arg_count, arg_buf, locals)
+
+      %Function{locals: local_defs, arg_count: arg_count} ->
+        build_local_map(local_defs, arg_count, arg_buf, locals)
+
+      _ ->
+        %{}
+    end
+  end
+
   def scoped_globals(ctx_globals, eval_scope_globals, declared_names, keep_declared?) do
     base_globals =
       if keep_declared?,
@@ -187,6 +200,27 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     locals
     |> Enum.map(&Names.resolve_display_name(&1.name))
     |> Enum.filter(&is_binary/1)
+  end
+
+  defp build_local_map(local_defs, arg_count, arg_buf, locals) do
+    local_defs
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {local, idx}, acc ->
+      with name when is_binary(name) <- local.name,
+           val when val != :undefined <- local_value(idx, arg_count, arg_buf, locals) do
+        Map.put(acc, name, val)
+      else
+        _ -> acc
+      end
+    end)
+  end
+
+  defp local_value(idx, _arg_count, arg_buf, _locals) when idx < tuple_size(arg_buf) do
+    elem(arg_buf, idx)
+  end
+
+  defp local_value(idx, _arg_count, _arg_buf, locals) do
+    if idx < tuple_size(locals), do: elem(locals, idx), else: :undefined
   end
 
   defp capture_key(%{closure_type: type, var_idx: idx}), do: {type, idx}
