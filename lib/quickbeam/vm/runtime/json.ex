@@ -16,7 +16,6 @@ defmodule QuickBEAM.VM.Runtime.JSON do
     InternalMethods,
     OwnProperty,
     PropertyDescriptor,
-    Put,
     WrappedPrimitive
   }
 
@@ -447,7 +446,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp create_or_delete_json_property({:obj, ref} = object, key, value) do
     case Heap.get_prop_desc(ref, key) do
       %{configurable: false} -> object
-      _ -> Put.put(object, key, value)
+      _ -> InternalMethods.set(object, key, value)
     end
   end
 
