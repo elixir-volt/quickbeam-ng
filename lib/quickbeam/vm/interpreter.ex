@@ -484,73 +484,31 @@ defmodule QuickBEAM.VM.Interpreter do
         assigned_names = Eval.simple_assigned_names(code)
         DirectEval.reject_lexical_conflicts!(ctx, declared_names)
         eval_globals = collect_caller_locals(caller_frame, ctx)
-        captured_globals = collect_captured_globals(ctx.current_func)
+        captured_globals = DirectEval.collect_captured_globals(ctx.current_func)
 
         eval_scope_globals =
-          merge_var_object_globals(Map.merge(eval_globals, captured_globals), var_objs)
+          DirectEval.merge_var_object_globals(Map.merge(eval_globals, captured_globals), var_objs)
 
-        base_globals =
-          if keep_declared?,
-            do: Map.drop(ctx.globals, MapSet.to_list(declared_names)),
-            else: ctx.globals
+        {base_globals, _scoped_globals, merged_globals} =
+          DirectEval.scoped_globals(
+            ctx.globals,
+            eval_scope_globals,
+            declared_names,
+            keep_declared?
+          )
 
-        scoped_globals =
-          if keep_declared?,
-            do: Map.drop(eval_scope_globals, MapSet.to_list(declared_names)),
-            else: eval_scope_globals
-
-        merged_globals = Map.merge(base_globals, scoped_globals)
-
-        arguments_key = RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf)
-
-        {arguments_obj, created_arguments?} =
-          case Map.fetch(merged_globals, arguments_key) do
-            {:ok, arguments} ->
-              {arguments, false}
-
-            :error ->
-              case Map.fetch(merged_globals, "arguments") do
-                {:ok, arguments} ->
-                  {arguments, false}
-
-                :error ->
-                  key = RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf)
-
-                  case RuntimeState.get_arguments_object(key) do
-                    nil ->
-                      arguments =
-                        Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
-                          strict: current_strict_mode?(ctx),
-                          callee: ctx.current_func
-                        )
-
-                      RuntimeState.put_arguments_object(key, arguments)
-                      {arguments, true}
-
-                    arguments ->
-                      {arguments, true}
-                  end
-              end
-          end
-
-        eval_ctx_globals = Map.put(merged_globals, "arguments", arguments_obj)
+        {eval_ctx_globals, arguments_key, arguments_obj, created_arguments?} =
+          DirectEval.install_eval_arguments(merged_globals, ctx)
 
         visible_declared_names =
-          base_globals
-          |> Map.merge(eval_scope_globals)
-          |> Map.put("arguments", :present)
-          |> Map.keys()
-          |> Enum.filter(&is_binary/1)
-          |> MapSet.new()
-          |> MapSet.intersection(MapSet.union(declared_names, assigned_names))
+          DirectEval.visible_declared_names(
+            base_globals,
+            eval_scope_globals,
+            declared_names,
+            assigned_names
+          )
 
-        abrupt_visible_names =
-          base_globals
-          |> Map.merge(eval_scope_globals)
-          |> Map.put("arguments", :present)
-          |> Map.keys()
-          |> Enum.filter(&is_binary/1)
-          |> MapSet.new()
+        abrupt_visible_names = DirectEval.abrupt_visible_names(base_globals, eval_scope_globals)
 
         eval_opts = %{
           gas: gas,
@@ -572,9 +530,13 @@ defmodule QuickBEAM.VM.Interpreter do
               post_eval_globals
               |> Map.merge(Map.get(final_ctx || %{}, :globals, %{}))
               |> Map.take(MapSet.to_list(visible_declared_names))
-              |> put_created_eval_arguments(created_arguments?, arguments_key, arguments_obj)
+              |> DirectEval.put_created_arguments(
+                created_arguments?,
+                arguments_key,
+                arguments_obj
+              )
 
-            returned_transients = filter_local_eval_transients(ctx, transient_globals)
+            returned_transients = DirectEval.filter_local_transients(ctx, transient_globals)
 
             apply_eval_transients(ctx.current_func, var_objs, transient_globals, keep_declared?)
             write_back_eval_vars(caller_frame, ctx, pre_eval_globals, var_objs, declared_names)
@@ -586,9 +548,13 @@ defmodule QuickBEAM.VM.Interpreter do
             transient_globals =
               (Heap.get_persistent_globals() || %{})
               |> Map.take(MapSet.to_list(abrupt_visible_names))
-              |> put_created_eval_arguments(created_arguments?, arguments_key, arguments_obj)
+              |> DirectEval.put_created_arguments(
+                created_arguments?,
+                arguments_key,
+                arguments_obj
+              )
 
-            returned_transients = filter_local_eval_transients(ctx, transient_globals)
+            returned_transients = DirectEval.filter_local_transients(ctx, transient_globals)
 
             apply_eval_transients(ctx.current_func, var_objs, transient_globals, keep_declared?)
             write_back_eval_vars(caller_frame, ctx, pre_eval_globals, var_objs, declared_names)
@@ -603,46 +569,6 @@ defmodule QuickBEAM.VM.Interpreter do
       error ->
         DirectEval.handle_compile_error(error)
     end
-  end
-
-  defp filter_local_eval_transients(%Context{current_func: current_func}, transients) do
-    case current_func do
-      %QuickBEAM.VM.Function{name: {:predefined, 81}} ->
-        transients
-
-      {:closure, _, %QuickBEAM.VM.Function{name: {:predefined, 81}}} ->
-        transients
-
-      %QuickBEAM.VM.Function{locals: locals} ->
-        Map.drop(transients, local_names(locals))
-
-      {:closure, _, %QuickBEAM.VM.Function{locals: locals}} ->
-        Map.drop(transients, local_names(locals))
-
-      _ ->
-        transients
-    end
-  end
-
-  defp local_names(locals) do
-    locals
-    |> Enum.map(&Names.resolve_display_name(&1.name))
-    |> Enum.filter(&is_binary/1)
-  end
-
-  defp merge_var_object_globals(globals, []), do: globals
-
-  defp merge_var_object_globals(globals, var_objs) do
-    Enum.reduce(var_objs, globals, fn
-      {:obj, ref}, acc ->
-        case Heap.get_obj(ref, %{}) do
-          map when is_map(map) -> Map.merge(acc, map)
-          _ -> acc
-        end
-
-      _, acc ->
-        acc
-    end)
   end
 
   defp captured_var_objects({:closure, captured, _}) do
@@ -661,26 +587,6 @@ defmodule QuickBEAM.VM.Interpreter do
   end
 
   defp captured_var_objects(_), do: []
-
-  defp collect_captured_globals({:closure, captured, %QuickBEAM.VM.Function{closure_vars: cvs}}) do
-    Enum.reduce(cvs, %{}, fn cv, acc ->
-      case Names.resolve_display_name(cv.name) do
-        name when is_binary(name) ->
-          val =
-            case Map.get(captured, ClosureBuilder.capture_key(cv), :undefined) do
-              {:cell, ref} -> Heap.get_cell(ref)
-              other -> other
-            end
-
-          Map.put(acc, name, val)
-
-        _ ->
-          acc
-      end
-    end)
-  end
-
-  defp collect_captured_globals(_), do: %{}
 
   defp write_back_eval_vars(caller_frame, ctx, original_globals, var_objs, declared_names) do
     new_globals = Heap.get_persistent_globals() || %{}
@@ -730,11 +636,6 @@ defmodule QuickBEAM.VM.Interpreter do
       end
     end
   end
-
-  defp put_created_eval_arguments(globals, true, key, arguments),
-    do: Map.put(globals, key, arguments)
-
-  defp put_created_eval_arguments(globals, false, _key, _arguments), do: globals
 
   defp apply_eval_transients(current_func, var_objs, transient_globals, keep_declared?) do
     if transient_globals != %{} do

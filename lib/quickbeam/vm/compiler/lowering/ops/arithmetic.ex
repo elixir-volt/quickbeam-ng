@@ -1,10 +1,9 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
   @moduledoc "Arithmetic, bitwise, comparison, and unary opcodes."
 
+  alias QuickBEAM.VM.Compiler.BeamForms
   alias QuickBEAM.VM.Compiler.Lowering.Operators
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.Semantics.Values
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, name_args) do
@@ -16,25 +15,25 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
         Operators.unary_local_call(state, :op_plus)
 
       {{:ok, :not}, []} ->
-        Operators.unary_call(state, RuntimeHelpers, :bit_not)
+        Operators.unary_abi_call(state, :bit_not)
 
       {{:ok, :lnot}, []} ->
-        Operators.unary_call(state, RuntimeHelpers, :lnot)
+        Operators.unary_abi_call(state, :lnot)
 
       {{:ok, :is_undefined}, []} ->
-        Operators.unary_call(state, RuntimeHelpers, :undefined?)
+        Operators.unary_abi_call(state, :undefined?)
 
       {{:ok, :is_null}, []} ->
-        Operators.unary_call(state, RuntimeHelpers, :null?)
+        Operators.unary_abi_call(state, :null?)
 
       {{:ok, :is_undefined_or_null}, []} ->
         lower_is_undefined_or_null(state)
 
       {{:ok, :typeof_is_undefined}, []} ->
-        Operators.unary_call(state, RuntimeHelpers, :typeof_is_undefined)
+        Operators.unary_abi_call(state, :typeof_is_undefined)
 
       {{:ok, :typeof_is_function}, []} ->
-        Operators.unary_call(state, RuntimeHelpers, :typeof_is_function)
+        Operators.unary_abi_call(state, :typeof_is_function)
 
       {{:ok, :typeof}, []} ->
         with {:ok, expr, _type, state} <- Emit.pop_typed(state) do
@@ -69,7 +68,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
         Operators.binary_local_call(state, :op_mod)
 
       {{:ok, :pow}, []} ->
-        Operators.binary_call(state, Values, :pow)
+        Operators.binary_abi_call(state, :pow)
 
       {{:ok, :band}, []} ->
         Operators.binary_local_call(state, :op_band)
@@ -122,7 +121,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Arithmetic do
     with {:ok, expr, type, state} <- Emit.pop_typed(state) do
       {result_expr, result_type} =
         if type == :integer do
-          {{:op, 1, op, expr, {:integer, 1, 1}}, :integer}
+          {BeamForms.op(op, expr, Builder.integer(1)), :integer}
         else
           fun = if op == :+, do: :inc, else: :dec
           {State.abi_call(state, fun, [expr]), :unknown}

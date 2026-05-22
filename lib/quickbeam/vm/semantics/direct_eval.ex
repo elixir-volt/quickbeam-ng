@@ -6,10 +6,12 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
   alias QuickBEAM.VM.{
     BytecodeParser,
     Function,
+    Heap,
     JSThrow,
     Names,
     Opcodes,
     PredefinedAtoms,
+    RuntimeState,
     Value
   }
 
@@ -63,6 +65,131 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     do: throw({:js_throw, QuickBEAM.VM.Heap.make_error(msg, name)})
 
   def handle_compile_error(_), do: {:undefined, %{}}
+
+  def merge_var_object_globals(globals, []), do: globals
+
+  def merge_var_object_globals(globals, var_objs) do
+    Enum.reduce(var_objs, globals, fn
+      {:obj, ref}, acc ->
+        case Heap.get_obj(ref, %{}) do
+          map when is_map(map) -> Map.merge(acc, map)
+          _ -> acc
+        end
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  def collect_captured_globals({:closure, captured, %Function{closure_vars: closure_vars}}) do
+    Enum.reduce(closure_vars, %{}, fn closure_var, acc ->
+      case Names.resolve_display_name(closure_var.name) do
+        name when is_binary(name) ->
+          val =
+            case Map.get(captured, capture_key(closure_var), :undefined) do
+              {:cell, ref} -> Heap.get_cell(ref)
+              other -> other
+            end
+
+          Map.put(acc, name, val)
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  def collect_captured_globals(_), do: %{}
+
+  def scoped_globals(ctx_globals, eval_scope_globals, declared_names, keep_declared?) do
+    base_globals =
+      if keep_declared?,
+        do: Map.drop(ctx_globals, MapSet.to_list(declared_names)),
+        else: ctx_globals
+
+    scoped_globals =
+      if keep_declared?,
+        do: Map.drop(eval_scope_globals, MapSet.to_list(declared_names)),
+        else: eval_scope_globals
+
+    {base_globals, scoped_globals, Map.merge(base_globals, scoped_globals)}
+  end
+
+  def install_eval_arguments(merged_globals, ctx) do
+    arguments_key = RuntimeState.arguments_object_key(ctx.current_func, ctx.arg_buf)
+    {arguments_obj, created?} = eval_arguments_object(merged_globals, ctx, arguments_key)
+    {Map.put(merged_globals, "arguments", arguments_obj), arguments_key, arguments_obj, created?}
+  end
+
+  def visible_declared_names(base_globals, eval_scope_globals, declared_names, assigned_names) do
+    base_globals
+    |> Map.merge(eval_scope_globals)
+    |> Map.put("arguments", :present)
+    |> Map.keys()
+    |> Enum.filter(&is_binary/1)
+    |> MapSet.new()
+    |> MapSet.intersection(MapSet.union(declared_names, assigned_names))
+  end
+
+  def abrupt_visible_names(base_globals, eval_scope_globals) do
+    base_globals
+    |> Map.merge(eval_scope_globals)
+    |> Map.put("arguments", :present)
+    |> Map.keys()
+    |> Enum.filter(&is_binary/1)
+    |> MapSet.new()
+  end
+
+  def put_created_arguments(globals, true, key, arguments), do: Map.put(globals, key, arguments)
+  def put_created_arguments(globals, false, _key, _arguments), do: globals
+
+  def filter_local_transients(%{current_func: current_func}, transients) do
+    case current_func do
+      %Function{name: {:predefined, 81}} -> transients
+      {:closure, _, %Function{name: {:predefined, 81}}} -> transients
+      %Function{locals: locals} -> Map.drop(transients, local_names(locals))
+      {:closure, _, %Function{locals: locals}} -> Map.drop(transients, local_names(locals))
+      _ -> transients
+    end
+  end
+
+  defp eval_arguments_object(merged_globals, ctx, arguments_key) do
+    case Map.fetch(merged_globals, arguments_key) do
+      {:ok, arguments} ->
+        {arguments, false}
+
+      :error ->
+        case Map.fetch(merged_globals, "arguments") do
+          {:ok, arguments} -> {arguments, false}
+          :error -> cached_or_new_arguments(ctx, arguments_key)
+        end
+    end
+  end
+
+  defp cached_or_new_arguments(ctx, arguments_key) do
+    case RuntimeState.get_arguments_object(arguments_key) do
+      nil ->
+        arguments =
+          Heap.wrap_arguments(Tuple.to_list(ctx.arg_buf),
+            strict: strict_mode?(ctx),
+            callee: ctx.current_func
+          )
+
+        RuntimeState.put_arguments_object(arguments_key, arguments)
+        {arguments, true}
+
+      arguments ->
+        {arguments, true}
+    end
+  end
+
+  defp local_names(locals) do
+    locals
+    |> Enum.map(&Names.resolve_display_name(&1.name))
+    |> Enum.filter(&is_binary/1)
+  end
+
+  defp capture_key(%{closure_type: type, var_idx: idx}), do: {type, idx}
 
   defp collect_declared_instruction_name({op, [atom_ref, _scope]}, acc, atoms)
        when op in [@op_define_var, @op_check_define_var] do

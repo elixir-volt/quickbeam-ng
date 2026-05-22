@@ -80,6 +80,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def strict_neq(ctx, left, right), do: RuntimeHelpers.strict_neq(ctx, left, right)
 
+  def pow(_ctx, left, right), do: QuickBEAM.VM.Semantics.Values.pow(left, right)
+
   def bit_not(ctx, value), do: RuntimeHelpers.bit_not(ctx, value)
 
   def lnot(ctx, value), do: RuntimeHelpers.lnot(ctx, value)

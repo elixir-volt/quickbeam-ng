@@ -65,13 +65,27 @@ defmodule QuickBEAM.VM.OpcodeSpec do
     push_7: 7
   }
 
+  @opcode_rows Opcodes.table()
+  @opcode_names for {_num, {name, _size, _pops, _pushes, _format}} <- @opcode_rows, do: name
+  @opcode_formats for {_num, {_name, _size, _pops, _pushes, format}} <- @opcode_rows, do: format
+
+  if length(@opcode_names) != length(Enum.uniq(@opcode_names)) do
+    raise "duplicate opcode names in QuickBEAM.VM.OpcodeSpec"
+  end
+
+  missing_formats = Enum.uniq(Enum.filter(@opcode_formats, &(Opcodes.format_info(&1) == nil)))
+
+  if missing_formats != [] do
+    raise "missing opcode format metadata: #{inspect(missing_formats)}"
+  end
+
   @call Map.fetch!(@families, :call)
   @get_slot Map.fetch!(@families, :get_slot)
   @put_slot Map.fetch!(@families, :put_slot)
   @set_slot Map.fetch!(@families, :set_slot)
   @small_int_push_names Map.keys(@small_int_push)
 
-  def table, do: Opcodes.table()
+  def table, do: @opcode_rows
   def all_opcodes, do: Opcodes.all_opcodes()
   def info(opcode), do: Opcodes.info(opcode)
   def num(name), do: Opcodes.num(name)
@@ -136,7 +150,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :perm4,
              :perm5,
              :nop
-           ], do: :stack
+           ],
+      do: :stack
 
   def lowering_family(name)
       when name in [
@@ -149,7 +164,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :inc_loc,
              :dec_loc,
              :add_loc
-           ], do: :locals
+           ],
+      do: :locals
 
   def lowering_family(name)
       when name in [
@@ -163,7 +179,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :import,
              :return,
              :return_undef
-           ], do: :calls
+           ],
+      do: :calls
 
   def lowering_family(name)
       when name in [
@@ -202,7 +219,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :put_private_field,
              :define_private_field,
              :private_in
-           ], do: :objects
+           ],
+      do: :objects
 
   def lowering_family(name)
       when name in [
@@ -241,7 +259,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :xor,
              :or,
              :pow
-           ], do: :arithmetic
+           ],
+      do: :arithmetic
 
   def lowering_family(name)
       when name in [
@@ -257,7 +276,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :if_true8,
              :goto8,
              :goto16
-           ], do: :control
+           ],
+      do: :control
 
   def lowering_family(name)
       when name in [
@@ -272,7 +292,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :iterator_next,
              :iterator_call,
              :rest
-           ], do: :iterators
+           ],
+      do: :iterators
 
   def lowering_family(name)
       when name in [
@@ -282,7 +303,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :define_class_computed,
              :add_brand,
              :check_brand
-           ], do: :classes
+           ],
+      do: :classes
 
   def lowering_family(name)
       when name in [:initial_yield, :yield, :yield_star, :async_yield_star, :await],
@@ -296,7 +318,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :with_make_ref,
              :with_get_ref,
              :with_get_ref_undef
-           ], do: :with_scope
+           ],
+      do: :with_scope
 
   def lowering_family(name)
       when name in [
@@ -314,7 +337,8 @@ defmodule QuickBEAM.VM.OpcodeSpec do
              :make_arg_ref,
              :make_var_ref_ref,
              :make_var_ref
-           ], do: :globals
+           ],
+      do: :globals
 
   def lowering_family(name) when name in @small_int_push_names, do: :stack
 
