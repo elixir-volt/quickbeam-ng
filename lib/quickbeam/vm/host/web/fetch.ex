@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Host.Web.Fetch do
     only: [arg: 3, argv: 2, constructor: 3, object: 1, object: 2]
 
   alias QuickBEAM.VM.{Heap, Promise, Runtime}
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor, Put}
+  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, PropertyDescriptor}
   alias QuickBEAM.VM.Host.Web.Body
   alias QuickBEAM.VM.Host.Web.Fetch.JSON
   alias QuickBEAM.VM.Host.Web.Headers
@@ -334,7 +334,7 @@ defmodule QuickBEAM.VM.Host.Web.Fetch do
   defp consume_request_body_ref(req_obj, ref) do
     if Body.has_body?(ref) do
       data = Body.consume_payload!(ref)
-      Put.put(req_obj, "bodyUsed", true)
+      InternalMethods.set(req_obj, "bodyUsed", true)
       data
     else
       Body.data(ref)

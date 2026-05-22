@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Host.Web.Abort do
   import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, constructor: 2, object: 1]
 
   alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.{Get, Put}
+  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods}
   alias QuickBEAM.VM.Host.Web.EventListeners
   alias QuickBEAM.VM.Host.WebAPIs
 
@@ -158,8 +158,8 @@ defmodule QuickBEAM.VM.Host.Web.Abort do
         aborted = Get.get(signal, "aborted")
 
         if aborted != true do
-          Put.put(signal, "aborted", true)
-          Put.put(signal, "reason", reason)
+          InternalMethods.set(signal, "aborted", true)
+          InternalMethods.set(signal, "reason", reason)
 
           case Get.get(signal, "__listeners_ref__") do
             {:obj, lref} ->

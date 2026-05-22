@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 1]
 
   alias QuickBEAM.VM.{Heap, Promise}
-  alias QuickBEAM.VM.ObjectModel.{Get, Put}
+  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods}
   alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.Web.IteratorResult
   alias QuickBEAM.VM.Host.Web.Streams.{Bytes, State}
@@ -140,7 +140,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
          end
 
          State.set_locked(chunks_ref, true)
-         Put.put(this, "locked", true)
+         InternalMethods.set(this, "locked", true)
          build_reader(chunks_ref)
        end}
 

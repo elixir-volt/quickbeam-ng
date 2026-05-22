@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Host.Web.Body do
   @moduledoc "Shared Fetch/Request/Response/Blob body conversion and consumption helpers."
 
   alias QuickBEAM.VM.{Heap, JSThrow, Promise}
-  alias QuickBEAM.VM.ObjectModel.Put
+  alias QuickBEAM.VM.ObjectModel.InternalMethods
   alias QuickBEAM.VM.Host.Web.BinaryData
 
   @doc "Creates a heap-backed body state record."
@@ -61,7 +61,7 @@ defmodule QuickBEAM.VM.Host.Web.Body do
 
       %{consumed: false} ->
         data = consume_payload!(body_ref)
-        Put.put(owner, "bodyUsed", true)
+        InternalMethods.set(owner, "bodyUsed", true)
         fun.(data)
 
       _ ->
