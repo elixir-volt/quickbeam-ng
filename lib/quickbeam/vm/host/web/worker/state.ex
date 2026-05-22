@@ -5,9 +5,9 @@ defmodule QuickBEAM.VM.Host.Web.Worker.State do
   @sources_key :qb_worker_sources
 
   def init_callbacks(onmessage_ref, onerror_ref, listeners_ref) do
-    Process.put(onmessage_ref, nil)
-    Process.put(onerror_ref, nil)
-    Process.put(listeners_ref, [])
+    Process.put(callback_key(onmessage_ref), nil)
+    Process.put(error_key(onerror_ref), nil)
+    Process.put(listeners_key(listeners_ref), [])
   end
 
   def register_worker(worker_ref, worker_pid) do
@@ -21,20 +21,25 @@ defmodule QuickBEAM.VM.Host.Web.Worker.State do
   end
 
   def add_listener(listeners_ref, callback) do
-    Process.put(listeners_ref, listeners(listeners_ref) ++ [callback])
+    Process.put(listeners_key(listeners_ref), listeners(listeners_ref) ++ [callback])
   end
 
   def remove_listener(listeners_ref, callback) do
-    Process.put(listeners_ref, Enum.reject(listeners(listeners_ref), &(&1 == callback)))
+    Process.put(
+      listeners_key(listeners_ref),
+      Enum.reject(listeners(listeners_ref), &(&1 == callback))
+    )
   end
 
-  def listener_callback(onmessage_ref), do: Process.get(onmessage_ref, nil)
-  def put_listener_callback(onmessage_ref, callback), do: Process.put(onmessage_ref, callback)
+  def listener_callback(onmessage_ref), do: Process.get(callback_key(onmessage_ref), nil)
 
-  def error_callback(onerror_ref), do: Process.get(onerror_ref, nil)
-  def put_error_callback(onerror_ref, callback), do: Process.put(onerror_ref, callback)
+  def put_listener_callback(onmessage_ref, callback),
+    do: Process.put(callback_key(onmessage_ref), callback)
 
-  def listeners(listeners_ref), do: Process.get(listeners_ref, [])
+  def error_callback(onerror_ref), do: Process.get(error_key(onerror_ref), nil)
+  def put_error_callback(onerror_ref, callback), do: Process.put(error_key(onerror_ref), callback)
+
+  def listeners(listeners_ref), do: Process.get(listeners_key(listeners_ref), [])
 
   def register_source(worker_ref, onmessage_ref, listeners_ref) do
     Process.put(@sources_key, sources() ++ [{worker_ref, onmessage_ref, listeners_ref}])
@@ -47,4 +52,7 @@ defmodule QuickBEAM.VM.Host.Web.Worker.State do
   def sources, do: Process.get(@sources_key, [])
 
   defp workers, do: Process.get(@workers_key, %{})
+  defp callback_key(ref), do: {:qb_worker_onmessage, ref}
+  defp error_key(ref), do: {:qb_worker_onerror, ref}
+  defp listeners_key(ref), do: {:qb_worker_listeners, ref}
 end
