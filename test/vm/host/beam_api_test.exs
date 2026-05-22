@@ -1,8 +1,8 @@
-defmodule QuickBEAM.VM.Host.BEAMAPITest do
+defmodule QuickBEAM.VM.Host.BEAMTest do
   use ExUnit.Case, async: true
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Host.BEAMAPI
+  alias QuickBEAM.VM.Host.BEAM
 
   setup do
     Heap.reset()
@@ -10,6 +10,6 @@ defmodule QuickBEAM.VM.Host.BEAMAPITest do
   end
 
   test "Beam bridge is exposed as a host binding" do
-    assert %{"Beam" => {:obj, _}} = BEAMAPI.bindings()
+    assert %{"Beam" => {:obj, _}} = BEAM.bindings()
   end
 end
