@@ -34,14 +34,13 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   def kind({:bound, _, _, _, _}), do: :function
   def kind(_), do: :primitive
 
-  def get(obj, key, receiver \\ nil), do: Get.get(obj, key, receiver || obj)
+  def get(obj, key, receiver \\ nil), do: get_by_kind(kind(obj), obj, key, receiver || obj)
   def set(obj, key, value, receiver \\ nil)
 
   def set(obj, key, value, receiver),
-    do: ProxySet.dispatch(obj, key, value, receiver, &Put.ordinary_set/4)
+    do: set_by_kind(kind(obj), obj, key, value, receiver || obj)
 
-  def has_property(obj, key),
-    do: ProxyHas.dispatch(obj, key, &HasProperty.ordinary_has_property?/2)
+  def has_property(obj, key), do: has_property_by_kind(kind(obj), obj, key)
 
   def own_property(obj, key), do: OwnProperty.descriptor(obj, key)
 
@@ -56,6 +55,19 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   def own_keys(obj), do: ProxyOwnKeys.dispatch(obj, &OwnProperty.ordinary_own_keys/1)
 
   def extensible?(obj), do: ProxyExtensible.dispatch(obj, &ordinary_extensible?/1)
+
+  defp get_by_kind(_kind, obj, key, receiver), do: Get.get(obj, key, receiver)
+
+  defp set_by_kind(:proxy, obj, key, value, receiver),
+    do: ProxySet.dispatch(obj, key, value, receiver, &Put.ordinary_set/4)
+
+  defp set_by_kind(_kind, obj, key, value, receiver),
+    do: Put.ordinary_set(obj, key, value, receiver)
+
+  defp has_property_by_kind(:proxy, obj, key),
+    do: ProxyHas.dispatch(obj, key, &HasProperty.ordinary_has_property?/2)
+
+  defp has_property_by_kind(_kind, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
 
   defp ordinary_extensible?({:obj, ref}), do: Heap.extensible?(ref)
   defp ordinary_extensible?(_), do: true
