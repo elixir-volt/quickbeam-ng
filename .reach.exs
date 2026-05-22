@@ -19,7 +19,6 @@ process_state_owners = [
   "QuickBEAM.VM.Host.Web.BroadcastChannel.State",
   "QuickBEAM.VM.Host.Web.ConsoleAPI.State",
   "QuickBEAM.VM.Host.Web.EventSourceAPI.State",
-  "QuickBEAM.VM.Host.Web.Fetch",
   "QuickBEAM.VM.Host.Web.Worker",
   "QuickBEAM.VM.Execution.ConstructorStack",
   "QuickBEAM.VM.Execution.DefinitionState",

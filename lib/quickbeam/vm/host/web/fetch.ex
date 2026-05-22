@@ -32,7 +32,6 @@ defmodule QuickBEAM.VM.Host.Web.Fetch do
          else
            fetch_id = System.unique_integer([:positive])
            result_ref = make_ref()
-           Process.put(result_ref, :pending)
 
            parent = self()
 
