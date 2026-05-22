@@ -1,11 +1,9 @@
 defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
   @moduledoc "Fast-path lowering for object literals with statically known data fields."
 
-  import QuickBEAM.VM.OpcodeFamily, only: [is_small_int_push: 1]
-
   alias QuickBEAM.VM.Compiler.Analysis.CFG
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Literals, Slots, State}
-  alias QuickBEAM.VM.OpcodeFamily
+  alias QuickBEAM.VM.OpcodeSpec
 
   @doc "Attempts to lower an object literal followed by define_field opcodes."
   def try_lower(instructions, size, idx, arg_count, state) do
@@ -108,10 +106,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
       {:ok, name} when name in [:push_i32, :push_i16, :push_i8] ->
         {:ok, Builder.integer(hd(args)), true, state}
 
-      {:ok, name} when is_small_int_push(name) ->
-        {:ok, value} = OpcodeFamily.small_int_push(name)
-        {:ok, Builder.integer(value), true, state}
-
       {:ok, :null} ->
         {:ok, Builder.atom(nil), true, state}
 
@@ -136,6 +130,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
       {:ok, :push_atom_value} ->
         {:ok, State.constant_call(state, :push_atom_value, [Builder.literal(hd(args))]), false,
          state}
+
+      {:ok, name} ->
+        if OpcodeSpec.small_int_push?(name) do
+          {:ok, value} = OpcodeSpec.small_int_push(name)
+          {:ok, Builder.integer(value), true, state}
+        else
+          :not_literal
+        end
 
       _ ->
         :error

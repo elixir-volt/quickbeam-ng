@@ -432,6 +432,7 @@ defmodule QuickBEAM.VM.OpcodeSpec do
   end
 
   def small_int_push(name), do: Map.fetch(@small_int_push, name)
+  def small_int_push?(name), do: Map.has_key?(@small_int_push, name)
   def small_int_push_names, do: @small_int_push_names
   def lowering_family(name), do: Map.get(@lowering_families, name)
 end

@@ -39,6 +39,12 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.control_flow_family(:push_i32) == nil
   end
 
+  test "small integer push metadata is centralized" do
+    assert OpcodeSpec.small_int_push(:push_0) == {:ok, 0}
+    assert OpcodeSpec.small_int_push?(:push_0)
+    refute OpcodeSpec.small_int_push?(:push_i8)
+  end
+
   test "symbolic instruction stack effects are centralized" do
     assert OpcodeSpec.symbolic_stack_effect({:call, 2}) == {:ok, {3, 1}}
     assert OpcodeSpec.symbolic_stack_effect({:define_method, "m", 0}) == {:ok, {2, 1}}

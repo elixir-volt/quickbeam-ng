@@ -2,10 +2,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   @moduledoc "Stack manipulation opcodes: push constants, dup, drop, swap, rot, perm, insert, nip, nop."
 
   alias QuickBEAM.VM.Compiler.Analysis.Types, as: AnalysisTypes
-  import QuickBEAM.VM.OpcodeFamily, only: [is_small_int_push: 1]
-
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Emit, State}
-  alias QuickBEAM.VM.{OpcodeFamily, OpcodeSpec}
+  alias QuickBEAM.VM.OpcodeSpec
 
   @small_int_handlers Map.new(OpcodeSpec.small_int_push_names(), &{&1, {:push_small_int, &1}})
 
@@ -161,9 +159,13 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
       {{:ok, :push_i8}, [value]} ->
         {:ok, Emit.push(state, Builder.integer(value))}
 
-      {{:ok, name}, [_]} when is_small_int_push(name) ->
-        {:ok, value} = OpcodeFamily.small_int_push(name)
-        {:ok, Emit.push(state, Builder.integer(value))}
+      {{:ok, name}, [_]} ->
+        if OpcodeSpec.small_int_push?(name) do
+          {:ok, value} = OpcodeSpec.small_int_push(name)
+          {:ok, Emit.push(state, Builder.integer(value))}
+        else
+          :not_handled
+        end
 
       {{:ok, :push_true}, []} ->
         {:ok, Emit.push(state, Builder.atom(true))}
