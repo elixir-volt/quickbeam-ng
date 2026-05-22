@@ -4,7 +4,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Slots, State}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings
-  alias QuickBEAM.VM.GlobalEnvironment
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, name_args) do
@@ -46,8 +45,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
         {:ok,
          State.update_ctx(
            state,
-           Builder.remote_call(GlobalEnvironment, :define_var, [
-             State.ctx_expr(state),
+           State.abi_call(state, :define_var, [
              Builder.literal(atom_idx),
              Builder.literal(scope)
            ])
@@ -57,10 +55,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
         {:ok,
          State.update_ctx(
            state,
-           Builder.remote_call(GlobalEnvironment, :check_define_var, [
-             State.ctx_expr(state),
-             Builder.literal(atom_idx)
-           ])
+           State.abi_call(state, :check_define_var, [Builder.literal(atom_idx)])
          )}
 
       {{:ok, name}, [idx]}
@@ -127,8 +122,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Globals do
       {:ok,
        State.update_ctx(
          state,
-         Builder.remote_call(GlobalEnvironment, :put, [
-           State.ctx_expr(state),
+         State.abi_call(state, :put_var, [
            Builder.literal(atom_idx),
            val,
            Builder.literal(init: init?, strict: state.strict_mode)

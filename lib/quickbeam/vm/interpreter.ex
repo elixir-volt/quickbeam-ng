@@ -463,7 +463,9 @@ defmodule QuickBEAM.VM.Interpreter do
     DirectEval.eval(%DirectEval.Caller{
       code: code,
       ctx: ctx,
-      frame: caller_frame,
+      locals: elem(caller_frame, Frame.locals()),
+      var_refs: elem(caller_frame, Frame.var_refs()),
+      l2v: elem(caller_frame, Frame.l2v()),
       gas: gas,
       var_objects: var_objs,
       keep_declared?: keep_declared?,

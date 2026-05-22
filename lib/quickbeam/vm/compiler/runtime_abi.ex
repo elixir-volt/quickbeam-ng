@@ -25,6 +25,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
+  alias QuickBEAM.VM.GlobalEnvironment
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.{
     Bindings,
@@ -48,6 +49,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   def get_var(ctx, name), do: Bindings.get_var(ctx, name)
 
   def get_var_undef(ctx, name), do: Bindings.get_var_undef(ctx, name)
+
+  def put_var(ctx, atom_idx, value, opts), do: GlobalEnvironment.put(ctx, atom_idx, value, opts)
+
+  def define_var(ctx, atom_idx, scope), do: GlobalEnvironment.define_var(ctx, atom_idx, scope)
+
+  def check_define_var(ctx, atom_idx), do: GlobalEnvironment.check_define_var(ctx, atom_idx)
 
   def delete_var(ctx, atom_idx), do: Bindings.delete_var(ctx, atom_idx)
 

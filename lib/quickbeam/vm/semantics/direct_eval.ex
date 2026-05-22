@@ -15,9 +15,6 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     Value
   }
 
-  alias QuickBEAM.VM.Interpreter.Frame
-  require Frame
-
   alias QuickBEAM.VM.Semantics.Eval, as: EvalSemantics
 
   @op_define_var Opcodes.num(:define_var)
@@ -29,7 +26,9 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     defstruct [
       :code,
       :ctx,
-      :frame,
+      :locals,
+      :var_refs,
+      :l2v,
       :gas,
       :var_objects,
       :keep_declared?,
@@ -42,7 +41,9 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     %Caller{
       code: code,
       ctx: ctx,
-      frame: frame,
+      locals: locals,
+      var_refs: var_refs,
+      l2v: l2v,
       gas: gas,
       var_objects: var_objs,
       keep_declared?: keep_declared?,
@@ -56,7 +57,9 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
           parsed,
           code,
           ctx,
-          frame,
+          locals,
+          var_refs,
+          l2v,
           gas,
           var_objs,
           keep_declared?,
@@ -269,7 +272,9 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
          parsed,
          code,
          ctx,
-         caller_frame,
+         locals,
+         var_refs,
+         l2v,
          gas,
          var_objs,
          keep_declared?,
@@ -280,7 +285,7 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     assigned_names = EvalSemantics.simple_assigned_names(code)
     reject_lexical_conflicts!(ctx, declared_names)
 
-    eval_globals = collect_caller_locals(elem(caller_frame, Frame.locals()), ctx)
+    eval_globals = collect_caller_locals(locals, ctx)
     captured_globals = collect_captured_globals(ctx.current_func)
 
     eval_scope_globals =
@@ -318,7 +323,8 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
             keep_declared?,
             pre_eval_globals,
             declared_names,
-            caller_frame,
+            var_refs,
+            l2v,
             success_transients(
               final_ctx,
               visible_declared_names,
@@ -337,7 +343,8 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
           keep_declared?,
           pre_eval_globals,
           declared_names,
-          caller_frame,
+          var_refs,
+          l2v,
           abrupt_transients(
             abrupt_visible_names,
             created_arguments?,
@@ -378,7 +385,8 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
          keep_declared?,
          pre_eval_globals,
          declared_names,
-         caller_frame,
+         var_refs,
+         l2v,
          transient_globals
        ) do
     returned_transients = filter_local_transients(ctx, transient_globals)
@@ -390,8 +398,8 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
       pre_eval_globals,
       var_objs,
       declared_names,
-      elem(caller_frame, Frame.var_refs()),
-      elem(caller_frame, Frame.l2v())
+      var_refs,
+      l2v
     )
 
     clean_eval_globals(pre_eval_globals, returned_transients)
