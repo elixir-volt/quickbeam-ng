@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   alias QuickBEAM.VM.JSThrow
 
   alias QuickBEAM.VM.ObjectModel.{
-    Define,
+    InternalMethods,
     Delete,
     Get,
     HasProperty,
@@ -2507,7 +2507,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp create_data_property_or_throw({:obj, ref} = target, key, value) do
     desc = %{"value" => value, "writable" => true, "enumerable" => true, "configurable" => true}
-    result = Define.property(target, key, Heap.wrap(desc), desc)
+    result = InternalMethods.define_own_property(target, key, Heap.wrap(desc), desc)
 
     if value == :undefined do
       Heap.put_array_prop(ref, key, value)
@@ -2519,7 +2519,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp create_data_property_or_throw(target, key, value) do
     desc = %{"value" => value, "writable" => true, "enumerable" => true, "configurable" => true}
-    Define.property(target, key, Heap.wrap(desc), desc)
+    InternalMethods.define_own_property(target, key, Heap.wrap(desc), desc)
   end
 
   defp constructable_from?({:builtin, _, _} = builtin) do

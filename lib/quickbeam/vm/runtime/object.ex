@@ -334,7 +334,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
       end
 
     desc_obj = Heap.wrap(desc)
-    Define.property(target, prop_key, desc_obj, desc)
+    InternalMethods.define_own_property(target, prop_key, desc_obj, desc)
     :undefined
   end
 
@@ -709,7 +709,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
               raw_desc
             end
 
-          Define.property(obj, key, Heap.wrap(raw_desc), raw_desc)
+          InternalMethods.define_own_property(obj, key, Heap.wrap(raw_desc), raw_desc)
       end
     end
 
@@ -790,7 +790,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
     for key <- OwnProperty.descriptor_keys(obj) do
       desc = %{"configurable" => false}
-      Define.property(obj, key, Heap.wrap(desc), desc)
+      InternalMethods.define_own_property(obj, key, Heap.wrap(desc), desc)
     end
 
     true
@@ -1844,7 +1844,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp define_property([{:obj, _} = obj, key, {:obj, desc_ref} = desc_obj | _]) do
     desc = Heap.get_obj(desc_ref, %{})
-    Define.property(obj, key, desc_obj, desc)
+    InternalMethods.define_own_property(obj, key, desc_obj, desc)
   end
 
   defp define_property([{:regexp, _, _, ref} = regexp, key, {:obj, desc_ref} = desc_obj | _]) do
@@ -1879,13 +1879,13 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp define_property([{:obj, _} = obj, key, desc | _]) when is_map(desc) do
-    Define.property(obj, key, Heap.wrap(desc), desc)
+    InternalMethods.define_own_property(obj, key, Heap.wrap(desc), desc)
   end
 
   defp define_property([{:obj, _} = obj, key, desc_obj | _])
        when is_tuple(desc_obj) or is_struct(desc_obj) do
     if descriptor_object?(desc_obj) do
-      Define.property(obj, key, desc_obj, %{})
+      InternalMethods.define_own_property(obj, key, desc_obj, %{})
     else
       throw({:js_throw, Heap.make_error("Property description must be an object", "TypeError")})
     end

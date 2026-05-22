@@ -46,7 +46,10 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   def own_property(obj, key), do: OwnProperty.descriptor(obj, key)
 
   def define_own_property(obj, key, descriptor),
-    do: Define.property(obj, key, descriptor, descriptor)
+    do: define_own_property(obj, key, descriptor, descriptor)
+
+  def define_own_property(obj, key, desc_obj, raw_desc),
+    do: Define.property(obj, key, desc_obj, raw_desc)
 
   def delete(obj, key), do: ProxyDelete.dispatch(obj, key, &Delete.ordinary_delete_property/2)
 
