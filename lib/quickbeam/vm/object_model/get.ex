@@ -32,6 +32,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     FunctionExoticGet,
     FunctionPrototypeGet,
     IndexedExoticGet,
+    MapPropertyGet,
     OwnProperty,
     PrimitiveExoticGet,
     PrimitiveWrapperGet,
@@ -392,13 +393,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_map_property(map, key, receiver) do
-    case Map.fetch(map, key) do
-      {:ok, {:accessor, getter, _setter}} when getter != nil -> call_getter(getter, receiver)
-      {:ok, val} -> val
-      :error -> :undefined
-    end
-  end
+  defp get_map_property(map, key, receiver),
+    do: MapPropertyGet.property(map, key, receiver, &call_getter/2)
 
   defp get_own({:obj, ref}, key) do
     case Heap.get_obj_raw(ref) do
