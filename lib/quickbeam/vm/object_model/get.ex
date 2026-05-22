@@ -31,6 +31,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   alias QuickBEAM.VM.ObjectModel.{
     ArrayExoticGet,
     BuiltinExoticGet,
+    DateExoticGet,
     OwnProperty,
     PrimitiveWrapperGet,
     PropertyKey,
@@ -368,18 +369,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp prototype_object_property(_map, _key), do: :undefined
 
-  defp date_proto_property(map, key) do
-    case Map.get(map, proto()) do
-      {:obj, _} = proto ->
-        case get(proto, key) do
-          :undefined -> JSDate.proto_property(key)
-          val -> val
-        end
-
-      _ ->
-        JSDate.proto_property(key)
-    end
-  end
+  defp date_proto_property(map, key), do: DateExoticGet.proto_property(map, key)
 
   defp string_proto_property(key), do: PrimitiveWrapperGet.string_proto_property(key)
 
