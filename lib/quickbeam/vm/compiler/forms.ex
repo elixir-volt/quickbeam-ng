@@ -29,7 +29,7 @@ defmodule QuickBEAM.VM.Compiler.Forms do
   defp entry_form(entry, ctx_entry, arity) do
     args = slot_vars(arity)
     body = [local_call(ctx_entry, [remote_call(RuntimeHelpers, :entry_ctx, []) | args])]
-    {:function, @line, entry, arity, [{:clause, @line, args, [], body}]}
+    BEAMForms.function(entry, arity, [BEAMForms.clause(args, [], body)])
   end
 
   defp ctx_entry_form(ctx_entry, arity, slot_count, force_capture_slots?) do
@@ -67,7 +67,7 @@ defmodule QuickBEAM.VM.Compiler.Forms do
 
     body = [local_call(block_name(0), body_args)]
 
-    {:function, @line, ctx_entry, arity + 1, [{:clause, @line, args, [], body}]}
+    BEAMForms.function(ctx_entry, arity + 1, [BEAMForms.clause(args, [], body)])
   end
 
   defp force_capture_slots?(fun) do
