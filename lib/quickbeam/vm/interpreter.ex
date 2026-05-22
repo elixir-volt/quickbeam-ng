@@ -676,6 +676,10 @@ defmodule QuickBEAM.VM.Interpreter do
   use QuickBEAM.VM.Interpreter.Ops.RestArguments
   use QuickBEAM.VM.Interpreter.Ops.ThisValue
   use QuickBEAM.VM.Interpreter.Ops.ThrowErrors
+  use QuickBEAM.VM.Interpreter.Ops.FunctionNaming
+  use QuickBEAM.VM.Interpreter.Ops.ConstructorChecks
+  use QuickBEAM.VM.Interpreter.Ops.PrototypeMutation
+  use QuickBEAM.VM.Interpreter.Ops.PrivateSymbols
 
   use QuickBEAM.VM.Interpreter.Ops.Objects
 

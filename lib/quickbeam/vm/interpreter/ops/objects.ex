@@ -256,58 +256,14 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         end
       end
 
-      defp run({@op_check_ctor, []}, pc, frame, stack, gas, ctx),
-        do: run(pc + 1, frame, stack, gas, ctx)
-
-      defp run({@op_check_ctor_return, []}, pc, frame, [val | rest], gas, ctx) do
-        case Construction.check_ctor_return(val) do
-          {:ok, replace_with_this?, checked_val} ->
-            run(pc + 1, frame, [replace_with_this?, checked_val | rest], gas, ctx)
-
-          {:error, message} ->
-            throw_or_catch(frame, Heap.make_error(message, "TypeError"), gas, ctx)
-        end
-      end
-
-      defp run({@op_set_name, [atom_idx]}, pc, frame, [fun | rest], gas, ctx) do
-        named = Functions.set_name_atom(fun, atom_idx, ctx.atoms)
-        run(pc + 1, frame, [named | rest], gas, ctx)
-      end
-
       defp run({@op_invalid, []}, _pc, _frame, _stack, _gas, _ctx),
         do: throw({:error, :invalid_opcode})
 
       # ── Misc stubs ──
 
-      defp run({@op_set_home_object, []}, pc, frame, [method, target | _] = stack, gas, ctx) do
-        Functions.put_home_object(method, target)
-        run(pc + 1, frame, stack, gas, ctx)
-      end
-
-      defp run({@op_set_proto, []}, pc, frame, [proto, obj | rest], gas, ctx) do
-        case obj do
-          {:obj, ref} ->
-            map = Heap.get_obj(ref, %{})
-
-            if is_map(map) and (is_object(proto) or proto == nil) do
-              Heap.put_obj(ref, Map.put(map, proto(), proto))
-            end
-
-          _ ->
-            :ok
-        end
-
-        run(pc + 1, frame, [obj | rest], gas, ctx)
-      end
-
       defp run({@op_special_object, [type]}, pc, frame, stack, gas, %Context{} = ctx) do
         {val, ctx} = SpecialObjects.build(type, frame, ctx)
         run(pc + 1, frame, [val | stack], gas, ctx)
-      end
-
-      defp run({@op_set_name_computed, []}, pc, frame, [fun, name_val | rest], gas, ctx) do
-        named = Functions.set_name_computed(fun, name_val)
-        run(pc + 1, frame, [named, name_val | rest], gas, ctx)
       end
 
       defp run({@op_copy_data_properties, []}, pc, frame, [source, target | rest], gas, ctx) do
@@ -327,11 +283,6 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
            ) do
         val = SuperProperties.get(func, home_object, super)
         run(pc + 1, frame, [val | rest], gas, ctx)
-      end
-
-      defp run({@op_private_symbol, [atom_idx]}, pc, frame, stack, gas, ctx) do
-        name = Names.resolve_atom(ctx, atom_idx)
-        run(pc + 1, frame, [PrivateFields.symbol(name) | stack], gas, ctx)
       end
 
       # ── instanceof ──
