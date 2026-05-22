@@ -31,6 +31,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     DateExoticGet,
     FunctionExoticGet,
     FunctionPrototypeGet,
+    IndexedExoticGet,
     OwnProperty,
     PrimitiveExoticGet,
     PrimitiveWrapperGet,
@@ -501,35 +502,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_own({:qb_arr, arr}, "length"), do: :array.size(arr)
-
-  defp get_own({:qb_arr, arr}, key) when is_binary(key) do
-    case PropertyKey.array_index(key) do
-      {:ok, idx} ->
-        if idx < :array.size(arr), do: :array.get(idx, arr), else: :undefined
-
-      :error ->
-        :undefined
-    end
-  end
-
-  defp get_own(list, "length") when is_list(list), do: length(list)
-
-  defp get_own(list, key) when is_list(list) and is_binary(key) do
-    case PropertyKey.array_index(key) do
-      {:ok, idx} -> Enum.at(list, idx, :undefined)
-      :error -> :undefined
-    end
-  end
-
-  defp get_own(s, "length") when is_binary(s), do: string_length(s)
-
-  defp get_own(s, key) when is_binary(s) do
-    case PropertyKey.array_index(key) do
-      {:ok, index} when index < 4_294_967_295 -> JSString.utf16_code_unit_at(s, index)
-      _ -> JSString.proto_property(key)
-    end
-  end
+  defp get_own({:qb_arr, _} = array, key), do: IndexedExoticGet.own_property(array, key)
+  defp get_own(list, key) when is_list(list), do: IndexedExoticGet.own_property(list, key)
+  defp get_own(string, key) when is_binary(string), do: IndexedExoticGet.own_property(string, key)
 
   defp get_own(n, _) when is_number(n), do: :undefined
   defp get_own(true, _), do: :undefined
