@@ -687,8 +687,10 @@ defmodule QuickBEAM.VM.Interpreter do
   use QuickBEAM.VM.Interpreter.Ops.PrivateFieldAccess
   use QuickBEAM.VM.Interpreter.Ops.DeleteVars
   use QuickBEAM.VM.Interpreter.Ops.NoopInvalid
-
-  use QuickBEAM.VM.Interpreter.Ops.Objects
+  use QuickBEAM.VM.Interpreter.Ops.CopyDataAdapter
+  use QuickBEAM.VM.Interpreter.Ops.DeleteProperty
+  use QuickBEAM.VM.Interpreter.Ops.InOperatorAdapter
+  use QuickBEAM.VM.Interpreter.Ops.InstanceOfAdapter
 
   use QuickBEAM.VM.Interpreter.Ops.Globals
 
