@@ -148,31 +148,50 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
         base_before = Heap.get_base_globals()
 
         try do
-          new_ctx =
-            GlobalEnvironment.put(ctx, atom_idx, val,
-              init: op == @op_put_var_init,
-              strict: current_strict_mode?(ctx),
-              sync_global_this: false
-            )
-
           name = Names.resolve_atom(ctx, atom_idx)
 
-          unless GlobalEnvironment.lexical_global?(name) do
-            case Map.get(ctx.globals, "globalThis") do
-              {:obj, _} = gt ->
-                validate_global_set_result!(ctx, name, InternalMethods.set(gt, name, val))
+          case maybe_set_existing_global_object_property(ctx, atom_idx, op, name, val) do
+            {:handled, ctx} ->
+              run(pc + 1, frame, rest, gas, ctx)
 
-              _ ->
-                :ok
-            end
+            :continue ->
+              new_ctx =
+                GlobalEnvironment.put(ctx, atom_idx, val,
+                  init: op == @op_put_var_init,
+                  strict: current_strict_mode?(ctx),
+                  sync_global_this: false
+                )
+
+              unless GlobalEnvironment.lexical_global?(name) do
+                case Map.get(ctx.globals, "globalThis") do
+                  {:obj, _} = gt ->
+                    validate_global_set_result!(ctx, name, InternalMethods.set(gt, name, val))
+
+                  _ ->
+                    :ok
+                end
+              end
+
+              run(pc + 1, frame, rest, gas, new_ctx)
           end
-
-          run(pc + 1, frame, rest, gas, new_ctx)
         catch
           {:js_throw, error} ->
             Heap.put_persistent_globals(persistent_before)
             Heap.put_base_globals(base_before)
             throw_or_catch(frame, error, gas, ctx)
+        end
+      end
+
+      defp maybe_set_existing_global_object_property(ctx, atom_idx, op, name, val) do
+        global_this = Map.get(ctx.globals, "globalThis")
+
+        if op == @op_put_var and not GlobalEnvironment.lexical_global?(name) and
+             match?(:not_found, GlobalEnvironment.fetch(ctx, atom_idx)) and
+             match?({:obj, _}, global_this) and InternalMethods.has_property(global_this, name) do
+          validate_global_set_result!(ctx, name, InternalMethods.set(global_this, name, val))
+          {:handled, Completion.refresh_globals(ctx)}
+        else
+          :continue
         end
       end
 

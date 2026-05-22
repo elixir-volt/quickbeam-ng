@@ -15,6 +15,8 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
   alias QuickBEAM.VM.Execution.GlobalBindingState
   alias QuickBEAM.VM.{Heap, JSThrow, Names, Runtime, RuntimeState}
   alias QuickBEAM.VM.Interpreter.Context
+  alias QuickBEAM.VM.ObjectModel.InternalMethods
+  alias QuickBEAM.VM.Semantics.Values
 
   @doc "Returns the active JavaScript global environment."
   def current do
@@ -75,18 +77,29 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
       JSThrow.type_error!("Assignment to constant variable")
     end
 
-    globals = ctx.globals |> Map.merge(Heap.get_persistent_globals() || %{}) |> Map.put(name, val)
+    if current == :not_found and not init? and observable_global_property?(ctx, name) do
+      validate_global_set_result!(
+        strict?,
+        name,
+        InternalMethods.set(Map.get(ctx.globals, "globalThis"), name, val)
+      )
 
-    if Keyword.get(opts, :sync_global_this, true) and not lexical_global?(name) do
-      sync_global_this_property(globals, name, val)
+      RuntimeState.refresh_globals(ctx)
+    else
+      globals =
+        ctx.globals |> Map.merge(Heap.get_persistent_globals() || %{}) |> Map.put(name, val)
+
+      if Keyword.get(opts, :sync_global_this, true) and not lexical_global?(name) do
+        sync_global_this_property(globals, name, val)
+      end
+
+      if Keyword.get(opts, :persist, true) do
+        Heap.put_persistent_globals(globals)
+        Heap.put_base_globals(globals)
+      end
+
+      %{ctx | globals: globals} |> Context.mark_dirty()
     end
-
-    if Keyword.get(opts, :persist, true) do
-      Heap.put_persistent_globals(globals)
-      Heap.put_base_globals(globals)
-    end
-
-    %{ctx | globals: globals} |> Context.mark_dirty()
   end
 
   @doc "Defines a hoisted `var` binding in the active global environment."
@@ -130,6 +143,21 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
   defp const_global_flags?(_flags), do: false
 
   def lexical_global?(name), do: GlobalBindingState.lexical?(name)
+
+  defp observable_global_property?(ctx, name) do
+    case Map.get(ctx.globals, "globalThis") do
+      {:obj, _} = global_this -> InternalMethods.has_property(global_this, name)
+      _ -> false
+    end
+  end
+
+  defp validate_global_set_result!(strict?, name, result) do
+    if Values.truthy?(result) or not strict? do
+      :ok
+    else
+      JSThrow.type_error!("Cannot assign to #{name}")
+    end
+  end
 
   defp sync_global_this_property(_globals, "globalThis", _val), do: :ok
 
