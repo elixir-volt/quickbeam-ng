@@ -3,7 +3,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
 
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Slots, State}
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Captures, as: RuntimeCaptures
   alias QuickBEAM.VM.OpcodeSpec
 
   @tdz :__tdz__
@@ -118,10 +117,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
 
     value =
       if Captures.slot_captured?(state, slot_idx) do
-        Builder.remote_call(RuntimeCaptures, :read_cell, [
-          Slots.capture_cell_expr(state, slot_idx),
-          expr
-        ])
+        State.abi_call(state, :read_capture_cell, [Slots.capture_cell_expr(state, slot_idx), expr])
       else
         expr
       end
@@ -142,10 +138,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Locals do
 
     value =
       if Captures.slot_captured?(state, slot_idx) do
-        Builder.remote_call(RuntimeCaptures, :read_cell, [
-          Slots.capture_cell_expr(state, slot_idx),
-          expr
-        ])
+        State.abi_call(state, :read_capture_cell, [Slots.capture_cell_expr(state, slot_idx), expr])
       else
         expr
       end

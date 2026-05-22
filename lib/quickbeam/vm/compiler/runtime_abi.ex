@@ -25,18 +25,31 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
   """
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
-  alias QuickBEAM.VM.GlobalEnvironment
+  alias QuickBEAM.VM.{GlobalEnvironment, ObjectModel}
 
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.{
     Bindings,
     Calls,
     Captures,
     Classes,
+    Constants,
     Iterators,
     Properties
   }
 
   def push_this(ctx), do: RuntimeHelpers.push_this(ctx)
+
+  def push_atom_value(ctx, atom_idx), do: Constants.push_atom_value(ctx, atom_idx)
+
+  def private_symbol(ctx, name_or_atom_idx), do: Constants.private_symbol(ctx, name_or_atom_idx)
+
+  def materialize_constant(ctx, value), do: Constants.materialize_constant(ctx, value)
+
+  def regexp_literal(ctx, pattern, flags), do: Constants.regexp_literal(ctx, pattern, flags)
+
+  def to_property_key_raw(_ctx, value), do: ObjectModel.PropertyKey.to_property_key(value)
+
+  def read_capture_cell(ctx, cell, slot_value), do: Captures.read_cell(ctx, cell, slot_value)
 
   def ensure_capture_cell(ctx, cell, value), do: Captures.ensure_cell(ctx, cell, value)
 
@@ -50,11 +63,17 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def get_var_undef(ctx, name), do: Bindings.get_var_undef(ctx, name)
 
+  def get_var_ref(ctx, idx), do: Bindings.get_var_ref(ctx, idx)
+
+  def get_var_ref_check(ctx, idx), do: Bindings.get_var_ref_check(ctx, idx)
+
   def put_var(ctx, atom_idx, value, opts), do: GlobalEnvironment.put(ctx, atom_idx, value, opts)
 
   def define_var(ctx, atom_idx, scope), do: GlobalEnvironment.define_var(ctx, atom_idx, scope)
 
   def check_define_var(ctx, atom_idx), do: GlobalEnvironment.check_define_var(ctx, atom_idx)
+
+  def refresh_globals(ctx), do: GlobalEnvironment.refresh(ctx)
 
   def delete_var(ctx, atom_idx), do: Bindings.delete_var(ctx, atom_idx)
 

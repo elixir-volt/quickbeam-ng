@@ -174,6 +174,31 @@ process_state_owners = [
          "QuickBEAM.VM.ObjectModel.*",
          "QuickBEAM.VM.Runtime.*"
        ]},
+      {"QuickBEAM.VM.Compiler.Lowering.State",
+       [
+         "QuickBEAM.VM.GlobalEnvironment",
+         "QuickBEAM.VM.Heap.*",
+         "QuickBEAM.VM.Invocation.*",
+         "QuickBEAM.VM.ObjectModel.*",
+         "QuickBEAM.VM.Runtime.*",
+         "QuickBEAM.VM.Compiler.RuntimeHelpers.*"
+       ]},
+      {"QuickBEAM.VM.Compiler.Lowering.Ops.Stack",
+       [
+         "QuickBEAM.VM.Heap.*",
+         "QuickBEAM.VM.Invocation.*",
+         "QuickBEAM.VM.ObjectModel.*",
+         "QuickBEAM.VM.Runtime.*",
+         "QuickBEAM.VM.Compiler.RuntimeHelpers.*"
+       ]},
+      {"QuickBEAM.VM.Compiler.Lowering.Ops.Locals",
+       [
+         "QuickBEAM.VM.Heap.*",
+         "QuickBEAM.VM.Invocation.*",
+         "QuickBEAM.VM.ObjectModel.*",
+         "QuickBEAM.VM.Runtime.*",
+         "QuickBEAM.VM.Compiler.RuntimeHelpers.*"
+       ]},
       {"QuickBEAM.VM.Interpreter.*", ["QuickBEAM.VM.Host.Test262.*"]},
       {"QuickBEAM.VM.Runtime.*", ["QuickBEAM.VM.Compiler.*"]},
       {"QuickBEAM.VM.Runtime.*", ["QuickBEAM.VM.Interpreter.*"]},

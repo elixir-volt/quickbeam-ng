@@ -14,9 +14,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   }
 
   alias QuickBEAM.VM.Compiler.RuntimeABI
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.{Bindings, Constants}
-  alias QuickBEAM.VM.GlobalEnvironment
-  alias QuickBEAM.VM.ObjectModel.PropertyKey
   alias QuickBEAM.VM.Operands.CopyDataProperties
 
   defstruct [
@@ -140,8 +137,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   def abi_call(state, fun, args),
     do: Builder.remote_call(RuntimeABI, fun, [ctx_expr(state) | args])
 
-  def constant_call(state, fun, args),
-    do: Builder.remote_call(Constants, fun, [ctx_expr(state) | args])
+  def constant_call(state, fun, args), do: abi_call(state, fun, args)
 
   @doc "Binds a new context expression and marks it as the current context."
   def update_ctx(state, expr) do
@@ -473,11 +469,10 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
         Emit.bind(
           state,
           Builder.temp_name(state.temp),
-          Builder.remote_call(PropertyKey, :to_property_key, [idx])
+          abi_call(state, :to_property_key_raw, [idx])
         )
 
-      state =
-        update_ctx(state, Builder.remote_call(GlobalEnvironment, :refresh, [ctx_expr(state)]))
+      state = update_ctx(state, abi_call(state, :refresh_globals, []))
 
       val_expr = refresh_define_value_expr(state, val_expr)
       {val, state} = Emit.bind(state, Builder.temp_name(state.temp), val_expr)
@@ -681,11 +676,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
       {result, state} = Emit.bind(state, Builder.temp_name(state.temp), expr)
 
-      state =
-        update_ctx(
-          state,
-          Builder.remote_call(QuickBEAM.VM.GlobalEnvironment, :refresh, [ctx_expr(state)])
-        )
+      state = update_ctx(state, abi_call(state, :refresh_globals, []))
 
       {:ok, Emit.push(state, result, function_return_type(fun_type, state.return_type))}
     end
@@ -882,11 +873,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     {result, state} =
       Emit.bind(state, Builder.temp_name(state.temp), invoke_runtime_expr(state, fun, args))
 
-    state =
-      update_ctx(
-        state,
-        Builder.remote_call(QuickBEAM.VM.GlobalEnvironment, :refresh, [ctx_expr(state)])
-      )
+    state = update_ctx(state, abi_call(state, :refresh_globals, []))
 
     {:ok, Emit.push(state, result, function_return_type(fun_type, state.return_type))}
   end
@@ -915,7 +902,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   end
 
   defp var_ref_fun_call(
-         {:call, _, {:remote, _, {:atom, _, Bindings}, {:atom, _, fun}}, [_ctx, idx]},
+         {:call, _, {:remote, _, {:atom, _, RuntimeABI}, {:atom, _, fun}}, [_ctx, idx]},
          argc
        )
        when fun in [:get_var_ref, :get_var_ref_check] do

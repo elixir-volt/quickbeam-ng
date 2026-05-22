@@ -5,7 +5,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   import QuickBEAM.VM.OpcodeFamily, only: [is_small_int_push: 1]
 
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Captures, Emit, State}
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings
   alias QuickBEAM.VM.{OpcodeFamily, OpcodeSpec}
 
   @handlers %{
@@ -355,10 +354,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
       Emit.bind(
         state,
         Builder.temp_name(state.temp),
-        Builder.remote_call(Bindings, :get_var_ref, [
-          State.ctx_expr(state),
-          Builder.literal(idx)
-        ])
+        State.abi_call(state, :get_var_ref, [Builder.literal(idx)])
       )
 
     {cell, state} =
