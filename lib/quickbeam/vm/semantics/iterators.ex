@@ -86,6 +86,20 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
     end
   end
 
+  def iterator_call(_ctx, flags, val, catch_offset, next_fn, iter_obj) do
+    method_name = if Bitwise.band(flags, 1) == 1, do: "throw", else: "return"
+    method = Get.get(iter_obj, method_name)
+
+    if Value.nullish?(method) do
+      {true, val, catch_offset, next_fn, iter_obj}
+    else
+      args = if Bitwise.band(flags, 2) == 2, do: [], else: [val]
+
+      {false, Invocation.invoke_with_receiver(method, args, iter_obj), catch_offset, next_fn,
+       iter_obj}
+    end
+  end
+
   @doc "Collects values from an iterable according to ECMAScript iterator protocol."
   def iterable_to_list(value), do: collect_iterable_values(value)
 

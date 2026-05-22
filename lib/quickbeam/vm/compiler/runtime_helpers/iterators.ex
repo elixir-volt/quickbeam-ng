@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   @moduledoc "Iterator and argument-rest helpers used by BEAM-compiled JavaScript."
 
-  alias QuickBEAM.VM.{Heap, Invocation, Runtime, RuntimeState, Value}
+  alias QuickBEAM.VM.{Heap, Runtime, RuntimeState}
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Properties
   alias QuickBEAM.VM.Interpreter.Context
@@ -30,19 +30,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
     value
   end
 
-  def call(_ctx, flags, val, catch_offset, next_fn, iter_obj) do
-    method_name = if Bitwise.band(flags, 1) == 1, do: "throw", else: "return"
-    method = Get.get(iter_obj, method_name)
-
-    if Value.nullish?(method) do
-      {true, val, catch_offset, next_fn, iter_obj}
-    else
-      args = if Bitwise.band(flags, 2) == 2, do: [], else: [val]
-
-      {false, Invocation.invoke_with_receiver(method, args, iter_obj), catch_offset, next_fn,
-       iter_obj}
-    end
-  end
+  def call(ctx, flags, val, catch_offset, next_fn, iter_obj),
+    do: IteratorSemantics.iterator_call(ctx, flags, val, catch_offset, next_fn, iter_obj)
 
   @doc "Creates key iteration state for a JavaScript `for...in` loop."
   defdelegate for_in_start(ctx \\ nil, obj), to: IteratorSemantics
