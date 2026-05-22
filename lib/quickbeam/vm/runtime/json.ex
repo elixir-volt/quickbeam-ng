@@ -12,8 +12,8 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   alias QuickBEAM.VM.Value
 
   alias QuickBEAM.VM.ObjectModel.{
-    Delete,
     Get,
+    InternalMethods,
     OwnProperty,
     PropertyDescriptor,
     Put,
@@ -442,7 +442,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   defp internalize_json_children(_value, _reviver, _source), do: :ok
 
   defp create_or_delete_json_property(object, key, :undefined),
-    do: Delete.delete_property(object, key)
+    do: InternalMethods.delete(object, key)
 
   defp create_or_delete_json_property({:obj, ref} = object, key, value) do
     case Heap.get_prop_desc(ref, key) do
