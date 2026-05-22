@@ -50,11 +50,11 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   def define_own_property(obj, key, desc_obj, raw_desc),
     do: Define.property(obj, key, desc_obj, raw_desc)
 
-  def delete(obj, key), do: ProxyDelete.dispatch(obj, key, &Delete.ordinary_delete_property/2)
+  def delete(obj, key), do: delete_by_kind(kind(obj), obj, key)
 
-  def own_keys(obj), do: ProxyOwnKeys.dispatch(obj, &OwnProperty.ordinary_own_keys/1)
+  def own_keys(obj), do: own_keys_by_kind(kind(obj), obj)
 
-  def extensible?(obj), do: ProxyExtensible.dispatch(obj, &ordinary_extensible?/1)
+  def extensible?(obj), do: extensible_by_kind(kind(obj), obj)
 
   defp get_by_kind(_kind, obj, key, receiver), do: Get.get(obj, key, receiver)
 
@@ -68,6 +68,19 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     do: ProxyHas.dispatch(obj, key, &HasProperty.ordinary_has_property?/2)
 
   defp has_property_by_kind(_kind, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
+
+  defp delete_by_kind(:proxy, obj, key),
+    do: ProxyDelete.dispatch(obj, key, &Delete.ordinary_delete_property/2)
+
+  defp delete_by_kind(_kind, obj, key), do: Delete.ordinary_delete_property(obj, key)
+
+  defp own_keys_by_kind(:proxy, obj),
+    do: ProxyOwnKeys.dispatch(obj, &OwnProperty.ordinary_own_keys/1)
+
+  defp own_keys_by_kind(_kind, obj), do: OwnProperty.ordinary_own_keys(obj)
+
+  defp extensible_by_kind(:proxy, obj), do: ProxyExtensible.dispatch(obj, &ordinary_extensible?/1)
+  defp extensible_by_kind(_kind, obj), do: ordinary_extensible?(obj)
 
   defp ordinary_extensible?({:obj, ref}), do: Heap.extensible?(ref)
   defp ordinary_extensible?(_), do: true
