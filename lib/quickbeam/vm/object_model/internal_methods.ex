@@ -42,7 +42,7 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
 
   def has_property(obj, key), do: has_property_by_kind(kind(obj), obj, key)
 
-  def own_property(obj, key), do: OwnProperty.descriptor(obj, key)
+  def own_property(obj, key), do: own_property_by_kind(kind(obj), obj, key)
 
   def define_own_property(obj, key, descriptor),
     do: define_own_property(obj, key, descriptor, descriptor)
@@ -68,6 +68,8 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     do: ProxyHas.dispatch(obj, key, &HasProperty.ordinary_has_property?/2)
 
   defp has_property_by_kind(_kind, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
+
+  defp own_property_by_kind(_kind, obj, key), do: OwnProperty.descriptor(obj, key)
 
   defp define_own_property_by_kind(_kind, obj, key, desc_obj, raw_desc),
     do: Define.property(obj, key, desc_obj, raw_desc)
