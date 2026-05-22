@@ -307,6 +307,7 @@ process_state_owners = [
          "QuickBEAM.VM.Interpreter.Ops.ArrayElements",
          "QuickBEAM.VM.Interpreter.Ops.CopyDataProperties",
          "QuickBEAM.VM.Interpreter.Ops.FieldAccess",
+         "QuickBEAM.VM.Interpreter.Ops.Globals",
          "QuickBEAM.VM.Interpreter.Ops.PropertyKeys",
          "QuickBEAM.VM.Interpreter.Ops.SuperAccess"
        ]},

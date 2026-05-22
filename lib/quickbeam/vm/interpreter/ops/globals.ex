@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
     quote location: :keep do
       import QuickBEAM.VM.Value, only: [is_object: 1]
       alias QuickBEAM.VM.{GlobalEnvironment, Heap, Names, Runtime, RuntimeState}
-      alias QuickBEAM.VM.Interpreter.{ArgumentsObject, Closures, Context, Frame}
+      alias QuickBEAM.VM.Interpreter.{ArgumentsObject, Closures, Completion, Context, Frame}
       alias QuickBEAM.VM.JSThrow
       alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, Put}
       alias QuickBEAM.VM.Promise, as: Promise
@@ -347,8 +347,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
             run(pc + 1, frame, rest, gas, ctx)
           catch
             {:js_throw, error} ->
-              ctx = RuntimeState.current_or(ctx)
-              throw_or_catch(frame, error, gas, ctx)
+              throw_or_catch(frame, error, gas, Completion.current_context(ctx))
           end
         end
       end
