@@ -129,7 +129,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
             case Map.get(ctx.globals, "globalThis") do
               {:obj, _} = global_this ->
-                case Get.get(global_this, name) do
+                case InternalMethods.get(global_this, name) do
                   :undefined -> JSThrow.reference_error!("#{name} is not defined")
                   val -> val
                 end
