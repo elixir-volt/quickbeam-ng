@@ -143,6 +143,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
       defp run({op, [atom_idx]}, pc, frame, [val | rest], gas, ctx)
            when op in [@op_put_var, @op_put_var_init] do
+        persistent_before = Heap.get_persistent_globals()
+        base_before = Heap.get_base_globals()
+
         try do
           new_ctx =
             GlobalEnvironment.put(ctx, atom_idx, val,
@@ -161,7 +164,10 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
 
           run(pc + 1, frame, rest, gas, new_ctx)
         catch
-          {:js_throw, error} -> throw_or_catch(frame, error, gas, ctx)
+          {:js_throw, error} ->
+            Heap.put_persistent_globals(persistent_before)
+            Heap.put_base_globals(base_before)
+            throw_or_catch(frame, error, gas, ctx)
         end
       end
 
