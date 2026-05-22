@@ -18,6 +18,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
       }
 
       alias QuickBEAM.VM.Interpreter.{Context, Frame}
+      alias QuickBEAM.VM.Interpreter.Ops.{ObjectLiterals, PropertyKeys}
       alias QuickBEAM.VM.Semantics.Values
 
       alias QuickBEAM.VM.ObjectModel.{
@@ -27,7 +28,6 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         Functions,
         Get,
         Private,
-        PropertyKey,
         Put
       }
 
@@ -178,21 +178,8 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
 
       defp run({@op_array_from, [argc]}, pc, frame, stack, gas, ctx) do
         {elems, rest} = Enum.split(stack, argc)
-        ref = make_ref()
         values = Enum.reverse(elems)
-        Heap.put_obj(ref, values)
-
-        values
-        |> Enum.with_index()
-        |> Enum.each(fn {_value, index} ->
-          Heap.put_prop_desc(ref, Integer.to_string(index), %{
-            writable: true,
-            enumerable: true,
-            configurable: true
-          })
-        end)
-
-        run(pc + 1, frame, [{:obj, ref} | rest], gas, ctx)
+        run(pc + 1, frame, [ObjectLiterals.array_from(values) | rest], gas, ctx)
       end
 
       defp run({@op_get_field2, [atom_idx]}, __pc, frame, [obj | _rest], gas, ctx)
@@ -244,18 +231,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         do: run(pc + 1, frame, stack, gas, ctx)
 
       defp run({@op_to_propkey, []}, pc, frame, [key | rest], gas, ctx) do
-        try do
-          prop_key = PropertyKey.to_property_key(key)
-
-          run(
-            pc + 1,
-            frame,
-            [prop_key | rest],
-            gas,
-            GlobalEnvironment.refresh(RuntimeState.current() || ctx)
-          )
-        catch
-          {:js_throw, error} -> throw_or_catch(frame, error, gas, RuntimeState.current() || ctx)
+        case PropertyKeys.to_property_key(key, ctx) do
+          {:ok, prop_key, ctx} -> run(pc + 1, frame, [prop_key | rest], gas, ctx)
+          {:throw, error, ctx} -> throw_or_catch(frame, error, gas, ctx)
         end
       end
 
