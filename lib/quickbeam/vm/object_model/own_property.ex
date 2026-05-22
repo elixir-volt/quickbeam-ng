@@ -14,7 +14,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     Static,
     PropertyDescriptor,
     PropertyKey,
-    ProxyTrap,
+    ProxyOwnProperty,
     WrappedPrimitive
   }
 
@@ -385,7 +385,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
         JSThrow.type_error!("Cannot perform operation on a revoked proxy")
 
       is_map(data) and Map.has_key?(data, proxy_target()) ->
-        proxy_descriptor(data, prop_name)
+        ProxyOwnProperty.dispatch(data, prop_name, &descriptor/2, &target_descriptor_flags/2)
 
       is_list(data) or match?({:qb_arr, _}, data) ->
         ArrayExotic.descriptor(ref, data, prop_name)
@@ -789,73 +789,6 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   defp constant_property_name?(key) when is_binary(key), do: String.upcase(key) == key
   defp constant_property_name?(_key), do: false
 
-  defp proxy_descriptor(proxy_map, prop_name) do
-    target = Map.fetch!(proxy_map, proxy_target())
-    handler = Map.fetch!(proxy_map, proxy_handler())
-
-    if Map.get(proxy_map, "__proxy_revoked__") == true do
-      throw(
-        {:js_throw, Heap.make_error("Cannot perform operation on a revoked proxy", "TypeError")}
-      )
-    end
-
-    unless Value.object_like?(handler) do
-      throw(
-        {:js_throw,
-         Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
-      )
-    end
-
-    trap = Get.get(handler, "getOwnPropertyDescriptor")
-
-    if Value.nullish?(trap) do
-      descriptor(target, prop_name)
-    else
-      result = ProxyTrap.call(trap, [target, prop_name], handler)
-      validate_proxy_descriptor_result(target, prop_name, result)
-    end
-  end
-
-  defp validate_proxy_descriptor_result(target, prop_name, :undefined) do
-    case target_descriptor_flags(target, prop_name) do
-      %{configurable: false} ->
-        proxy_descriptor_invariant_error()
-
-      nil ->
-        :undefined
-
-      _flags ->
-        if target_extensible?(target), do: :undefined, else: proxy_descriptor_invariant_error()
-    end
-  end
-
-  defp validate_proxy_descriptor_result(target, prop_name, {:obj, result_ref} = result) do
-    result_desc = Heap.get_obj(result_ref, %{})
-
-    cond do
-      not target_extensible?(target) and target_descriptor_flags(target, prop_name) == nil ->
-        proxy_descriptor_invariant_error()
-
-      Map.get(result_desc, "configurable") == false and
-          not match?(%{configurable: false}, target_descriptor_flags(target, prop_name)) ->
-        proxy_descriptor_invariant_error()
-
-      Map.get(result_desc, "configurable") == false and Map.get(result_desc, "writable") == false and
-          match?(%{writable: true}, target_descriptor_flags(target, prop_name)) ->
-        proxy_descriptor_invariant_error()
-
-      true ->
-        result
-    end
-  end
-
-  defp validate_proxy_descriptor_result(_target, _prop_name, _result) do
-    throw(
-      {:js_throw,
-       Heap.make_error("proxy getOwnPropertyDescriptor trap returned non-object", "TypeError")}
-    )
-  end
-
   defp target_descriptor_flags({:obj, ref} = target, prop_name) do
     Heap.get_prop_desc(ref, prop_name) ||
       if present?(target, prop_name) do
@@ -864,16 +797,6 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   end
 
   defp target_descriptor_flags(_target, _prop_name), do: nil
-
-  defp target_extensible?({:obj, ref}), do: Heap.extensible?(ref)
-  defp target_extensible?(_target), do: true
-
-  defp proxy_descriptor_invariant_error do
-    throw(
-      {:js_throw,
-       Heap.make_error("proxy getOwnPropertyDescriptor trap violates invariant", "TypeError")}
-    )
-  end
 
   defp descriptor_internal_key?(:__internal_proto__), do: true
   defp descriptor_internal_key?(key), do: internal_slot?(key)
