@@ -350,6 +350,28 @@ defmodule QuickBEAM.VM.OpcodeSpec do
 
   def table, do: @opcode_rows
   def all_opcodes, do: Opcodes.all_opcodes()
+
+  def opcode(name) when is_atom(name) do
+    with num when is_integer(num) <- num(name),
+         {^name, size, pops, pushes, format} <- info(num) do
+      {:ok,
+       %{
+         name: name,
+         opcode: num,
+         size: size,
+         format: format,
+         stack_effect: {pops, pushes},
+         lowering_family: lowering_family(name),
+         control_flow_family: control_flow_family(name),
+         small_int_push: Map.get(@small_int_push, name)
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  def opcode(_name), do: :error
+
   def info(opcode), do: Opcodes.info(opcode)
   def num(name), do: Opcodes.num(name)
   def format_info(format), do: Opcodes.format_info(format)

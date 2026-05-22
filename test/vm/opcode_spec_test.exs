@@ -31,6 +31,19 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert names == Enum.uniq(names)
   end
 
+  test "opcode records centralize metadata" do
+    assert {:ok, info} = OpcodeSpec.opcode(:if_false)
+    assert info.name == :if_false
+    assert is_integer(info.opcode)
+    assert info.stack_effect == {1, 0}
+    assert info.lowering_family == :control
+    assert info.control_flow_family == {:branch, false}
+
+    assert {:ok, push} = OpcodeSpec.opcode(:push_0)
+    assert push.small_int_push == 0
+    assert OpcodeSpec.opcode(:not_an_opcode) == :error
+  end
+
   test "control flow families are centralized" do
     assert OpcodeSpec.control_flow_family(:if_false) == {:branch, false}
     assert OpcodeSpec.control_flow_family(:if_true8) == {:branch, true}
