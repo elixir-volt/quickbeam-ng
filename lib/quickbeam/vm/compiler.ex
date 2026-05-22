@@ -24,6 +24,10 @@ defmodule QuickBEAM.VM.Compiler do
   @type beam_file :: {:beam_file, module(), list(), list(), list(), list()}
 
   @compiler_cache_version "v6"
+  @max_instruction_count 20_000
+  @max_atom_count 10_000
+  @max_constant_count 10_000
+  @max_block_form_count 5_000
 
   @doc "Invokes the runtime object represented by this module."
   def invoke(fun, args), do: invoke(fun, args, nil)
@@ -205,8 +209,10 @@ defmodule QuickBEAM.VM.Compiler do
     with :ok <- reject_mapped_arguments(fun),
          :ok <- reject_generator_cleanup_resume(fun),
          {:instructions, {:ok, instructions}} <- {:instructions, instructions(fun)},
+         :ok <- reject_resource_limits(fun, atoms, instructions),
          optimized = Optimizer.optimize(instructions, fun.constants),
          {:lower, {:ok, {slot_count, block_forms}}} <- {:lower, Lowering.lower(fun, optimized)},
+         :ok <- reject_block_form_limit(block_forms),
          {:forms, {:ok, _module, binary}} <-
            {:forms,
             Forms.compile_module(
@@ -222,10 +228,26 @@ defmodule QuickBEAM.VM.Compiler do
     else
       {:error, :mapped_arguments} -> {:error, :mapped_arguments}
       {:error, :generator_cleanup_resume} -> {:error, :generator_cleanup_resume}
+      {:error, :compiler_resource_limit} -> {:error, :compiler_resource_limit}
       {:instructions, {:error, reason}} -> {:error, {:decode_failed, reason}}
       {:lower, {:error, reason}} -> {:error, reason}
       {:forms, {:error, reason}} -> {:error, {:beam_compile_failed, reason}}
     end
+  end
+
+  defp reject_resource_limits(fun, atoms, instructions) do
+    cond do
+      length(instructions) > @max_instruction_count -> {:error, :compiler_resource_limit}
+      tuple_size(atoms) > @max_atom_count -> {:error, :compiler_resource_limit}
+      length(List.wrap(fun.constants)) > @max_constant_count -> {:error, :compiler_resource_limit}
+      true -> :ok
+    end
+  end
+
+  defp reject_block_form_limit(block_forms) do
+    if length(block_forms) > @max_block_form_count,
+      do: {:error, :compiler_resource_limit},
+      else: :ok
   end
 
   defp reject_mapped_arguments(%QuickBEAM.VM.Function{arg_count: arg_count, source: source})

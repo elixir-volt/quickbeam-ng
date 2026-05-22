@@ -122,7 +122,8 @@ defmodule QuickBEAM.VM.Compiler.Runner do
         ctx = invocation_ctx(base_ctx, current_func, args, ctx_overrides, fun, atoms)
         {:ok, invoke_compiled(fun, compiled, ctx, normalized_args)}
 
-      {:error, reason} when reason in [:generator_cleanup_resume, :mapped_arguments] ->
+      {:error, reason}
+      when reason in [:generator_cleanup_resume, :mapped_arguments, :compiler_resource_limit] ->
         ctx = invocation_ctx(base_ctx, current_func, args, ctx_overrides, fun, atoms)
         {:ok, interpreter_fallback(current_func, args, ctx)}
 
