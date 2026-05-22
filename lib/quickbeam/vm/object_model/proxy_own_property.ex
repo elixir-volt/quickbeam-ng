@@ -1,26 +1,13 @@
 defmodule QuickBEAM.VM.ObjectModel.ProxyOwnProperty do
   @moduledoc "Proxy [[GetOwnProperty]] dispatch and invariant validation."
 
-  import QuickBEAM.VM.Heap.Keys, only: [proxy_handler: 0, proxy_target: 0]
-
-  alias QuickBEAM.VM.{Heap, JSThrow, Value}
-  alias QuickBEAM.VM.ObjectModel.{Get, ProxyTrap}
+  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.ObjectModel.{ProxyDispatch, ProxyTrap}
 
   def dispatch(proxy_map, prop_name, fallback, target_flags)
       when is_function(fallback, 2) and is_function(target_flags, 2) do
-    target = Map.fetch!(proxy_map, proxy_target())
-    handler = Map.fetch!(proxy_map, proxy_handler())
-
-    cond do
-      Map.get(proxy_map, "__proxy_revoked__") == true ->
-        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-
-      not Value.object_like?(handler) ->
-        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
-
-      true ->
-        descriptor_trap(target, handler, prop_name, fallback, target_flags)
-    end
+    {target, handler} = ProxyDispatch.target_handler!(proxy_map)
+    descriptor_trap(target, handler, prop_name, fallback, target_flags)
   end
 
   def validate_result(target, prop_name, :undefined, target_flags)
@@ -62,9 +49,9 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnProperty do
     do: JSThrow.type_error!("proxy getOwnPropertyDescriptor trap returned non-object")
 
   defp descriptor_trap(target, handler, prop_name, fallback, target_flags) do
-    trap = Get.get(handler, "getOwnPropertyDescriptor")
+    trap = ProxyDispatch.trap(handler, "getOwnPropertyDescriptor")
 
-    if Value.nullish?(trap) do
+    if is_nil(ProxyDispatch.callable_trap!(trap, "getOwnPropertyDescriptor")) do
       fallback.(target, prop_name)
     else
       trap

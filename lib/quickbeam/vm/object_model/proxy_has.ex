@@ -1,22 +1,16 @@
 defmodule QuickBEAM.VM.ObjectModel.ProxyHas do
   @moduledoc "Proxy [[HasProperty]] dispatch and invariant validation."
 
-  import QuickBEAM.VM.Heap.Keys, only: [proxy_handler: 0, proxy_target: 0]
+  import QuickBEAM.VM.Heap.Keys, only: [proxy_target: 0]
 
-  alias QuickBEAM.VM.{Heap, JSThrow, Value}
-  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, ProxyTrap}
+  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.ObjectModel.{OwnProperty, ProxyDispatch, ProxyTrap}
   alias QuickBEAM.VM.Semantics.Values
 
   def dispatch({:obj, ref} = proxy, key, fallback) when is_function(fallback, 2) do
     case Heap.get_obj(ref, %{}) do
-      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
-        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-
-      %{proxy_target() => _target, proxy_handler() => handler}
-      when not is_map(handler) and not is_tuple(handler) ->
-        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
-
-      %{proxy_target() => target, proxy_handler() => handler} ->
+      %{proxy_target() => _target} = proxy_map ->
+        {target, handler} = ProxyDispatch.target_handler!(proxy_map)
         has_trap(target, handler, key, fallback)
 
       _ ->
@@ -45,9 +39,9 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyHas do
   def validate_invariant(_target, _key, result), do: result
 
   defp has_trap(target, handler, key, fallback) do
-    trap = Get.get(handler, "has")
+    trap = ProxyDispatch.trap(handler, "has")
 
-    if Value.nullish?(trap) do
+    if is_nil(ProxyDispatch.callable_trap!(trap, "has")) do
       fallback.(target, key)
     else
       trap_result = trap |> ProxyTrap.call([target, key], handler) |> Values.truthy?()

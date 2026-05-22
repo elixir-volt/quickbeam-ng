@@ -1,21 +1,13 @@
 defmodule QuickBEAM.VM.ObjectModel.ProxyGet do
   @moduledoc "Proxy [[Get]] dispatch and invariant validation."
 
-  alias QuickBEAM.VM.{Heap, JSThrow, Value}
-  alias QuickBEAM.VM.ObjectModel.{Get, ProxyTrap, Semantics}
+  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.ObjectModel.{ProxyDispatch, ProxyTrap, Semantics}
 
   def dispatch(proxy_map, target, handler, key, receiver, fallback, target_slot)
       when is_function(fallback, 3) and is_function(target_slot, 2) do
-    cond do
-      Map.get(proxy_map, "__proxy_revoked__") == true ->
-        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-
-      not Value.object_like?(handler) ->
-        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
-
-      true ->
-        get_trap(target, handler, key, receiver, fallback, target_slot)
-    end
+    ProxyDispatch.target_handler!(proxy_map)
+    get_trap(target, handler, key, receiver, fallback, target_slot)
   end
 
   def validate_invariant(target, key, trap_result, target_slot)
@@ -27,18 +19,13 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyGet do
   end
 
   defp get_trap(target, handler, key, receiver, fallback, target_slot) do
-    trap = Get.get(handler, "get")
+    trap = ProxyDispatch.trap(handler, "get")
 
-    cond do
-      Value.nullish?(trap) ->
-        fallback.(target, key, receiver)
-
-      not QuickBEAM.VM.Builtin.callable?(trap) ->
-        JSThrow.type_error!("proxy get trap is not callable")
-
-      true ->
-        trap_result = ProxyTrap.call(trap, [target, key, receiver], handler)
-        validate_invariant(target, key, trap_result, target_slot)
+    if is_nil(ProxyDispatch.callable_trap!(trap, "get")) do
+      fallback.(target, key, receiver)
+    else
+      trap_result = ProxyTrap.call(trap, [target, key, receiver], handler)
+      validate_invariant(target, key, trap_result, target_slot)
     end
   end
 
