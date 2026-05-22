@@ -24,13 +24,62 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
 
   def get(obj, key, receiver \\ nil), do: Get.get(obj, key, receiver || obj)
   def set(obj, key, value, _receiver \\ nil), do: Put.put(obj, key, value)
-  def has_property(obj, key), do: HasProperty.has_property?(obj, key)
+
+  def has_property({:obj, ref} = obj, key) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
+      %{proxy_target() => _target, proxy_handler() => handler}
+      when not is_map(handler) and not is_tuple(handler) ->
+        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
+
+      %{proxy_target() => target, proxy_handler() => handler} ->
+        trap = Get.get(handler, "has")
+
+        if Value.nullish?(trap) do
+          has_property(target, key)
+        else
+          result = Values.truthy?(ProxyTrap.call(trap, [target, key], handler))
+          validate_proxy_has_invariant(target, key, result)
+        end
+
+      _ ->
+        HasProperty.ordinary_has_property?(obj, key)
+    end
+  end
+
+  def has_property(obj, key), do: HasProperty.ordinary_has_property?(obj, key)
   def own_property(obj, key), do: OwnProperty.descriptor(obj, key)
 
   def define_own_property(obj, key, descriptor),
     do: Define.property(obj, key, descriptor, descriptor)
 
-  def delete(obj, key), do: Delete.delete_property(obj, key)
+  def delete({:obj, ref} = obj, key) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
+      %{proxy_target() => _target, proxy_handler() => handler}
+      when not is_map(handler) and not is_tuple(handler) ->
+        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
+
+      %{proxy_target() => target, proxy_handler() => handler} ->
+        trap = Get.get(handler, "deleteProperty")
+
+        if Value.nullish?(trap) do
+          delete(target, key)
+        else
+          result = Values.truthy?(ProxyTrap.call(trap, [target, key], handler))
+          validate_proxy_delete_invariant(target, key, result)
+        end
+
+      _ ->
+        Delete.ordinary_delete_property(obj, key)
+    end
+  end
+
+  def delete(obj, key), do: Delete.ordinary_delete_property(obj, key)
 
   def own_keys({:obj, ref} = obj) do
     case Heap.get_obj(ref, %{}) do
@@ -59,6 +108,35 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   end
 
   def own_keys(obj), do: OwnProperty.ordinary_own_keys(obj)
+
+  defp validate_proxy_has_invariant({:obj, target_ref} = target, key, false) do
+    desc = Heap.get_prop_desc(target_ref, key)
+
+    cond do
+      match?(%{configurable: false}, desc) ->
+        JSThrow.type_error!("proxy has trap violates invariant")
+
+      OwnProperty.present?(target, key) and not Heap.extensible?(target_ref) ->
+        JSThrow.type_error!("proxy has trap violates invariant")
+
+      true ->
+        false
+    end
+  end
+
+  defp validate_proxy_has_invariant(_target, _key, result), do: result
+
+  defp validate_proxy_delete_invariant({:obj, target_ref}, key, true) do
+    case Heap.get_prop_desc(target_ref, key) do
+      %{configurable: false} ->
+        JSThrow.type_error!("proxy deleteProperty trap violates invariant")
+
+      _ ->
+        true
+    end
+  end
+
+  defp validate_proxy_delete_invariant(_target, _key, result), do: result
 
   def extensible?({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do

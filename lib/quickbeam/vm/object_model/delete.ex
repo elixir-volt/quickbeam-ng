@@ -6,10 +6,20 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Semantics.Values
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, ProxyTrap, Semantics, WrappedPrimitive}
+
+  alias QuickBEAM.VM.ObjectModel.{
+    Get,
+    InternalMethods,
+    PropertyKey,
+    ProxyTrap,
+    Semantics,
+    WrappedPrimitive
+  }
 
   @doc "Deletes a property according to JavaScript delete semantics."
-  def delete_property(nil, key) do
+  def delete_property(target, key), do: InternalMethods.delete(target, key)
+
+  def ordinary_delete_property(nil, key) do
     throw(
       {:js_throw,
        Heap.make_error(
@@ -19,7 +29,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     )
   end
 
-  def delete_property(:undefined, key) do
+  def ordinary_delete_property(:undefined, key) do
     throw(
       {:js_throw,
        Heap.make_error(
@@ -29,7 +39,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     )
   end
 
-  def delete_property({:obj, ref}, "length" = key) do
+  def ordinary_delete_property({:obj, ref}, "length" = key) do
     if array_prototype_object?(Heap.get_obj_raw(ref)) do
       false
     else
@@ -37,13 +47,13 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     end
   end
 
-  def delete_property({:obj, ref}, key), do: delete_object_property({:obj, ref}, key)
+  def ordinary_delete_property({:obj, ref}, key), do: delete_object_property({:obj, ref}, key)
 
-  def delete_property({:builtin, _name, _} = builtin, key) do
+  def ordinary_delete_property({:builtin, _name, _} = builtin, key) do
     delete_static_property(builtin, key)
   end
 
-  def delete_property({:regexp, _, _, ref}, key) do
+  def ordinary_delete_property({:regexp, _, _, ref}, key) do
     if key == "lastIndex" or match?(%{configurable: false}, Heap.get_prop_desc(ref, key)) do
       false
     else
@@ -53,11 +63,11 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     end
   end
 
-  def delete_property(target, key) when is_tuple(target) or is_struct(target) do
+  def ordinary_delete_property(target, key) when is_tuple(target) or is_struct(target) do
     delete_static_property(target, key)
   end
 
-  def delete_property(_obj, _key), do: true
+  def ordinary_delete_property(_obj, _key), do: true
 
   defp delete_object_property({:obj, ref}, key) do
     key = PropertyKey.normalize(key)

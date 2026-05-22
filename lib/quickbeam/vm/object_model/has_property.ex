@@ -5,10 +5,12 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Semantics.Values
-  alias QuickBEAM.VM.ObjectModel.{Get, OwnProperty, PropertyKey, ProxyTrap}
+  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, OwnProperty, PropertyKey, ProxyTrap}
   alias QuickBEAM.VM.Runtime.TypedArray
 
-  def has_property?({:obj, ref} = obj, key) do
+  def has_property?(target, key), do: InternalMethods.has_property(target, key)
+
+  def ordinary_has_property?({:obj, ref} = obj, key) do
     case Heap.get_obj(ref, %{}) do
       %{proxy_target() => _target, "__proxy_revoked__" => true} ->
         QuickBEAM.VM.JSThrow.type_error!("Cannot perform operation on a revoked proxy")
@@ -20,7 +22,7 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
           result = Values.truthy?(ProxyTrap.call(has_trap, [target, key], handler))
           validate_proxy_has_invariant(target, key, result)
         else
-          has_property?(target, key)
+          ordinary_has_property?(target, key)
         end
 
       %{typed_array() => true} = map ->
@@ -48,52 +50,61 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
     end
   end
 
-  def has_property?(%QuickBEAM.VM.Function{} = fun, key), do: Get.get(fun, key) != :undefined
+  def ordinary_has_property?(%QuickBEAM.VM.Function{} = fun, key),
+    do: Get.get(fun, key) != :undefined
 
-  def has_property?({:closure, _, %QuickBEAM.VM.Function{}} = closure, key),
+  def ordinary_has_property?({:closure, _, %QuickBEAM.VM.Function{}} = closure, key),
     do: Get.get(closure, key) != :undefined
 
-  def has_property?({:builtin, _, _} = builtin, key), do: Get.get(builtin, key) != :undefined
-  def has_property?({:bound, _, _, _, _} = bound, key), do: Get.get(bound, key) != :undefined
-  def has_property?({:regexp, _, _, _} = regexp, key), do: Get.get(regexp, key) != :undefined
-  def has_property?({:regexp, _, _} = regexp, key), do: Get.get(regexp, key) != :undefined
-  def has_property?(map, key) when is_map(map), do: Map.has_key?(map, key)
+  def ordinary_has_property?({:builtin, _, _} = builtin, key),
+    do: Get.get(builtin, key) != :undefined
 
-  def has_property?({:qb_arr, arr}, key) when is_integer(key),
+  def ordinary_has_property?({:bound, _, _, _, _} = bound, key),
+    do: Get.get(bound, key) != :undefined
+
+  def ordinary_has_property?({:regexp, _, _, _} = regexp, key),
+    do: Get.get(regexp, key) != :undefined
+
+  def ordinary_has_property?({:regexp, _, _} = regexp, key),
+    do: Get.get(regexp, key) != :undefined
+
+  def ordinary_has_property?(map, key) when is_map(map), do: Map.has_key?(map, key)
+
+  def ordinary_has_property?({:qb_arr, arr}, key) when is_integer(key),
     do: key >= 0 and key < :array.size(arr)
 
-  def has_property?({:qb_arr, arr}, key) when is_binary(key) do
+  def ordinary_has_property?({:qb_arr, arr}, key) when is_binary(key) do
     case PropertyKey.array_index(key) do
       {:ok, idx} -> idx < :array.size(arr)
       :error -> false
     end
   end
 
-  def has_property?(list, key) when is_list(list) and is_integer(key),
+  def ordinary_has_property?(list, key) when is_list(list) and is_integer(key),
     do: key >= 0 and key < length(list)
 
-  def has_property?(list, key) when is_list(list) and is_binary(key) do
+  def ordinary_has_property?(list, key) when is_list(list) and is_binary(key) do
     case PropertyKey.array_index(key) do
       {:ok, idx} -> idx < length(list)
       :error -> false
     end
   end
 
-  def has_property?(_, _), do: false
+  def ordinary_has_property?(_, _), do: false
 
   defp prototype_has_property?({:obj, ref}, map, key) do
     cond do
       Map.has_key?(map, :__internal_proto__) ->
-        has_property?(Map.get(map, :__internal_proto__), key)
+        ordinary_has_property?(Map.get(map, :__internal_proto__), key)
 
       Map.has_key?(map, proto()) ->
-        has_property?(Map.get(map, proto()), key)
+        ordinary_has_property?(Map.get(map, proto()), key)
 
       object_prototype_ref?(ref) ->
         false
 
       true ->
-        has_property?(Heap.get_object_prototype(), key)
+        ordinary_has_property?(Heap.get_object_prototype(), key)
     end
   end
 
@@ -122,7 +133,7 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
   defp validate_proxy_has_invariant(_target, _key, result), do: result
 
   defp has_array_prototype_property?(ref, key) do
-    has_property?(Heap.get_array_proto(ref), key) or
-      has_property?(Heap.get_object_prototype(), key)
+    ordinary_has_property?(Heap.get_array_proto(ref), key) or
+      ordinary_has_property?(Heap.get_object_prototype(), key)
   end
 end
