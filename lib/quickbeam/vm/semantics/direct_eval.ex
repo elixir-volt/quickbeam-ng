@@ -15,6 +15,7 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     Value
   }
 
+  alias QuickBEAM.VM.ObjectModel.InternalMethods
   alias QuickBEAM.VM.Semantics.Eval, as: EvalSemantics
 
   @op_define_var Opcodes.num(:define_var)
@@ -221,7 +222,7 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     if transient_globals != %{} do
       if var_objs != [] do
         for {name, val} <- transient_globals, var_obj <- var_objs do
-          QuickBEAM.VM.ObjectModel.Put.put(var_obj, name, val)
+          InternalMethods.set(var_obj, name, val)
         end
       end
 
@@ -558,7 +559,7 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
         is_binary(name),
         Map.has_key?(original_globals, name),
         Map.get(original_globals, name) != val do
-      for var_obj <- var_objs, do: QuickBEAM.VM.ObjectModel.Put.put(var_obj, name, val)
+      for var_obj <- var_objs, do: InternalMethods.set(var_obj, name, val)
     end
   end
 
