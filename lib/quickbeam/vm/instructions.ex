@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Instructions do
   @moduledoc false
 
-  alias QuickBEAM.VM.Opcodes
+  alias QuickBEAM.VM.{Opcodes, OpcodeSpec}
 
   @op Opcodes.all_opcodes()
 
@@ -219,7 +219,7 @@ defmodule QuickBEAM.VM.Instructions do
   defp stack_effect(instruction), do: opcode_stack_effect(to_op(instruction, %{}, %{}, 0))
 
   defp opcode_stack_effect({op, _args}) do
-    {_name, _size, pops, pushes, _format} = Opcodes.info(op)
-    {pops, pushes}
+    {:ok, effect} = OpcodeSpec.stack_effect(op)
+    effect
   end
 end
