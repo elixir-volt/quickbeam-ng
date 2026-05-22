@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
   defmacro __using__(_opts) do
     quote location: :keep do
       alias QuickBEAM.VM.{Heap, Invocation, Runtime, RuntimeState}
-      alias QuickBEAM.VM.Interpreter.Context
+      alias QuickBEAM.VM.Interpreter.Completion
       alias QuickBEAM.VM.ObjectModel.{Copy, Get, Put}
       alias QuickBEAM.VM.Semantics.Iterators
 
@@ -62,14 +62,13 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
       defp run({@op_define_array_el, []}, pc, frame, [val, idx, obj | rest], gas, ctx) do
         try do
           idx = QuickBEAM.VM.ObjectModel.PropertyKey.to_property_key(idx)
-          ctx = RuntimeState.refresh_globals(ctx)
+          ctx = Completion.refresh_globals(ctx)
           val = resolve_delayed_define_value(val, ctx)
           {_idx, obj2} = Put.define_array_el(obj, idx, val)
           run(pc + 1, frame, [idx, obj2 | rest], gas, ctx)
         catch
           {:js_throw, error} ->
-            ctx = RuntimeState.current_or(ctx)
-            throw_or_catch(frame, error, gas, ctx)
+            throw_or_catch(frame, error, gas, Completion.current_context(ctx))
         end
       end
 
@@ -106,7 +105,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
 
         case result do
           {:ok, {done?, value, next_iter}} ->
-            ctx = refresh_persistent_iterator_globals(ctx)
+            ctx = Completion.refresh_persistent_globals(ctx)
             updated_stack = List.replace_at(stack, offset - 1, next_iter)
 
             if done? do
@@ -138,7 +137,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
         case result do
           {:ok, {result, next_iter}} ->
             RuntimeState.put_iterator_result_owner(result, iter_obj)
-            ctx = refresh_persistent_iterator_globals(ctx)
+            ctx = Completion.refresh_persistent_globals(ctx)
             run(pc + 1, frame, [result, catch_offset, next_fn, next_iter | rest], gas, ctx)
 
           {:throw, error} ->
@@ -195,16 +194,14 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
         result =
           try do
             Iterators.iterator_close(ctx, iter_obj)
-            {:ok, RuntimeState.current_or(ctx)}
+            {:ok, Completion.current_context(ctx)}
           catch
             {:js_throw, error} -> {:throw, error}
           end
 
         case result do
           {:ok, ctx} ->
-            persistent = Heap.get_persistent_globals() || %{}
-            ctx = Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, persistent)})
-            run(pc + 1, frame, rest, gas, ctx)
+            run(pc + 1, frame, rest, gas, Completion.refresh_persistent_globals(ctx))
 
           {:throw, error} ->
             throw_or_catch(frame, error, gas, ctx)
@@ -259,14 +256,6 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Iterators do
 
       defp run({@op_iterator_call, []}, pc, frame, stack, gas, ctx),
         do: run(pc + 1, frame, stack, gas, ctx)
-
-      defp refresh_persistent_iterator_globals(ctx) do
-        case Heap.get_persistent_globals() do
-          nil -> ctx
-          p when map_size(p) == 0 -> ctx
-          p -> Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, p)})
-        end
-      end
 
       # ── for-await-of ──
 
