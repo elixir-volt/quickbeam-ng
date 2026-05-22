@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
   alias QuickBEAM.VM.ObjectModel.{Get, Put}
   alias QuickBEAM.VM.Host.Callback
   alias QuickBEAM.VM.Host.Web.IteratorResult
-  alias QuickBEAM.VM.Host.Web.Streams.Bytes
+  alias QuickBEAM.VM.Host.Web.Streams.{Bytes, State}
   alias QuickBEAM.VM.Host.WebAPIs
 
   @doc "Returns the JavaScript global bindings provided by this module."
@@ -24,8 +24,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
   end
 
   defp build_text_encoder_stream(_args, _this) do
-    chunks_ref = make_ref()
-    Heap.put_obj(chunks_ref, %{chunks: [], closed: false})
+    chunks_ref = State.new()
 
     sink =
       Heap.wrap(%{
@@ -34,16 +33,13 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
            fn [chunk | _], _ ->
              str = if is_binary(chunk), do: chunk, else: to_string(chunk)
              bytes = :unicode.characters_to_binary(str)
-             state = Heap.get_obj(chunks_ref, %{})
-             existing = Map.get(state, :chunks, [])
-             Heap.put_obj(chunks_ref, Map.put(state, :chunks, existing ++ [bytes]))
+             State.append_chunk(chunks_ref, bytes)
              :undefined
            end},
         "close" =>
           {:builtin, "close",
            fn _, _ ->
-             state = Heap.get_obj(chunks_ref, %{})
-             Heap.put_obj(chunks_ref, Map.put(state, :closed, true))
+             State.close(chunks_ref)
              :undefined
            end}
       })
@@ -61,16 +57,9 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
   defp build_uint8_reader(chunks_ref) do
     object do
       method "read" do
-        state = Heap.get_obj(chunks_ref, %{})
-        chunks = Map.get(state, :chunks, [])
-
-        case chunks do
-          [chunk | rest] ->
-            Heap.put_obj(chunks_ref, Map.put(state, :chunks, rest))
-            chunk |> Bytes.uint8_array() |> IteratorResult.resolved_value()
-
-          [] ->
-            IteratorResult.resolved_done()
+        case State.take_chunk(chunks_ref) do
+          {:ok, chunk} -> chunk |> Bytes.uint8_array() |> IteratorResult.resolved_value()
+          :empty -> IteratorResult.resolved_done()
         end
       end
 
@@ -91,8 +80,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
         _ -> "utf-8"
       end
 
-    chunks_ref = make_ref()
-    Heap.put_obj(chunks_ref, %{chunks: [], closed: false})
+    chunks_ref = State.new()
 
     sink =
       Heap.wrap(%{
@@ -101,16 +89,13 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
            fn [chunk | _], _ ->
              bytes = Bytes.extract(chunk)
              decoded = :unicode.characters_to_binary(bytes)
-             state = Heap.get_obj(chunks_ref, %{})
-             existing = Map.get(state, :chunks, [])
-             Heap.put_obj(chunks_ref, Map.put(state, :chunks, existing ++ [decoded]))
+             State.append_chunk(chunks_ref, decoded)
              :undefined
            end},
         "close" =>
           {:builtin, "close",
            fn _, _ ->
-             state = Heap.get_obj(chunks_ref, %{})
-             Heap.put_obj(chunks_ref, Map.put(state, :closed, true))
+             State.close(chunks_ref)
              :undefined
            end}
       })
@@ -123,8 +108,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
   defp build_readable_stream(args, _this) do
     source = arg(args, 0, nil)
 
-    chunks_ref = make_ref()
-    Heap.put_obj(chunks_ref, %{chunks: [], closed: false, locked: false})
+    chunks_ref = State.new(%{locked: false})
 
     controller = build_controller(chunks_ref)
 
@@ -151,13 +135,11 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
     reader_fn =
       {:builtin, "getReader",
        fn _args, this ->
-         state = Heap.get_obj(chunks_ref, %{})
-
-         if Map.get(state, :locked, false) do
+         if State.locked?(chunks_ref) do
            QuickBEAM.VM.JSThrow.type_error!("ReadableStream is already locked")
          end
 
-         Heap.put_obj(chunks_ref, Map.put(state, :locked, true))
+         State.set_locked(chunks_ref, true)
          Put.put(this, "locked", true)
          build_reader(chunks_ref)
        end}
@@ -223,26 +205,22 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
     object do
       method "enqueue" do
         value = arg(args, 0, :undefined)
-        state = Heap.get_obj(chunks_ref, %{})
 
-        unless Map.get(state, :closed, false) do
-          chunks = Map.get(state, :chunks, [])
-          Heap.put_obj(chunks_ref, Map.put(state, :chunks, chunks ++ [value]))
+        unless State.closed?(chunks_ref) do
+          State.append_chunk(chunks_ref, value)
         end
 
         :undefined
       end
 
       method "close" do
-        state = Heap.get_obj(chunks_ref, %{})
-        Heap.put_obj(chunks_ref, Map.put(state, :closed, true))
+        State.close(chunks_ref)
         :undefined
       end
 
       method "error" do
         err_reason = arg(args, 0, nil)
-        state = Heap.get_obj(chunks_ref, %{})
-        Heap.put_obj(chunks_ref, Map.merge(state, %{closed: true, error: err_reason}))
+        State.error(chunks_ref, err_reason)
         :undefined
       end
     end
@@ -251,16 +229,9 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
   defp build_reader(chunks_ref) do
     object do
       method "read" do
-        state = Heap.get_obj(chunks_ref, %{})
-        chunks = Map.get(state, :chunks, [])
-
-        case chunks do
-          [chunk | rest] ->
-            Heap.put_obj(chunks_ref, Map.put(state, :chunks, rest))
-            IteratorResult.resolved_value(chunk)
-
-          [] ->
-            IteratorResult.resolved_done()
+        case State.take_chunk(chunks_ref) do
+          {:ok, chunk} -> IteratorResult.resolved_value(chunk)
+          :empty -> IteratorResult.resolved_done()
         end
       end
 
@@ -280,16 +251,9 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
     iter =
       object do
         method "next" do
-          state = Heap.get_obj(chunks_ref, %{})
-          chunks = Map.get(state, :chunks, [])
-
-          case chunks do
-            [chunk | rest] ->
-              Heap.put_obj(chunks_ref, Map.put(state, :chunks, rest))
-              IteratorResult.resolved_value(chunk)
-
-            [] ->
-              IteratorResult.resolved_done()
+          case State.take_chunk(chunks_ref) do
+            {:ok, chunk} -> IteratorResult.resolved_value(chunk)
+            :empty -> IteratorResult.resolved_done()
           end
         end
 
@@ -309,8 +273,6 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
 
   defp build_writable_stream(args, _this) do
     sink = arg(args, 0, nil)
-    locked_ref = make_ref()
-    Heap.put_obj(locked_ref, false)
 
     write_fn =
       case sink do
@@ -407,8 +369,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
 
   defp build_transform_stream(args, _this) do
     transformer = arg(args, 0, nil)
-    chunks_ref = make_ref()
-    Heap.put_obj(chunks_ref, %{chunks: [], closed: false, locked: false})
+    chunks_ref = State.new(%{locked: false})
 
     transform_fn =
       case transformer do
@@ -446,19 +407,13 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
                  Callback.invoke(transform_fn, [chunk, controller])
                rescue
                  _ ->
-                   state = Heap.get_obj(chunks_ref, %{})
-                   chunks = Map.get(state, :chunks, [])
-                   Heap.put_obj(chunks_ref, Map.put(state, :chunks, chunks ++ [chunk]))
+                   State.append_chunk(chunks_ref, chunk)
                catch
                  _, _ ->
-                   state = Heap.get_obj(chunks_ref, %{})
-                   chunks = Map.get(state, :chunks, [])
-                   Heap.put_obj(chunks_ref, Map.put(state, :chunks, chunks ++ [chunk]))
+                   State.append_chunk(chunks_ref, chunk)
                end
              else
-               state = Heap.get_obj(chunks_ref, %{})
-               chunks = Map.get(state, :chunks, [])
-               Heap.put_obj(chunks_ref, Map.put(state, :chunks, chunks ++ [chunk]))
+               State.append_chunk(chunks_ref, chunk)
              end
 
              :undefined
@@ -476,8 +431,7 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
                end
              end
 
-             state = Heap.get_obj(chunks_ref, %{})
-             Heap.put_obj(chunks_ref, Map.put(state, :closed, true))
+             State.close(chunks_ref)
              :undefined
            end}
       })
