@@ -35,6 +35,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     OwnProperty,
     PrimitiveWrapperGet,
     PropertyKey,
+    RegExpExoticGet,
     Prototype,
     ProxyGet,
     Semantics,
@@ -770,45 +771,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     RegExp.proto_accessor(key)
   end
 
-  defp regexp_instance_property({:regexp, _, _, ref}, key) do
-    case RegexpState.fetch(ref, proto()) do
-      {:ok, instance_proto} ->
-        case get(instance_proto, key) do
-          :undefined -> regexp_prototype_property(key)
-          value -> value
-        end
+  defp regexp_instance_property(regexp, key), do: RegExpExoticGet.instance_property(regexp, key)
 
-      :error ->
-        regexp_prototype_property(key)
-    end
-  end
-
-  defp regexp_prototype_property(key) do
-    case active_regexp_prototype() do
-      {:obj, ref} = proto ->
-        if Heap.get_prop_desc(ref, key) == :deleted do
-          :undefined
-        else
-          case get(proto, key) do
-            :undefined -> RegExp.proto_property(key)
-            value -> value
-          end
-        end
-
-      proto ->
-        case get(proto, key) do
-          :undefined -> RegExp.proto_property(key)
-          value -> value
-        end
-    end
-  end
-
-  defp active_regexp_prototype do
-    case QuickBEAM.VM.GlobalEnvironment.current() do
-      %{"RegExp" => ctor} -> get(ctor, "prototype")
-      _ -> Runtime.global_class_proto("RegExp")
-    end
-  end
+  defp regexp_prototype_property(key), do: RegExpExoticGet.prototype_property(key)
 
   defp typed_array_property(obj, map, key),
     do: TypedArrayExoticGet.property(obj, map, key, fn -> get_map_property(map, key, obj) end)

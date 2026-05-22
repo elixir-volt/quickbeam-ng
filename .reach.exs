@@ -263,6 +263,7 @@ process_state_owners = [
       "QuickBEAM.VM.ObjectModel.DateExoticGet",
       "QuickBEAM.VM.ObjectModel.PrimitiveWrapperGet",
       "QuickBEAM.VM.ObjectModel.ProxyDefine",
+      "QuickBEAM.VM.ObjectModel.RegExpExoticGet",
       "QuickBEAM.VM.ObjectModel.ProxyDelete",
       "QuickBEAM.VM.ObjectModel.ProxyDispatch",
       "QuickBEAM.VM.ObjectModel.ProxyExtensible",
@@ -316,6 +317,7 @@ process_state_owners = [
       {"QuickBEAM.VM.ObjectModel.DateExoticGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.PrimitiveWrapperGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDefine", ["QuickBEAM.VM.ObjectModel.Define"]},
+      {"QuickBEAM.VM.ObjectModel.RegExpExoticGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDelete", ["QuickBEAM.VM.ObjectModel.InternalMethods"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDispatch",
        [
