@@ -683,6 +683,10 @@ defmodule QuickBEAM.VM.Interpreter do
   use QuickBEAM.VM.Interpreter.Ops.ObjectConstruction
   use QuickBEAM.VM.Interpreter.Ops.FieldAccess
   use QuickBEAM.VM.Interpreter.Ops.ArrayElements
+  use QuickBEAM.VM.Interpreter.Ops.SuperAccess
+  use QuickBEAM.VM.Interpreter.Ops.PrivateFieldAccess
+  use QuickBEAM.VM.Interpreter.Ops.DeleteVars
+  use QuickBEAM.VM.Interpreter.Ops.NoopInvalid
 
   use QuickBEAM.VM.Interpreter.Ops.Objects
 
