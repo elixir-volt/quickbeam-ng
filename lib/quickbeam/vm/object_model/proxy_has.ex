@@ -10,8 +10,10 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyHas do
   def dispatch({:obj, ref} = proxy, key, fallback) when is_function(fallback, 2) do
     case Heap.get_obj(ref, %{}) do
       %{proxy_target() => _target} = proxy_map ->
-        {target, handler} = ProxyDispatch.target_handler!(proxy_map)
-        has_trap(target, handler, key, fallback)
+        ProxyDispatch.with_trap(proxy_map, "has", &fallback.(&1, key), fn target, handler, trap ->
+          trap_result = trap |> ProxyTrap.call([target, key], handler) |> Values.truthy?()
+          validate_invariant(target, key, trap_result)
+        end)
 
       _ ->
         fallback.(proxy, key)
@@ -37,15 +39,4 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyHas do
   end
 
   def validate_invariant(_target, _key, result), do: result
-
-  defp has_trap(target, handler, key, fallback) do
-    trap = ProxyDispatch.trap(handler, "has")
-
-    if is_nil(ProxyDispatch.callable_trap!(trap, "has")) do
-      fallback.(target, key)
-    else
-      trap_result = trap |> ProxyTrap.call([target, key], handler) |> Values.truthy?()
-      validate_invariant(target, key, trap_result)
-    end
-  end
 end

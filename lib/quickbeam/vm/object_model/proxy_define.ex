@@ -11,8 +11,24 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyDefine do
       when is_function(fallback, 3) and is_function(invariant?, 3) do
     case Heap.get_obj(ref, %{}) do
       %{proxy_target() => _target} = proxy_map ->
-        {target, handler} = ProxyDispatch.target_handler!(proxy_map)
-        define_trap(proxy, target, handler, key, prop_name, desc_obj, fallback, invariant?)
+        ProxyDispatch.with_trap(
+          proxy_map,
+          "defineProperty",
+          fn target ->
+            fallback.(target, key, desc_obj)
+            proxy
+          end,
+          fn target, handler, trap ->
+            validate_trap_result(
+              proxy,
+              target,
+              prop_name,
+              desc_obj,
+              ProxyTrap.call(trap, [target, prop_name, desc_obj], handler),
+              invariant?
+            )
+          end
+        )
 
       _ ->
         fallback.(proxy, key, desc_obj)
@@ -23,15 +39,9 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyDefine do
       when is_function(fallback, 3),
       do: fallback.(target, key, desc_obj)
 
-  defp define_trap(proxy, target, handler, key, prop_name, desc_obj, fallback, invariant?) do
-    trap = ProxyDispatch.trap(handler, "defineProperty")
-
+  defp validate_trap_result(proxy, target, prop_name, desc_obj, trap_result, invariant?) do
     cond do
-      is_nil(ProxyDispatch.callable_trap!(trap, "defineProperty")) ->
-        fallback.(target, key, desc_obj)
-        proxy
-
-      not Values.truthy?(ProxyTrap.call(trap, [target, prop_name, desc_obj], handler)) ->
+      not Values.truthy?(trap_result) ->
         JSThrow.type_error!("proxy defineProperty trap returned false")
 
       invariant?.(target, prop_name, descriptor_map(desc_obj)) ->

@@ -9,8 +9,12 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnKeys do
   def dispatch({:obj, ref} = proxy, fallback) when is_function(fallback, 1) do
     case Heap.get_obj(ref, %{}) do
       %{proxy_target() => _target} = proxy_map ->
-        {target, handler} = ProxyDispatch.target_handler!(proxy_map)
-        own_keys_trap(target, handler, fallback)
+        ProxyDispatch.with_trap(proxy_map, "ownKeys", fallback, fn target, handler, trap ->
+          trap
+          |> ProxyTrap.call([target], handler)
+          |> result_list()
+          |> validate_invariant(target)
+        end)
 
       _ ->
         fallback.(proxy)
@@ -49,19 +53,6 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnKeys do
 
       true ->
         trap_keys
-    end
-  end
-
-  defp own_keys_trap(target, handler, fallback) do
-    trap = ProxyDispatch.trap(handler, "ownKeys")
-
-    if is_nil(ProxyDispatch.callable_trap!(trap, "ownKeys")) do
-      fallback.(target)
-    else
-      trap
-      |> ProxyTrap.call([target], handler)
-      |> result_list()
-      |> validate_invariant(target)
     end
   end
 

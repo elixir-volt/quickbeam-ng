@@ -6,8 +6,16 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnProperty do
 
   def dispatch(proxy_map, prop_name, fallback, target_flags)
       when is_function(fallback, 2) and is_function(target_flags, 2) do
-    {target, handler} = ProxyDispatch.target_handler!(proxy_map)
-    descriptor_trap(target, handler, prop_name, fallback, target_flags)
+    ProxyDispatch.with_trap(
+      proxy_map,
+      "getOwnPropertyDescriptor",
+      &fallback.(&1, prop_name),
+      fn target, handler, trap ->
+        trap
+        |> ProxyTrap.call([target, prop_name], handler)
+        |> validate_result(target, prop_name, target_flags)
+      end
+    )
   end
 
   def validate_result(target, prop_name, :undefined, target_flags)
@@ -47,18 +55,6 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnProperty do
 
   def validate_result(_target, _prop_name, _result, _target_flags),
     do: JSThrow.type_error!("proxy getOwnPropertyDescriptor trap returned non-object")
-
-  defp descriptor_trap(target, handler, prop_name, fallback, target_flags) do
-    trap = ProxyDispatch.trap(handler, "getOwnPropertyDescriptor")
-
-    if is_nil(ProxyDispatch.callable_trap!(trap, "getOwnPropertyDescriptor")) do
-      fallback.(target, prop_name)
-    else
-      trap
-      |> ProxyTrap.call([target, prop_name], handler)
-      |> validate_result(target, prop_name, target_flags)
-    end
-  end
 
   defp target_extensible?({:obj, ref}), do: Heap.extensible?(ref)
   defp target_extensible?(_target), do: true

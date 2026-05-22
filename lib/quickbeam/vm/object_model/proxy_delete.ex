@@ -10,8 +10,12 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyDelete do
   def dispatch({:obj, ref} = proxy, key, fallback) when is_function(fallback, 2) do
     case Heap.get_obj(ref, %{}) do
       %{proxy_target() => _target} = proxy_map ->
-        {target, handler} = ProxyDispatch.target_handler!(proxy_map)
-        delete_trap(target, handler, key, fallback)
+        ProxyDispatch.with_trap(proxy_map, "deleteProperty", &fallback.(&1, key), fn target,
+                                                                                     handler,
+                                                                                     trap ->
+          trap_result = trap |> ProxyTrap.call([target, key], handler) |> Values.truthy?()
+          validate_invariant(target, key, trap_result)
+        end)
 
       _ ->
         fallback.(proxy, key)
@@ -32,15 +36,4 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyDelete do
   end
 
   def validate_invariant(_target, _key, result), do: result
-
-  defp delete_trap(target, handler, key, fallback) do
-    trap = ProxyDispatch.trap(handler, "deleteProperty")
-
-    if is_nil(ProxyDispatch.callable_trap!(trap, "deleteProperty")) do
-      fallback.(target, key)
-    else
-      trap_result = trap |> ProxyTrap.call([target, key], handler) |> Values.truthy?()
-      validate_invariant(target, key, trap_result)
-    end
-  end
 end

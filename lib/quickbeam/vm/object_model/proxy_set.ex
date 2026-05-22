@@ -11,8 +11,14 @@ defmodule QuickBEAM.VM.ObjectModel.ProxySet do
       when is_function(fallback, 4) do
     case Heap.get_obj(ref, %{}) do
       %{proxy_target() => _target} = proxy_map ->
-        {target, handler} = ProxyDispatch.target_handler!(proxy_map)
-        set_trap(target, handler, key, value, receiver || proxy, fallback)
+        receiver = receiver || proxy
+
+        ProxyDispatch.with_trap(proxy_map, "set", &fallback.(&1, key, value, receiver), fn target,
+                                                                                           handler,
+                                                                                           trap ->
+          trap_result = ProxyTrap.call(trap, [target, key, value, receiver], handler)
+          validate_invariant(target, key, value, trap_result)
+        end)
 
       _ ->
         fallback.(proxy, key, value, receiver || proxy)
@@ -44,17 +50,6 @@ defmodule QuickBEAM.VM.ObjectModel.ProxySet do
   end
 
   def validate_invariant(_target, _key, _value, trap_result), do: trap_result
-
-  defp set_trap(target, handler, key, value, receiver, fallback) do
-    trap = ProxyDispatch.trap(handler, "set")
-
-    if is_nil(ProxyDispatch.callable_trap!(trap, "set")) do
-      fallback.(target, key, value, receiver)
-    else
-      trap_result = ProxyTrap.call(trap, [target, key, value, receiver], handler)
-      validate_invariant(target, key, value, trap_result)
-    end
-  end
 
   defp getter_only_accessor?(target_ref, key) do
     case Heap.raw_fetch(Heap.get_obj_raw(target_ref), key) do

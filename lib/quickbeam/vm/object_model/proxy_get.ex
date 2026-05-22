@@ -4,10 +4,14 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyGet do
   alias QuickBEAM.VM.{Heap, JSThrow}
   alias QuickBEAM.VM.ObjectModel.{ProxyDispatch, ProxyTrap, Semantics}
 
-  def dispatch(proxy_map, target, handler, key, receiver, fallback, target_slot)
+  def dispatch(proxy_map, _target, _handler, key, receiver, fallback, target_slot)
       when is_function(fallback, 3) and is_function(target_slot, 2) do
-    ProxyDispatch.target_handler!(proxy_map)
-    get_trap(target, handler, key, receiver, fallback, target_slot)
+    ProxyDispatch.with_trap(proxy_map, "get", &fallback.(&1, key, receiver), fn target,
+                                                                                handler,
+                                                                                trap ->
+      trap_result = ProxyTrap.call(trap, [target, key, receiver], handler)
+      validate_invariant(target, key, trap_result, target_slot)
+    end)
   end
 
   def validate_invariant(target, key, trap_result, target_slot)
@@ -15,17 +19,6 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyGet do
     case target do
       {:obj, target_ref} -> validate_object_invariant(target_ref, key, trap_result, target_slot)
       _ -> trap_result
-    end
-  end
-
-  defp get_trap(target, handler, key, receiver, fallback, target_slot) do
-    trap = ProxyDispatch.trap(handler, "get")
-
-    if is_nil(ProxyDispatch.callable_trap!(trap, "get")) do
-      fallback.(target, key, receiver)
-    else
-      trap_result = ProxyTrap.call(trap, [target, key, receiver], handler)
-      validate_invariant(target, key, trap_result, target_slot)
     end
   end
 
