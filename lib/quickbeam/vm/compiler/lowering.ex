@@ -22,9 +22,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
 
   alias QuickBEAM.VM.Compiler.{Lowering.Ops, Lowering.State}
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.OpcodeFamily
-
-  require OpcodeFamily
+  alias QuickBEAM.VM.OpcodeSpec
 
   @large_frame_slot_threshold 200
   @line 1
@@ -405,25 +403,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
          entries,
          inline_targets
        ) do
-    case CFG.opcode_name(op) do
-      {:ok, name} when OpcodeFamily.is_false_branch(name) ->
-        Branches.lower(
-          instructions,
-          size,
-          idx,
-          next_entry,
-          arg_count,
-          state,
-          stack_depths,
-          constants,
-          entries,
-          inline_targets,
-          target,
-          false,
-          lowering_driver()
-        )
+    branch_sense =
+      case CFG.opcode_name(op) do
+        {:ok, name} -> OpcodeSpec.control_flow_family(name)
+        _ -> nil
+      end
 
-      {:ok, name} when OpcodeFamily.is_true_branch(name) ->
+    case branch_sense do
+      {:branch, sense} ->
         Branches.lower(
           instructions,
           size,
@@ -436,7 +423,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
           entries,
           inline_targets,
           target,
-          true,
+          sense,
           lowering_driver()
         )
 
