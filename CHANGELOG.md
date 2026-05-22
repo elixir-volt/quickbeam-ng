@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Update `oxc` to 0.15.1
+
 ## 0.10.15
 
 - Update `oxc` to 0.15.0
