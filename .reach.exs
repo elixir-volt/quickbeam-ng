@@ -41,6 +41,28 @@ process_state_owners = [
 ]
 
 [
+  layers: [
+    vm_compiler: ["QuickBEAM.VM.Compiler", "QuickBEAM.VM.Compiler.*"],
+    vm_object_model: ["QuickBEAM.VM.ObjectModel", "QuickBEAM.VM.ObjectModel.*"],
+    vm_runtime_globals: ["QuickBEAM.VM.Runtime.Globals", "QuickBEAM.VM.Runtime.Globals.*"]
+  ],
+  deps: [
+    mode: :allowlist,
+    allowed: [
+      vm_compiler: [:vm_object_model],
+      vm_object_model: [],
+      vm_runtime_globals: [:vm_object_model]
+    ]
+  ],
+  source: [
+    forbidden_modules: ["QuickBEAM.VM.Runtime.Globals.Constructors"],
+    forbidden_files: [".reach-baseline.json", "lib/quickbeam/vm/runtime/globals/constructors.ex"]
+  ],
+  checks: [
+    layer_coverage: [
+      forbid_multiple_matches: true
+    ]
+  ],
   calls: [
     forbidden: [
       {"QuickBEAM.VM.*", ["QuickBEAM.VM.Host.*"], except: host_boundary_callers},
