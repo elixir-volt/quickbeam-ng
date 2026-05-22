@@ -42,7 +42,8 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
   test "call arity metadata is centralized" do
     assert OpcodeSpec.call_arity(:call, [4]) == {:ok, 4}
     assert OpcodeSpec.call_arity(:call2, []) == {:ok, 2}
-    assert OpcodeSpec.call_arity(:call2, [2]) == :error
+    assert OpcodeSpec.call_arity(:call2, [2]) == {:ok, 2}
+    assert OpcodeSpec.call_arity(:call2, [3]) == :error
   end
 
   test "compact slot operand metadata is centralized" do
