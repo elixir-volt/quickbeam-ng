@@ -7,16 +7,14 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Literals, Slots, State}
   alias QuickBEAM.VM.OpcodeFamily
 
-  @line 1
-
   @doc "Attempts to lower an object literal followed by define_field opcodes."
   def try_lower(instructions, size, idx, arg_count, state) do
     with {:ok, map_pairs, skip_to, state} <-
            collect_define_fields(instructions, size, idx + 1, arg_count, state) do
       keys_list = Enum.map(map_pairs, &elem(&1, 0))
       vals_list = Enum.map(map_pairs, &elem(&1, 1))
-      keys_tuple = {:tuple, @line, keys_list}
-      vals_tuple = {:tuple, @line, vals_list}
+      keys_tuple = Builder.tuple_expr(keys_list)
+      vals_tuple = Builder.tuple_expr(vals_list)
 
       ct_offsets =
         map_pairs
