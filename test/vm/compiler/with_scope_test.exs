@@ -9,6 +9,14 @@ defmodule QuickBEAM.VM.Compiler.WithScopeTest do
     )
   end
 
+  test "with proxy get throw is catchable", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let p = new Proxy({}, { has(){ return true }, get(){ throw "get" } }); try { with (p) { x } } catch (e) { e }|,
+      "get"
+    )
+  end
+
   test "with delete jumps through target when binding exists", %{rt: rt} do
     assert_modes(
       rt,
