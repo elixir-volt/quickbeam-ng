@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.{Heap, JSThrow, Value}
+  alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Semantics.Values
 
@@ -12,7 +12,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
     Get,
     PropertyDescriptor,
     PropertyKey,
-    ProxyTrap,
+    ProxyDefine,
     Semantics,
     WrappedPrimitive
   }
@@ -112,13 +112,18 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
       throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
     end
 
-    if is_map(existing) and Map.get(existing, "__proxy_revoked__") == true and
-         Map.has_key?(existing, proxy_target()) do
-      JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-    end
-
     if is_map(existing) and Map.has_key?(existing, proxy_target()) do
-      throw({:early_return, proxy_property(obj, existing, key, prop_name, desc_obj)})
+      throw(
+        {:early_return,
+         ProxyDefine.dispatch(
+           obj,
+           key,
+           prop_name,
+           desc_obj,
+           &property(&1, &2, &3, descriptor_map(&3)),
+           &proxy_define_property_invariant_violation?/3
+         )}
+      )
     end
 
     if non_extensible_new_property?(ref, existing, prop_name) or
@@ -301,40 +306,6 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
     new_len
   end
 
-  defp proxy_property(proxy, proxy_map, key, prop_name, desc_obj) do
-    target = Map.fetch!(proxy_map, proxy_target())
-    handler = Map.fetch!(proxy_map, proxy_handler())
-
-    unless Value.object_like?(handler) do
-      throw(
-        {:js_throw,
-         Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
-      )
-    end
-
-    trap = Get.get(handler, "defineProperty")
-
-    cond do
-      Value.nullish?(trap) ->
-        property(target, key, desc_obj, descriptor_map(desc_obj))
-        proxy
-
-      not Values.truthy?(ProxyTrap.call(trap, [target, prop_name, desc_obj], handler)) ->
-        throw(
-          {:js_throw, Heap.make_error("proxy defineProperty trap returned false", "TypeError")}
-        )
-
-      proxy_define_property_invariant_violation?(target, prop_name, descriptor_map(desc_obj)) ->
-        throw(
-          {:js_throw,
-           Heap.make_error("proxy defineProperty trap violates invariant", "TypeError")}
-        )
-
-      true ->
-        proxy
-    end
-  end
-
   defp descriptor_map({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
       map when is_map(map) -> map
@@ -344,7 +315,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   defp descriptor_map(_), do: %{}
 
-  defp proxy_define_property_invariant_violation?({:obj, target_ref}, prop_name, desc) do
+  def proxy_define_property_invariant_violation?({:obj, target_ref}, prop_name, desc) do
     existing = Heap.get_obj(target_ref, %{})
     current_desc = Heap.get_prop_desc(target_ref, prop_name)
 
@@ -368,7 +339,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
     end
   end
 
-  defp proxy_define_property_invariant_violation?(_target, _prop_name, _desc), do: false
+  def proxy_define_property_invariant_violation?(_target, _prop_name, _desc), do: false
 
   defp define_typed_array_index_property(obj, _ref, existing, prop_name, desc) do
     if is_map(existing) and Map.get(existing, typed_array()) do
