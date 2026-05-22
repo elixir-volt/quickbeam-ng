@@ -680,6 +680,9 @@ defmodule QuickBEAM.VM.Interpreter do
   use QuickBEAM.VM.Interpreter.Ops.ConstructorChecks
   use QuickBEAM.VM.Interpreter.Ops.PrototypeMutation
   use QuickBEAM.VM.Interpreter.Ops.PrivateSymbols
+  use QuickBEAM.VM.Interpreter.Ops.ObjectConstruction
+  use QuickBEAM.VM.Interpreter.Ops.FieldAccess
+  use QuickBEAM.VM.Interpreter.Ops.ArrayElements
 
   use QuickBEAM.VM.Interpreter.Ops.Objects
 
