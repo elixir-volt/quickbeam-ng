@@ -1,8 +1,29 @@
 defmodule QuickBEAM.VM.ObjectModel.ProxyOwnKeys do
   @moduledoc "Proxy [[OwnPropertyKeys]] trap result conversion and invariant validation."
 
-  alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods}
+  import QuickBEAM.VM.Heap.Keys, only: [proxy_handler: 0, proxy_target: 0]
+
+  alias QuickBEAM.VM.{Heap, JSThrow, Value}
+  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, ProxyTrap}
+
+  def dispatch({:obj, ref} = proxy, fallback) when is_function(fallback, 1) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target, "__proxy_revoked__" => true} ->
+        JSThrow.type_error!("Cannot perform operation on a revoked proxy")
+
+      %{proxy_target() => _target, proxy_handler() => handler}
+      when not is_map(handler) and not is_tuple(handler) ->
+        JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
+
+      %{proxy_target() => target, proxy_handler() => handler} ->
+        own_keys_trap(target, handler, fallback)
+
+      _ ->
+        fallback.(proxy)
+    end
+  end
+
+  def dispatch(target, fallback) when is_function(fallback, 1), do: fallback.(target)
 
   def result_list(result) do
     length = Get.get(result, "length")
@@ -34,6 +55,19 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnKeys do
 
       true ->
         trap_keys
+    end
+  end
+
+  defp own_keys_trap(target, handler, fallback) do
+    trap = Get.get(handler, "ownKeys")
+
+    if Value.nullish?(trap) do
+      fallback.(target)
+    else
+      trap
+      |> ProxyTrap.call([target], handler)
+      |> result_list()
+      |> validate_invariant(target)
     end
   end
 

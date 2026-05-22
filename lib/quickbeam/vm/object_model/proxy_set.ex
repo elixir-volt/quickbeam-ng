@@ -57,9 +57,8 @@ defmodule QuickBEAM.VM.ObjectModel.ProxySet do
     if Value.nullish?(trap) do
       fallback.(target, key, value, receiver)
     else
-      trap
-      |> ProxyTrap.call([target, key, value, receiver], handler)
-      |> validate_invariant(target, key, value)
+      trap_result = ProxyTrap.call(trap, [target, key, value, receiver], handler)
+      validate_invariant(target, key, value, trap_result)
     end
   end
 
