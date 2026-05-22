@@ -2,8 +2,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Delete do
   @moduledoc "Delete operator helpers for interpreter object operations."
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.Delete, as: ObjectDelete
-  alias QuickBEAM.VM.ObjectModel.Static
+  alias QuickBEAM.VM.ObjectModel.{InternalMethods, Static}
   alias QuickBEAM.VM.Semantics.Values
 
   def nullish_error(obj, key) do
@@ -17,7 +16,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Delete do
 
   def property(obj, key) do
     case obj do
-      {:obj, _} = obj -> ObjectDelete.delete_property(obj, key)
+      {:obj, _} = obj -> InternalMethods.delete(obj, key)
       {:closure, _, _} = fun -> Static.delete_static(fun, key)
       %QuickBEAM.VM.Function{} = fun -> Static.delete_static(fun, key)
       {:builtin, _, _} = fun -> Static.delete_static(fun, key)

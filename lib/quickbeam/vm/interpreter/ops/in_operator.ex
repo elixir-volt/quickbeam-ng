@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.InOperator do
   import QuickBEAM.VM.Value, only: [is_closure: 1, is_object: 1]
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.HasProperty
+  alias QuickBEAM.VM.ObjectModel.InternalMethods
   alias QuickBEAM.VM.Semantics.Values
 
   def evaluate(key, obj) do
@@ -18,7 +18,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.InOperator do
       )
     end
 
-    HasProperty.has_property?(obj, property_key(key))
+    InternalMethods.has_property(obj, property_key(key))
   end
 
   defp object_like?(obj) do

@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
       alias QuickBEAM.VM.{GlobalEnvironment, Heap, Names, Runtime, RuntimeState}
       alias QuickBEAM.VM.Interpreter.{ArgumentsObject, Closures, Context, Frame}
       alias QuickBEAM.VM.JSThrow
-      alias QuickBEAM.VM.ObjectModel.{Delete, Get, Put}
+      alias QuickBEAM.VM.ObjectModel.{Delete, Get, InternalMethods, Put}
       alias QuickBEAM.VM.Promise, as: Promise
 
       # ── Globals: get_var, put_var, define_var, eval ──
@@ -333,7 +333,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
       defp run({@op_put_ref_value, []}, pc, frame, [val, key, obj | rest], gas, ctx)
            when is_binary(key) do
         if current_strict_mode?(ctx) and is_object(obj) and
-             not QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, key) do
+             not InternalMethods.has_property(obj, key) do
           throw_or_catch(
             frame,
             Heap.make_error("#{key} is not defined", "ReferenceError"),
