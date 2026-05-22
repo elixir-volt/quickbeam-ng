@@ -10,8 +10,12 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyExtensible do
   def dispatch({:obj, ref} = proxy, fallback) when is_function(fallback, 1) do
     case Heap.get_obj(ref, %{}) do
       %{proxy_target() => _target} = proxy_map ->
-        {target, handler} = ProxyDispatch.target_handler!(proxy_map)
-        extensible_trap(target, handler, fallback)
+        ProxyDispatch.with_trap(proxy_map, "isExtensible", fallback, fn target, handler, trap ->
+          trap
+          |> ProxyTrap.call([target], handler)
+          |> Values.truthy?()
+          |> validate_invariant(fallback.(target))
+        end)
 
       _ ->
         fallback.(proxy)
@@ -25,19 +29,6 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyExtensible do
       trap_result
     else
       JSThrow.type_error!("proxy isExtensible trap violates invariant")
-    end
-  end
-
-  defp extensible_trap(target, handler, fallback) do
-    trap = ProxyDispatch.trap(handler, "isExtensible")
-
-    if is_nil(ProxyDispatch.callable_trap!(trap, "isExtensible")) do
-      fallback.(target)
-    else
-      trap
-      |> ProxyTrap.call([target], handler)
-      |> Values.truthy?()
-      |> validate_invariant(fallback.(target))
     end
   end
 end

@@ -25,6 +25,16 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyDispatch do
 
   def trap(handler, name), do: Get.get(handler, name)
 
+  def with_trap(proxy_map, name, fallback, fun)
+      when is_function(fallback, 1) and is_function(fun, 3) do
+    {target, handler} = target_handler!(proxy_map)
+
+    case callable_trap!(trap(handler, name), name) do
+      nil -> fallback.(target)
+      trap -> fun.(target, handler, trap)
+    end
+  end
+
   def callable_trap!(trap, name) do
     cond do
       Value.nullish?(trap) ->
