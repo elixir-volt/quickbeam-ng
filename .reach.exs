@@ -10,6 +10,13 @@ builtin_installers = [
   "QuickBEAM.VM.Runtime.Errors"
 ]
 
+class_proto_writers = [
+  "QuickBEAM.VM.ObjectModel.Class",
+  "QuickBEAM.VM.Realm",
+  "QuickBEAM.VM.Runtime.ConstructorProperties",
+  "QuickBEAM.VM.Runtime.ConstructorRegistry"
+]
+
 process_state_owners = [
   "QuickBEAM.VM.Heap",
   "QuickBEAM.VM.Heap.*",
@@ -40,6 +47,7 @@ process_state_owners = [
       {"QuickBEAM.VM.*", ["QuickBEAM.VM.Host.Test262.*"], except: ["QuickBEAM.VM.Host.*"]},
       {"QuickBEAM.VM.*", ["QuickBEAM.VM.Heap.get_ctx", "QuickBEAM.VM.Heap.put_ctx"],
        except: ["QuickBEAM.VM.RuntimeState"]},
+      {"QuickBEAM.VM.*", ["QuickBEAM.VM.Heap.put_class_proto"], except: class_proto_writers},
       {"QuickBEAM.VM.*", ["Process.get", "Process.put", "Process.delete"],
        except: process_state_owners},
       {"QuickBEAM.VM.*", ["QuickBEAM.VM.Builtin.Installer.install"], except: builtin_installers},
@@ -79,11 +87,14 @@ process_state_owners = [
       "QuickBEAM.VM.Execution.ClosureCells",
       "QuickBEAM.VM.Runtime.Construction",
       "QuickBEAM.VM.Runtime.ConstructorProperties",
+      "QuickBEAM.VM.Interpreter.Ops.ObjectLiterals",
+      "QuickBEAM.VM.Interpreter.Ops.PropertyKeys",
       "QuickBEAM.VM.Host.BeamAPI.State",
       "QuickBEAM.VM.Host.Web.BroadcastChannel.State",
       "QuickBEAM.VM.Host.Web.ConsoleAPI.State",
       "QuickBEAM.VM.Host.Web.EventSourceAPI.State",
-      "QuickBEAM.VM.Host.Web.Worker.State"
+      "QuickBEAM.VM.Host.Web.Worker.State",
+      "QuickBEAM.VM.Host.Web.Streams.State"
     ],
     internal_callers: [
       {"QuickBEAM.VM.Host.Test262", ["QuickBEAM.VM.Host.*"]},
@@ -96,12 +107,15 @@ process_state_owners = [
       {"QuickBEAM.VM.Execution.ClosureCells", ["QuickBEAM.VM.ObjectModel.*"]},
       {"QuickBEAM.VM.Runtime.Construction", ["QuickBEAM.VM.Runtime"]},
       {"QuickBEAM.VM.Runtime.ConstructorProperties", ["QuickBEAM.VM.ObjectModel.Get"]},
+      {"QuickBEAM.VM.Interpreter.Ops.ObjectLiterals", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
+      {"QuickBEAM.VM.Interpreter.Ops.PropertyKeys", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
       {"QuickBEAM.VM.Host.BeamAPI.State", ["QuickBEAM.VM.Host.BeamAPI"]},
       {"QuickBEAM.VM.Host.Web.BroadcastChannel.State",
        ["QuickBEAM.VM.Host.Web.BroadcastChannel"]},
       {"QuickBEAM.VM.Host.Web.ConsoleAPI.State", ["QuickBEAM.VM.Host.Web.ConsoleAPI"]},
       {"QuickBEAM.VM.Host.Web.EventSourceAPI.State", ["QuickBEAM.VM.Host.Web.EventSourceAPI"]},
-      {"QuickBEAM.VM.Host.Web.Worker.State", ["QuickBEAM.VM.Host.Web.Worker"]}
+      {"QuickBEAM.VM.Host.Web.Worker.State", ["QuickBEAM.VM.Host.Web.Worker"]},
+      {"QuickBEAM.VM.Host.Web.Streams.State", ["QuickBEAM.VM.Host.Web.Streams"]}
     ]
   ],
   tests: [
