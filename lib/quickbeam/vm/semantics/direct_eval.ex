@@ -218,11 +218,11 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
     end
   end
 
-  def apply_transients(current_func, var_objs, transient_globals, keep_declared?) do
+  def apply_transients(ctx, current_func, var_objs, transient_globals, keep_declared?) do
     if transient_globals != %{} do
       if var_objs != [] do
         for {name, val} <- transient_globals, var_obj <- var_objs do
-          InternalMethods.set(var_obj, name, val)
+          write_var_object!(ctx, var_obj, name, val)
         end
       end
 
@@ -255,7 +255,7 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
       write_back_captured_vars(ctx.current_func, new_globals, original_globals, declared_names)
     end
 
-    write_back_var_objects(var_objs, new_globals, original_globals)
+    write_back_var_objects(ctx, var_objs, new_globals, original_globals)
   end
 
   def restore_restores(mark) do
@@ -392,7 +392,7 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
        ) do
     returned_transients = filter_local_transients(ctx, transient_globals)
 
-    apply_transients(ctx.current_func, var_objs, transient_globals, keep_declared?)
+    apply_transients(ctx, ctx.current_func, var_objs, transient_globals, keep_declared?)
 
     write_back_vars(
       ctx,
@@ -552,14 +552,14 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
 
   defp write_back_captured_vars(_, _, _, _), do: :ok
 
-  defp write_back_var_objects([], _new_globals, _original_globals), do: :ok
+  defp write_back_var_objects(_ctx, [], _new_globals, _original_globals), do: :ok
 
-  defp write_back_var_objects(var_objs, new_globals, original_globals) do
+  defp write_back_var_objects(ctx, var_objs, new_globals, original_globals) do
     for {name, val} <- new_globals,
         is_binary(name),
         Map.has_key?(original_globals, name),
         Map.get(original_globals, name) != val do
-      for var_obj <- var_objs, do: InternalMethods.set(var_obj, name, val)
+      for var_obj <- var_objs, do: write_var_object!(ctx, var_obj, name, val)
     end
   end
 
@@ -636,6 +636,16 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
   defp parse_error_message(_errors), do: "Syntax error"
 
   defp strict_mode?(ctx), do: Value.strict_context?(ctx)
+
+  defp write_var_object!(ctx, var_obj, name, val) do
+    case InternalMethods.set(var_obj, name, val) do
+      true ->
+        :ok
+
+      false ->
+        if strict_mode?(ctx), do: JSThrow.type_error!("Cannot assign to #{name}"), else: :ok
+    end
+  end
 
   defp resolve_declared_atom({:predefined, idx}, _atoms), do: PredefinedAtoms.lookup(idx)
 
