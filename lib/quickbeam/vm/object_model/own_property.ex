@@ -898,7 +898,12 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     end
   end
 
-  defp validate_proxy_descriptor_result(_target, _prop_name, _result), do: :undefined
+  defp validate_proxy_descriptor_result(_target, _prop_name, _result) do
+    throw(
+      {:js_throw,
+       Heap.make_error("proxy getOwnPropertyDescriptor trap returned non-object", "TypeError")}
+    )
+  end
 
   defp target_descriptor_flags({:obj, ref} = target, prop_name) do
     Heap.get_prop_desc(ref, prop_name) ||
