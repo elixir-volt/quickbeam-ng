@@ -21,7 +21,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     Boolean,
     Function,
     Number,
-    RegExp,
     TypedArray
   }
 
@@ -36,7 +35,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     PrimitiveExoticGet,
     PrimitiveWrapperGet,
     PropertyKey,
-    RegExpExoticGet,
+    RegExpStateGet,
     Prototype,
     PrototypeLookup,
     ProxyGet,
@@ -541,42 +540,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own({:builtin, _, _} = builtin, key),
     do: BuiltinFunctionGet.own_property(builtin, key, &call_getter/2)
 
-  defp get_own({:regexp, _, _, ref} = regexp, "flags") do
-    case RegexpState.fetch(ref, "flags") do
-      {:ok, value} -> regexp_state_value(value, regexp)
-      :error -> regexp_instance_property(regexp, "flags")
-    end
-  end
+  defp get_own({:regexp, _, _, _} = regexp, key),
+    do: RegExpStateGet.own_property(regexp, key, &call_getter/2)
 
-  defp get_own({:regexp, _bytecode, source, ref} = regexp, "source") when is_binary(source) do
-    case RegexpState.fetch(ref, "source") do
-      {:ok, value} -> regexp_state_value(value, regexp)
-      :error -> regexp_instance_property(regexp, "source")
-    end
-  end
-
-  defp get_own({:regexp, _, _, ref} = regexp, "lastIndex") do
-    case RegexpState.fetch(ref, "lastIndex") do
-      {:ok, value} -> regexp_state_value(value, regexp)
-      :error -> 0
-    end
-  end
-
-  defp get_own({:regexp, _, _} = regexp, "flags"), do: regexp_instance_property(regexp, "flags")
-
-  defp get_own({:regexp, _bytecode, source} = regexp, "source") when is_binary(source),
-    do: regexp_instance_property(regexp, "source")
-
-  defp get_own({:regexp, _, _}, "lastIndex"), do: 0
-
-  defp get_own({:regexp, _, _, ref} = regexp, key) do
-    case RegexpState.fetch(ref, key) do
-      {:ok, value} -> regexp_state_value(value, regexp)
-      :error -> regexp_instance_property(regexp, key)
-    end
-  end
-
-  defp get_own({:regexp, _, _}, key), do: regexp_prototype_property(key)
+  defp get_own({:regexp, _, _} = regexp, key),
+    do: RegExpStateGet.own_property(regexp, key, &call_getter/2)
 
   defp get_own(%QuickBEAM.VM.Function{} = fun, key),
     do: FunctionExoticGet.own_property(fun, key, &call_getter/2)
@@ -593,32 +561,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own(_, _), do: :undefined
 
   def own(value, key), do: get_own(value, key)
-
-  defp regexp_state_value({:accessor, getter, _}, receiver) when getter != nil,
-    do: call_getter(getter, receiver)
-
-  defp regexp_state_value({:accessor, nil, _}, _receiver), do: :undefined
-  defp regexp_state_value(value, _receiver), do: value
-
-  defp regexp_instance_property(_regexp, key)
-       when key in [
-              "source",
-              "flags",
-              "hasIndices",
-              "global",
-              "ignoreCase",
-              "multiline",
-              "dotAll",
-              "unicode",
-              "unicodeSets",
-              "sticky"
-            ] do
-    RegExp.proto_accessor(key)
-  end
-
-  defp regexp_instance_property(regexp, key), do: RegExpExoticGet.instance_property(regexp, key)
-
-  defp regexp_prototype_property(key), do: RegExpExoticGet.prototype_property(key)
 
   defp typed_array_property(obj, map, key),
     do: TypedArrayExoticGet.property(obj, map, key, fn -> get_map_property(map, key, obj) end)
