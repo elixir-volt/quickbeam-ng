@@ -5,6 +5,7 @@ defmodule QuickBEAM.VM.Interpreter.Completion do
   alias QuickBEAM.VM.Interpreter.Context
 
   def current_context(ctx), do: RuntimeState.current_or(ctx)
+  def refresh_globals(ctx), do: RuntimeState.refresh_globals(ctx)
 
   def refresh_persistent_globals(ctx) do
     case Heap.get_persistent_globals() do
