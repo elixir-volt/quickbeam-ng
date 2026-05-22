@@ -168,55 +168,12 @@ defmodule QuickBEAM.VM.Instructions do
   defp atom_operand({:predefined, _} = predefined, _atoms), do: predefined
   defp atom_operand(name, atoms), do: Map.fetch!(atoms, name)
 
-  defp stack_effect({:call, argc}), do: {1 + argc, 1}
-  defp stack_effect({:call_method, argc}), do: {2 + argc, 1}
-  defp stack_effect({:call_constructor, argc}), do: {2 + argc, 1}
-  defp stack_effect({:get_var, _name}), do: {0, 1}
-  defp stack_effect({:get_var_undef, _name}), do: {0, 1}
-  defp stack_effect({:put_var, _name}), do: {1, 0}
-  defp stack_effect({:array_from, count}), do: {count, 1}
-  defp stack_effect({:define_field, _name}), do: {2, 1}
-  defp stack_effect({:get_field, _name}), do: {1, 1}
-  defp stack_effect({:get_field2, _name}), do: {1, 2}
-  defp stack_effect({:put_field, _name}), do: {2, 0}
-  defp stack_effect({:define_static_method, _name}), do: {2, 0}
-  defp stack_effect({:set_name, _name}), do: {1, 1}
-  defp stack_effect({:define_method, _name, _flags}), do: {2, 1}
-  defp stack_effect({:define_class, _name, _flags}), do: {2, 2}
-  defp stack_effect({:define_method_computed, _flags}), do: {3, 1}
-  defp stack_effect({:close_loc, _idx}), do: {0, 0}
-  defp stack_effect({:set_loc_uninitialized, _idx}), do: {0, 0}
-  defp stack_effect(:set_home_object), do: {2, 2}
-  defp stack_effect(:check_ctor), do: {0, 0}
-  defp stack_effect(:check_ctor_return), do: {1, 2}
-  defp stack_effect(:add_brand), do: {2, 0}
-  defp stack_effect(:private_in), do: {2, 1}
-  defp stack_effect(:for_of_start), do: {1, 3}
-  defp stack_effect({:for_of_next, _idx}), do: {0, 2}
-  defp stack_effect({:with_get_var, _name, _label}), do: {1, 1}
-  defp stack_effect({:with_put_var, _name, _label}), do: {2, 1}
-  defp stack_effect({:with_delete_var, _name, _label}), do: {1, 1}
-  defp stack_effect(:check_brand), do: {2, 2}
-  defp stack_effect(:get_private_field), do: {2, 1}
-  defp stack_effect(:put_private_field), do: {3, 0}
-  defp stack_effect(:define_private_field), do: {3, 1}
-  defp stack_effect({:private_symbol, _name}), do: {0, 1}
-  defp stack_effect(:set_name_computed), do: {2, 2}
-  defp stack_effect({:catch, _label}), do: {0, 1}
-  defp stack_effect({:gosub, _label}), do: {0, 0}
-  defp stack_effect(:nip_catch), do: {2, 1}
-  defp stack_effect(:ret), do: {1, 0}
-  defp stack_effect({:eval, argc, _scope}), do: {1 + argc, 1}
-  defp stack_effect({op, _label}) when op in [:jump, :gosub], do: {0, 0}
-  defp stack_effect({op, _label}) when op in [:jump_if_false, :jump_if_true], do: {1, 0}
-  defp stack_effect({:catch, _label}), do: {0, 1}
-  defp stack_effect({:throw_error, _type, _atom}), do: {0, 0}
-  defp stack_effect({:rest, _start}), do: {0, 1}
-
-  defp stack_effect({_op, _arg} = instruction),
-    do: opcode_stack_effect(to_op(instruction, %{}, %{}, 0))
-
-  defp stack_effect(instruction), do: opcode_stack_effect(to_op(instruction, %{}, %{}, 0))
+  defp stack_effect(instruction) do
+    case OpcodeSpec.symbolic_stack_effect(instruction) do
+      {:ok, effect} -> effect
+      :error -> opcode_stack_effect(to_op(instruction, %{}, %{}, 0))
+    end
+  end
 
   defp opcode_stack_effect({op, _args}) do
     {:ok, effect} = OpcodeSpec.stack_effect(op)

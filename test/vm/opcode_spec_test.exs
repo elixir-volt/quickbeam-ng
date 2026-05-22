@@ -31,6 +31,12 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert names == Enum.uniq(names)
   end
 
+  test "symbolic instruction stack effects are centralized" do
+    assert OpcodeSpec.symbolic_stack_effect({:call, 2}) == {:ok, {3, 1}}
+    assert OpcodeSpec.symbolic_stack_effect({:define_method, "m", 0}) == {:ok, {2, 1}}
+    assert OpcodeSpec.symbolic_stack_effect(:push_this) == :error
+  end
+
   test "concrete opcode lowering families are stable atoms" do
     valid_families =
       MapSet.new([

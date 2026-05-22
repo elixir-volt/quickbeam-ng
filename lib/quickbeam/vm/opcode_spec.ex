@@ -368,6 +368,54 @@ defmodule QuickBEAM.VM.OpcodeSpec do
     end
   end
 
+  def symbolic_stack_effect({:call, argc}), do: {:ok, {1 + argc, 1}}
+  def symbolic_stack_effect({:call_method, argc}), do: {:ok, {2 + argc, 1}}
+  def symbolic_stack_effect({:call_constructor, argc}), do: {:ok, {2 + argc, 1}}
+  def symbolic_stack_effect({:get_var, _name}), do: {:ok, {0, 1}}
+  def symbolic_stack_effect({:get_var_undef, _name}), do: {:ok, {0, 1}}
+  def symbolic_stack_effect({:put_var, _name}), do: {:ok, {1, 0}}
+  def symbolic_stack_effect({:array_from, count}), do: {:ok, {count, 1}}
+  def symbolic_stack_effect({:define_field, _name}), do: {:ok, {2, 1}}
+  def symbolic_stack_effect({:get_field, _name}), do: {:ok, {1, 1}}
+  def symbolic_stack_effect({:get_field2, _name}), do: {:ok, {1, 2}}
+  def symbolic_stack_effect({:put_field, _name}), do: {:ok, {2, 0}}
+  def symbolic_stack_effect({:define_static_method, _name}), do: {:ok, {2, 0}}
+  def symbolic_stack_effect({:set_name, _name}), do: {:ok, {1, 1}}
+  def symbolic_stack_effect({:define_method, _name, _flags}), do: {:ok, {2, 1}}
+  def symbolic_stack_effect({:define_class, _name, _flags}), do: {:ok, {2, 2}}
+  def symbolic_stack_effect({:define_method_computed, _flags}), do: {:ok, {3, 1}}
+  def symbolic_stack_effect({:close_loc, _idx}), do: {:ok, {0, 0}}
+  def symbolic_stack_effect({:set_loc_uninitialized, _idx}), do: {:ok, {0, 0}}
+  def symbolic_stack_effect(:set_home_object), do: {:ok, {2, 2}}
+  def symbolic_stack_effect(:check_ctor), do: {:ok, {0, 0}}
+  def symbolic_stack_effect(:check_ctor_return), do: {:ok, {1, 2}}
+  def symbolic_stack_effect(:add_brand), do: {:ok, {2, 0}}
+  def symbolic_stack_effect(:private_in), do: {:ok, {2, 1}}
+  def symbolic_stack_effect(:for_of_start), do: {:ok, {1, 3}}
+  def symbolic_stack_effect({:for_of_next, _idx}), do: {:ok, {0, 2}}
+  def symbolic_stack_effect({:with_get_var, _name, _label}), do: {:ok, {1, 1}}
+  def symbolic_stack_effect({:with_put_var, _name, _label}), do: {:ok, {2, 1}}
+  def symbolic_stack_effect({:with_delete_var, _name, _label}), do: {:ok, {1, 1}}
+  def symbolic_stack_effect(:check_brand), do: {:ok, {2, 2}}
+  def symbolic_stack_effect(:get_private_field), do: {:ok, {2, 1}}
+  def symbolic_stack_effect(:put_private_field), do: {:ok, {3, 0}}
+  def symbolic_stack_effect(:define_private_field), do: {:ok, {3, 1}}
+  def symbolic_stack_effect({:private_symbol, _name}), do: {:ok, {0, 1}}
+  def symbolic_stack_effect(:set_name_computed), do: {:ok, {2, 2}}
+  def symbolic_stack_effect({:catch, _label}), do: {:ok, {0, 1}}
+  def symbolic_stack_effect({:gosub, _label}), do: {:ok, {0, 0}}
+  def symbolic_stack_effect(:nip_catch), do: {:ok, {2, 1}}
+  def symbolic_stack_effect(:ret), do: {:ok, {1, 0}}
+  def symbolic_stack_effect({:eval, argc, _scope}), do: {:ok, {1 + argc, 1}}
+  def symbolic_stack_effect({op, _label}) when op in [:jump, :gosub], do: {:ok, {0, 0}}
+
+  def symbolic_stack_effect({op, _label}) when op in [:jump_if_false, :jump_if_true],
+    do: {:ok, {1, 0}}
+
+  def symbolic_stack_effect({:throw_error, _type, _atom}), do: {:ok, {0, 0}}
+  def symbolic_stack_effect({:rest, _start}), do: {:ok, {0, 1}}
+  def symbolic_stack_effect(_instruction), do: :error
+
   def short_form_operands(opcode, arg_count), do: Opcodes.short_form_operands(opcode, arg_count)
 
   def family(name, family), do: name in Map.fetch!(@families, family)
