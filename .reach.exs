@@ -218,6 +218,7 @@ process_state_owners = [
          "QuickBEAM.VM.Runtime.*",
          "QuickBEAM.VM.Compiler.RuntimeHelpers.*"
        ]},
+      {"QuickBEAM.VM.Interpreter.Ops.*", ["QuickBEAM.VM.Compiler.*"]},
       {"QuickBEAM.VM.Interpreter.*", ["QuickBEAM.VM.Host.Test262.*"]},
       {"QuickBEAM.VM.Runtime.*", ["QuickBEAM.VM.Compiler.*"]},
       {"QuickBEAM.VM.Runtime.*", ["QuickBEAM.VM.Interpreter.*"]},
