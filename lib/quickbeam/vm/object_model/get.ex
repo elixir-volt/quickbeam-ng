@@ -41,6 +41,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     ProxyGet,
     Semantics,
     Static,
+    SymbolExoticGet,
     TypedArrayExoticGet,
     WrappedPrimitive
   }
@@ -624,18 +625,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own({:closure, _, %QuickBEAM.VM.Function{}} = closure, key),
     do: FunctionExoticGet.own_property(closure, key, &call_getter/2)
 
-  defp get_own({:symbol, desc}, "toString"),
-    do: {:builtin, "toString", fn _, _ -> symbol_to_string(desc) end}
-
-  defp get_own({:symbol, desc, _}, "toString"),
-    do: {:builtin, "toString", fn _, _ -> symbol_to_string(desc) end}
-
-  defp get_own({:symbol, _} = s, "valueOf"), do: {:builtin, "valueOf", fn _, _ -> s end}
-  defp get_own({:symbol, _, _} = s, "valueOf"), do: {:builtin, "valueOf", fn _, _ -> s end}
-  defp get_own({:symbol, :undefined}, "description"), do: :undefined
-  defp get_own({:symbol, :undefined, _}, "description"), do: :undefined
-  defp get_own({:symbol, desc}, "description"), do: desc
-  defp get_own({:symbol, desc, _}, "description"), do: desc
+  defp get_own({:symbol, _} = symbol, key), do: SymbolExoticGet.own_property(symbol, key)
+  defp get_own({:symbol, _, _} = symbol, key), do: SymbolExoticGet.own_property(symbol, key)
 
   defp get_own({:bound, _, _, _, _} = bound, key),
     do: FunctionExoticGet.own_property(bound, key, &call_getter/2)
@@ -678,9 +669,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp regexp_state_value({:accessor, nil, _}, _receiver), do: :undefined
   defp regexp_state_value(value, _receiver), do: value
-
-  defp symbol_to_string(:undefined), do: "Symbol()"
-  defp symbol_to_string(desc), do: "Symbol(#{desc})"
 
   defp regexp_instance_property(_regexp, key)
        when key in [
