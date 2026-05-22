@@ -31,6 +31,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   alias QuickBEAM.VM.ObjectModel.{
     ArrayExoticGet,
     BuiltinExoticGet,
+    BuiltinFunctionGet,
     DateExoticGet,
     FunctionExoticGet,
     OwnProperty,
@@ -180,7 +181,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp function_prototype_has_own?(key) do
+  def function_prototype_has_own?(key) do
     case Heap.get_func_proto() do
       {:obj, ref} ->
         match?({:ok, _}, Heap.raw_fetch(Heap.get_obj_raw(ref), key))
@@ -549,39 +550,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own(nil, _), do: :undefined
   defp get_own(:undefined, _), do: :undefined
 
-  defp get_own({:builtin, _name, map} = b, key) when is_map(map) do
-    statics = Heap.get_ctor_statics(b)
-
-    case Map.fetch(statics, key) do
-      {:ok, :deleted} -> :undefined
-      {:ok, {:accessor, getter, _}} when getter != nil -> call_getter(getter, b)
-      {:ok, {:accessor, nil, _}} -> :undefined
-      {:ok, val} -> val
-      :error -> Map.get(map, key, :undefined)
-    end
-  end
-
-  defp get_own({:builtin, _name, props}, key) when is_map(props) do
-    Map.get(props, key, :undefined)
-  end
-
-  defp get_own({:builtin, _, _} = builtin, key) do
-    case builtin_static_property(builtin, key) do
-      {:accessor, getter, _} when getter != nil ->
-        call_getter(getter, builtin)
-
-      {:accessor, nil, _} ->
-        :undefined
-
-      :undefined ->
-        if function_prototype_has_own?(key),
-          do: :undefined,
-          else: fallback_to_object_proto(Function.proto_property(builtin, key), builtin, key)
-
-      value ->
-        value
-    end
-  end
+  defp get_own({:builtin, _, _} = builtin, key),
+    do: BuiltinFunctionGet.own_property(builtin, key, &call_getter/2)
 
   defp get_own({:regexp, _, _, ref} = regexp, "flags") do
     case RegexpState.fetch(ref, "flags") do
@@ -635,37 +605,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp get_own(_, _), do: :undefined
 
   def own(value, key), do: get_own(value, key)
-
-  defp builtin_static_property({:builtin, _name, _} = builtin, key) do
-    statics = Heap.get_ctor_statics(builtin)
-
-    case Map.fetch(statics, key) do
-      {:ok, :deleted} ->
-        :undefined
-
-      {:ok, value} ->
-        value
-
-      :error ->
-        if constructor_metadata?(builtin, statics) do
-          QuickBEAM.VM.Runtime.ConstructorProperties.static_property(builtin, key)
-        else
-          builtin_function_property(builtin, key)
-        end
-    end
-  end
-
-  defp constructor_metadata?(builtin, statics) do
-    Heap.get_class_proto(builtin) != nil or Map.has_key?(statics, "prototype") or
-      Map.has_key?(statics, :__module__)
-  end
-
-  defp builtin_function_property({:builtin, name, _}, "name"), do: name
-
-  defp builtin_function_property({:builtin, _, _} = builtin, "length"),
-    do: QuickBEAM.VM.Builtin.declared_length(builtin)
-
-  defp builtin_function_property(_builtin, _key), do: :undefined
 
   defp regexp_state_value({:accessor, getter, _}, receiver) when getter != nil,
     do: call_getter(getter, receiver)
@@ -1193,6 +1132,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp fallback_to_function_proto(val, _fun, _key), do: val
 
-  defp fallback_to_object_proto(:undefined, fun, key), do: get_default_object_prototype(fun, key)
-  defp fallback_to_object_proto(val, _fun, _key), do: val
+  def fallback_to_object_proto(:undefined, fun, key), do: get_default_object_prototype(fun, key)
+  def fallback_to_object_proto(val, _fun, _key), do: val
 end
