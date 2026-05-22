@@ -27,6 +27,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
     Copy,
     Functions,
     Get,
+    InternalMethods,
     Static
   }
 
@@ -102,7 +103,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers do
       JSThrow.type_error!("right-hand side of 'in' should be an object")
     end
 
-    QuickBEAM.VM.ObjectModel.HasProperty.has_property?(obj, Names.normalize_property_key(key))
+    InternalMethods.has_property(obj, Names.normalize_property_key(key))
   end
 
   @doc "Applies JavaScript logical NOT."
