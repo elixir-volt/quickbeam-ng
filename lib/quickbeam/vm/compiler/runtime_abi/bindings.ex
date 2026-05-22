@@ -3,11 +3,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI.Bindings do
 
   alias QuickBEAM.VM.GlobalEnvironment
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings, as: RuntimeBindings
+  alias QuickBEAM.VM.ObjectModel.InternalMethods
 
   def get_var(ctx, name), do: RuntimeBindings.get_var(ctx, name)
   def get_var_undef(ctx, name), do: RuntimeBindings.get_var_undef(ctx, name)
-  def get_global(ctx, name), do: RuntimeBindings.get_global(ctx.globals, name)
-  def get_global_undef(ctx, name), do: RuntimeBindings.get_global_undef(ctx.globals, name)
+  def get_global(ctx, name), do: get_global_binding_or_property(ctx, name, :throw)
+  def get_global_undef(ctx, name), do: get_global_binding_or_property(ctx, name, :undefined)
   def get_var_ref(ctx, idx), do: RuntimeBindings.get_var_ref(ctx, idx)
   def get_var_ref_check(ctx, idx), do: RuntimeBindings.get_var_ref_check(ctx, idx)
   def put_var(ctx, atom_idx, value, opts), do: GlobalEnvironment.put(ctx, atom_idx, value, opts)
@@ -23,4 +24,30 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI.Bindings do
   def make_var_ref_ref(ctx, idx), do: RuntimeBindings.make_var_ref_ref(ctx, idx)
   def get_ref_value(ctx, key, ref), do: RuntimeBindings.get_ref_value(ctx, key, ref)
   def put_ref_value(ctx, value, key, ref), do: RuntimeBindings.put_ref_value(ctx, value, key, ref)
+
+  defp get_global_binding_or_property(ctx, name, missing) do
+    case RuntimeBindings.get_global_undef(ctx.globals, name) do
+      :undefined -> get_global_object_property(ctx, name, missing)
+      value -> value
+    end
+  end
+
+  defp get_global_object_property(ctx, name, missing) do
+    case Map.get(ctx.globals, "globalThis") do
+      {:obj, _} = global_this ->
+        case InternalMethods.get(global_this, name) do
+          :undefined when missing == :throw ->
+            QuickBEAM.VM.JSThrow.reference_error!("#{name} is not defined")
+
+          value ->
+            value
+        end
+
+      _ when missing == :throw ->
+        QuickBEAM.VM.JSThrow.reference_error!("#{name} is not defined")
+
+      _ ->
+        :undefined
+    end
+  end
 end

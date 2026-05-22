@@ -1099,6 +1099,16 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, "set"} = Compiler.invoke(with_set, [])
     end
 
+    test "compiled global setter throw can be caught", %{rt: rt} do
+      fun =
+        compile_and_decode(
+          rt,
+          ~S[Object.defineProperty(globalThis,"reviewSet",{get(){return 0},set(v){throw "boom"},configurable:true}); let caught; try{reviewSet=1}catch(e){caught=e}; caught + "|" + reviewSet]
+        ).value
+
+      assert {:ok, "boom|0"} = Compiler.invoke(fun, [])
+    end
+
     test "routes observable instanceof and constructor prototype throws", %{rt: rt} do
       has_instance =
         compile_and_decode(
