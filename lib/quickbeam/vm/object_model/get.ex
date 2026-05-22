@@ -34,6 +34,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     DateExoticGet,
     FunctionExoticGet,
     OwnProperty,
+    PrimitiveExoticGet,
     PrimitiveWrapperGet,
     PropertyKey,
     RegExpExoticGet,
@@ -633,6 +634,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_own(_, _), do: :undefined
 
+  def own(value, key), do: get_own(value, key)
+
   defp builtin_static_property({:builtin, _name, _} = builtin, key) do
     statics = Heap.get_ctor_statics(builtin)
 
@@ -995,28 +998,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_from_prototype(_, _), do: :undefined
 
-  defp primitive_or_class_proto(default_value, key, class_name, receiver) do
-    case active_class_proto(class_name) do
-      {:obj, _} = proto ->
-        case prototype_property_with_receiver(proto, key, receiver) do
-          :undefined ->
-            if(default_value == :undefined,
-              do: get_own(Heap.get_object_prototype(), key),
-              else: default_value
-            )
+  defp primitive_or_class_proto(default_value, key, class_name, receiver),
+    do: PrimitiveExoticGet.prototype_property(default_value, key, class_name, receiver)
 
-          value ->
-            value
-        end
-
-      _ ->
-        if default_value == :undefined,
-          do: get_own(Heap.get_object_prototype(), key),
-          else: default_value
-    end
-  end
-
-  defp prototype_property_with_receiver(target, key, receiver) do
+  def prototype_property_with_receiver(target, key, receiver) do
     case prototype_property_lookup_with_receiver(target, key, receiver) do
       {:found, value} -> value
       :not_found -> :undefined
@@ -1099,13 +1084,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp raw_own_property(raw, key) do
     if Heap.shape?(raw), do: Heap.raw_fetch(raw, key), else: :error
-  end
-
-  defp active_class_proto(class_name) do
-    case QuickBEAM.VM.GlobalEnvironment.current() do
-      %{^class_name => ctor} -> get(ctor, "prototype")
-      _ -> Runtime.global_class_proto(class_name)
-    end
   end
 
   defp arguments_proto_property(obj, {:symbol, "Symbol.iterator"}) do
