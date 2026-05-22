@@ -9,6 +9,7 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
   alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime.StructuredClone
   alias QuickBEAM.VM.Host.Callback
+  alias QuickBEAM.VM.Host.Web.MessageChannel.State
   alias QuickBEAM.VM.Host.WebAPIs
 
   @doc "Returns the JavaScript global bindings provided by this module."
@@ -28,11 +29,8 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
   defp build_port_stub(_args, _this), do: build_port_pair_port(make_ref(), make_ref())
 
   defp build_channel(port_ctor) do
-    q1 = make_ref()
-    q2 = make_ref()
-
-    Heap.put_obj(q1, %{messages: [], closed: false, started: false, handler: nil, listeners: []})
-    Heap.put_obj(q2, %{messages: [], closed: false, started: false, handler: nil, listeners: []})
+    q1 = State.new_queue()
+    q2 = State.new_queue()
 
     port1 = build_port(q1, q2, port_ctor)
     port2 = build_port(q2, q1, port_ctor)
@@ -41,15 +39,8 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
   end
 
   defp build_port_pair_port(my_q, peer_q) do
-    Heap.put_obj(my_q, %{messages: [], closed: false, started: false, handler: nil, listeners: []})
-
-    Heap.put_obj(peer_q, %{
-      messages: [],
-      closed: false,
-      started: false,
-      handler: nil,
-      listeners: []
-    })
+    State.init_queue(my_q)
+    State.init_queue(peer_q)
 
     build_port(my_q, peer_q, Runtime.global_constructor("MessagePort"))
   end
@@ -62,12 +53,9 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
 
       method "postMessage" do
         data = arg(args, 0, :undefined)
-        state = Heap.get_obj(my_q, %{})
 
-        unless Map.get(state, :closed, false) do
-          peer_state = Heap.get_obj(peer_q, %{})
-
-          unless Map.get(peer_state, :closed, false) do
+        unless State.closed?(my_q) do
+          unless State.closed?(peer_q) do
             data |> StructuredClone.clone() |> then(&deliver_or_queue(peer_q, &1))
           end
         end
@@ -76,15 +64,13 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
       end
 
       method "start" do
-        state = Heap.get_obj(my_q, %{})
-        Heap.put_obj(my_q, %{state | started: true})
+        State.start(my_q)
         drain_queue(my_q)
         :undefined
       end
 
       method "close" do
-        state = Heap.get_obj(my_q, %{})
-        Heap.put_obj(my_q, %{state | closed: true})
+        State.close(my_q)
         :undefined
       end
 
@@ -92,10 +78,8 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
         [type, callback, opts] = argv(args, [nil, nil, nil])
 
         if to_string(type) == "message" do
-          state = Heap.get_obj(my_q, %{})
-          listeners = Map.get(state, :listeners, [])
           listener = %{callback: callback, once: listener_once?(opts)}
-          Heap.put_obj(my_q, Map.put(state, :listeners, listeners ++ [listener]))
+          State.add_listener(my_q, listener)
         end
 
         :undefined
@@ -105,10 +89,7 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
         [type, callback] = argv(args, [nil, nil])
 
         if to_string(type) == "message" do
-          state = Heap.get_obj(my_q, %{})
-          listeners = Map.get(state, :listeners, [])
-          updated = Enum.reject(listeners, &(Map.get(&1, :callback) == callback))
-          Heap.put_obj(my_q, Map.put(state, :listeners, updated))
+          State.remove_listener(my_q, callback)
         end
 
         :undefined
@@ -120,12 +101,11 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
 
       accessor "onmessage" do
         get do
-          my_q |> Heap.get_obj(%{}) |> Map.get(:handler, nil)
+          State.handler(my_q)
         end
 
         set do
-          state = Heap.get_obj(my_q, %{})
-          Heap.put_obj(my_q, %{state | handler: arg(args, 0, nil), started: true})
+          State.put_handler(my_q, arg(args, 0, nil))
           drain_queue(my_q)
           :undefined
         end
@@ -133,12 +113,11 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
 
       accessor "onmessageerror" do
         get do
-          my_q |> Heap.get_obj(%{}) |> Map.get(:error_handler, nil)
+          State.error_handler(my_q)
         end
 
         set do
-          state = Heap.get_obj(my_q, %{})
-          Heap.put_obj(my_q, Map.put(state, :error_handler, arg(args, 0, nil)))
+          State.put_error_handler(my_q, arg(args, 0, nil))
           :undefined
         end
       end
@@ -151,28 +130,24 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
   defp listener_once?(_), do: false
 
   defp deliver_or_queue(q_ref, data) do
-    state = Heap.get_obj(q_ref, %{})
+    state = State.get(q_ref)
     event = make_message_event(data)
 
-    if Map.get(state, :started, false) do
-      handler = Map.get(state, :handler)
-      listeners = Map.get(state, :listeners, [])
-
-      dispatch_event(event, handler, listeners, q_ref)
+    if State.started?(state) do
+      dispatch_event(event, Map.get(state, :handler), Map.get(state, :listeners, []), q_ref)
     else
-      messages = Map.get(state, :messages, [])
-      Heap.put_obj(q_ref, Map.put(state, :messages, messages ++ [data]))
+      State.queue_message(q_ref, data)
     end
   end
 
   defp drain_queue(q_ref) do
-    state = Heap.get_obj(q_ref, %{})
+    state = State.get(q_ref)
     messages = Map.get(state, :messages, [])
 
-    if messages != [] and Map.get(state, :started, false) do
+    if messages != [] and State.started?(state) do
       handler = Map.get(state, :handler)
       listeners = Map.get(state, :listeners, [])
-      Heap.put_obj(q_ref, Map.put(state, :messages, []))
+      State.take_messages(q_ref)
 
       Enum.each(messages, fn data ->
         event = make_message_event(data)
@@ -190,8 +165,7 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
             Callback.safe_invoke(handler, [event])
           end
 
-          state = Heap.get_obj(q_ref, %{})
-          all_listeners = Map.get(state, :listeners, [])
+          all_listeners = q_ref |> State.get() |> Map.get(:listeners, [])
 
           survivors =
             Enum.reject(all_listeners, fn entry ->
@@ -202,7 +176,7 @@ defmodule QuickBEAM.VM.Host.Web.MessageChannel do
               Map.get(entry, :once, false)
             end)
 
-          Heap.put_obj(q_ref, Map.put(state, :listeners, survivors))
+          State.replace_listeners(q_ref, survivors)
           :undefined
         end}, :undefined}
     )
