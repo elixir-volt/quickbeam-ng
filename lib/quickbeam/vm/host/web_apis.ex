@@ -33,6 +33,11 @@ defmodule QuickBEAM.VM.Host.WebAPIs do
   @doc "Registers this runtime subsystem in the supplied global environment."
   def register(name, constructor), do: Constructors.register(name, constructor, %{}, nil)
 
+  @doc "Registers a set of host constructors from `{name, callback}` declarations."
+  def register_constructors(declarations) do
+    Map.new(declarations, fn {name, constructor} -> {name, register(name, constructor)} end)
+  end
+
   @providers [
     TextEncoding,
     URL,

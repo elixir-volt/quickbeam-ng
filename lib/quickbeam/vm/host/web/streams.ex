@@ -14,13 +14,13 @@ defmodule QuickBEAM.VM.Host.Web.Streams do
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
-    %{
-      "ReadableStream" => WebAPIs.register("ReadableStream", &build_readable_stream/2),
-      "WritableStream" => WebAPIs.register("WritableStream", &build_writable_stream/2),
-      "TransformStream" => WebAPIs.register("TransformStream", &build_transform_stream/2),
-      "TextEncoderStream" => WebAPIs.register("TextEncoderStream", &build_text_encoder_stream/2),
-      "TextDecoderStream" => WebAPIs.register("TextDecoderStream", &build_text_decoder_stream/2)
-    }
+    WebAPIs.register_constructors([
+      {"ReadableStream", &build_readable_stream/2},
+      {"WritableStream", &build_writable_stream/2},
+      {"TransformStream", &build_transform_stream/2},
+      {"TextEncoderStream", &build_text_encoder_stream/2},
+      {"TextDecoderStream", &build_text_decoder_stream/2}
+    ])
   end
 
   defp build_text_encoder_stream(_args, _this) do
