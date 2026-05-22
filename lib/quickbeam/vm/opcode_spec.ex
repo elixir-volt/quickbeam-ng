@@ -445,6 +445,16 @@ defmodule QuickBEAM.VM.OpcodeSpec do
   def call_arity(:call, [argc]), do: {:ok, argc}
   def call_arity(_name, _args), do: :error
 
+  def branch_target(name, [target]) do
+    case control_flow_family(name) do
+      {:branch, sense} -> {:ok, {:branch, sense, target}}
+      :goto -> {:ok, {:goto, target}}
+      _ -> :error
+    end
+  end
+
+  def branch_target(_name, _args), do: :error
+
   def family(name, family), do: name in Map.fetch!(@families, family)
   def family_members(family), do: Map.fetch!(@families, family)
 

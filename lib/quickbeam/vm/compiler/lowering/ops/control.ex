@@ -32,25 +32,26 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Control do
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, idx, next_entry, stack_depths, inline_targets, {{:ok, name}, args}) do
-    case Map.get(@handlers, name) do
-      nil ->
-        :not_handled
+    case OpcodeSpec.branch_target(name, args) do
+      {:ok, {:branch, sense, target}} ->
+        State.branch(state, idx, next_entry, target, sense, stack_depths)
 
-      handler ->
-        lower_handler(handler, state, idx, next_entry, stack_depths, inline_targets, args)
+      {:ok, {:goto, target}} ->
+        lower_goto(state, target, stack_depths, inline_targets)
+
+      :error ->
+        case Map.get(@handlers, name) do
+          nil ->
+            :not_handled
+
+          handler ->
+            lower_handler(handler, state, idx, next_entry, stack_depths, inline_targets, args)
+        end
     end
   end
 
   def lower(_state, _idx, _next_entry, _stack_depths, _inline_targets, _name_args),
     do: :not_handled
-
-  defp lower_handler({:branch, sense}, state, idx, next_entry, stack_depths, _inline_targets, [
-         target
-       ]),
-       do: State.branch(state, idx, next_entry, target, sense, stack_depths)
-
-  defp lower_handler(:goto, state, _idx, _next_entry, stack_depths, inline_targets, [target]),
-    do: lower_goto(state, target, stack_depths, inline_targets)
 
   defp lower_handler(:nip_catch, state, _idx, _next_entry, _stack_depths, _inline_targets, []),
     do: Emit.nip_catch(state)

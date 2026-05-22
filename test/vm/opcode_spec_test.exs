@@ -39,6 +39,13 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.control_flow_family(:push_i32) == nil
   end
 
+  test "branch target metadata is centralized" do
+    assert OpcodeSpec.branch_target(:if_false, [12]) == {:ok, {:branch, false, 12}}
+    assert OpcodeSpec.branch_target(:if_true8, [4]) == {:ok, {:branch, true, 4}}
+    assert OpcodeSpec.branch_target(:goto16, [9]) == {:ok, {:goto, 9}}
+    assert OpcodeSpec.branch_target(:push_0, []) == :error
+  end
+
   test "call arity metadata is centralized" do
     assert OpcodeSpec.call_arity(:call, [4]) == {:ok, 4}
     assert OpcodeSpec.call_arity(:call2, []) == {:ok, 2}
