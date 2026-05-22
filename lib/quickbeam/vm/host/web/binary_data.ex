@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Host.Web.BinaryData do
   @moduledoc "Helpers for exposing BEAM binaries as Web binary JS objects."
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.Runtime.ConstructorRegistry, as: Constructors
+  alias QuickBEAM.VM.Runtime.Construction
 
   @doc "Constructs a JavaScript `Uint8Array` from a binary."
   def uint8_array(bytes) when is_binary(bytes) do
@@ -12,7 +12,7 @@ defmodule QuickBEAM.VM.Host.Web.BinaryData do
   end
 
   def uint8_array(bytes) when is_list(bytes) do
-    Constructors.construct("Uint8Array", [bytes], fn -> Heap.wrap(bytes) end)
+    Construction.construct("Uint8Array", [bytes], fn -> Heap.wrap(bytes) end)
   end
 
   def typed_array_bytes(map) when is_map(map) do
@@ -35,7 +35,7 @@ defmodule QuickBEAM.VM.Host.Web.BinaryData do
   def array_buffer(bytes) when is_binary(bytes) do
     byte_len = byte_size(bytes)
 
-    Constructors.construct(
+    Construction.construct(
       "ArrayBuffer",
       [byte_len],
       fn -> Heap.wrap(%{"__buffer__" => bytes, "byteLength" => byte_len}) end,
