@@ -15,7 +15,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   alias QuickBEAM.VM.Execution.{ClosureCells, PrototypeState, RegexpState}
   alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.ObjectModel.ProxyTrap
   alias QuickBEAM.VM.Runtime
 
   alias QuickBEAM.VM.Runtime.{
@@ -35,6 +34,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     OwnProperty,
     PropertyKey,
     Prototype,
+    ProxyGet,
     Semantics,
     Static,
     WrappedPrimitive
@@ -88,7 +88,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   def get({:obj, ref} = value, key, receiver) when is_binary(key) do
     case Heap.get_obj_raw(ref) do
       %{proxy_target() => target, proxy_handler() => handler} = proxy ->
-        proxy_get(proxy, target, handler, key, receiver)
+        ProxyGet.dispatch(proxy, target, handler, key, receiver, &ordinary_get/3, &target_slot/2)
 
       _ ->
         ordinary_get(value, key, receiver)
@@ -138,33 +138,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   end
 
   defp get_own_with_receiver(value, key, _receiver), do: get_own(value, key)
-
-  defp proxy_get(proxy, target, handler, key, receiver) do
-    if Map.get(proxy, "__proxy_revoked__") == true do
-      JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-    end
-
-    unless Value.object_like?(handler) do
-      JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
-    end
-
-    get_trap = get(handler, "get")
-
-    cond do
-      Value.nullish?(get_trap) ->
-        get(target, key, receiver)
-
-      not QuickBEAM.VM.Builtin.callable?(get_trap) ->
-        JSThrow.type_error!("proxy get trap is not callable")
-
-      true ->
-        validate_proxy_get_invariant(
-          target,
-          key,
-          ProxyTrap.call(get_trap, [target, key, receiver], handler)
-        )
-    end
-  end
 
   defp array_prototype_raw?(raw), do: Semantics.array_prototype_object?(raw)
 
@@ -546,30 +519,15 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         :undefined
 
       %{proxy_target() => target, proxy_handler() => handler} = proxy ->
-        if Map.get(proxy, "__proxy_revoked__") == true do
-          JSThrow.type_error!("Cannot perform operation on a revoked proxy")
-        end
-
-        unless Value.object_like?(handler) do
-          JSThrow.type_error!("Cannot perform operation on a proxy with null handler")
-        end
-
-        get_trap = get(handler, "get")
-
-        cond do
-          Value.nullish?(get_trap) ->
-            get(target, key)
-
-          not QuickBEAM.VM.Builtin.callable?(get_trap) ->
-            JSThrow.type_error!("proxy get trap is not callable")
-
-          true ->
-            validate_proxy_get_invariant(
-              target,
-              key,
-              ProxyTrap.call(get_trap, [target, key, {:obj, ref}], handler)
-            )
-        end
+        ProxyGet.dispatch(
+          proxy,
+          target,
+          handler,
+          key,
+          {:obj, ref},
+          &ordinary_get/3,
+          &target_slot/2
+        )
 
       {:qb_arr, _} = arr ->
         case Heap.get_regexp_result(ref) do
@@ -975,33 +933,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp validate_proxy_get_invariant({:obj, target_ref}, key, trap_result) do
-    desc = Heap.get_prop_desc(target_ref, key)
-    target_value = target_slot(target_ref, key)
-
-    cond do
-      match?(%{configurable: false, writable: false}, desc) and
-        not match?({:accessor, _, _}, target_value) and
-          not Semantics.same_value?(trap_result, target_value) ->
-        JSThrow.type_error!("proxy get trap violates invariant")
-
-      match?(%{configurable: false}, desc) and match?({:accessor, nil, _}, target_value) and
-          trap_result != :undefined ->
-        JSThrow.type_error!("proxy get trap violates invariant")
-
-      true ->
-        trap_result
-    end
-  end
-
-  defp validate_proxy_get_invariant(_target, _key, trap_result), do: trap_result
-
-  defp target_slot(target_ref, key) do
+  defp target_slot({:obj, target_ref}, key) do
     case Heap.get_obj(target_ref, %{}) do
       map when is_map(map) -> Map.get(map, key, :undefined)
       _ -> get_own({:obj, target_ref}, key)
     end
   end
+
+  defp target_slot(_target, _key), do: :undefined
 
   defp array_own_property(ref, array_data, "length") do
     case Heap.get_array_prop(ref, "length") do
