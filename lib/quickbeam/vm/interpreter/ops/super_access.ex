@@ -25,12 +25,11 @@ defmodule QuickBEAM.VM.Interpreter.Ops.SuperAccess do
              gas,
              ctx
            ) do
-        try do
-          SuperProperties.put_value(proto_obj, this_obj, key, val)
-          run(pc + 1, frame, rest, gas, ctx)
-        catch
-          {:js_throw, error} ->
-            throw_or_catch(frame, error, gas, Completion.current_context(ctx))
+        case Completion.capture(ctx, fn ->
+               SuperProperties.put_value(proto_obj, this_obj, key, val)
+             end) do
+          {:ok, _value, ctx} -> run(pc + 1, frame, rest, gas, ctx)
+          {:throw, error, ctx} -> throw_or_catch(frame, error, gas, ctx)
         end
       end
     end

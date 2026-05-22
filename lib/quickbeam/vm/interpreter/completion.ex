@@ -16,4 +16,12 @@ defmodule QuickBEAM.VM.Interpreter.Completion do
   end
 
   def throw_result(error, ctx), do: {:throw, error, current_context(ctx)}
+
+  def capture(ctx, fun) when is_function(fun, 0) do
+    try do
+      {:ok, fun.(), refresh_globals(ctx)}
+    catch
+      {:js_throw, error} -> throw_result(error, ctx)
+    end
+  end
 end
