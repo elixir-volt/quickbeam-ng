@@ -15,17 +15,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   alias QuickBEAM.VM.Execution.{ClosureCells, RegexpState}
   alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Invocation
-  alias QuickBEAM.VM.Runtime
-
-  alias QuickBEAM.VM.Runtime.{
-    Boolean,
-    Function,
-    Number,
-    TypedArray
-  }
+  alias QuickBEAM.VM.Runtime.TypedArray
 
   alias QuickBEAM.VM.ObjectModel.{
-    ArrayExoticGet,
     BuiltinExoticGet,
     BuiltinFunctionGet,
     DateExoticGet,
@@ -34,11 +26,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     IndexedExoticGet,
     MapPropertyGet,
     OwnProperty,
-    PrimitiveExoticGet,
     PrimitiveWrapperGet,
     PropertyKey,
     RegExpStateGet,
     Prototype,
+    PrototypeGet,
     PrototypeLookup,
     ProxyGet,
     Semantics,
@@ -702,123 +694,17 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp explicit_undefined_own?(_value, _key), do: false
 
-  defp get_from_prototype({:obj, ref}, key) do
-    case Heap.get_obj(ref) do
-      {:qb_arr, _} ->
-        if Heap.get_array_prop(ref, "__arguments__") == true do
-          arguments_proto_property({:obj, ref}, key)
-        else
-          array_proto_property({:obj, ref}, key)
-        end
+  defp get_from_prototype(value, key),
+    do: PrototypeGet.property(value, key, prototype_get_callbacks())
 
-      list when is_list(list) ->
-        if Heap.get_array_prop(ref, "__arguments__") == true do
-          arguments_proto_property({:obj, ref}, key)
-        else
-          array_proto_property({:obj, ref}, key)
-        end
-
-      map when is_map(map) ->
-        cond do
-          Map.has_key?(map, proxy_target()) and
-              QuickBEAM.VM.Builtin.callable?(Map.get(map, proxy_target())) ->
-            FunctionPrototypeGet.fallback(:undefined, Map.get(map, proxy_target()), key)
-
-          (builtin = BuiltinExoticGet.map_proto_property(map, key)) != :undefined ->
-            builtin
-
-          Map.has_key?(map, :__internal_proto__) ->
-            prototype_property_with_receiver(Map.get(map, :__internal_proto__), key, {:obj, ref})
-
-          Map.get(map, proto()) == :null_proto ->
-            :undefined
-
-          Map.has_key?(map, proto()) ->
-            prototype_property_with_receiver(Map.get(map, proto()), key, {:obj, ref})
-
-          true ->
-            PrototypeLookup.object_prototype_property({:obj, ref}, key)
-        end
-
-      _ ->
-        :undefined
-    end
+  defp prototype_get_callbacks do
+    %{
+      call_getter: &call_getter/2,
+      get_own: &get_own/2,
+      prototype_property_with_receiver: &prototype_property_with_receiver/3,
+      string_proto_property: &string_proto_property/1
+    }
   end
-
-  defp get_from_prototype({:qb_arr, _}, "constructor") do
-    Map.get(Runtime.global_bindings(), "Array", :undefined)
-  end
-
-  defp get_from_prototype({:qb_arr, _}, key), do: array_proto_property(key)
-
-  defp get_from_prototype(list, "constructor") when is_list(list) do
-    Map.get(Runtime.global_bindings(), "Array", :undefined)
-  end
-
-  defp get_from_prototype(list, key) when is_list(list), do: array_proto_property(key)
-
-  defp get_from_prototype(s, key) when is_binary(s),
-    do: primitive_or_class_proto(string_proto_property(key), key, "String", s)
-
-  defp get_from_prototype(n, key) when is_number(n),
-    do: primitive_or_class_proto(Number.proto_property(key), key, "Number", n)
-
-  defp get_from_prototype(n, key) when n in [:nan, :infinity, :neg_infinity],
-    do: primitive_or_class_proto(Number.proto_property(key), key, "Number", n)
-
-  defp get_from_prototype(true, key),
-    do: primitive_or_class_proto(Boolean.proto_property(key), key, "Boolean", true)
-
-  defp get_from_prototype(false, key),
-    do: primitive_or_class_proto(Boolean.proto_property(key), key, "Boolean", false)
-
-  defp get_from_prototype({:symbol, _, _} = receiver, key),
-    do: primitive_or_class_proto(:undefined, key, "Symbol", receiver)
-
-  defp get_from_prototype({:symbol, _} = receiver, key),
-    do: primitive_or_class_proto(:undefined, key, "Symbol", receiver)
-
-  defp get_from_prototype({:bigint, _} = receiver, key),
-    do: primitive_or_class_proto(:undefined, key, "BigInt", receiver)
-
-  defp get_from_prototype(%QuickBEAM.VM.Function{} = f, "constructor"),
-    do: FunctionPrototypeGet.constructor(f)
-
-  defp get_from_prototype(%QuickBEAM.VM.Function{} = f, {:symbol, "Symbol.toStringTag"} = key),
-    do: FunctionPrototypeGet.to_string_tag(f, key)
-
-  defp get_from_prototype(%QuickBEAM.VM.Function{} = f, key),
-    do: FunctionPrototypeGet.own_or_parent(f, key)
-
-  defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{} = f}, "constructor"),
-    do: FunctionPrototypeGet.constructor(f)
-
-  defp get_from_prototype(
-         {:closure, _, %QuickBEAM.VM.Function{}} = closure,
-         {:symbol, "Symbol.toStringTag"} = key
-       ),
-       do: FunctionPrototypeGet.to_string_tag(closure, key)
-
-  defp get_from_prototype({:closure, _, %QuickBEAM.VM.Function{}} = c, key),
-    do: FunctionPrototypeGet.closure_own_or_parent(c, key, &call_getter/2)
-
-  defp get_from_prototype({:bound, _, _, _, _} = b, key),
-    do: FunctionPrototypeGet.fallback(Function.proto_property(b, key), b, key)
-
-  defp get_from_prototype({:builtin, "Error", _}, _key),
-    do: :undefined
-
-  defp get_from_prototype({:builtin, name, callback} = fun, key)
-       when is_binary(name) and is_function(callback),
-       do: FunctionPrototypeGet.fallback(:undefined, fun, key)
-
-  defp get_from_prototype({:builtin, name, props}, key) when is_binary(name) and is_map(props),
-    do: get_own(Heap.get_object_prototype(), key)
-
-  defp get_from_prototype(_, _), do: :undefined
-
-  defp primitive_or_class_proto(default_value, key, class_name, receiver),
-    do: PrimitiveExoticGet.prototype_property(default_value, key, class_name, receiver)
 
   def prototype_property_with_receiver(target, key, receiver) do
     case prototype_property_lookup_with_receiver(target, key, receiver) do
@@ -904,17 +790,4 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp raw_own_property(raw, key) do
     if Heap.shape?(raw), do: Heap.raw_fetch(raw, key), else: :error
   end
-
-  defp arguments_proto_property(obj, {:symbol, "Symbol.iterator"}) do
-    case array_proto_property(obj, {:symbol, "Symbol.iterator"}) do
-      :undefined -> PrototypeLookup.object_prototype_property(obj, {:symbol, "Symbol.iterator"})
-      val -> val
-    end
-  end
-
-  defp arguments_proto_property(obj, key), do: PrototypeLookup.object_prototype_property(obj, key)
-
-  defp array_proto_property({:obj, _} = obj, key), do: ArrayExoticGet.proto_property(obj, key)
-
-  defp array_proto_property(key), do: ArrayExoticGet.proto_property(key)
 end
