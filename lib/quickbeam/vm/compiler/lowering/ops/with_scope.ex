@@ -2,32 +2,54 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
   @moduledoc "with-statement opcodes: with_get_var, with_put_var, with_delete_var, with_make_ref, with_get_ref, with_get_ref_undef."
 
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
+  alias QuickBEAM.VM.OpcodeSpec
+
+  @handlers %{
+    with_get_var: :with_get_var,
+    with_get_ref: :with_get_ref,
+    with_get_ref_undef: :with_get_ref_undef,
+    with_put_var: :with_put_var,
+    with_delete_var: :with_delete_var,
+    with_make_ref: :with_make_ref
+  }
+
+  @invalid_handlers for {name, _handler} <- @handlers,
+                        OpcodeSpec.lowering_family(name) != :with_scope,
+                        do: name
+
+  if @invalid_handlers != [] do
+    raise "with-scope lowering handlers registered for non-with-scope opcodes: #{inspect(@invalid_handlers)}"
+  end
+
+  def registered_opcodes, do: Map.keys(@handlers)
 
   @doc "Lowers a VM instruction or function into compiler IR."
-  def lower(state, next_entry, stack_depths, name_args) do
-    case name_args do
-      {{:ok, :with_get_var}, [atom_idx, target, _is_with]} ->
-        lower_with_get_var(state, next_entry, stack_depths, atom_idx, target)
-
-      {{:ok, :with_get_ref}, [atom_idx, target, _is_with]} ->
-        lower_with_get_ref(state, next_entry, stack_depths, atom_idx, target)
-
-      {{:ok, :with_get_ref_undef}, [atom_idx, target, _is_with]} ->
-        lower_with_get_ref_undef(state, next_entry, stack_depths, atom_idx, target)
-
-      {{:ok, :with_put_var}, [atom_idx, target, _is_with]} ->
-        lower_with_put_var(state, next_entry, stack_depths, atom_idx, target)
-
-      {{:ok, :with_delete_var}, [atom_idx, target, _is_with]} ->
-        lower_with_delete_var(state, next_entry, stack_depths, atom_idx, target)
-
-      {{:ok, :with_make_ref}, [atom_idx, target, _is_with]} ->
-        lower_with_make_ref(state, next_entry, stack_depths, atom_idx, target)
-
-      _ ->
-        :not_handled
+  def lower(state, next_entry, stack_depths, {{:ok, name}, [atom_idx, target, _is_with]}) do
+    case Map.get(@handlers, name) do
+      nil -> :not_handled
+      handler -> lower_handler(handler, state, next_entry, stack_depths, atom_idx, target)
     end
   end
+
+  def lower(_state, _next_entry, _stack_depths, _name_args), do: :not_handled
+
+  defp lower_handler(:with_get_var, state, next_entry, stack_depths, atom_idx, target),
+    do: lower_with_get_var(state, next_entry, stack_depths, atom_idx, target)
+
+  defp lower_handler(:with_get_ref, state, next_entry, stack_depths, atom_idx, target),
+    do: lower_with_get_ref(state, next_entry, stack_depths, atom_idx, target)
+
+  defp lower_handler(:with_get_ref_undef, state, next_entry, stack_depths, atom_idx, target),
+    do: lower_with_get_ref_undef(state, next_entry, stack_depths, atom_idx, target)
+
+  defp lower_handler(:with_put_var, state, next_entry, stack_depths, atom_idx, target),
+    do: lower_with_put_var(state, next_entry, stack_depths, atom_idx, target)
+
+  defp lower_handler(:with_delete_var, state, next_entry, stack_depths, atom_idx, target),
+    do: lower_with_delete_var(state, next_entry, stack_depths, atom_idx, target)
+
+  defp lower_handler(:with_make_ref, state, next_entry, stack_depths, atom_idx, target),
+    do: lower_with_make_ref(state, next_entry, stack_depths, atom_idx, target)
 
   defp lower_with_get_var(state, next_entry, stack_depths, atom_idx, target) do
     with {:ok, obj, _type, state} <- Emit.pop_typed(state) do

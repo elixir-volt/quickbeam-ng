@@ -10,7 +10,8 @@ defmodule QuickBEAM.VM.Compiler.LoweringRegistryTest do
     Iterators,
     Locals,
     Objects,
-    Stack
+    Stack,
+    WithScope
   }
 
   alias QuickBEAM.VM.OpcodeSpec
@@ -68,6 +69,10 @@ defmodule QuickBEAM.VM.Compiler.LoweringRegistryTest do
 
     assert Enum.sort(Generators.registered_opcodes()) ==
              Enum.uniq(Enum.sort(Generators.registered_opcodes()))
+  end
+
+  test "with-scope handlers match with-scope lowering family" do
+    assert_registered_family(WithScope.registered_opcodes(), :with_scope)
   end
 
   test "global handlers match globals lowering family" do
