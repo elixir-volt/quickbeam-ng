@@ -274,15 +274,6 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         run(pc + 1, frame, [named | rest], gas, ctx)
       end
 
-      defp run({@op_is_undefined, []}, pc, frame, [a | rest], gas, ctx),
-        do: run(pc + 1, frame, [a == :undefined | rest], gas, ctx)
-
-      defp run({@op_is_null, []}, pc, frame, [a | rest], gas, ctx),
-        do: run(pc + 1, frame, [a == nil | rest], gas, ctx)
-
-      defp run({@op_is_undefined_or_null, []}, pc, frame, [a | rest], gas, ctx),
-        do: run(pc + 1, frame, [Value.nullish?(a) | rest], gas, ctx)
-
       defp run({@op_invalid, []}, _pc, _frame, _stack, _gas, _ctx),
         do: throw({:error, :invalid_opcode})
 
@@ -314,40 +305,6 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         run(pc + 1, frame, [val | stack], gas, ctx)
       end
 
-      defp run({@op_rest, [start_idx]}, pc, frame, stack, gas, %Context{arg_buf: arg_buf} = ctx) do
-        rest_args =
-          if start_idx < tuple_size(arg_buf) do
-            Tuple.to_list(arg_buf) |> Enum.drop(start_idx)
-          else
-            []
-          end
-
-        ref = make_ref()
-        Heap.put_obj(ref, rest_args)
-        run(pc + 1, frame, [{:obj, ref} | stack], gas, ctx)
-      end
-
-      defp run({@op_typeof_is_function, []}, pc, frame, [val | rest], gas, ctx) do
-        result = Builtin.callable?(val)
-        run(pc + 1, frame, [result | rest], gas, ctx)
-      end
-
-      defp run({@op_typeof_is_undefined, []}, pc, frame, [val | rest], gas, ctx) do
-        result = Value.nullish?(val)
-        run(pc + 1, frame, [result | rest], gas, ctx)
-      end
-
-      defp run({@op_throw_error, []}, _pc, frame, [val | _], gas, ctx),
-        do: throw_or_catch(frame, val, gas, ctx)
-
-      defp run({@op_throw_error, [atom_idx, reason]}, __pc, frame, _stack, gas, ctx) do
-        name = Names.resolve_atom(ctx, atom_idx)
-
-        {error_type, message} = QuickBEAM.VM.Compiler.RuntimeHelpers.Errors.message(name, reason)
-
-        throw_or_catch(frame, Heap.make_error(message, error_type), gas, ctx)
-      end
-
       defp run({@op_set_name_computed, []}, pc, frame, [fun, name_val | rest], gas, ctx) do
         named = Functions.set_name_computed(fun, name_val)
         run(pc + 1, frame, [named, name_val | rest], gas, ctx)
@@ -372,72 +329,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Objects do
         run(pc + 1, frame, [val | rest], gas, ctx)
       end
 
-      defp run({@op_push_this, []}, _pc, frame, _stack, gas, %Context{this: this} = ctx)
-           when this == :uninitialized or
-                  (is_tuple(this) and tuple_size(this) == 2 and elem(this, 0) == :uninitialized) do
-        throw_or_catch(
-          frame,
-          Heap.make_error("this is not initialized", "ReferenceError"),
-          gas,
-          ctx
-        )
-      end
-
-      defp run(
-             {@op_push_this, []},
-             pc,
-             frame,
-             stack,
-             gas,
-             %Context{
-               this: this,
-               current_func: %QuickBEAM.VM.Function{is_strict_mode: true}
-             } = ctx
-           )
-           when this in [:undefined, nil] do
-        run(pc + 1, frame, [this | stack], gas, ctx)
-      end
-
-      defp run(
-             {@op_push_this, []},
-             pc,
-             frame,
-             stack,
-             gas,
-             %Context{
-               this: this,
-               current_func: {:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}
-             } = ctx
-           )
-           when this in [:undefined, nil] do
-        run(pc + 1, frame, [this | stack], gas, ctx)
-      end
-
-      defp run({@op_push_this, []}, pc, frame, stack, gas, %Context{this: this} = ctx)
-           when is_nullish(this) do
-        global_this = Map.get(ctx.globals, "globalThis", :undefined)
-        run(pc + 1, frame, [global_this | stack], gas, ctx)
-      end
-
-      defp run({@op_push_this, []}, pc, frame, stack, gas, %Context{this: this} = ctx) do
-        run(pc + 1, frame, [this | stack], gas, ctx)
-      end
-
       defp run({@op_private_symbol, [atom_idx]}, pc, frame, stack, gas, ctx) do
         name = Names.resolve_atom(ctx, atom_idx)
         run(pc + 1, frame, [PrivateFields.symbol(name) | stack], gas, ctx)
-      end
-
-      # ── Argument mutation ──
-
-      defp run({op, [idx]}, pc, frame, [val | rest], gas, %Context{} = ctx)
-           when op in [@op_put_arg, @op_put_arg0, @op_put_arg1, @op_put_arg2, @op_put_arg3] do
-        run_arg_update(pc, frame, rest, gas, ctx, idx, val)
-      end
-
-      defp run({op, [idx]}, pc, frame, [val | rest], gas, %Context{} = ctx)
-           when op in [@op_set_arg, @op_set_arg0, @op_set_arg1, @op_set_arg2, @op_set_arg3] do
-        run_arg_update(pc, frame, [val | rest], gas, ctx, idx, val)
       end
 
       # ── instanceof ──

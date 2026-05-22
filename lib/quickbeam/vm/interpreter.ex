@@ -672,6 +672,11 @@ defmodule QuickBEAM.VM.Interpreter do
 
   use QuickBEAM.VM.Interpreter.Ops.Calls
 
+  use QuickBEAM.VM.Interpreter.Ops.TypePredicates
+  use QuickBEAM.VM.Interpreter.Ops.RestArguments
+  use QuickBEAM.VM.Interpreter.Ops.ThisValue
+  use QuickBEAM.VM.Interpreter.Ops.ThrowErrors
+
   use QuickBEAM.VM.Interpreter.Ops.Objects
 
   use QuickBEAM.VM.Interpreter.Ops.Globals
