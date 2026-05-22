@@ -1042,13 +1042,21 @@ defmodule QuickBEAM.VM.CompilerTest do
     end
 
     test "compiles for-of object binding patterns", %{rt: rt} do
-      fun = compile_and_decode(rt, ~S<(function(){ let out = 0; for (let {a} of [{a: 1}]) { out = a } return out })>) |> user_function()
+      fun =
+        compile_and_decode(
+          rt,
+          ~S<(function(){ let out = 0; for (let {a} of [{a: 1}]) { out = a } return out })>
+        )
+        |> user_function()
 
       assert {:ok, 1} = Compiler.invoke(fun, [])
     end
 
     test "unsupported generator stubs preserve generator kind", %{rt: rt} do
-      assert {:ok, "function"} = QuickBEAM.eval(rt, "function* g(){ yield 1; } typeof g().next", mode: :beam_compiler)
+      assert {:ok, "function"} =
+               QuickBEAM.eval(rt, "function* g(){ yield 1; } typeof g().next",
+                 mode: :beam_compiler
+               )
     end
 
     test "compiles basic Proxy get and has traps", %{rt: rt} do
@@ -1060,6 +1068,28 @@ defmodule QuickBEAM.VM.CompilerTest do
 
       assert {:ok, 3} = Compiler.invoke(proxy_get, [])
       assert {:ok, false} = Compiler.invoke(proxy_has, [])
+    end
+
+    test "routes observable property read throws through catch handlers", %{rt: rt} do
+      field_get =
+        compile_and_decode(rt, ~S|let o={get x(){throw "field"}}; try{o.x}catch(e){e}|).value
+
+      field_get2 =
+        compile_and_decode(rt, ~S|let o={get x(){throw "field2"}}; try{o.x()}catch(e){e}|).value
+
+      length_get =
+        compile_and_decode(rt, ~S|let o={get length(){throw "length"}}; try{o.length}catch(e){e}|).value
+
+      with_has =
+        compile_and_decode(
+          rt,
+          ~S|let p=new Proxy({}, {has(){throw "has"}}); try{with(p){x}}catch(e){e}|
+        ).value
+
+      assert {:ok, "field"} = Compiler.invoke(field_get, [])
+      assert {:ok, "field2"} = Compiler.invoke(field_get2, [])
+      assert {:ok, "length"} = Compiler.invoke(length_get, [])
+      assert {:ok, "has"} = Compiler.invoke(with_has, [])
     end
 
     test "compiles runtime constructor and regexp feature calls", %{rt: rt} do
