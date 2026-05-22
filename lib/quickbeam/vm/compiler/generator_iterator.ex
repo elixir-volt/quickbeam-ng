@@ -8,6 +8,7 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
   """
 
   alias QuickBEAM.VM.Heap
+  alias QuickBEAM.VM.ObjectModel.InternalMethods
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.Promise, as: Promise
@@ -61,7 +62,7 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
   end
 
   defp generator_object_prototype(generator_fun) do
-    case QuickBEAM.VM.ObjectModel.Get.get(generator_fun, "prototype") do
+    case InternalMethods.get(generator_fun, "prototype") do
       {:obj, _} = proto -> proto
       _ -> Runtime.global_class_proto("Iterator")
     end
