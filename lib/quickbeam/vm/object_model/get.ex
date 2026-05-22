@@ -32,6 +32,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   alias QuickBEAM.VM.ObjectModel.{
     OwnProperty,
+    PrimitiveWrapperGet,
     PropertyKey,
     Prototype,
     ProxyGet,
@@ -355,48 +356,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp wrapped_raw_length(raw) do
-    case Heap.raw_fetch(raw, WrappedPrimitive.slot(:string)) do
-      {:ok, value} when is_binary(value) -> string_length(value)
-      _ -> :undefined
-    end
-  end
+  defp wrapped_raw_length(raw), do: PrimitiveWrapperGet.raw_length(raw)
 
-  defp wrapped_map_length(map) do
-    case WrappedPrimitive.value(map, :string) do
-      {:ok, value} -> string_length(value)
-      :error -> :undefined
-    end
-  end
+  defp wrapped_map_length(map), do: PrimitiveWrapperGet.map_length(map)
 
-  defp wrapped_raw_proto_property(raw, key) do
-    cond do
-      match?({:ok, _}, Heap.raw_fetch(raw, WrappedPrimitive.slot(:number))) ->
-        number_proto_property(key)
-
-      match?({:ok, _}, Heap.raw_fetch(raw, WrappedPrimitive.slot(:string))) ->
-        {:ok, string} = Heap.raw_fetch(raw, WrappedPrimitive.slot(:string))
-        wrapped_string_property(string, key)
-
-      match?({:ok, _}, Heap.raw_fetch(raw, WrappedPrimitive.slot(:boolean))) ->
-        boolean_proto_property(Heap.shape_to_map(raw), key)
-
-      true ->
-        :undefined
-    end
-  end
-
-  defp number_proto_property(key) do
-    case Runtime.global_class_proto("Number") do
-      {:obj, ref} = proto ->
-        if Heap.get_prop_desc(ref, key) == :deleted,
-          do: get_default_object_prototype(proto, key),
-          else: Number.proto_property(key)
-
-      _ ->
-        Number.proto_property(key)
-    end
-  end
+  defp wrapped_raw_proto_property(raw, key), do: PrimitiveWrapperGet.raw_proto_property(raw, key)
 
   defp prototype_object_property(%{"constructor" => {:builtin, "Date", _}}, key),
     do: JSDate.proto_property(key)
@@ -416,70 +380,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp wrapped_string_property(string, "length") when is_binary(string), do: string_length(string)
+  defp string_proto_property(key), do: PrimitiveWrapperGet.string_proto_property(key)
 
-  defp wrapped_string_property(string, key) when is_binary(string) do
-    case PropertyKey.array_index(key) do
-      {:ok, idx} -> JSString.utf16_code_unit_at(string, idx)
-      :error -> string_proto_property(key)
-    end
-  end
-
-  defp string_proto_property(key) do
-    case Runtime.global_class_proto("String") do
-      {:obj, ref} = proto ->
-        if Heap.get_prop_desc(ref, key) == :deleted,
-          do: get_default_object_prototype(proto, key),
-          else: JSString.proto_property(key)
-
-      _ ->
-        JSString.proto_property(key)
-    end
-  end
-
-  defp boolean_proto_property(map, key) when is_map(map) do
-    case Map.get(map, proto()) do
-      {:obj, _} = prototype -> get(prototype, key)
-      _ -> boolean_proto_property(key)
-    end
-  end
-
-  defp boolean_proto_property(key) do
-    case Runtime.global_class_proto("Boolean") do
-      {:obj, ref} = proto ->
-        if Heap.get_prop_desc(ref, key) == :deleted,
-          do: get_default_object_prototype(proto, key),
-          else: Boolean.proto_property(key)
-
-      _ ->
-        Boolean.proto_property(key)
-    end
-  end
-
-  defp wrapped_proto_property(map, key) do
-    case WrappedPrimitive.type(map) do
-      :symbol ->
-        {:ok, value} = WrappedPrimitive.value(map, :symbol)
-        get(value, key)
-
-      :number ->
-        number_proto_property(key)
-
-      :string ->
-        {:ok, value} = WrappedPrimitive.value(map, :string)
-        wrapped_string_property(value, key)
-
-      :boolean ->
-        boolean_proto_property(map, key)
-
-      :bigint ->
-        {:ok, value} = WrappedPrimitive.value(map, :bigint)
-        get(value, key)
-
-      _ ->
-        :undefined
-    end
-  end
+  defp wrapped_proto_property(map, key), do: PrimitiveWrapperGet.map_proto_property(map, key)
 
   defp inherited_or_wrapped_length(obj, fallback) do
     case get(obj, "length") do
