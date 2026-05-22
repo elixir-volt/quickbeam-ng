@@ -12,12 +12,13 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   import Bitwise, only: [band: 2]
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.Execution.{ClosureCells, RegexpState}
+  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Runtime.TypedArray
 
   alias QuickBEAM.VM.ObjectModel.{
+    ArrayObjectGet,
     BuiltinExoticGet,
     BuiltinFunctionGet,
     DateExoticGet,
@@ -407,13 +408,13 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       {:qb_arr, _} = arr ->
         case Heap.get_regexp_result(ref) do
           %{^key => val} -> val
-          _ -> array_own_property(ref, arr, key)
+          _ -> ArrayObjectGet.own_property(ref, arr, key, array_object_callbacks())
         end
 
       list when is_list(list) ->
         case Heap.get_regexp_result(ref) do
           %{^key => val} -> val
-          _ -> array_own_property(ref, list, key)
+          _ -> ArrayObjectGet.own_property(ref, list, key, array_object_callbacks())
         end
 
       raw when is_tuple(raw) ->
@@ -528,67 +529,14 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   defp typed_array_property(obj, map, key),
     do: TypedArrayExoticGet.property(obj, map, key, fn -> get_map_property(map, key, obj) end)
 
-  defp target_slot({:obj, target_ref}, key) do
-    case Heap.get_obj(target_ref, %{}) do
-      map when is_map(map) -> Map.get(map, key, :undefined)
-      _ -> get_own({:obj, target_ref}, key)
-    end
-  end
+  defp target_slot(target, key),
+    do: ArrayObjectGet.target_slot(target, key, array_object_callbacks())
 
-  defp target_slot(_target, _key), do: :undefined
-
-  defp array_own_property(ref, array_data, "length") do
-    case Heap.get_array_prop(ref, "length") do
-      len when is_integer(len) -> len
-      _ -> get_own(array_data, "length")
-    end
-  end
-
-  defp array_own_property(ref, array_data, key) do
-    with {:ok, idx} <- PropertyKey.array_index(key),
-         len when is_integer(len) <- virtual_array_length(ref),
-         true <- idx >= len do
-      :undefined
-    else
-      _ ->
-        case mapped_argument_value(ref, key) do
-          {:mapped, value} ->
-            value
-
-          :not_mapped ->
-            case Heap.get_array_prop(ref, key) do
-              :undefined ->
-                own_value = get_own(array_data, key)
-
-                if own_value == :undefined and Heap.get_prop_desc(ref, key) == nil do
-                  get_from_prototype({:obj, ref}, key)
-                else
-                  own_value
-                end
-
-              value ->
-                value
-            end
-        end
-    end
-  end
-
-  defp mapped_argument_value(ref, key) do
-    with {:ok, idx} <- PropertyKey.array_index(key),
-         false <- deleted_argument?(ref, idx),
-         mapped when is_map(mapped) <- Heap.get_array_prop(ref, "__mapped_arguments__"),
-         {:cell, _} = cell <- Map.get(mapped, idx) do
-      {:mapped, ClosureCells.read(cell)}
-    else
-      _ -> :not_mapped
-    end
-  end
-
-  defp deleted_argument?(ref, idx) do
-    case Heap.get_array_prop(ref, "__deleted_args__") do
-      %MapSet{} = deleted -> MapSet.member?(deleted, idx)
-      _ -> false
-    end
+  defp array_object_callbacks do
+    %{
+      get_own: &get_own/2,
+      get_from_prototype: &get_from_prototype/2
+    }
   end
 
   # ── Prototype chain ──
