@@ -38,6 +38,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     ProxyGet,
     Semantics,
     Static,
+    TypedArrayExoticGet,
     WrappedPrimitive
   }
 
@@ -819,22 +820,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp typed_array_property(obj, map, key) do
-    case PropertyKey.array_index(key) do
-      {:ok, idx} ->
-        if Map.has_key?(map, key_order()) do
-          case Map.fetch(map, key) do
-            {:ok, value} -> value
-            :error -> TypedArray.get_element(obj, idx)
-          end
-        else
-          TypedArray.get_element(obj, idx)
-        end
-
-      :error ->
-        get_map_property(map, key, obj)
-    end
-  end
+  defp typed_array_property(obj, map, key),
+    do: TypedArrayExoticGet.property(obj, map, key, fn -> get_map_property(map, key, obj) end)
 
   defp target_slot({:obj, target_ref}, key) do
     case Heap.get_obj(target_ref, %{}) do
