@@ -50,7 +50,7 @@ defmodule QuickBEAM.VM.OpcodeSpec do
     false_branch: [:if_false, :if_false8],
     true_branch: [:if_true, :if_true8],
     goto: [:goto, :goto8, :goto16],
-    finally_control: [:catch, :gosub, :goto, :goto8, :goto16]
+    finally_control: [:catch, :gosub]
   }
 
   @small_int_push %{

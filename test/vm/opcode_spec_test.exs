@@ -36,6 +36,7 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.control_flow_family(:if_true8) == {:branch, true}
     assert OpcodeSpec.control_flow_family(:goto16) == :goto
     assert OpcodeSpec.control_flow_family(:catch) == :finally_control
+    refute OpcodeSpec.family(:goto, :finally_control)
     assert OpcodeSpec.control_flow_family(:push_i32) == nil
   end
 
