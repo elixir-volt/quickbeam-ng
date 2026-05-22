@@ -7,9 +7,8 @@ defmodule QuickBEAM.VM.Host.Web.BroadcastChannel do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Host.Callback
+  alias QuickBEAM.VM.Host.Web.BroadcastChannel.State
   alias QuickBEAM.VM.Host.WebAPIs
-
-  @channels_key :qb_broadcast_channels
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
@@ -22,7 +21,7 @@ defmodule QuickBEAM.VM.Host.Web.BroadcastChannel do
     Heap.put_obj(listener_ref, nil)
 
     channel_id = make_ref()
-    register_channel(channel_name, channel_id, listener_ref)
+    State.register(channel_name, channel_id, listener_ref)
 
     object do
       prop("name", channel_name)
@@ -34,7 +33,7 @@ defmodule QuickBEAM.VM.Host.Web.BroadcastChannel do
       end
 
       method "close" do
-        unregister_channel(channel_name, channel_id)
+        State.unregister(channel_name, channel_id)
         :undefined
       end
 
@@ -53,7 +52,7 @@ defmodule QuickBEAM.VM.Host.Web.BroadcastChannel do
 
   defp deliver_message(channel_name, channel_id, data) do
     channel_name
-    |> get_channel_listeners()
+    |> State.listeners()
     |> Enum.each(fn {id, listener_ref} ->
       if id != channel_id do
         handler = Heap.get_obj(listener_ref, nil)
@@ -64,25 +63,5 @@ defmodule QuickBEAM.VM.Host.Web.BroadcastChannel do
         end
       end
     end)
-  end
-
-  defp register_channel(name, id, ref) do
-    channels = Process.get(@channels_key, %{})
-    listeners = Map.get(channels, name, [])
-    updated = Map.put(channels, name, [{id, ref} | listeners])
-    Process.put(@channels_key, updated)
-  end
-
-  defp unregister_channel(name, id) do
-    channels = Process.get(@channels_key, %{})
-    listeners = Map.get(channels, name, [])
-    updated_listeners = Enum.reject(listeners, fn {lid, _} -> lid == id end)
-    updated = Map.put(channels, name, updated_listeners)
-    Process.put(@channels_key, updated)
-  end
-
-  defp get_channel_listeners(name) do
-    channels = Process.get(@channels_key, %{})
-    Map.get(channels, name, [])
   end
 end

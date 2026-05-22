@@ -16,9 +16,9 @@ process_state_owners = [
   "QuickBEAM.VM.RuntimeState",
   "QuickBEAM.VM.Invocation.Context",
   "QuickBEAM.VM.Host.BeamAPI.State",
-  "QuickBEAM.VM.Host.Web.BroadcastChannel",
+  "QuickBEAM.VM.Host.Web.BroadcastChannel.State",
   "QuickBEAM.VM.Host.Web.ConsoleAPI.State",
-  "QuickBEAM.VM.Host.Web.EventSourceAPI",
+  "QuickBEAM.VM.Host.Web.EventSourceAPI.State",
   "QuickBEAM.VM.Host.Web.Fetch",
   "QuickBEAM.VM.Host.Web.Worker",
   "QuickBEAM.VM.Execution.ConstructorStack",
@@ -79,7 +79,9 @@ process_state_owners = [
       "QuickBEAM.VM.Execution.Eval",
       "QuickBEAM.VM.Execution.ClosureCells",
       "QuickBEAM.VM.Host.BeamAPI.State",
-      "QuickBEAM.VM.Host.Web.ConsoleAPI.State"
+      "QuickBEAM.VM.Host.Web.BroadcastChannel.State",
+      "QuickBEAM.VM.Host.Web.ConsoleAPI.State",
+      "QuickBEAM.VM.Host.Web.EventSourceAPI.State"
     ],
     internal_callers: [
       {"QuickBEAM.VM.Host.Test262", ["QuickBEAM.VM.Host.*"]},
@@ -91,7 +93,10 @@ process_state_owners = [
        ["QuickBEAM.VM.Runtime.Globals.Functions", "QuickBEAM.VM.Runtime.ConstructorCallbacks"]},
       {"QuickBEAM.VM.Execution.ClosureCells", ["QuickBEAM.VM.ObjectModel.*"]},
       {"QuickBEAM.VM.Host.BeamAPI.State", ["QuickBEAM.VM.Host.BeamAPI"]},
-      {"QuickBEAM.VM.Host.Web.ConsoleAPI.State", ["QuickBEAM.VM.Host.Web.ConsoleAPI"]}
+      {"QuickBEAM.VM.Host.Web.BroadcastChannel.State",
+       ["QuickBEAM.VM.Host.Web.BroadcastChannel"]},
+      {"QuickBEAM.VM.Host.Web.ConsoleAPI.State", ["QuickBEAM.VM.Host.Web.ConsoleAPI"]},
+      {"QuickBEAM.VM.Host.Web.EventSourceAPI.State", ["QuickBEAM.VM.Host.Web.EventSourceAPI"]}
     ]
   ],
   tests: [

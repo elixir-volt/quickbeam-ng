@@ -7,14 +7,13 @@ defmodule QuickBEAM.VM.Host.Web.EventSourceAPI do
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Host.Callback
+  alias QuickBEAM.VM.Host.Web.EventSourceAPI.State
   alias QuickBEAM.VM.Host.WebAPIs
 
   # readyState values
   @connecting 0
   @open 1
   @closed 2
-
-  @es_sources_key :qb_event_source_sources
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
@@ -23,10 +22,8 @@ defmodule QuickBEAM.VM.Host.Web.EventSourceAPI do
 
   @doc "Drain all pending EventSource messages. Called from drain_pending loop."
   def drain_all_event_sources do
-    sources = Process.get(@es_sources_key, [])
-
-    Enum.each(sources, fn {es_id, state_ref, onopen_ref, onmessage_ref, onerror_ref,
-                           listeners_ref, last_event_id_ref} ->
+    Enum.each(State.sources(), fn {es_id, state_ref, onopen_ref, onmessage_ref, onerror_ref,
+                                   listeners_ref, last_event_id_ref} ->
       state = Heap.get_obj(state_ref, %{})
 
       unless Map.get(state, :readyState) == @closed do
@@ -72,12 +69,10 @@ defmodule QuickBEAM.VM.Host.Web.EventSourceAPI do
 
     Heap.put_obj(state_ref, %{readyState: @connecting, task_pid: task_pid})
 
-    sources = Process.get(@es_sources_key, [])
-
     source =
       {es_id, state_ref, onopen_ref, onmessage_ref, onerror_ref, listeners_ref, last_event_id_ref}
 
-    Process.put(@es_sources_key, sources ++ [source])
+    State.append_source(source)
 
     schedule_sse_delivery(
       es_id,
