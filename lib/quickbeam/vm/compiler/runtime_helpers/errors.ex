@@ -2,24 +2,14 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Errors do
   @moduledoc "Error construction and compiled stack formatting for BEAM-compiled JavaScript."
 
   alias QuickBEAM.VM.{Heap, RuntimeState, SourcePosition}
+  alias QuickBEAM.VM.Semantics.ThrowErrors
   alias QuickBEAM.VM.Compiler.RuntimeHelpers.Context, as: RuntimeContext
   alias QuickBEAM.VM.ObjectModel.Get
 
   def throw(ctx, atom_idx, reason, atoms_resolver) do
     name = atoms_resolver.(ctx, atom_idx)
-    {error_type, message} = message(name, reason)
+    {error_type, message} = ThrowErrors.message(name, reason)
     throw({:js_throw, Heap.make_error(message, error_type)})
-  end
-
-  def message(name, reason) do
-    case reason do
-      0 -> {"TypeError", "'#{name}' is read-only"}
-      1 -> {"SyntaxError", "redeclaration of '#{name}'"}
-      2 -> {"ReferenceError", "cannot access '#{name}' before initialization"}
-      3 -> {"ReferenceError", "unsupported reference to 'super'"}
-      4 -> {"TypeError", "iterator does not have a throw method"}
-      _ -> {"Error", name}
-    end
   end
 
   def make_error_with_ctx(ctx, message, name, stack_override \\ nil) do
