@@ -893,6 +893,10 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
           not match?(%{configurable: false}, target_descriptor_flags(target, prop_name)) ->
         proxy_descriptor_invariant_error()
 
+      Map.get(result_desc, "configurable") == false and Map.get(result_desc, "writable") == false and
+          match?(%{writable: true}, target_descriptor_flags(target, prop_name)) ->
+        proxy_descriptor_invariant_error()
+
       true ->
         result
     end
