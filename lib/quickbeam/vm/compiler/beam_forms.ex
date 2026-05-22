@@ -18,6 +18,10 @@ defmodule QuickBEAM.VM.Compiler.BEAMForms do
   def tuple(values), do: {:tuple, @line, values}
   def op(operator, operand), do: {:op, @line, operator, operand}
   def op(operator, left, right), do: {:op, @line, operator, left, right}
+  def equal(left, right), do: op(:==, left, right)
+  def not_equal(left, right), do: op(:"=/=", left, right)
+  def or_else(left, right), do: op(:orelse, left, right)
+  def and_also(left, right), do: op(:andalso, left, right)
 
   def nil_expr, do: {nil, @line}
   def cons(head, tail), do: {:cons, @line, head, tail}
@@ -42,7 +46,19 @@ defmodule QuickBEAM.VM.Compiler.BEAMForms do
 
   def function(name, arity, clauses), do: {:function, @line, name, arity, clauses}
 
+  def function(name, args, guards, body),
+    do: function(name, length(args), [clause(args, guards, body)])
+
   def guard_call(fun, args), do: {:call, @line, atom(fun), args}
+  def is_number_guard(expr), do: guard_call(:is_number, [expr])
+  def is_integer_guard(expr), do: guard_call(:is_integer, [expr])
+  def is_float_guard(expr), do: guard_call(:is_float, [expr])
+  def is_binary_guard(expr), do: guard_call(:is_binary, [expr])
+
+  def binary(elements), do: {:bin, @line, elements}
+
+  def binary_element(expr, spec \\ :default, flags \\ [:binary]),
+    do: {:bin_element, @line, expr, spec, flags}
 
   def binary_concat(left, right) do
     {:bin, @line,

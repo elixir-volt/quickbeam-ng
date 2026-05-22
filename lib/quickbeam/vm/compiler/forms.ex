@@ -169,86 +169,78 @@ defmodule QuickBEAM.VM.Compiler.Forms do
     a = var("A")
     b = var("B")
 
-    {:function, @line, :op_add, 2,
-     [
-       {:clause, @line, [a, b], [integer_guards(a, b)], [{:op, @line, :+, a, b}]},
-       {:clause, @line, [a, b], [binary_guards(a, b)], [binary_concat(a, b)]},
-       {:clause, @line, [a, b], [], [remote_call(Values, :add, [a, b])]}
-     ]}
+    function_form(:op_add, 2, [
+      clause([a, b], [integer_guards(a, b)], [op(:+, a, b)]),
+      clause([a, b], [binary_guards(a, b)], [binary_concat(a, b)]),
+      clause([a, b], [], [remote_call(Values, :add, [a, b])])
+    ])
   end
 
   defp guarded_binary_helper(name, op, fallback_mod, fallback_fun) do
     a = var("A")
     b = var("B")
 
-    {:function, @line, name, 2,
-     [
-       {:clause, @line, [a, b], [integer_guards(a, b)], [{:op, @line, op, a, b}]},
-       {:clause, @line, [a, b], [], [remote_call(fallback_mod, fallback_fun, [a, b])]}
-     ]}
+    function_form(name, 2, [
+      clause([a, b], [integer_guards(a, b)], [op(op, a, b)]),
+      clause([a, b], [], [remote_call(fallback_mod, fallback_fun, [a, b])])
+    ])
   end
 
   defp number_guarded_binary_helper(name, op, fallback_mod, fallback_fun) do
     a = var("A")
     b = var("B")
 
-    {:function, @line, name, 2,
-     [
-       {:clause, @line, [a, b], [number_guards(a, b)], [{:op, @line, op, a, b}]},
-       {:clause, @line, [a, b], [], [remote_call(fallback_mod, fallback_fun, [a, b])]}
-     ]}
+    function_form(name, 2, [
+      clause([a, b], [number_guards(a, b)], [op(op, a, b)]),
+      clause([a, b], [], [remote_call(fallback_mod, fallback_fun, [a, b])])
+    ])
   end
 
   defp div_helper do
     a = var("A")
     b = var("B")
 
-    {:function, @line, :op_div, 2,
-     [
-       {:clause, @line, [a, b], [], [remote_call(Values, :js_div, [a, b])]}
-     ]}
+    function_form(:op_div, 2, [
+      clause([a, b], [], [remote_call(Values, :js_div, [a, b])])
+    ])
   end
 
   defp mod_helper do
     a = var("A")
     b = var("B")
 
-    {:function, @line, :op_mod, 2,
-     [
-       {:clause, @line, [a, b], [], [remote_call(Values, :mod, [a, b])]}
-     ]}
+    function_form(:op_mod, 2, [
+      clause([a, b], [], [remote_call(Values, :mod, [a, b])])
+    ])
   end
 
   defp neg_helper do
     a = var("A")
 
-    {:function, @line, :op_neg, 1,
-     [
-       {:clause, @line, [{:integer, @line, 0}], [], [{:float, @line, -0.0}]},
-       {:clause, @line, [a], [[integer_guard(a)]], [{:op, @line, :-, a}]},
-       {:clause, @line, [a], [[float_guard(a)]], [{:op, @line, :-, a}]},
-       {:clause, @line, [a], [], [remote_call(Values, :neg, [a])]}
-     ]}
+    function_form(:op_neg, 1, [
+      clause([BEAMForms.integer(0)], [], [BEAMForms.literal(-0.0)]),
+      clause([a], [[integer_guard(a)]], [op(:-, a)]),
+      clause([a], [[float_guard(a)]], [op(:-, a)]),
+      clause([a], [], [remote_call(Values, :neg, [a])])
+    ])
   end
 
   defp unary_fallback_helper(name, fallback_mod, fallback_fun) do
     a = var("A")
 
-    {:function, @line, name, 1,
-     [
-       {:clause, @line, [a], [[integer_guard(a)]], [a]},
-       {:clause, @line, [a], [], [remote_call(fallback_mod, fallback_fun, [a])]}
-     ]}
+    function_form(name, 1, [
+      clause([a], [[integer_guard(a)]], [a]),
+      clause([a], [], [remote_call(fallback_mod, fallback_fun, [a])])
+    ])
   end
 
   defp unary_fallback_helper2(name, fallback_mod, fallback_fun) do
     a = var("A")
     b = var("B")
 
-    {:function, @line, name, 2,
-     [
-       {:clause, @line, [a, b], [], [remote_call(fallback_mod, fallback_fun, [a, b])]}
-     ]}
+    function_form(name, 2, [
+      clause([a, b], [], [remote_call(fallback_mod, fallback_fun, [a, b])])
+    ])
   end
 
   defp eq_helper do
@@ -309,10 +301,10 @@ defmodule QuickBEAM.VM.Compiler.Forms do
   defp number_guards(a, b), do: [number_guard(a), number_guard(b)]
   defp binary_guards(a, b), do: [binary_guard(a), binary_guard(b)]
 
-  defp integer_guard(expr), do: {:call, @line, {:atom, @line, :is_integer}, [expr]}
-  defp number_guard(expr), do: {:call, @line, {:atom, @line, :is_number}, [expr]}
-  defp float_guard(expr), do: {:call, @line, {:atom, @line, :is_float}, [expr]}
-  defp binary_guard(expr), do: {:call, @line, {:atom, @line, :is_binary}, [expr]}
+  defp integer_guard(expr), do: BEAMForms.is_integer_guard(expr)
+  defp number_guard(expr), do: BEAMForms.is_number_guard(expr)
+  defp float_guard(expr), do: BEAMForms.is_float_guard(expr)
+  defp binary_guard(expr), do: BEAMForms.is_binary_guard(expr)
 
   defp block_name(idx), do: BEAMForms.block_name(idx)
   defp slot_var(idx), do: var("Slot#{idx}")
@@ -324,6 +316,10 @@ defmodule QuickBEAM.VM.Compiler.Forms do
   defp atom(value), do: BEAMForms.atom(value)
   defp remote_call(mod, fun, args), do: BEAMForms.remote_call(mod, fun, args)
   defp binary_concat(left, right), do: BEAMForms.binary_concat(left, right)
+  defp function_form(name, arity, clauses), do: BEAMForms.function(name, arity, clauses)
+  defp clause(patterns, guards, body), do: BEAMForms.clause(patterns, guards, body)
+  defp op(operator, left, right), do: BEAMForms.op(operator, left, right)
+  defp op(operator, operand), do: BEAMForms.op(operator, operand)
 
   defp get_field_inline_helper do
     _obj = var("Obj")
