@@ -13,7 +13,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
     Types
   }
 
-  alias QuickBEAM.VM.Compiler.RuntimeABI
+  alias QuickBEAM.VM.Compiler.{BEAMForms, RuntimeABI}
   alias QuickBEAM.VM.Operands.CopyDataProperties
 
   defstruct [
@@ -501,7 +501,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
   defp refresh_define_value_expr(state, {:call, line, remote, [globals_expr, name]}) do
     case globals_expr do
       _ ->
-        if QuickBEAM.VM.Compiler.BEAMForms.map_get?(globals_expr, :globals) do
+        if BEAMForms.map_get?(globals_expr, :globals) do
           {:call, line, remote, [context_globals_expr(state), name]}
         else
           {:call, line, remote, [globals_expr, name]}
@@ -511,8 +511,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.State do
 
   defp refresh_define_value_expr(_state, expr), do: expr
 
-  defp context_globals_expr(state),
-    do: QuickBEAM.VM.Compiler.BEAMForms.map_get(ctx_expr(state), Builder.atom(:globals))
+  defp context_globals_expr(state), do: BEAMForms.map_get(ctx_expr(state), Builder.atom(:globals))
 
   @doc "Lowers conversion of an iterable or array-like value into an array object."
   def array_from_call(state, argc) do
