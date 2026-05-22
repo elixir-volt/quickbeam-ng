@@ -3,6 +3,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
 
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, State}
+  alias QuickBEAM.VM.Compiler.RuntimeABI
   alias QuickBEAM.VM.OpcodeSpec
 
   @handlers %{
@@ -44,7 +45,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Classes do
   defp lower_handler(:define_method, state, [{:tagged_int, _} = atom_idx, flags]) do
     State.define_method_call(
       state,
-      QuickBEAM.VM.ObjectModel.PropertyKey.normalize(atom_idx),
+      RuntimeABI.normalize_property_key_literal(atom_idx),
       flags
     )
   end

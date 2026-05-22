@@ -15,4 +15,6 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI.Constants do
     do: RuntimeConstants.regexp_literal(ctx, pattern, flags)
 
   def to_property_key_raw(_ctx, value), do: PropertyKey.to_property_key(value)
+
+  def normalize_property_key_literal(value), do: PropertyKey.normalize(value)
 end

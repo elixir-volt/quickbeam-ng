@@ -48,6 +48,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def to_property_key_raw(ctx, value), do: RuntimeABI.Constants.to_property_key_raw(ctx, value)
 
+  def normalize_property_key_literal(value),
+    do: RuntimeABI.Constants.normalize_property_key_literal(value)
+
   def read_capture_cell(ctx, cell, slot_value),
     do: RuntimeABI.Captures.read_capture_cell(ctx, cell, slot_value)
 
