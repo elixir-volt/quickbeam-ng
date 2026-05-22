@@ -166,6 +166,9 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def get_field(ctx, obj, key), do: Properties.get_field(ctx, obj, key)
 
+  def get_property(object, key),
+    do: QuickBEAM.VM.Semantics.PropertyAccess.get_property(object, key)
+
   def call_callback(_ctx, fun, args), do: QuickBEAM.VM.Runtime.call_callback(fun, args)
 
   def put_field(ctx, obj, key, value), do: Properties.put_field(ctx, obj, key, value)
