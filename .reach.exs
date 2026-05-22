@@ -75,6 +75,7 @@ process_state_owners = [
       "QuickBEAM.VM.Interpreter.Ops.ObjectLiterals",
       "QuickBEAM.VM.Interpreter.Ops.PrivateFields",
       "QuickBEAM.VM.Interpreter.Ops.PropertyKeys",
+      "QuickBEAM.VM.Interpreter.Ops.SpecialObjects",
       "QuickBEAM.VM.Interpreter.Ops.SuperProperties"
     ],
     vm_object_model: ["QuickBEAM.VM.ObjectModel", "QuickBEAM.VM.ObjectModel.*"],
@@ -180,6 +181,7 @@ process_state_owners = [
       "QuickBEAM.VM.Interpreter.Ops.InOperator",
       "QuickBEAM.VM.Interpreter.Ops.InstanceOf",
       "QuickBEAM.VM.Interpreter.Ops.PrivateFields",
+      "QuickBEAM.VM.Interpreter.Ops.SpecialObjects",
       "QuickBEAM.VM.Interpreter.Ops.SuperProperties",
       "QuickBEAM.VM.ObjectModel.ProxyTrap",
       "QuickBEAM.VM.Interpreter.Ops.PropertyKeys",
@@ -218,6 +220,7 @@ process_state_owners = [
       {"QuickBEAM.VM.Interpreter.Ops.ObjectLiterals", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
       {"QuickBEAM.VM.Interpreter.Ops.PrivateFields", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
       {"QuickBEAM.VM.Interpreter.Ops.PropertyKeys", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
+      {"QuickBEAM.VM.Interpreter.Ops.SpecialObjects", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
       {"QuickBEAM.VM.Interpreter.Ops.SuperProperties", ["QuickBEAM.VM.Interpreter.Ops.Objects"]},
       {"QuickBEAM.VM.Host.BEAMAPI.State", ["QuickBEAM.VM.Host.BEAMAPI"]},
       {"QuickBEAM.VM.Host.Web.BroadcastChannel.State",
