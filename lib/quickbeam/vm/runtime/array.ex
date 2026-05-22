@@ -376,7 +376,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         create_data_property_or_throw(target, Integer.to_string(index), value)
       end)
 
-      Put.put(target, "length", length(args))
+      InternalMethods.set(target, "length", length(args))
       target
     else
       Heap.wrap(args)
@@ -499,7 +499,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         JSThrow.type_error!("Cannot assign to read only property")
 
       _ ->
-        Put.put(receiver, "length", length)
+        InternalMethods.set(receiver, "length", length)
     end
   end
 
@@ -514,7 +514,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         :ok
     end
 
-    Put.put(receiver, "length", length)
+    InternalMethods.set(receiver, "length", length)
   end
 
   defp put_or_throw({:obj, ref} = receiver, key, value) do
@@ -526,11 +526,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
         JSThrow.type_error!("Cannot assign to read only property")
 
       _ ->
-        Put.put(receiver, key, value)
+        InternalMethods.set(receiver, key, value)
     end
   end
 
-  defp put_or_throw(receiver, key, value), do: Put.put(receiver, key, value)
+  defp put_or_throw(receiver, key, value), do: InternalMethods.set(receiver, key, value)
 
   defp shift(nil, _args), do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
@@ -557,7 +557,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
           to_key = Integer.to_string(from - 1)
 
           if InternalMethods.has_property(receiver, from_key) do
-            Put.put(receiver, to_key, Get.get(receiver, from_key))
+            InternalMethods.set(receiver, to_key, Get.get(receiver, from_key))
           else
             delete_or_throw(receiver, to_key)
           end
@@ -641,7 +641,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         end
       end)
 
-      Put.put(target, "length", len)
+      InternalMethods.set(target, "length", len)
       target
     end)
   end
@@ -764,7 +764,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       create_data_property_or_throw(target, Integer.to_string(index), value)
     end)
 
-    Put.put(target, "length", length(result))
+    InternalMethods.set(target, "length", length(result))
     target
   end
 
@@ -1213,7 +1213,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end)
     end
 
-    Put.put(target, "length", count)
+    InternalMethods.set(target, "length", count)
     target
   end
 
@@ -1287,7 +1287,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
     insert
     |> Enum.with_index(actual_start)
-    |> Enum.each(fn {item, index} -> Put.put(receiver, Integer.to_string(index), item) end)
+    |> Enum.each(fn {item, index} ->
+      InternalMethods.set(receiver, Integer.to_string(index), item)
+    end)
 
     put_length_or_throw(receiver, new_len)
     removed
@@ -1299,11 +1301,12 @@ defmodule QuickBEAM.VM.Runtime.Array do
         Put.set(removed, "length", length, removed)
 
       _ ->
-        Put.put(removed, "length", length)
+        InternalMethods.set(removed, "length", length)
     end
   end
 
-  defp set_splice_removed_length(removed, length), do: Put.put(removed, "length", length)
+  defp set_splice_removed_length(removed, length),
+    do: InternalMethods.set(removed, "length", length)
 
   defp splice_start([], _len), do: 0
 
@@ -1358,7 +1361,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         to_key = Integer.to_string(from + insert_count)
 
         if InternalMethods.has_property(receiver, from_key) do
-          Put.put(receiver, to_key, Get.get(receiver, from_key))
+          InternalMethods.set(receiver, to_key, Get.get(receiver, from_key))
         else
           delete_or_throw(receiver, to_key)
         end
@@ -1383,7 +1386,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         to_key = Integer.to_string(from + insert_count)
 
         if InternalMethods.has_property(receiver, from_key) do
-          Put.put(receiver, to_key, Get.get(receiver, from_key))
+          InternalMethods.set(receiver, to_key, Get.get(receiver, from_key))
         else
           delete_or_throw(receiver, to_key)
         end
@@ -1588,7 +1591,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         :ok
     end)
 
-    Put.put(target, "length", length(entries))
+    InternalMethods.set(target, "length", length(entries))
     target
   end
 
@@ -1768,11 +1771,11 @@ defmodule QuickBEAM.VM.Runtime.Array do
         Put.set(receiver, Integer.to_string(index), value, receiver)
 
       _ ->
-        Put.put(receiver, Integer.to_string(index), value)
+        InternalMethods.set(receiver, Integer.to_string(index), value)
     end
   end
 
-  defp reverse_put(receiver, _index, key, value), do: Put.put(receiver, key, value)
+  defp reverse_put(receiver, _index, key, value), do: InternalMethods.set(receiver, key, value)
 
   defp delete_or_throw(receiver, key) do
     unless InternalMethods.delete(receiver, key) do
@@ -2103,7 +2106,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp fill_object_indices(_obj, _val, idx, end_idx) when idx >= end_idx, do: :ok
 
   defp fill_object_indices(obj, val, idx, end_idx) do
-    Put.put(obj, Integer.to_string(idx), val)
+    InternalMethods.set(obj, Integer.to_string(idx), val)
     fill_object_indices(obj, val, idx + 1, end_idx)
   end
 
@@ -2424,7 +2427,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
           Heap.with_temp_roots(target, fn ->
             count = iterator_to_target(array_from_iterator(source), target, map_fn, this_arg, 0)
-            Put.put(target, "length", count)
+            InternalMethods.set(target, "length", count)
             {:target, target}
           end)
 
@@ -2470,7 +2473,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         create_data_property_or_throw(target, Integer.to_string(index), value)
       end)
 
-      Put.put(target, "length", length(list))
+      InternalMethods.set(target, "length", length(list))
       target
     else
       Heap.wrap(list)
@@ -2825,7 +2828,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         to_key = Integer.to_string(to_idx)
 
         if InternalMethods.has_property(obj, from_key) do
-          Put.put(obj, to_key, Get.get(obj, from_key))
+          InternalMethods.set(obj, to_key, Get.get(obj, from_key))
         else
           unless InternalMethods.delete(obj, to_key) do
             JSThrow.type_error!("Cannot delete property")
@@ -2851,7 +2854,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
           copy_within_sparse_source_value(obj, ref, start_idx + offset, current_len, from_key)
 
         if to < current_len do
-          Put.put(obj, to_key, value)
+          InternalMethods.set(obj, to_key, value)
         else
           Heap.put_array_prop(ref, to_key, value)
           Heap.put_array_prop(ref, "length", to + 1)
@@ -2957,7 +2960,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         to_key = Integer.to_string(target + offset)
 
         if InternalMethods.has_property(acc, from_key) do
-          Put.put(acc, to_key, Get.get(acc, from_key))
+          InternalMethods.set(acc, to_key, Get.get(acc, from_key))
         else
           unless InternalMethods.delete(acc, to_key) do
             JSThrow.type_error!("Cannot delete property")
@@ -3057,7 +3060,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end)
     end
 
-    Put.put(target, "length", len)
+    InternalMethods.set(target, "length", len)
     target
   end
 
@@ -3088,7 +3091,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       create_data_property_or_throw(target, Integer.to_string(index), value)
     end)
 
-    Put.put(target, "length", len)
+    InternalMethods.set(target, "length", len)
     target
   end
 
@@ -3121,7 +3124,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end)
 
     copy_suffix(receiver, target, actual_start, actual_delete_count, length(insert), len)
-    Put.put(target, "length", new_len)
+    InternalMethods.set(target, "length", new_len)
     target
   end
 
@@ -3152,7 +3155,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end)
     end
 
-    Put.put(target, "length", len)
+    InternalMethods.set(target, "length", len)
     target
   end
 
