@@ -249,6 +249,7 @@ process_state_owners = [
       "QuickBEAM.VM.Execution.ClosureCells",
       "QuickBEAM.VM.Runtime.Construction",
       "QuickBEAM.VM.Runtime.ConstructorProperties",
+      "QuickBEAM.VM.Interpreter.Completion",
       "QuickBEAM.VM.Interpreter.Ops.ObjectLiterals",
       "QuickBEAM.VM.Interpreter.Ops.CopyDataProperties",
       "QuickBEAM.VM.Interpreter.Ops.Delete",
@@ -293,6 +294,12 @@ process_state_owners = [
       {"QuickBEAM.VM.Execution.ClosureCells", ["QuickBEAM.VM.ObjectModel.*"]},
       {"QuickBEAM.VM.Runtime.Construction", ["QuickBEAM.VM.Runtime"]},
       {"QuickBEAM.VM.Runtime.ConstructorProperties", ["QuickBEAM.VM.ObjectModel.Get"]},
+      {"QuickBEAM.VM.Interpreter.Completion",
+       [
+         "QuickBEAM.VM.Interpreter.Ops.ArrayElements",
+         "QuickBEAM.VM.Interpreter.Ops.CopyDataProperties",
+         "QuickBEAM.VM.Interpreter.Ops.PropertyKeys"
+       ]},
       {"QuickBEAM.VM.Interpreter.Ops.CopyDataProperties",
        ["QuickBEAM.VM.Interpreter.Ops.CopyDataAdapter"]},
       {"QuickBEAM.VM.Interpreter.Ops.Delete", ["QuickBEAM.VM.Interpreter.Ops.DeleteProperty"]},

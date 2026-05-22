@@ -3,8 +3,8 @@ defmodule QuickBEAM.VM.Interpreter.Ops.ArrayElements do
 
   defmacro __using__(_opts) do
     quote location: :keep do
-      alias QuickBEAM.VM.{Heap, RuntimeState}
-      alias QuickBEAM.VM.Interpreter.Context
+      alias QuickBEAM.VM.RuntimeState
+      alias QuickBEAM.VM.Interpreter.Completion
       alias QuickBEAM.VM.Interpreter.Ops.ObjectLiterals
       alias QuickBEAM.VM.Semantics.PropertyAccess
 
@@ -28,12 +28,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.ArrayElements do
         try do
           PropertyAccess.set_property(ctx, obj, idx, val)
 
-          ctx =
-            case Heap.get_persistent_globals() do
-              nil -> ctx
-              p when map_size(p) == 0 -> ctx
-              p -> Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, p)})
-            end
+          ctx = Completion.refresh_persistent_globals(ctx)
 
           frame = sync_setter_globals_to_frame(frame, ctx)
           run(pc + 1, frame, rest, gas, ctx)
