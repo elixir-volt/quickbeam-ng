@@ -220,6 +220,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def array_from(ctx, list), do: Properties.array_from(ctx, list)
 
+  def await(ctx, value), do: RuntimeHelpers.await(ctx, value)
+
+  def generator_resume_return?(_ctx, value), do: RuntimeHelpers.generator_resume_return?(value)
+
+  def generator_resume_value(_ctx, value), do: RuntimeHelpers.generator_resume_value(value)
+
   def with_has_property(ctx, obj, key), do: RuntimeHelpers.with_has_property(ctx, obj, key)
 
   def rest(ctx, start_idx), do: Iterators.rest(ctx, start_idx)

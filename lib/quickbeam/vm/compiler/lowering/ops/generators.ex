@@ -3,7 +3,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
 
   alias QuickBEAM.VM.Compiler.Lowering.Effects, as: LoweringEffects
   alias QuickBEAM.VM.Compiler.Lowering.{Builder, Emit, Slots, State}
-  alias QuickBEAM.VM.Compiler.RuntimeHelpers
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, next_entry, stack_depths, name_args) do
@@ -50,10 +49,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
         with {:ok, val, _type, state} <- Emit.pop_typed(state) do
           LoweringEffects.effectful_push(
             state,
-            Builder.remote_call(RuntimeHelpers, :await, [
-              State.ctx_expr(state),
-              val
-            ])
+            State.abi_call(state, :await, [val])
           )
         end
 
@@ -156,8 +152,8 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Generators do
 
   defp resume_stack(arg_var, state) do
     [
-      Builder.remote_call(RuntimeHelpers, :generator_resume_return?, [arg_var]),
-      Builder.remote_call(RuntimeHelpers, :generator_resume_value, [arg_var])
+      State.abi_call(state, :generator_resume_return?, [arg_var]),
+      State.abi_call(state, :generator_resume_value, [arg_var])
       | State.current_stack(state)
     ]
   end
