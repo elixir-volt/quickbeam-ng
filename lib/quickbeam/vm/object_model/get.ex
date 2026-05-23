@@ -20,8 +20,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   alias QuickBEAM.VM.ObjectModel.{
     ArrayObjectGet,
     BuiltinExoticGet,
+    BuiltinObjectGet,
     BuiltinFunctionGet,
-    DateExoticGet,
     FunctionExoticGet,
     FunctionPrototypeGet,
     IndexedExoticGet,
@@ -41,7 +41,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     WrappedPrimitive
   }
 
-  alias QuickBEAM.VM.Runtime.ArrayBuffer
   alias QuickBEAM.VM.Runtime.Date, as: JSDate
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
@@ -357,8 +356,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp prototype_object_property(_map, _key), do: :undefined
 
-  defp date_proto_property(map, key), do: DateExoticGet.proto_property(map, key)
-
   defp string_proto_property(key), do: PrimitiveWrapperGet.string_proto_property(key)
 
   defp wrapped_proto_property(map, key), do: PrimitiveWrapperGet.map_proto_property(map, key)
@@ -422,19 +419,13 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         RawObjectGet.own_property(raw, key, raw_object_callbacks(ref))
 
       %{date_ms() => _} = map ->
-        case get_map_property(map, key, {:obj, ref}) do
-          :undefined -> date_proto_property(map, key)
-          val -> val
-        end
+        BuiltinObjectGet.date_property(map, key, builtin_object_callbacks({:obj, ref}))
 
       %{typed_array() => true} = map ->
         TypedArrayObjectGet.own_property({:obj, ref}, map, key, typed_array_callbacks())
 
       %{buffer() => _} = map ->
-        case Map.get(map, key) do
-          nil -> ArrayBuffer.proto_property(key)
-          val -> val
-        end
+        BuiltinObjectGet.buffer_property(map, key)
 
       map when is_map(map) and key == "length" ->
         if Semantics.array_prototype_object?(map) do
@@ -499,6 +490,10 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   def own(value, key), do: get_own(value, key)
 
   defp typed_array_callbacks, do: %{get_map_property: &get_map_property/3}
+
+  defp builtin_object_callbacks(receiver) do
+    %{get_map_property: fn map, key -> get_map_property(map, key, receiver) end}
+  end
 
   defp raw_object_callbacks(ref) do
     %{
