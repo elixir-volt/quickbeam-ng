@@ -283,6 +283,8 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI do
 
   def throw_error(ctx, atom_idx, reason), do: RuntimeHelpers.throw_error(ctx, atom_idx, reason)
 
+  def reference_error!(message), do: QuickBEAM.VM.JSThrow.reference_error!(message)
+
   def array_from(ctx, list), do: Properties.array_from(ctx, list)
 
   def await(ctx, value), do: RuntimeHelpers.await(ctx, value)

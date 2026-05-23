@@ -397,7 +397,7 @@ defmodule QuickBEAM.VM.Compiler.Forms do
      [
        {:clause, @line, [{:atom, @line, :__tdz__}], [],
         [
-          remote_call(QuickBEAM.VM.JSThrow, :reference_error!, [
+          remote_call(RuntimeABI, :reference_error!, [
             :erl_parse.abstract("Cannot access variable before initialization")
           ])
         ]},
