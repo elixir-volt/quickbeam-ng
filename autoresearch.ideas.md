@@ -117,3 +117,5 @@
 - Discarded after clean Object baseline: changing Iterator.zip longest mode to skip already-exhausted iterator records via existing `open_iterators` was semantically tempting from the abstract algorithm, but it regressed the remaining zipKeyed residual into descriptor failures for padding/undefined properties and did not fix `zip/basic-longest.js` (`not a function`). Do not retry that exact open-iterator membership patch unchanged; first reduce the interpreter-only interaction around proxy padding/propertyHelper and inspect actual iterator result/value object identities.
 
 - Continue compiled global object property parity: setter throws are now catchable and compiled global reads fall back to `globalThis`, but broader tests should cover accessor reads, non-strict implicit globals, and delete interactions.
+
+- Direct-eval strict code still misses strict failed `[[Set]]` when assigning to a proxy stored in the caller scope (`var p=...; eval('\"use strict\"; p.x=1')` returns 1). Standalone strict eval-local proxy assignment throws correctly, so investigate caller-scope binding/materialization and strict-context propagation rather than generic `Put.put_element`.
