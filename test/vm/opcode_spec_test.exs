@@ -37,12 +37,15 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert is_integer(info.opcode)
     assert info.stack_effect == {1, 0}
     assert info.format_info == Opcodes.format_info(:label)
+    assert info.operand_decoder == {:encoded, [:leb128]}
+    assert info.symbolic_stack_effect == :error
     assert info.lowering_family == :control
     assert info.lowering_module == QuickBEAM.VM.Compiler.Lowering.Ops.Control
     assert info.control_flow_family == {:branch, false}
 
     assert {:ok, push} = OpcodeSpec.opcode(:push_0)
     assert push.small_int_push == 0
+    assert push.operand_decoder == {:fixed, []}
     assert push.canonical == :push_i32
     assert push.canonical_operands == [0]
     assert push.short_form?

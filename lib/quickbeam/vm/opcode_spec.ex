@@ -394,7 +394,9 @@ defmodule QuickBEAM.VM.OpcodeSpec do
        size: size,
        format: format,
        format_info: format_info(format),
+       operand_decoder: operand_decoder(format),
        stack_effect: {pops, pushes},
+       symbolic_stack_effect: symbolic_stack_effect(name),
        lowering_family: lowering_family(name),
        lowering_module: lowering_module(name),
        control_flow_family: control_flow_family(name),
@@ -409,6 +411,16 @@ defmodule QuickBEAM.VM.OpcodeSpec do
   def info(opcode), do: Opcodes.info(opcode)
   def num(name), do: Opcodes.num(name)
   def format_info(format), do: Opcodes.format_info(format)
+
+  def operand_decoder(format) do
+    case format_info(format) do
+      nil -> :unknown
+      decoder when decoder in [:none, :zero] -> {:fixed, []}
+      :leb128 -> {:encoded, [:leb128]}
+      :sleb128 -> {:encoded, [:sleb128]}
+      decoder when is_atom(decoder) -> {:encoded, [decoder]}
+    end
+  end
 
   def name(opcode) do
     case info(opcode) do
