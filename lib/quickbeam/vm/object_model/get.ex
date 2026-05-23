@@ -36,7 +36,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     ProxyGet,
     Semantics,
     SymbolExoticGet,
-    TypedArrayExoticGet,
+    TypedArrayObjectGet,
     WrappedPrimitive
   }
 
@@ -442,21 +442,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         end
 
       %{typed_array() => true} = map ->
-        obj = {:obj, ref}
-
-        case key do
-          "length" ->
-            if TypedArray.out_of_bounds?(obj), do: 0, else: TypedArray.element_count(obj)
-
-          "byteLength" ->
-            if TypedArray.out_of_bounds?(obj), do: 0, else: TypedArray.current_byte_length(obj)
-
-          "byteOffset" ->
-            if TypedArray.out_of_bounds?(obj), do: 0, else: Map.get(map, "byteOffset", 0)
-
-          _ ->
-            typed_array_property(obj, map, key)
-        end
+        TypedArrayObjectGet.own_property({:obj, ref}, map, key, typed_array_callbacks())
 
       %{buffer() => _} = map ->
         case Map.get(map, key) do
@@ -526,8 +512,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   def own(value, key), do: get_own(value, key)
 
-  defp typed_array_property(obj, map, key),
-    do: TypedArrayExoticGet.property(obj, map, key, fn -> get_map_property(map, key, obj) end)
+  defp typed_array_callbacks, do: %{get_map_property: &get_map_property/3}
 
   defp target_slot(target, key),
     do: ArrayObjectGet.target_slot(target, key, array_object_callbacks())

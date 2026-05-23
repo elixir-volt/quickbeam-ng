@@ -274,6 +274,7 @@ process_state_owners = [
       "QuickBEAM.VM.ObjectModel.RegExpExoticGet",
       "QuickBEAM.VM.ObjectModel.RegExpStateGet",
       "QuickBEAM.VM.ObjectModel.SymbolExoticGet",
+      "QuickBEAM.VM.ObjectModel.TypedArrayObjectGet",
       "QuickBEAM.VM.ObjectModel.ProxyDelete",
       "QuickBEAM.VM.ObjectModel.ProxyDispatch",
       "QuickBEAM.VM.ObjectModel.ProxyExtensible",
@@ -348,6 +349,7 @@ process_state_owners = [
        ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.RegExpStateGet"]},
       {"QuickBEAM.VM.ObjectModel.RegExpStateGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.SymbolExoticGet", ["QuickBEAM.VM.ObjectModel.Get"]},
+      {"QuickBEAM.VM.ObjectModel.TypedArrayObjectGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDelete", ["QuickBEAM.VM.ObjectModel.InternalMethods"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDispatch",
        [
@@ -383,7 +385,8 @@ process_state_owners = [
          "QuickBEAM.VM.Runtime.Object",
          "QuickBEAM.VM.Runtime.Reflect"
        ]},
-      {"QuickBEAM.VM.ObjectModel.TypedArrayExoticGet", ["QuickBEAM.VM.ObjectModel.Get"]},
+      {"QuickBEAM.VM.ObjectModel.TypedArrayExoticGet",
+       ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.TypedArrayObjectGet"]},
       {"QuickBEAM.VM.Interpreter.Ops.ObjectLiterals",
        ["QuickBEAM.VM.Interpreter.Ops.ArrayElements"]},
       {"QuickBEAM.VM.Interpreter.Ops.PrivateFields",
