@@ -1133,6 +1133,16 @@ defmodule QuickBEAM.VM.CompilerTest do
       assert {:ok, true} = Compiler.invoke(nonconfigurable, [])
     end
 
+    test "compiled global accessor returning undefined is still a binding", %{rt: rt} do
+      fun =
+        compile_and_decode(
+          rt,
+          ~S[Object.defineProperty(globalThis,"undefinedReview",{get(){return undefined},configurable:true}); String(undefinedReview)]
+        ).value
+
+      assert {:ok, "undefined"} = Compiler.invoke(fun, [])
+    end
+
     test "compiled global accessor reads fall back to global object", %{rt: rt} do
       fun =
         compile_and_decode(

@@ -46,19 +46,19 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI.Bindings do
   defp get_global_object_property(ctx, name, missing) do
     case Map.get(ctx.globals, "globalThis") do
       {:obj, _} = global_this ->
-        case InternalMethods.get(global_this, name) do
-          :undefined when missing == :throw ->
-            QuickBEAM.VM.JSThrow.reference_error!("#{name} is not defined")
-
-          value ->
-            value
+        if InternalMethods.has_property(global_this, name) do
+          InternalMethods.get(global_this, name)
+        else
+          missing_global!(name, missing)
         end
 
-      _ when missing == :throw ->
-        QuickBEAM.VM.JSThrow.reference_error!("#{name} is not defined")
-
       _ ->
-        :undefined
+        missing_global!(name, missing)
     end
   end
+
+  defp missing_global!(name, :throw),
+    do: QuickBEAM.VM.JSThrow.reference_error!("#{name} is not defined")
+
+  defp missing_global!(_name, :undefined), do: :undefined
 end
