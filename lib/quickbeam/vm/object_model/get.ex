@@ -12,7 +12,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   import Bitwise, only: [band: 2]
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.{Heap, Value}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Runtime.TypedArray
@@ -22,6 +21,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     BuiltinExoticGet,
     BuiltinObjectGet,
     CallableOwnGet,
+    ExplicitOwnProperty,
     FunctionPrototypeGet,
     IndexedExoticGet,
     MapPropertyGet,
@@ -549,37 +549,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_prototype_raw(value, key), do: get_from_prototype(value, key)
 
-  defp explicit_undefined_own?({:regexp, _, _, ref}, key) do
-    RegexpState.has_property?(ref, key)
-  end
-
-  defp explicit_undefined_own?({:obj, ref}, key) do
-    case Heap.get_obj_raw(ref) do
-      {:qb_arr, _} ->
-        Heap.get_prop_desc(ref, key) != nil
-
-      data when is_list(data) ->
-        Heap.get_prop_desc(ref, key) != nil
-
-      raw when is_tuple(raw) ->
-        Heap.shape?(raw) and match?({:ok, _}, Heap.raw_fetch(raw, key))
-
-      %{typed_array() => true} ->
-        match?({:ok, _}, PropertyKey.array_index(key)) or
-          Map.has_key?(Heap.get_obj(ref, %{}), key)
-
-      map when is_map(map) ->
-        not Map.has_key?(map, proxy_target()) and Map.has_key?(map, key)
-
-      _ ->
-        false
-    end
-  end
-
-  defp explicit_undefined_own?(value, key) when is_tuple(value) or is_struct(value),
-    do: Heap.get_ctor_prop_desc(value, key) != nil
-
-  defp explicit_undefined_own?(_value, _key), do: false
+  defp explicit_undefined_own?(value, key), do: ExplicitOwnProperty.present?(value, key)
 
   defp get_from_prototype(value, key),
     do: PrototypeGet.property(value, key, prototype_get_callbacks())
