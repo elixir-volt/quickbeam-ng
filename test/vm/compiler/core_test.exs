@@ -392,6 +392,10 @@ defmodule QuickBEAM.VM.CompilerTest do
                {:call_ext_only, 2, {:extfunc, QuickBEAM.VM.Heap, :wrap_keyed_object_literal, 2}} ->
                  true
 
+               {:call_ext_only, 3,
+                {:extfunc, QuickBEAM.VM.Compiler.RuntimeABI, :wrap_keyed_object_literal, 3}} ->
+                 true
+
                _ ->
                  false
              end)
