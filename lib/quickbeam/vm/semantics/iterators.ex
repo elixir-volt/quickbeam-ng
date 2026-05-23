@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, Runtime, Value}
   alias QuickBEAM.VM.Interpreter.Context
   alias QuickBEAM.VM.Semantics.Values
-  alias QuickBEAM.VM.ObjectModel.{Copy, Get, InternalMethods, OwnProperty}
+  alias QuickBEAM.VM.ObjectModel.{Copy, Get, InternalMethods}
   alias QuickBEAM.VM.Runtime.Collections
 
   @doc "Creates iterator state for a JavaScript `for...of` loop."
@@ -303,7 +303,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp own_array_iterator_method(obj) do
     symbol = {:symbol, "Symbol.iterator"}
 
-    case OwnProperty.descriptor(obj, symbol) do
+    case InternalMethods.own_property(obj, symbol) do
       :undefined -> :missing
       _desc -> Get.get(obj, symbol)
     end

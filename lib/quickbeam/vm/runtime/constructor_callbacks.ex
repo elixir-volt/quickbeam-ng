@@ -131,7 +131,7 @@ defmodule QuickBEAM.VM.Runtime.ConstructorCallbacks do
   end
 
   defp inherit_array_prototype({:obj, ref} = result, {:obj, _} = this) do
-    case QuickBEAM.VM.ObjectModel.Prototype.get(this) do
+    case InternalMethods.get_prototype_of(this) do
       {:obj, _} = proto -> Heap.put_array_prop(ref, "__proto__", proto)
       _ -> :ok
     end
