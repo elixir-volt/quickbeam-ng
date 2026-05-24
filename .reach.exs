@@ -269,6 +269,7 @@ process_state_owners = [
       "QuickBEAM.VM.ObjectModel.FunctionExoticGet",
       "QuickBEAM.VM.ObjectModel.FunctionPrototypeGet",
       "QuickBEAM.VM.ObjectModel.IndexedExoticGet",
+      "QuickBEAM.VM.ObjectModel.LengthGet",
       "QuickBEAM.VM.ObjectModel.MapPropertyGet",
       "QuickBEAM.VM.ObjectModel.ObjectMapGet",
       "QuickBEAM.VM.ObjectModel.PrimitiveExoticGet",
@@ -355,12 +356,17 @@ process_state_owners = [
          "QuickBEAM.VM.ObjectModel.SymbolGet"
        ]},
       {"QuickBEAM.VM.ObjectModel.IndexedExoticGet", ["QuickBEAM.VM.ObjectModel.Get"]},
+      {"QuickBEAM.VM.ObjectModel.LengthGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.MapPropertyGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ObjectMapGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.PrimitiveExoticGet",
        ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.PrototypeGet"]},
       {"QuickBEAM.VM.ObjectModel.PrimitiveWrapperGet",
-       ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.ObjectMapGet"]},
+       [
+         "QuickBEAM.VM.ObjectModel.Get",
+         "QuickBEAM.VM.ObjectModel.ObjectMapGet",
+         "QuickBEAM.VM.ObjectModel.LengthGet"
+       ]},
       {"QuickBEAM.VM.ObjectModel.PrototypeGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.RawObjectGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDefine", ["QuickBEAM.VM.ObjectModel.Define"]},
