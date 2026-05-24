@@ -268,7 +268,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
   end
 
-  defp object_proto_get(target), do: Prototype.get(target)
+  defp object_proto_get(target), do: InternalMethods.get_prototype_of(target)
 
   defp object_proto_set(_args, target) when is_nullish(target) do
     throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
@@ -277,7 +277,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp object_proto_set([proto | _], {:obj, ref} = target) do
     if proto == nil or match?({:obj, _}, proto) do
       cond do
-        Prototype.get(target) == proto ->
+        InternalMethods.get_prototype_of(target) == proto ->
           :ok
 
         target == Heap.get_object_prototype() and proto != nil ->
@@ -289,14 +289,14 @@ defmodule QuickBEAM.VM.Runtime.Object do
         match?({:obj, _}, proto) and Prototype.ordinary_chain_contains?(proto, ref) ->
           throw({:js_throw, Heap.make_error("Cannot create prototype cycle", "TypeError")})
 
-        not Heap.extensible?(ref) and Prototype.get(target) != proto ->
+        not Heap.extensible?(ref) and InternalMethods.get_prototype_of(target) != proto ->
           throw(
             {:js_throw,
              Heap.make_error("Cannot set prototype of non-extensible object", "TypeError")}
           )
 
         true ->
-          Prototype.set(target, proto)
+          InternalMethods.set_prototype_of(target, proto)
       end
     end
 
@@ -305,7 +305,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp object_proto_set([proto | _], target) do
     if proto == nil or match?({:obj, _}, proto) do
-      Prototype.set(target, proto)
+      InternalMethods.set_prototype_of(target, proto)
     end
 
     :undefined
