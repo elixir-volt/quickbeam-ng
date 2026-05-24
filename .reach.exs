@@ -279,6 +279,7 @@ process_state_owners = [
       "QuickBEAM.VM.ObjectModel.RegExpExoticGet",
       "QuickBEAM.VM.ObjectModel.RegExpStateGet",
       "QuickBEAM.VM.ObjectModel.SymbolExoticGet",
+      "QuickBEAM.VM.ObjectModel.SymbolGet",
       "QuickBEAM.VM.ObjectModel.TypedArrayObjectGet",
       "QuickBEAM.VM.ObjectModel.ProxyDelete",
       "QuickBEAM.VM.ObjectModel.ProxyDispatch",
@@ -348,7 +349,11 @@ process_state_owners = [
       {"QuickBEAM.VM.ObjectModel.FunctionExoticGet",
        ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.CallableOwnGet"]},
       {"QuickBEAM.VM.ObjectModel.FunctionPrototypeGet",
-       ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.PrototypeGet"]},
+       [
+         "QuickBEAM.VM.ObjectModel.Get",
+         "QuickBEAM.VM.ObjectModel.PrototypeGet",
+         "QuickBEAM.VM.ObjectModel.SymbolGet"
+       ]},
       {"QuickBEAM.VM.ObjectModel.IndexedExoticGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.MapPropertyGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ObjectMapGet", ["QuickBEAM.VM.ObjectModel.Get"]},
@@ -363,6 +368,7 @@ process_state_owners = [
        ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.RegExpStateGet"]},
       {"QuickBEAM.VM.ObjectModel.RegExpStateGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.SymbolExoticGet", ["QuickBEAM.VM.ObjectModel.Get"]},
+      {"QuickBEAM.VM.ObjectModel.SymbolGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.TypedArrayObjectGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDelete", ["QuickBEAM.VM.ObjectModel.InternalMethods"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDispatch",
@@ -391,6 +397,7 @@ process_state_owners = [
          "QuickBEAM.VM.ObjectModel.BuiltinFunctionGet",
          "QuickBEAM.VM.ObjectModel.FunctionPrototypeGet",
          "QuickBEAM.VM.ObjectModel.Get",
+         "QuickBEAM.VM.ObjectModel.SymbolGet",
          "QuickBEAM.VM.ObjectModel.PrimitiveExoticGet",
          "QuickBEAM.VM.ObjectModel.PrototypeGet"
        ]},

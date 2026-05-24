@@ -22,7 +22,6 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     BuiltinObjectGet,
     CallableOwnGet,
     ExplicitOwnProperty,
-    FunctionPrototypeGet,
     IndexedExoticGet,
     MapPropertyGet,
     ObjectMapGet,
@@ -37,6 +36,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     ProxyGet,
     Semantics,
     SymbolExoticGet,
+    SymbolGet,
     TypedArrayObjectGet
   }
 
@@ -48,35 +48,16 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   def get(value, key) when is_integer(key),
     do: get(value, Integer.to_string(key))
 
-  def get({:obj, _} = value, {:symbol, _} = sym_key), do: get_symbol(value, sym_key)
-
-  def get({:obj, _} = value, {:symbol, _, _} = sym_key),
-    do: get_symbol(value, PropertyKey.normalize(sym_key))
-
-  def get({:regexp, _, _, _} = value, {:symbol, _} = sym_key), do: get_symbol(value, sym_key)
-
-  def get({:regexp, _, _, _} = value, {:symbol, _, _} = sym_key),
-    do: get_symbol(value, PropertyKey.normalize(sym_key))
-
-  def get({:regexp, _, _} = value, {:symbol, _} = sym_key), do: get_symbol(value, sym_key)
-
-  def get({:regexp, _, _} = value, {:symbol, _, _} = sym_key),
-    do: get_symbol(value, PropertyKey.normalize(sym_key))
-
   def get(value, {:symbol, "Symbol.hasInstance"} = sym_key),
     do: get_callable_symbol(value, sym_key)
 
   def get(value, {:symbol, "Symbol.hasInstance", _} = sym_key),
-    do: get_callable_symbol(value, PropertyKey.normalize(sym_key))
+    do: get_callable_symbol(value, SymbolGet.normalize(sym_key))
 
-  def get(value, {:symbol, _} = sym_key) do
-    if QuickBEAM.VM.Builtin.callable?(value),
-      do: get_callable_symbol(value, sym_key),
-      else: get_symbol(value, sym_key)
-  end
+  def get(value, {:symbol, _} = sym_key), do: get_symbol(value, sym_key)
 
   def get(value, {:symbol, _, _} = sym_key),
-    do: get(value, PropertyKey.normalize(sym_key))
+    do: get_symbol(value, SymbolGet.normalize(sym_key))
 
   def get(_, _), do: :undefined
 
@@ -171,45 +152,19 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     end
   end
 
-  defp get_callable_symbol(value, sym_key) do
-    if QuickBEAM.VM.Builtin.callable?(value) do
-      case get_own(value, sym_key) do
-        :undefined ->
-          FunctionPrototypeGet.fallback(get_from_prototype(value, sym_key), value, sym_key)
+  defp get_callable_symbol(value, sym_key),
+    do: SymbolGet.callable_property(value, sym_key, symbol_get_callbacks())
 
-        {:accessor, getter, _} when getter != nil ->
-          call_getter(getter, value)
+  defp get_symbol(value, sym_key),
+    do: SymbolGet.property(value, sym_key, symbol_get_callbacks())
 
-        {:accessor, nil, _} ->
-          :undefined
-
-        val ->
-          val
-      end
-    else
-      get_own(value, sym_key)
-    end
-  end
-
-  defp get_symbol(value, sym_key) do
-    case get_own(value, sym_key) do
-      :undefined ->
-        if explicit_undefined_own?(value, sym_key) do
-          :undefined
-        else
-          case get_prototype_raw(value, sym_key) do
-            {:accessor, getter, _} when getter != nil -> call_getter(getter, value)
-            {:accessor, nil, _} -> :undefined
-            val -> val
-          end
-        end
-
-      {:accessor, getter, _} when getter != nil ->
-        call_getter(getter, value)
-
-      val ->
-        val
-    end
+  defp symbol_get_callbacks do
+    %{
+      call_getter: &call_getter/2,
+      explicit_own?: &explicit_undefined_own?/2,
+      get_from_prototype: &get_from_prototype/2,
+      get_own: &get_own/2
+    }
   end
 
   @doc "Invokes a getter function with the provided receiver."
