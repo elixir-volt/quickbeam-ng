@@ -950,63 +950,53 @@ defmodule QuickBEAM.VM.Runtime.Object do
     case args do
       [{:obj, ref} | _] ->
         case Heap.get_obj(ref, %{}) do
-          %{proxy_target() => target, proxy_handler() => handler} ->
-            proxy_get_prototype_of(target, handler)
-
-          map when is_map(map) ->
-            Prototype.get({:obj, ref})
-
-          {:qb_arr, _} ->
-            Prototype.get({:obj, ref})
-
-          list when is_list(list) ->
-            Prototype.get({:obj, ref})
-
-          _ ->
-            nil
+          map when is_map(map) -> InternalMethods.get_prototype_of({:obj, ref})
+          {:qb_arr, _} -> InternalMethods.get_prototype_of({:obj, ref})
+          list when is_list(list) -> InternalMethods.get_prototype_of({:obj, ref})
+          _ -> nil
         end
 
       [{:qb_arr, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [value | _] when is_list(value) ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [{:builtin, _, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [{:regexp, _, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [{:regexp, _, _, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [{:closure, _, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [{:bound, _, _, _, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [%QuickBEAM.VM.Function{} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [value | _] when is_function(value) ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [value | _] when is_integer(value) or is_float(value) ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [value | _] when is_binary(value) ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [value | _] when is_boolean(value) ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [{:symbol, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       [{:symbol, _, _} = value | _] ->
-        Prototype.get(value)
+        InternalMethods.get_prototype_of(value)
 
       _ ->
         throw(
@@ -1015,73 +1005,9 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
-  defp proxy_get_prototype_of(target, handler) do
-    unless Value.object_like?(handler) do
-      throw(
-        {:js_throw,
-         Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
-      )
-    end
-
-    trap = Get.get(handler, "getPrototypeOf")
-
-    result =
-      if Value.nullish?(trap) do
-        Prototype.get(target)
-      else
-        ProxyTrap.call(trap, [target], handler)
-      end
-
-    cond do
-      not prototype_value?(result) ->
-        proxy_prototype_invariant_error()
-
-      not target_extensible_for_prototype?(target) and result != Prototype.get(target) ->
-        proxy_prototype_invariant_error()
-
-      true ->
-        result
-    end
-  end
-
-  defp proxy_set_prototype_of(target, handler, new_proto) do
-    unless Value.object_like?(handler) do
-      throw(
-        {:js_throw,
-         Heap.make_error("Cannot perform operation on a proxy with null handler", "TypeError")}
-      )
-    end
-
-    trap = Get.get(handler, "setPrototypeOf")
-
-    success? =
-      if Value.nullish?(trap) do
-        set_own_prototype(target, new_proto)
-        true
-      else
-        Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target, new_proto], handler))
-      end
-
-    if success? and not target_extensible_for_prototype?(target) and
-         new_proto != Prototype.get(target) do
-      proxy_prototype_invariant_error()
-    end
-
-    success?
-  end
-
   defp prototype_value?(nil), do: true
   defp prototype_value?({:obj, _}), do: true
   defp prototype_value?(_), do: false
-
-  defp set_own_prototype(target, new_proto), do: Prototype.set(target, new_proto)
-
-  defp target_extensible_for_prototype?({:obj, ref}), do: Heap.extensible?(ref)
-  defp target_extensible_for_prototype?(_), do: true
-
-  defp proxy_prototype_invariant_error do
-    throw({:js_throw, Heap.make_error("proxy prototype trap violates invariant", "TypeError")})
-  end
 
   static "defineProperty", length: 3, constructable: false do
     define_property(args)
@@ -1174,8 +1100,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
     case args do
       [{:obj, ref} = obj, new_proto | _] ->
         case Heap.get_obj(ref, %{}) do
-          %{proxy_target() => target, proxy_handler() => handler} ->
-            if proxy_set_prototype_of(target, handler, new_proto) do
+          %{proxy_target() => _target, proxy_handler() => _handler} ->
+            if InternalMethods.set_prototype_of(obj, new_proto) do
               obj
             else
               throw(
@@ -1213,13 +1139,13 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp set_ordinary_prototype_or_throw!(obj, ref, new_proto) do
     cond do
-      obj == Heap.get_object_prototype() and new_proto != Prototype.get(obj) ->
+      obj == Heap.get_object_prototype() and new_proto != InternalMethods.get_prototype_of(obj) ->
         throw({:js_throw, Heap.make_error("Cannot set immutable prototype", "TypeError")})
 
       match?({:obj, _}, new_proto) and Prototype.ordinary_chain_contains?(new_proto, ref) ->
         throw({:js_throw, Heap.make_error("Cannot create prototype cycle", "TypeError")})
 
-      not Heap.extensible?(ref) and new_proto != Prototype.get(obj) ->
+      not Heap.extensible?(ref) and new_proto != InternalMethods.get_prototype_of(obj) ->
         throw(
           {:js_throw,
            Heap.make_error("Cannot set prototype of non-extensible object", "TypeError")}

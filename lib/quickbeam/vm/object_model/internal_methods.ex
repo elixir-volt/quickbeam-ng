@@ -101,7 +101,23 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   end
 
   defp get_prototype_of_by_kind(_kind, obj), do: Prototype.get(obj)
-  defp set_prototype_of_by_kind(_kind, obj, proto), do: Prototype.set(obj, proto)
+
+  defp set_prototype_of_by_kind(:proxy, {:obj, ref}, proto) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target} = proxy ->
+        ProxyPrototype.set(proxy, proto, &ordinary_set_prototype_of/2)
+
+      _ ->
+        ordinary_set_prototype_of({:obj, ref}, proto)
+    end
+  end
+
+  defp set_prototype_of_by_kind(_kind, obj, proto), do: ordinary_set_prototype_of(obj, proto)
+
+  defp ordinary_set_prototype_of(obj, proto) do
+    Prototype.set(obj, proto)
+    true
+  end
 
   defp ordinary_extensible?({:obj, ref}), do: Heap.extensible?(ref)
   defp ordinary_extensible?(_), do: true
