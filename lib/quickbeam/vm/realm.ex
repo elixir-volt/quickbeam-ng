@@ -20,7 +20,7 @@ defmodule QuickBEAM.VM.Realm do
   alias QuickBEAM.VM.Runtime.Set, as: JSSet
   alias QuickBEAM.VM.Runtime.Number, as: JSNumber
   alias QuickBEAM.VM.Runtime.String, as: JSString
-  alias QuickBEAM.VM.ObjectModel.{Get, Prototype, Put}
+  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, Put}
   alias QuickBEAM.VM.Runtime.WeakRef, as: JSWeakRef
 
   def create do
@@ -551,7 +551,9 @@ defmodule QuickBEAM.VM.Realm do
          end}
 
       function_object_proto =
-        if this in [nil, :undefined], do: function_proto, else: Prototype.get(this)
+        if this in [nil, :undefined],
+          do: function_proto,
+          else: InternalMethods.get_prototype_of(this)
 
       function_prototype = Heap.wrap(%{"__proto__" => object_proto})
 
