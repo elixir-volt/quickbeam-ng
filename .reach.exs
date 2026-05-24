@@ -275,6 +275,7 @@ process_state_owners = [
       "QuickBEAM.VM.ObjectModel.PrimitiveExoticGet",
       "QuickBEAM.VM.ObjectModel.PrimitiveWrapperGet",
       "QuickBEAM.VM.ObjectModel.PrototypeGet",
+      "QuickBEAM.VM.ObjectModel.PrototypeTraversalGet",
       "QuickBEAM.VM.ObjectModel.RawObjectGet",
       "QuickBEAM.VM.ObjectModel.ProxyDefine",
       "QuickBEAM.VM.ObjectModel.RegExpExoticGet",
@@ -339,7 +340,11 @@ process_state_owners = [
        ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.PrototypeGet"]},
       {"QuickBEAM.VM.ObjectModel.ArrayObjectGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.BuiltinExoticGet",
-       ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.PrototypeGet"]},
+       [
+         "QuickBEAM.VM.ObjectModel.Get",
+         "QuickBEAM.VM.ObjectModel.PrototypeGet",
+         "QuickBEAM.VM.ObjectModel.PrototypeTraversalGet"
+       ]},
       {"QuickBEAM.VM.ObjectModel.BuiltinObjectGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.BuiltinFunctionGet",
        ["QuickBEAM.VM.ObjectModel.Get", "QuickBEAM.VM.ObjectModel.CallableOwnGet"]},
@@ -368,6 +373,7 @@ process_state_owners = [
          "QuickBEAM.VM.ObjectModel.LengthGet"
        ]},
       {"QuickBEAM.VM.ObjectModel.PrototypeGet", ["QuickBEAM.VM.ObjectModel.Get"]},
+      {"QuickBEAM.VM.ObjectModel.PrototypeTraversalGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.RawObjectGet", ["QuickBEAM.VM.ObjectModel.Get"]},
       {"QuickBEAM.VM.ObjectModel.ProxyDefine", ["QuickBEAM.VM.ObjectModel.Define"]},
       {"QuickBEAM.VM.ObjectModel.RegExpExoticGet",
@@ -405,7 +411,8 @@ process_state_owners = [
          "QuickBEAM.VM.ObjectModel.Get",
          "QuickBEAM.VM.ObjectModel.SymbolGet",
          "QuickBEAM.VM.ObjectModel.PrimitiveExoticGet",
-         "QuickBEAM.VM.ObjectModel.PrototypeGet"
+         "QuickBEAM.VM.ObjectModel.PrototypeGet",
+         "QuickBEAM.VM.ObjectModel.PrototypeTraversalGet"
        ]},
       {"QuickBEAM.VM.ObjectModel.ProxyTrap",
        [

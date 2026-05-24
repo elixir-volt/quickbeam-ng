@@ -11,12 +11,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   import QuickBEAM.VM.Heap.Keys
 
-  alias QuickBEAM.VM.{Heap, Value}
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Invocation
 
   alias QuickBEAM.VM.ObjectModel.{
     ArrayObjectGet,
-    BuiltinExoticGet,
     BuiltinObjectGet,
     CallableOwnGet,
     ExplicitOwnProperty,
@@ -24,13 +23,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     LengthGet,
     MapPropertyGet,
     ObjectMapGet,
-    OwnProperty,
     PrimitiveWrapperGet,
     RawObjectGet,
     RegExpStateGet,
-    Prototype,
     PrototypeGet,
-    PrototypeLookup,
+    PrototypeTraversalGet,
     ProxyGet,
     SymbolExoticGet,
     SymbolGet,
@@ -277,74 +274,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   # ── Prototype chain ──
 
-  defp get_prototype_raw({:obj, ref}, key) do
-    case Heap.get_obj_raw(ref) do
-      raw when is_tuple(raw) ->
-        if Heap.shape?(raw) do
-          case Heap.shape_proto(raw) do
-            {:obj, _pref} = proto ->
-              case prototype_property_lookup_with_receiver(proto, key, {:obj, ref}) do
-                {:found, value} -> value
-                :not_found -> PrototypeLookup.object_prototype_property({:obj, ref}, key)
-              end
-
-            nil ->
-              PrototypeLookup.object_prototype_property({:obj, ref}, key)
-
-            :null_proto ->
-              :undefined
-
-            proto ->
-              get_from_prototype(proto, key)
-          end
-        else
-          get_from_prototype({:obj, ref}, key)
-        end
-
-      map when is_map(map) and is_map_key(map, proto()) ->
-        proto = Map.get(map, :__internal_proto__, Map.get(map, proto()))
-
-        proto_result =
-          case proto do
-            {:obj, _} -> prototype_property_lookup_with_receiver(proto, key, {:obj, ref})
-            _ -> :not_found
-          end
-
-        type_result =
-          cond do
-            match?({:found, _}, proto_result) ->
-              proto_result
-
-            true ->
-              BuiltinExoticGet.map_proto_property(map, key)
-          end
-
-        case type_result do
-          {:found, value} ->
-            value
-
-          value when value != :undefined ->
-            value
-
-          _ ->
-            case proto do
-              {:obj, _pref} = proto ->
-                prototype_property_with_receiver(proto, key, {:obj, ref})
-
-              :null_proto ->
-                :undefined
-
-              _ ->
-                get_from_prototype(proto, key)
-            end
-        end
-
-      _ ->
-        get_from_prototype({:obj, ref}, key)
-    end
-  end
-
-  defp get_prototype_raw(value, key), do: get_from_prototype(value, key)
+  defp get_prototype_raw(value, key),
+    do: PrototypeTraversalGet.raw_property(value, key, prototype_traversal_callbacks())
 
   defp explicit_undefined_own?(value, key), do: ExplicitOwnProperty.present?(value, key)
 
@@ -360,88 +291,21 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     }
   end
 
-  def prototype_property_with_receiver(target, key, receiver) do
-    case prototype_property_lookup_with_receiver(target, key, receiver) do
-      {:found, value} -> value
-      :not_found -> :undefined
-    end
-  end
+  def prototype_property_with_receiver(target, key, receiver),
+    do:
+      PrototypeTraversalGet.property_with_receiver(
+        target,
+        key,
+        receiver,
+        prototype_traversal_callbacks()
+      )
 
-  defp prototype_property_lookup_with_receiver(nil, _key, _receiver), do: :not_found
-
-  defp prototype_property_lookup_with_receiver({:obj, ref} = target, key, receiver) do
-    raw = Heap.get_obj_raw(ref)
-
-    case raw do
-      %{proxy_target() => _, proxy_handler() => _} ->
-        {:found, get(target, key, receiver)}
-
-      _ ->
-        case descriptor_property_with_receiver(target, key, receiver) do
-          {:found_from_accessor, value} ->
-            {:found, value}
-
-          _ ->
-            case raw_own_property(raw, key) do
-              {:ok, {:accessor, getter, _}} when getter != nil ->
-                {:found, call_getter(getter, receiver)}
-
-              {:ok, {:accessor, nil, _}} ->
-                {:found, :undefined}
-
-              {:ok, value} ->
-                {:found, value}
-
-              :error ->
-                case descriptor_property_with_receiver(target, key, receiver) do
-                  :not_found ->
-                    prototype_property_lookup_with_receiver(Prototype.get(target), key, receiver)
-
-                  {:found_from_accessor, value} ->
-                    {:found, value}
-
-                  found ->
-                    found
-                end
-            end
-        end
-    end
-  end
-
-  defp prototype_property_lookup_with_receiver(target, key, receiver) do
-    case descriptor_property_with_receiver(target, key, receiver) do
-      :not_found -> prototype_property_lookup_with_receiver(Prototype.get(target), key, receiver)
-      found -> found
-    end
-  end
-
-  defp descriptor_property_with_receiver(target, key, receiver) do
-    case OwnProperty.descriptor(target, key) do
-      {:obj, _} = desc ->
-        getter = get(desc, "get")
-
-        cond do
-          not Value.nullish?(getter) ->
-            {:found_from_accessor, call_getter(getter, receiver)}
-
-          get(desc, "value") != :undefined ->
-            {:found, get(desc, "value")}
-
-          true ->
-            {:found, :undefined}
-        end
-
-      :undefined ->
-        :not_found
-
-      _ ->
-        :not_found
-    end
-  end
-
-  defp raw_own_property(raw, key) when is_map(raw), do: Map.fetch(raw, key)
-
-  defp raw_own_property(raw, key) do
-    if Heap.shape?(raw), do: Heap.raw_fetch(raw, key), else: :error
+  defp prototype_traversal_callbacks do
+    %{
+      call_getter: &call_getter/2,
+      get: &get/3,
+      get_from_prototype: &get_from_prototype/2,
+      get_own_value: &get/2
+    }
   end
 end
