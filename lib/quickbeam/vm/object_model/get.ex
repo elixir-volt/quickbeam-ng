@@ -19,6 +19,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
     ExplicitOwnProperty,
     LengthGet,
     MapPropertyGet,
+    OrdinaryGet,
     OwnGet,
     PrimitiveWrapperGet,
     PrototypeGet,
@@ -61,47 +62,17 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   def get(value, key, receiver) when is_binary(key), do: ordinary_get(value, key, receiver)
 
-  defp ordinary_get(value, key, receiver) do
-    case get_own_with_receiver(value, key, receiver) do
-      :undefined ->
-        if explicit_undefined_own?(value, key) do
-          :undefined
-        else
-          result = get_prototype_raw(value, key)
+  defp ordinary_get(value, key, receiver),
+    do: OrdinaryGet.property(value, key, receiver, ordinary_get_callbacks())
 
-          case result do
-            {:accessor, getter, _} when getter != nil -> call_getter(getter, receiver)
-            {:accessor, nil, _} -> :undefined
-            _ -> result
-          end
-        end
-
-      {:accessor, getter, _} when getter != nil ->
-        call_getter(getter, receiver)
-
-      {:accessor, nil, _} ->
-        :undefined
-
-      val ->
-        val
-    end
+  defp ordinary_get_callbacks do
+    %{
+      call_getter: &call_getter/2,
+      explicit_own?: &explicit_undefined_own?/2,
+      get_own: &get_own/2,
+      get_prototype_raw: &get_prototype_raw/2
+    }
   end
-
-  defp get_own_with_receiver({:obj, ref} = value, key, receiver) do
-    case Heap.get_obj_raw(ref) do
-      map when is_map(map) ->
-        case Map.fetch(map, key) do
-          {:ok, {:accessor, getter, _setter}} when getter != nil -> call_getter(getter, receiver)
-          {:ok, {:accessor, nil, _setter}} -> :undefined
-          _ -> get_own(value, key)
-        end
-
-      _ ->
-        get_own(value, key)
-    end
-  end
-
-  defp get_own_with_receiver(value, key, _receiver), do: get_own(value, key)
 
   defp get_callable_symbol(value, sym_key),
     do: SymbolGet.callable_property(value, sym_key, symbol_get_callbacks())
