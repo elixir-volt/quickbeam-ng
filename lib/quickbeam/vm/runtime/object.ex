@@ -612,7 +612,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp freeze_callable(callable) do
     for key <- OwnProperty.descriptor_keys(callable) do
-      case OwnProperty.descriptor(callable, key) do
+      case InternalMethods.own_property(callable, key) do
         :undefined ->
           :ok
 
@@ -636,7 +636,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp seal_callable(callable) do
     for key <- OwnProperty.descriptor_keys(callable) do
-      unless OwnProperty.descriptor(callable, key) == :undefined do
+      unless InternalMethods.own_property(callable, key) == :undefined do
         callable
         |> callable_descriptor_attrs(key)
         |> Map.put(:configurable, false)
@@ -654,7 +654,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp freeze_regexp(regexp, ref) do
     for key <- OwnProperty.descriptor_keys(regexp) do
-      case OwnProperty.descriptor(regexp, key) do
+      case InternalMethods.own_property(regexp, key) do
         :undefined ->
           :ok
 
@@ -694,7 +694,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
 
     for key <- OwnProperty.descriptor_keys(obj) do
-      case OwnProperty.descriptor(obj, key) do
+      case InternalMethods.own_property(obj, key) do
         :undefined ->
           :ok
 
@@ -807,7 +807,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp seal_regexp(regexp, ref) do
     for key <- OwnProperty.descriptor_keys(regexp) do
-      unless OwnProperty.descriptor(regexp, key) == :undefined do
+      unless InternalMethods.own_property(regexp, key) == :undefined do
         regexp
         |> descriptor_attrs(key)
         |> Map.put(:configurable, false)
@@ -819,7 +819,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp descriptor_attrs(target, key) do
-    case OwnProperty.descriptor(target, key) do
+    case InternalMethods.own_property(target, key) do
       {:obj, _} = desc -> descriptor_attrs_from_object(desc)
       _ -> %{writable: true, enumerable: true, configurable: true}
     end
@@ -844,7 +844,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp frozen_descriptor?(target, key) do
-    case OwnProperty.descriptor(target, key) do
+    case InternalMethods.own_property(target, key) do
       {:obj, _} = desc ->
         Get.get(desc, "configurable") == false and Get.get(desc, "writable") != true
 
@@ -854,7 +854,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp sealed_descriptor?(target, key) do
-    case OwnProperty.descriptor(target, key) do
+    case InternalMethods.own_property(target, key) do
       {:obj, _} = desc -> Get.get(desc, "configurable") == false
       _ -> false
     end
@@ -1559,7 +1559,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   end
 
   defp proxy_enumerable_key?(obj, key) do
-    case OwnProperty.descriptor(obj, key) do
+    case InternalMethods.own_property(obj, key) do
       :undefined -> false
       {:obj, desc_ref} -> Values.truthy?(Get.get({:obj, desc_ref}, "enumerable"))
       _ -> false
@@ -1631,7 +1631,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     |> OwnProperty.descriptor_keys()
     |> Enum.filter(&is_binary/1)
     |> Enum.flat_map(fn key ->
-      case OwnProperty.descriptor(obj, key) do
+      case InternalMethods.own_property(obj, key) do
         {:obj, _} = desc ->
           if Get.get(desc, "enumerable") == true, do: [Get.get(obj, key)], else: []
 
@@ -1680,7 +1680,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp enumerable_descriptor_pairs(target, keys) do
     keys
     |> Enum.reduce([], fn key, acc ->
-      case OwnProperty.descriptor(target, key) do
+      case InternalMethods.own_property(target, key) do
         :undefined ->
           acc
 
@@ -2046,7 +2046,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         props
         |> OwnProperty.descriptor_keys()
         |> Enum.filter(fn key ->
-          case OwnProperty.descriptor(props, key) do
+          case InternalMethods.own_property(props, key) do
             {:obj, _} = desc -> Values.truthy?(Get.get(desc, "enumerable"))
             _ -> false
           end
