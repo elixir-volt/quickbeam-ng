@@ -354,7 +354,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp lookup_accessor_in_chain(nil, _key, _kind), do: :undefined
 
   defp lookup_accessor_in_chain(obj, key, kind) do
-    case OwnProperty.descriptor(obj, key) do
+    case InternalMethods.own_property(obj, key) do
       {:obj, _} = desc ->
         getter = Get.get(desc, "get")
         setter = Get.get(desc, "set")
@@ -369,7 +369,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         end
 
       :undefined ->
-        lookup_accessor_in_chain(Prototype.get(obj), key, kind)
+        lookup_accessor_in_chain(InternalMethods.get_prototype_of(obj), key, kind)
     end
   end
 
@@ -388,10 +388,10 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp has_own_property(_, _), do: false
 
   defp function_descriptor_present?(%QuickBEAM.VM.Function{} = target, key),
-    do: OwnProperty.descriptor(target, key) != :undefined
+    do: InternalMethods.own_property(target, key) != :undefined
 
   defp function_descriptor_present?({:closure, _, %QuickBEAM.VM.Function{}} = target, key),
-    do: OwnProperty.descriptor(target, key) != :undefined
+    do: InternalMethods.own_property(target, key) != :undefined
 
   defp function_descriptor_present?(_, _), do: false
 
