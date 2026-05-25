@@ -33,8 +33,15 @@ defmodule QuickBEAM.VM.Host.Web.Timers do
   end
 
   defp dequeue_timer_id(id) do
+    cancel_timer_id(id)
     Caches.put_timer_queue(Enum.reject(Caches.get_timer_queue(), &(&1.id == id)))
   end
+
+  defp cancel_timer_id(id),
+    do: Caches.put_cancelled_timer_ids(MapSet.put(cancelled_timer_ids(), id))
+
+  defp cancelled_timer_ids, do: Caches.get_cancelled_timer_ids()
+  defp cancelled_timer?(id), do: MapSet.member?(cancelled_timer_ids(), id)
 
   @doc "Runs due timers from the process-local timer queue."
   def drain_timers do
@@ -47,15 +54,16 @@ defmodule QuickBEAM.VM.Host.Web.Timers do
 
     if ready != [] do
       Enum.each(ready, fn timer ->
-        try do
-          Interpreter.invoke_callback(timer.callback, [])
-        catch
-          {:js_throw, _} -> :ok
-        end
+        unless cancelled_timer?(timer.id) do
+          try do
+            Interpreter.invoke_callback(timer.callback, [])
+          catch
+            {:js_throw, _} -> :ok
+          end
 
-        # Re-enqueue intervals
-        if timer.type == :interval do
-          enqueue_timer(timer.id, :interval, timer.callback, timer.repeat_ms, timer.repeat_ms)
+          if timer.type == :interval and not cancelled_timer?(timer.id) do
+            enqueue_timer(timer.id, :interval, timer.callback, timer.repeat_ms, timer.repeat_ms)
+          end
         end
       end)
 

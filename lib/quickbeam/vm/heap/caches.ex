@@ -99,4 +99,6 @@ defmodule QuickBEAM.VM.Heap.Caches do
   def put_timer_queue(queue), do: Process.put(:qb_timer_queue, queue)
   def get_timer_next_id, do: Process.get(:qb_timer_next_id, 1)
   def put_timer_next_id(id), do: Process.put(:qb_timer_next_id, id)
+  def get_cancelled_timer_ids, do: Process.get(:qb_cancelled_timer_ids, MapSet.new())
+  def put_cancelled_timer_ids(ids), do: Process.put(:qb_cancelled_timer_ids, ids)
 end
