@@ -1124,7 +1124,14 @@ defmodule QuickBEAM.VM.Builtin do
   end
 
   @doc "Wraps a two-arity callback in the VM builtin tuple representation."
-  def builtin(name, callback, opts \\ []) when is_function(callback, 2) do
+  def builtin(name, callback, opts \\ [])
+
+  def builtin(name, callback, %Meta{} = meta) when is_function(callback, 2) do
+    {:builtin, name, callback}
+    |> put_builtin_metadata(meta)
+  end
+
+  def builtin(name, callback, opts) when is_function(callback, 2) do
     function = {:builtin, name, callback}
 
     case opts do

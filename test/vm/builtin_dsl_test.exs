@@ -89,4 +89,18 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
     assert %QuickBEAM.VM.Builtin.Meta{ecma: "20.1.3.6"} =
              QuickBEAM.VM.Builtin.metadata_for(method)
   end
+
+  test "array prototype installation preserves ECMA clause metadata" do
+    assert %QuickBEAM.VM.Builtin.Definition{ecma: "23.1"} =
+             QuickBEAM.VM.Runtime.Array.builtin_definition()
+
+    assert %QuickBEAM.VM.Builtin.Meta{ecma: "23.1.3.23"} =
+             QuickBEAM.VM.Runtime.Array.proto_property_meta("push")
+
+    {:obj, ref} = QuickBEAM.VM.Runtime.Array.prototype()
+    method = QuickBEAM.VM.Heap.get_obj(ref)["push"]
+
+    assert %QuickBEAM.VM.Builtin.Meta{ecma: "23.1.3.23"} =
+             QuickBEAM.VM.Builtin.metadata_for(method)
+  end
 end
