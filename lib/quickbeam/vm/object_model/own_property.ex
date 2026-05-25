@@ -789,14 +789,14 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
   defp constant_property_name?(key) when is_binary(key), do: String.upcase(key) == key
   defp constant_property_name?(_key), do: false
 
-  defp target_descriptor_flags({:obj, ref} = target, prop_name) do
+  def target_descriptor_flags({:obj, ref} = target, prop_name) do
     Heap.get_prop_desc(ref, prop_name) ||
       if present?(target, prop_name) do
         PropertyDescriptor.attrs(writable: true, enumerable: true, configurable: true)
       end
   end
 
-  defp target_descriptor_flags(_target, _prop_name), do: nil
+  def target_descriptor_flags(_target, _prop_name), do: nil
 
   defp descriptor_internal_key?(:__internal_proto__), do: true
   defp descriptor_internal_key?(key), do: internal_slot?(key)

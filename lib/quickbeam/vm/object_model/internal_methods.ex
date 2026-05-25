@@ -15,6 +15,7 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     ProxyExtensible,
     ProxyHas,
     ProxyOwnKeys,
+    ProxyOwnProperty,
     ProxyPrototype,
     ProxySet,
     Put,
@@ -74,6 +75,21 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     do: ProxyHas.dispatch(obj, key, &HasProperty.ordinary_has_property?/2)
 
   defp has_property_by_kind(_kind, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
+
+  defp own_property_by_kind(:proxy, {:obj, ref} = obj, key) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target} = proxy ->
+        ProxyOwnProperty.dispatch(
+          proxy,
+          key,
+          &OwnProperty.descriptor/2,
+          &OwnProperty.target_descriptor_flags/2
+        )
+
+      _ ->
+        OwnProperty.descriptor(obj, key)
+    end
+  end
 
   defp own_property_by_kind(_kind, obj, key), do: OwnProperty.descriptor(obj, key)
 
