@@ -72,7 +72,8 @@ defmodule QuickBEAM.VM.Builtin.Installer do
       QuickBEAM.VM.Builtin.meta(definition.name,
         length: definition.length || 0,
         constructable: definition.constructable?,
-        ecma: definition.ecma
+        ecma: definition.ecma,
+        annex: definition.annex
       )
     )
   end

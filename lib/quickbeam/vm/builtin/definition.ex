@@ -28,6 +28,7 @@ defmodule QuickBEAM.VM.Builtin.Definition do
           constructable?: boolean(),
           intrinsic_key: atom() | nil,
           ecma: term(),
+          annex: term(),
           after_install: (term() -> term()) | (term(), keyword() -> term()) | nil,
           auto_install?: boolean()
         }
@@ -47,6 +48,7 @@ defmodule QuickBEAM.VM.Builtin.Definition do
             constructable?: true,
             intrinsic_key: nil,
             ecma: nil,
+            annex: nil,
             after_install: nil,
             auto_install?: true
 end

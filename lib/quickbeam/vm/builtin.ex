@@ -65,7 +65,8 @@ defmodule QuickBEAM.VM.Builtin do
               enumerable?: false,
               configurable?: true,
               kind: :function,
-              ecma: nil
+              ecma: nil,
+              annex: nil
   end
 
   @doc "Builds builtin metadata from macro options."
@@ -78,7 +79,8 @@ defmodule QuickBEAM.VM.Builtin do
       enumerable?: Keyword.get(opts, :enumerable, false),
       configurable?: Keyword.get(opts, :configurable, true),
       kind: kind,
-      ecma: Keyword.get(opts, :ecma)
+      ecma: Keyword.get(opts, :ecma),
+      annex: Keyword.get(opts, :annex)
     }
   end
 
@@ -746,6 +748,7 @@ defmodule QuickBEAM.VM.Builtin do
       Module.register_attribute(__MODULE__, :__has_static, accumulate: false)
       Module.register_attribute(__MODULE__, :__static_names, accumulate: true)
       Module.register_attribute(__MODULE__, :ecma, accumulate: false)
+      Module.register_attribute(__MODULE__, :annex, accumulate: false)
       @before_compile QuickBEAM.VM.Builtin
     end
   end
@@ -791,8 +794,14 @@ defmodule QuickBEAM.VM.Builtin do
 
   # ── Module-level dispatch macros ──
 
-  def opts_with_ecma(opts, nil), do: opts
-  def opts_with_ecma(opts, ecma), do: Keyword.put_new(opts, :ecma, ecma)
+  def opts_with_builtin_attrs(opts, ecma, annex) do
+    opts
+    |> put_attr(:ecma, ecma)
+    |> put_attr(:annex, annex)
+  end
+
+  defp put_attr(opts, _key, nil), do: opts
+  defp put_attr(opts, key, value), do: Keyword.put_new(opts, key, value)
 
   @doc "Defines a prototype property as a JavaScript builtin function."
   defmacro proto(name, opts \\ [], do: body) do
@@ -806,12 +815,17 @@ defmodule QuickBEAM.VM.Builtin do
       def proto_property_meta(unquote(name)) do
         QuickBEAM.VM.Builtin.meta(
           unquote(name),
-          QuickBEAM.VM.Builtin.opts_with_ecma(unquote(Macro.escape(opts)), @ecma),
+          QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
+            unquote(Macro.escape(opts)),
+            @ecma,
+            @annex
+          ),
           :prototype
         )
       end
 
       @ecma nil
+      @annex nil
     end
   end
 
@@ -828,12 +842,17 @@ defmodule QuickBEAM.VM.Builtin do
       def static_property_meta(unquote(name)) do
         QuickBEAM.VM.Builtin.meta(
           unquote(name),
-          QuickBEAM.VM.Builtin.opts_with_ecma(unquote(Macro.escape(opts)), @ecma),
+          QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
+            unquote(Macro.escape(opts)),
+            @ecma,
+            @annex
+          ),
           :static
         )
       end
 
       @ecma nil
+      @annex nil
     end
   end
 
@@ -885,8 +904,21 @@ defmodule QuickBEAM.VM.Builtin do
           intrinsic_key: unquote(intrinsic_key),
           ecma:
             Keyword.get(
-              QuickBEAM.VM.Builtin.opts_with_ecma(unquote(Macro.escape(opts)), @ecma),
+              QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
+                unquote(Macro.escape(opts)),
+                @ecma,
+                @annex
+              ),
               :ecma
+            ),
+          annex:
+            Keyword.get(
+              QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
+                unquote(Macro.escape(opts)),
+                @ecma,
+                @annex
+              ),
+              :annex
             ),
           after_install: unquote(after_install),
           auto_install?: unquote(auto_install?)
@@ -894,6 +926,7 @@ defmodule QuickBEAM.VM.Builtin do
       end
 
       @ecma nil
+      @annex nil
     end
   end
 
@@ -987,6 +1020,9 @@ defmodule QuickBEAM.VM.Builtin do
       Enum.reduce(entries, {[], []}, fn
         {:@, _, [{:ecma, _, [ecma]}]}, {built, pending_opts} ->
           {built, Keyword.put(pending_opts, :ecma, ecma)}
+
+        {:@, _, [{:annex, _, [annex]}]}, {built, pending_opts} ->
+          {built, Keyword.put(pending_opts, :annex, annex)}
 
         {:@, _, [{:doc, _, [_doc]}]}, {built, pending_opts} ->
           {built, pending_opts}
