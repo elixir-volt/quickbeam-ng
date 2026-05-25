@@ -55,6 +55,53 @@ defmodule QuickBEAM.VM.Builtin do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
 
+  defmodule FunctionSpec do
+    @moduledoc "Declarative metadata for an ECMAScript builtin function."
+
+    defstruct name: nil,
+              length: 0,
+              kind: :function,
+              constructable?: false,
+              writable?: true,
+              enumerable?: false,
+              configurable?: true,
+              ecma: nil,
+              annex: nil
+  end
+
+  defmodule PropertySpec do
+    @moduledoc "Declarative metadata for an ECMAScript builtin property."
+
+    defstruct key: nil,
+              kind: :data,
+              value: nil,
+              descriptor: %{},
+              ecma: nil,
+              annex: nil
+  end
+
+  defmodule ObjectSpec do
+    @moduledoc "Declarative metadata for an ECMAScript builtin object."
+
+    defstruct name: nil,
+              intrinsic: nil,
+              properties: [],
+              prototype: nil,
+              ecma: nil,
+              annex: nil
+  end
+
+  defmodule IntrinsicSpec do
+    @moduledoc "Declarative metadata for an ECMAScript intrinsic graph entry."
+
+    defstruct name: nil,
+              constructor: nil,
+              statics: [],
+              prototype: nil,
+              ecma: nil,
+              annex: nil
+  end
+
   defmodule Meta do
     @moduledoc "Metadata attached to JavaScript builtin functions and properties."
 
@@ -71,7 +118,28 @@ defmodule QuickBEAM.VM.Builtin do
 
   @doc "Builds builtin metadata from macro options."
   def meta(name, opts \\ [], kind \\ :function) do
+    name
+    |> function_spec(opts, kind)
+    |> function_meta()
+  end
+
+  def function_meta(%FunctionSpec{} = spec) do
     %Meta{
+      name: spec.name,
+      length: spec.length,
+      constructable?: spec.constructable?,
+      writable?: spec.writable?,
+      enumerable?: spec.enumerable?,
+      configurable?: spec.configurable?,
+      kind: spec.kind,
+      ecma: spec.ecma,
+      annex: spec.annex
+    }
+  end
+
+  @doc "Builds a first-class function spec from builtin macro options."
+  def function_spec(name, opts \\ [], kind \\ :function) do
+    %FunctionSpec{
       name: Keyword.get(opts, :name, name),
       length: Keyword.get(opts, :length, 0),
       constructable?: Keyword.get(opts, :constructable, false),
@@ -725,6 +793,10 @@ defmodule QuickBEAM.VM.Builtin do
           static: 2,
           static: 3,
           static_val: 2,
+          defintrinsic: 2,
+          defintrinsic: 3,
+          prototype_methods: 1,
+          static_methods: 1,
           js_object: 2,
           build_methods: 1,
           build_object: 1,
@@ -766,6 +838,7 @@ defmodule QuickBEAM.VM.Builtin do
         quote do
           def proto_property(_), do: :undefined
           def proto_property_meta(_), do: nil
+          def proto_property_spec(_), do: nil
         end
       end
 
@@ -774,6 +847,7 @@ defmodule QuickBEAM.VM.Builtin do
         quote do
           def static_property(_), do: :undefined
           def static_property_meta(_), do: nil
+          def static_property_spec(_), do: nil
         end
       end
 
@@ -812,8 +886,8 @@ defmodule QuickBEAM.VM.Builtin do
         unquote(build_builtin(name, body))
       end
 
-      def proto_property_meta(unquote(name)) do
-        QuickBEAM.VM.Builtin.meta(
+      def proto_property_spec(unquote(name)) do
+        QuickBEAM.VM.Builtin.function_spec(
           unquote(name),
           QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
             unquote(Macro.escape(opts)),
@@ -822,6 +896,11 @@ defmodule QuickBEAM.VM.Builtin do
           ),
           :prototype
         )
+      end
+
+      def proto_property_meta(unquote(name)) do
+        proto_property_spec(unquote(name))
+        |> QuickBEAM.VM.Builtin.function_meta()
       end
 
       @ecma nil
@@ -839,8 +918,8 @@ defmodule QuickBEAM.VM.Builtin do
         unquote(build_builtin(name, body))
       end
 
-      def static_property_meta(unquote(name)) do
-        QuickBEAM.VM.Builtin.meta(
+      def static_property_spec(unquote(name)) do
+        QuickBEAM.VM.Builtin.function_spec(
           unquote(name),
           QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
             unquote(Macro.escape(opts)),
@@ -849,6 +928,11 @@ defmodule QuickBEAM.VM.Builtin do
           ),
           :static
         )
+      end
+
+      def static_property_meta(unquote(name)) do
+        static_property_spec(unquote(name))
+        |> QuickBEAM.VM.Builtin.function_meta()
       end
 
       @ecma nil
@@ -865,12 +949,46 @@ defmodule QuickBEAM.VM.Builtin do
     end
   end
 
+  @doc "Defines an ECMAScript intrinsic constructor. Alias for `builtin_definition/2`."
+  defmacro defintrinsic(name, opts) do
+    build_builtin_definition(name, opts, __CALLER__)
+  end
+
+  defmacro defintrinsic(name, opts, do: block) do
+    opts = Keyword.merge(opts, parse_intrinsic_block(block))
+    build_builtin_definition(name, opts, __CALLER__)
+  end
+
+  @doc "Defines prototype methods using contextual `method` entries."
+  defmacro prototype(do: block) do
+    build_contextual_methods(block, :proto)
+  end
+
+  @doc "Defines prototype methods using contextual `method` entries without colliding with local `prototype/1` functions."
+  defmacro prototype_methods(do: block) do
+    build_contextual_methods(block, :proto)
+  end
+
+  @doc "Defines constructor/static methods using contextual `method` entries."
+  defmacro statics(do: block) do
+    build_contextual_methods(block, :static)
+  end
+
+  @doc "Defines constructor/static methods using contextual `method` entries."
+  defmacro static_methods(do: block) do
+    build_contextual_methods(block, :static)
+  end
+
   @doc "Defines declarative installation metadata for a JavaScript builtin."
   defmacro builtin_definition(name, opts) do
+    build_builtin_definition(name, opts, __CALLER__)
+  end
+
+  defp build_builtin_definition(name, opts, caller) do
     constructor = Keyword.fetch!(opts, :constructor)
     length = Keyword.get(opts, :length)
     phase = Keyword.get(opts, :phase, :runtime)
-    module = Keyword.get(opts, :module, __CALLER__.module)
+    module = Keyword.get(opts, :module, caller.module)
     prototype_parent = Keyword.get(opts, :prototype_parent, :object)
     constructor_descriptor = Keyword.get(opts, :constructor_descriptor, %{})
     prototype_descriptor = Keyword.get(opts, :prototype_descriptor, %{})
@@ -929,6 +1047,54 @@ defmodule QuickBEAM.VM.Builtin do
       @annex nil
     end
   end
+
+  defp build_contextual_methods(block, target) do
+    block
+    |> contextual_methods(target)
+    |> block_from_entries()
+  end
+
+  defp parse_intrinsic_block(block) do
+    block
+    |> normalize_block()
+    |> Enum.flat_map(fn
+      {:install_with, _, [callback]} ->
+        [after_install: callback]
+
+      {:phase, _, [phase]} ->
+        [phase: phase]
+
+      {:constructor, _, [callback, opts]} when is_list(opts) ->
+        Keyword.put(opts, :constructor, callback)
+
+      {:constructor, _, [callback]} ->
+        [constructor: callback]
+
+      _ ->
+        []
+    end)
+  end
+
+  defp contextual_methods(block, target) do
+    block
+    |> normalize_block()
+    |> Enum.map(fn
+      {:@, _, _} = attr ->
+        attr
+
+      {:method, meta, [name, [do: body]]} ->
+        {target, meta, [name, [do: body]]}
+
+      {:method, meta, [name, opts, [do: body]]} ->
+        {target, meta, [name, opts, [do: body]]}
+
+      other ->
+        other
+    end)
+  end
+
+  defp block_from_entries([entry]), do: entry
+  defp block_from_entries(entries), do: {:__block__, [], entries}
 
   # ── Named object macro ──
 

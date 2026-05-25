@@ -1,6 +1,27 @@
 defmodule QuickBEAM.VM.BuiltinDSLTest do
   use ExUnit.Case, async: true
 
+  defmodule StructuredSample do
+    use QuickBEAM.VM.Builtin
+
+    @ecma "99.1"
+    defintrinsic("StructuredSample", constructor: fn _args, this -> this end, length: 1)
+
+    static_methods do
+      @ecma "99.1.2.1"
+      method "from", length: 1 do
+        :from
+      end
+    end
+
+    prototype_methods do
+      @ecma "99.1.3.1"
+      method "valueOf", length: 0 do
+        this
+      end
+    end
+  end
+
   defmodule Sample do
     use QuickBEAM.VM.Builtin
 
@@ -41,6 +62,17 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
         end
       end
     end
+  end
+
+  test "defintrinsic and contextual method blocks expose first-class specs" do
+    assert %QuickBEAM.VM.Builtin.Definition{ecma: "99.1"} =
+             StructuredSample.builtin_definition()
+
+    assert %QuickBEAM.VM.Builtin.FunctionSpec{ecma: "99.1.2.1", kind: :static} =
+             StructuredSample.static_property_spec("from")
+
+    assert %QuickBEAM.VM.Builtin.FunctionSpec{ecma: "99.1.3.1", kind: :prototype} =
+             StructuredSample.proto_property_spec("valueOf")
   end
 
   test "@ecma annotates builtin definitions" do
