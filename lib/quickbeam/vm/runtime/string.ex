@@ -16,6 +16,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   @prototype_methods ~w(charAt charCodeAt codePointAt indexOf lastIndexOf includes startsWith endsWith slice substring substr split trim trimStart trimEnd toUpperCase toLowerCase toLocaleUpperCase toLocaleLowerCase repeat padStart padEnd replace replaceAll match matchAll localeCompare search normalize concat toString valueOf at isWellFormed toWellFormed)
 
+  @ecma "22.1"
   builtin_definition("String",
     constructor: &QuickBEAM.VM.Runtime.ConstructorCallbacks.string/2,
     length: 1,
@@ -55,8 +56,15 @@ defmodule QuickBEAM.VM.Runtime.String do
 
     iterator =
       case proto_property(sym_iterator) do
-        {:builtin, _name, callback} -> {:builtin, "[Symbol.iterator]", callback}
-        other -> other
+        {:builtin, _name, callback} ->
+          Builtin.builtin(
+            "[Symbol.iterator]",
+            callback,
+            proto_property_meta(sym_iterator) || Builtin.meta("[Symbol.iterator]", length: 0)
+          )
+
+        other ->
+          other
       end
 
     Heap.put_obj_key(proto_ref, sym_iterator, iterator)
@@ -72,114 +80,142 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   # ── Dispatch ──
 
+  @ecma "22.1.3.2"
   proto "charAt" do
     char_at(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.3"
   proto "charCodeAt" do
     char_code_at(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.4"
   proto "codePointAt" do
     code_point_at(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.9"
   proto "indexOf" do
     index_of(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.11"
   proto "lastIndexOf" do
     last_index_of(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.8"
   proto "includes" do
     includes(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.24"
   proto "startsWith" do
     starts_with(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.7"
   proto "endsWith" do
     ends_with(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.22"
   proto "slice" do
     slice(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.25"
   proto "substring" do
     substring(coerce_string_this(this), args)
   end
 
+  @ecma "B.2.2.1"
+  @annex :b
   proto "substr" do
     substr(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.23"
   proto "split" do
     split_dispatch(this, args)
   end
 
+  @ecma "22.1.3.32"
   proto "trim" do
     coerce_string_this(this) |> trim_js()
   end
 
+  @ecma "22.1.3.34"
   proto "trimStart" do
     coerce_string_this(this) |> trim_start_js()
   end
 
+  @ecma "22.1.3.33"
   proto "trimEnd" do
     coerce_string_this(this) |> trim_end_js()
   end
 
+  @ecma "22.1.3.30"
   proto "toUpperCase" do
     s = coerce_string_this(this)
     :string.uppercase(s) |> IO.iodata_to_binary()
   end
 
+  @ecma "22.1.3.28"
   proto "toLowerCase" do
     s = coerce_string_this(this)
     locale_lowercase(s)
   end
 
+  @ecma "22.1.3.26"
   proto "toLocaleLowerCase" do
     s = coerce_string_this(this)
     locale_lowercase(s)
   end
 
+  @ecma "22.1.3.27"
   proto "toLocaleUpperCase" do
     s = coerce_string_this(this)
     :string.uppercase(s) |> IO.iodata_to_binary()
   end
 
+  @ecma "22.1.3.18"
   proto "repeat" do
     repeat(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.17"
   proto "padStart" do
     pad(coerce_string_this(this), args, :start)
   end
 
+  @ecma "22.1.3.16"
   proto "padEnd" do
     pad(coerce_string_this(this), args, :end)
   end
 
+  @ecma "22.1.3.19"
   proto "replace" do
     replace(this, args)
   end
 
+  @ecma "22.1.3.20"
   proto "replaceAll" do
     replace_all(this, args)
   end
 
+  @ecma "22.1.3.13"
   proto "match" do
     match(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.14"
   proto "matchAll" do
     match_all(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.12"
   proto "localeCompare" do
     s = coerce_string_this(this)
     other = arg(args, 0, :undefined)
@@ -194,40 +230,49 @@ defmodule QuickBEAM.VM.Runtime.String do
     end
   end
 
+  @ecma "22.1.3.21"
   proto "search" do
     search(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.15"
   proto "normalize" do
     normalize_string(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.5"
   proto "concat" do
     coerce_string_this(this) <> Enum.map_join(args, &Coercion.to_string_val/1)
   end
 
+  @ecma "22.1.3.29"
   proto "toString" do
     unwrap_string(this)
   end
 
+  @ecma "22.1.3.35"
   proto "valueOf" do
     unwrap_string(this)
   end
 
+  @ecma "22.1.3.1"
   proto "at" do
     string_at(coerce_string_this(this), args)
   end
 
+  @ecma "22.1.3.10"
   proto "isWellFormed" do
     s = coerce_string_this(this)
     not has_lone_surrogate?(s)
   end
 
+  @ecma "22.1.3.31"
   proto "toWellFormed" do
     s = coerce_string_this(this)
     replace_lone_surrogates(s)
   end
 
+  @ecma "22.1.3.36"
   proto {:symbol, "Symbol.iterator"} do
     this
     |> coerce_string_this()
@@ -3115,6 +3160,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   # ── String static methods ──
 
+  @ecma "22.1.2.2"
   static "fromCodePoint" do
     Enum.map_join(args, &from_code_point/1)
   end
@@ -3189,6 +3235,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
   defp encode_code_point(cp), do: <<cp::utf8>>
 
+  @ecma "22.1.2.1"
   static "fromCharCode" do
     Enum.map_join(args, fn n ->
       cp = Bitwise.band(Runtime.to_int(n), 0xFFFF)
@@ -3202,6 +3249,7 @@ defmodule QuickBEAM.VM.Runtime.String do
     end)
   end
 
+  @ecma "22.1.2.4"
   static "raw" do
     [strings | subs] = args
 
