@@ -1,7 +1,7 @@
 defmodule QuickBEAM.MixProject do
   use Mix.Project
 
-  @version "0.10.3"
+  @version "0.10.15"
 
   @source_url "https://github.com/elixir-volt/quickbeam"
 
@@ -67,16 +67,16 @@ defmodule QuickBEAM.MixProject do
 
   defp deps do
     [
-      {:zigler_precompiled, "~> 0.1.2"},
+      {:zigler_precompiled, "~> 0.1.4"},
       {:yaml_elixir, "~> 2.11", only: [:dev, :test], runtime: false},
       {:zigler, "~> 0.15.2", runtime: false, optional: true},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
-      {:jason, "~> 1.4"},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
-      {:oxc, ">= 0.7.0"},
-      {:npm, "~> 0.6.0"},
+      {:jason, "~> 1.4"},
+      {:oxc, "~> 0.15.1"},
+      {:npm, "~> 0.7.4", optional: true},
       {:mint_web_socket, "~> 1.0"},
       {:nimble_pool, "~> 1.1"},
       {:bandit, "~> 1.0", only: :test},

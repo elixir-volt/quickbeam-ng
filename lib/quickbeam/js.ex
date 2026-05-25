@@ -11,7 +11,7 @@ defmodule QuickBEAM.JS do
 
   # ── Polyfill compilation (compile-time only) ──
 
-  @ts_dir Path.join([__DIR__, "../../priv/ts"]) |> Path.expand()
+  @ts_dir Application.app_dir(:quickbeam, "priv/ts")
 
   for ts <- Path.wildcard(Path.join(@ts_dir, "*.ts")),
       not String.ends_with?(ts, ".d.ts") do
@@ -200,7 +200,7 @@ defmodule QuickBEAM.JS do
 
   @node_js PolyfillCompiler.standalone(
              @ts_dir,
-             ~w[node-process node-path node-fs node-os node-child-process]
+             ~w[buffer node-process node-path node-fs node-os node-child-process]
            )
 
   def browser_js, do: @browser_js

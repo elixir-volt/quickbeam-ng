@@ -3,13 +3,15 @@ defmodule QuickBEAM.Native do
 
   @version Mix.Project.config()[:version]
 
-  @c_src_dir Path.expand("../../priv/c_src", __DIR__)
-  @lexbor_cflags [
+  @c_src_dir Application.app_dir(:quickbeam, "priv/c_src")
+  @hidden_cflags ["-fvisibility=hidden"]
+  @lexbor_base_cflags [
     "-std=c99",
     "-DLEXBOR_STATIC",
     "-I#{@c_src_dir}",
     "-I#{@c_src_dir}/lexbor/ports/posix"
   ]
+  @lexbor_cflags @lexbor_base_cflags ++ @hidden_cflags
 
   @lexbor_src Path.wildcard("priv/c_src/lexbor/{core,dom,html,tag,ns,css,selectors}/**/*.c")
               |> Enum.concat(Path.wildcard("priv/c_src/lexbor/ports/posix/**/*.c"))
@@ -18,7 +20,7 @@ defmodule QuickBEAM.Native do
                 {:priv, String.replace_prefix(path, "priv/", ""), @lexbor_cflags}
               end)
 
-  @wamr_cflags [
+  @wamr_base_cflags [
     "-std=c11",
     "-D_GNU_SOURCE",
     "-DWASM_ENABLE_INTERP=1",
@@ -52,6 +54,7 @@ defmodule QuickBEAM.Native do
     "-DWASM_ENABLE_WASM_CACHE=0",
     "-DWASM_ENABLE_STRINGREF=0",
     "-DWASM_MEM_ALLOC_WITH_SYSTEM_ALLOCATOR=1",
+    "-DWASM_API_EXTERN=",
     "-DWASM_RUNTIME_API_EXTERN=",
     "-DBH_MALLOC=wasm_runtime_malloc",
     "-DBH_FREE=wasm_runtime_free",
@@ -64,6 +67,7 @@ defmodule QuickBEAM.Native do
     "-I#{@c_src_dir}/wamr/shared/mem-alloc",
     "-I#{@c_src_dir}/wamr/shared/platform/#{if(:os.type() == {:unix, :darwin}, do: "darwin", else: "linux")}"
   ]
+  @wamr_cflags @wamr_base_cflags ++ @hidden_cflags
 
   @wamr_src (Path.wildcard("priv/c_src/wamr/interpreter/wasm_loader.c") ++
                Path.wildcard("priv/c_src/wamr/interpreter/wasm_interp_classic.c") ++
@@ -117,6 +121,8 @@ defmodule QuickBEAM.Native do
                     ],
                     else: ["-std=c11", "-D_GNU_SOURCE"]
 
+  @quickjs_cflags @quickjs_cflags ++ @hidden_cflags
+
   if System.get_env("QUICKBEAM_BUILD") in ["1", "true"] and
        is_nil(System.get_env("ZIG_LOCAL_CACHE_DIR")) do
     zig_local_cache_dir = Path.expand(Path.join(Mix.Project.build_path(), "zig-cache"))
@@ -129,7 +135,7 @@ defmodule QuickBEAM.Native do
     base_url: "https://github.com/elixir-volt/quickbeam/releases/download/v#{@version}",
     version: @version,
     force_build: System.get_env("QUICKBEAM_BUILD") in ["1", "true"],
-    targets: ~w(x86_64-linux-gnu aarch64-macos-none),
+    targets: ~w(x86_64-linux-gnu aarch64-linux-gnu aarch64-macos-none),
     zig_code_path: "quickbeam.zig",
     optimize: :env,
     c: [

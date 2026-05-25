@@ -3,6 +3,7 @@ name: Build precompiled NIFs
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,6 +16,7 @@ jobs:
       matrix:
         include:
           - { target: x86_64-linux-gnu,       os: ubuntu-latest }
+          - { target: aarch64-linux-gnu,      os: ubuntu-latest }
           - { target: aarch64-macos-none,     os: macos-latest }
 
     steps:
@@ -29,39 +31,18 @@ jobs:
           otp-version: '27'
           elixir-version: '1.18'
 
-      - name: Build NIF
+      - name: Build NIF artifact
+        shell: bash
         run: |
           mix local.hex --force
           mix local.rebar --force
           mix deps.get
-          QUICKBEAM_BUILD=1 mix compile
-
-      - name: Package artifact
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          BASENAME="Elixir.QuickBEAM.Native"
-
-          # Find the built library (could be .so or .dylib)
-          LIB_FILE=$(find priv/lib -name "*${BASENAME}.*" \
-            \( -name "*.so" -o -name "*.dylib" \) \
-            -not -name "*.[0-9]*" | sort | head -1)
-
-          if [ -z "$LIB_FILE" ]; then
-            echo "ERROR: Could not find built library"
-            find priv/lib -type f | head -20
-            exit 1
-          fi
-
-          echo "Found: ${LIB_FILE}"
-
-          # ZiglerPrecompiled expects: Elixir.QuickBEAM.Native-v0.5.0-target.so.tar.gz
-          # The .so extension is always used in the tar name, even for .dylib
-          mkdir -p artifacts
-          ARTIFACT_NAME="${BASENAME}-v${VERSION}-${{ matrix.target }}.so.tar.gz"
-          tar czf "artifacts/${ARTIFACT_NAME}" -C "$(dirname "$LIB_FILE")" "$(basename "$LIB_FILE")"
-          echo "Packaged: ${ARTIFACT_NAME}"
+          QUICKBEAM_BUILD=1 mix zigler_precompiled.build lib/quickbeam/native.ex \
+            --target "${{ matrix.target }}" \
+            --out artifacts
 
       - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: artifacts/*.tar.gz
