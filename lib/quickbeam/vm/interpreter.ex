@@ -34,6 +34,7 @@ defmodule QuickBEAM.VM.Interpreter do
   alias QuickBEAM.VM.Semantics.DirectEval
 
   alias __MODULE__.{
+    ArgumentsObject,
     ClosureBuilder,
     Closures,
     Context,
@@ -337,7 +338,6 @@ defmodule QuickBEAM.VM.Interpreter do
   end
 
   defp current_strict_mode?(ctx), do: Value.strict_context?(ctx)
-  defp strict_function?(fun), do: Value.strict_function?(fun)
 
   defp maybe_refresh_error_stack({:obj, ref} = error) do
     case Heap.get_obj(ref, %{}) do
@@ -956,21 +956,20 @@ defmodule QuickBEAM.VM.Interpreter do
         fn_atoms = Heap.get_fn_atoms(fun, Heap.get_atoms())
         Heap.put_atoms(fn_atoms)
 
-        inner_ctx =
+        base_inner_ctx =
           %{
             ctx
             | current_func: self_ref,
               arg_buf: List.to_tuple(args),
-              globals:
-                Map.put(
-                  ctx.globals,
-                  "arguments",
-                  Heap.wrap_arguments(args, strict: strict_function?(self_ref), callee: self_ref)
-                ),
               catch_stack: [],
               atoms: fn_atoms
           }
           |> InvokeContext.attach_method_state()
+
+        inner_ctx =
+          base_inner_ctx
+          |> ArgumentsObject.get(frame, var_ref_offset: :raw)
+          |> then(&ArgumentsObject.store_global(base_inner_ctx, &1))
 
         prev_ctx = RuntimeState.current()
         RuntimeState.install(inner_ctx)
