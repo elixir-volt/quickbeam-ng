@@ -63,18 +63,44 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
 
   def set_prototype_of(obj, proto), do: set_prototype_of_by_kind(kind(obj), obj, proto)
 
-  defp get_by_kind(_kind, obj, key, receiver), do: Get.get(obj, key, receiver)
+  defp get_by_kind(:proxy, obj, key, receiver), do: Get.get(obj, key, receiver)
+  defp get_by_kind(:ordinary, obj, key, receiver), do: Get.get(obj, key, receiver)
+  defp get_by_kind(:array, obj, key, receiver), do: Get.get(obj, key, receiver)
+  defp get_by_kind(:typed_array, obj, key, receiver), do: Get.get(obj, key, receiver)
+  defp get_by_kind(:function, obj, key, receiver), do: Get.get(obj, key, receiver)
+  defp get_by_kind(:primitive, obj, key, receiver), do: Get.get(obj, key, receiver)
 
   defp set_by_kind(:proxy, obj, key, value, receiver),
     do: ProxySet.dispatch(obj, key, value, receiver, &Put.ordinary_set/4)
 
-  defp set_by_kind(_kind, obj, key, value, receiver),
+  defp set_by_kind(:ordinary, obj, key, value, receiver),
+    do: Put.ordinary_set(obj, key, value, receiver)
+
+  defp set_by_kind(:array, obj, key, value, receiver),
+    do: Put.ordinary_set(obj, key, value, receiver)
+
+  defp set_by_kind(:typed_array, obj, key, value, receiver),
+    do: Put.ordinary_set(obj, key, value, receiver)
+
+  defp set_by_kind(:function, obj, key, value, receiver),
+    do: Put.ordinary_set(obj, key, value, receiver)
+
+  defp set_by_kind(:primitive, obj, key, value, receiver),
     do: Put.ordinary_set(obj, key, value, receiver)
 
   defp has_property_by_kind(:proxy, obj, key),
     do: ProxyHas.dispatch(obj, key, &HasProperty.ordinary_has_property?/2)
 
-  defp has_property_by_kind(_kind, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
+  defp has_property_by_kind(:ordinary, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
+  defp has_property_by_kind(:array, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
+
+  defp has_property_by_kind(:typed_array, obj, key),
+    do: HasProperty.ordinary_has_property?(obj, key)
+
+  defp has_property_by_kind(:function, obj, key), do: HasProperty.ordinary_has_property?(obj, key)
+
+  defp has_property_by_kind(:primitive, obj, key),
+    do: HasProperty.ordinary_has_property?(obj, key)
 
   defp own_property_by_kind(:proxy, {:obj, ref} = obj, key) do
     case Heap.get_obj(ref, %{}) do
@@ -91,23 +117,54 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     end
   end
 
-  defp own_property_by_kind(_kind, obj, key), do: OwnProperty.descriptor(obj, key)
+  defp own_property_by_kind(:ordinary, obj, key), do: OwnProperty.descriptor(obj, key)
+  defp own_property_by_kind(:array, obj, key), do: OwnProperty.descriptor(obj, key)
+  defp own_property_by_kind(:typed_array, obj, key), do: OwnProperty.descriptor(obj, key)
+  defp own_property_by_kind(:function, obj, key), do: OwnProperty.descriptor(obj, key)
+  defp own_property_by_kind(:primitive, obj, key), do: OwnProperty.descriptor(obj, key)
 
-  defp define_own_property_by_kind(_kind, obj, key, desc_obj, raw_desc),
+  defp define_own_property_by_kind(:proxy, obj, key, desc_obj, raw_desc),
+    do: Define.property(obj, key, desc_obj, raw_desc)
+
+  defp define_own_property_by_kind(:ordinary, obj, key, desc_obj, raw_desc),
+    do: Define.property(obj, key, desc_obj, raw_desc)
+
+  defp define_own_property_by_kind(:array, obj, key, desc_obj, raw_desc),
+    do: Define.property(obj, key, desc_obj, raw_desc)
+
+  defp define_own_property_by_kind(:typed_array, obj, key, desc_obj, raw_desc),
+    do: Define.property(obj, key, desc_obj, raw_desc)
+
+  defp define_own_property_by_kind(:function, obj, key, desc_obj, raw_desc),
+    do: Define.property(obj, key, desc_obj, raw_desc)
+
+  defp define_own_property_by_kind(:primitive, obj, key, desc_obj, raw_desc),
     do: Define.property(obj, key, desc_obj, raw_desc)
 
   defp delete_by_kind(:proxy, obj, key),
     do: ProxyDelete.dispatch(obj, key, &Delete.ordinary_delete_property/2)
 
-  defp delete_by_kind(_kind, obj, key), do: Delete.ordinary_delete_property(obj, key)
+  defp delete_by_kind(:ordinary, obj, key), do: Delete.ordinary_delete_property(obj, key)
+  defp delete_by_kind(:array, obj, key), do: Delete.ordinary_delete_property(obj, key)
+  defp delete_by_kind(:typed_array, obj, key), do: Delete.ordinary_delete_property(obj, key)
+  defp delete_by_kind(:function, obj, key), do: Delete.ordinary_delete_property(obj, key)
+  defp delete_by_kind(:primitive, obj, key), do: Delete.ordinary_delete_property(obj, key)
 
   defp own_keys_by_kind(:proxy, obj),
     do: ProxyOwnKeys.dispatch(obj, &OwnProperty.ordinary_own_keys/1)
 
-  defp own_keys_by_kind(_kind, obj), do: OwnProperty.ordinary_own_keys(obj)
+  defp own_keys_by_kind(:ordinary, obj), do: OwnProperty.ordinary_own_keys(obj)
+  defp own_keys_by_kind(:array, obj), do: OwnProperty.ordinary_own_keys(obj)
+  defp own_keys_by_kind(:typed_array, obj), do: OwnProperty.ordinary_own_keys(obj)
+  defp own_keys_by_kind(:function, obj), do: OwnProperty.ordinary_own_keys(obj)
+  defp own_keys_by_kind(:primitive, obj), do: OwnProperty.ordinary_own_keys(obj)
 
   defp extensible_by_kind(:proxy, obj), do: ProxyExtensible.dispatch(obj, &ordinary_extensible?/1)
-  defp extensible_by_kind(_kind, obj), do: ordinary_extensible?(obj)
+  defp extensible_by_kind(:ordinary, obj), do: ordinary_extensible?(obj)
+  defp extensible_by_kind(:array, obj), do: ordinary_extensible?(obj)
+  defp extensible_by_kind(:typed_array, obj), do: ordinary_extensible?(obj)
+  defp extensible_by_kind(:function, obj), do: ordinary_extensible?(obj)
+  defp extensible_by_kind(:primitive, obj), do: ordinary_extensible?(obj)
 
   defp get_prototype_of_by_kind(:proxy, {:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
@@ -116,7 +173,11 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     end
   end
 
-  defp get_prototype_of_by_kind(_kind, obj), do: Prototype.get(obj)
+  defp get_prototype_of_by_kind(:ordinary, obj), do: Prototype.get(obj)
+  defp get_prototype_of_by_kind(:array, obj), do: Prototype.get(obj)
+  defp get_prototype_of_by_kind(:typed_array, obj), do: Prototype.get(obj)
+  defp get_prototype_of_by_kind(:function, obj), do: Prototype.get(obj)
+  defp get_prototype_of_by_kind(:primitive, obj), do: Prototype.get(obj)
 
   defp set_prototype_of_by_kind(:proxy, {:obj, ref}, proto) do
     case Heap.get_obj(ref, %{}) do
@@ -128,7 +189,14 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     end
   end
 
-  defp set_prototype_of_by_kind(_kind, obj, proto), do: ordinary_set_prototype_of(obj, proto)
+  defp set_prototype_of_by_kind(:ordinary, obj, proto), do: ordinary_set_prototype_of(obj, proto)
+  defp set_prototype_of_by_kind(:array, obj, proto), do: ordinary_set_prototype_of(obj, proto)
+
+  defp set_prototype_of_by_kind(:typed_array, obj, proto),
+    do: ordinary_set_prototype_of(obj, proto)
+
+  defp set_prototype_of_by_kind(:function, obj, proto), do: ordinary_set_prototype_of(obj, proto)
+  defp set_prototype_of_by_kind(:primitive, obj, proto), do: ordinary_set_prototype_of(obj, proto)
 
   defp ordinary_set_prototype_of(obj, proto) do
     Prototype.set(obj, proto)
