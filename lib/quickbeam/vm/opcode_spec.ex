@@ -399,7 +399,12 @@ defmodule QuickBEAM.VM.OpcodeSpec do
        symbolic_stack_effect: symbolic_stack_effect(name),
        lowering_family: lowering_family(name),
        lowering_module: lowering_module(name),
+       lowering_handler: lowering_handler(name),
        control_flow_family: control_flow_family(name),
+       control_flow_metadata: control_flow_metadata(name),
+       branch_metadata: branch_metadata(name),
+       call_metadata: call_metadata(name),
+       slot_metadata: slot_metadata(name),
        canonical: canonical,
        canonical_operands: canonical_operands,
        canonical_opcode: num(canonical),
@@ -523,6 +528,80 @@ defmodule QuickBEAM.VM.OpcodeSpec do
 
   def branch_target(_name, _args), do: :error
 
+  def control_flow_metadata(name) do
+    case control_flow_family(name) do
+      {:branch, sense} -> %{kind: :branch, sense: sense}
+      :goto -> %{kind: :goto}
+      :finally_control -> %{kind: :finally_control}
+      nil -> nil
+    end
+  end
+
+  def branch_metadata(name) do
+    case control_flow_family(name) do
+      {:branch, sense} -> %{sense: sense}
+      :goto -> %{sense: :always}
+      _ -> nil
+    end
+  end
+
+  def call_metadata(name) when name in @call do
+    arity =
+      case name do
+        :call -> :operand
+        :call0 -> 0
+        :call1 -> 1
+        :call2 -> 2
+        :call3 -> 3
+      end
+
+    %{arity: arity}
+  end
+
+  def call_metadata(_name), do: nil
+
+  def slot_metadata(name) when name in @get_slot, do: slot_metadata(name, :get)
+  def slot_metadata(name) when name in @put_slot, do: slot_metadata(name, :put)
+  def slot_metadata(name) when name in @set_slot, do: slot_metadata(name, :set)
+  def slot_metadata(_name), do: nil
+
+  defp slot_metadata(name, operation) do
+    {space, index} =
+      cond do
+        name in [:get_arg, :put_arg, :set_arg] ->
+          {:arg, :operand}
+
+        name in [:get_loc, :get_loc8, :put_loc, :put_loc8, :set_loc, :set_loc8] ->
+          {:local, :operand}
+
+        name in [:get_arg0, :put_arg0, :set_arg0] ->
+          {:arg, 0}
+
+        name in [:get_arg1, :put_arg1, :set_arg1] ->
+          {:arg, 1}
+
+        name in [:get_arg2, :put_arg2, :set_arg2] ->
+          {:arg, 2}
+
+        name in [:get_arg3, :put_arg3, :set_arg3] ->
+          {:arg, 3}
+
+        name in [:get_loc0, :put_loc0, :set_loc0] ->
+          {:local, 0}
+
+        name in [:get_loc1, :put_loc1, :set_loc1] ->
+          {:local, 1}
+
+        name in [:get_loc2, :put_loc2, :set_loc2] ->
+          {:local, 2}
+
+        name in [:get_loc3, :put_loc3, :set_loc3] ->
+          {:local, 3}
+      end
+
+    %{operation: operation, space: space, index: index}
+  end
+
   def family(name, family), do: name in Map.fetch!(@families, family)
   def family_members(family), do: Map.fetch!(@families, family)
 
@@ -545,6 +624,13 @@ defmodule QuickBEAM.VM.OpcodeSpec do
     case lowering_family(name) do
       nil -> nil
       family -> Map.fetch!(@lowering_modules, family)
+    end
+  end
+
+  def lowering_handler(name) do
+    case lowering_module(name) do
+      nil -> nil
+      module -> module.handler_for(name)
     end
   end
 end

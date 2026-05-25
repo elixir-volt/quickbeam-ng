@@ -22,6 +22,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.WithScope do
   end
 
   def registered_opcodes, do: Map.keys(@handlers)
+  def handler_for(name), do: Map.get(@handlers, name)
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, next_entry, stack_depths, {{:ok, name}, [atom_idx, target, _is_with]}) do

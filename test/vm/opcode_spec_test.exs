@@ -41,7 +41,16 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert info.symbolic_stack_effect == :error
     assert info.lowering_family == :control
     assert info.lowering_module == QuickBEAM.VM.Compiler.Lowering.Ops.Control
+    assert info.lowering_handler == {:branch, false}
     assert info.control_flow_family == {:branch, false}
+    assert info.control_flow_metadata == %{kind: :branch, sense: false}
+    assert info.branch_metadata == %{sense: false}
+
+    assert {:ok, call} = OpcodeSpec.opcode(:call2)
+    assert call.call_metadata == %{arity: 2}
+
+    assert {:ok, slot} = OpcodeSpec.opcode(:get_loc3)
+    assert slot.slot_metadata == %{operation: :get, space: :local, index: 3}
 
     assert {:ok, push} = OpcodeSpec.opcode(:push_0)
     assert push.small_int_push == 0
@@ -60,6 +69,8 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.control_flow_family(:catch) == :finally_control
     refute OpcodeSpec.family(:goto, :finally_control)
     assert OpcodeSpec.control_flow_family(:push_i32) == nil
+    assert OpcodeSpec.control_flow_metadata(:if_true) == %{kind: :branch, sense: true}
+    assert OpcodeSpec.control_flow_metadata(:goto) == %{kind: :goto}
   end
 
   test "branch target metadata is centralized" do
@@ -74,6 +85,8 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.call_arity(:call2, []) == {:ok, 2}
     assert OpcodeSpec.call_arity(:call2, [2]) == {:ok, 2}
     assert OpcodeSpec.call_arity(:call2, [3]) == :error
+    assert OpcodeSpec.call_metadata(:call) == %{arity: :operand}
+    assert OpcodeSpec.call_metadata(:call3) == %{arity: 3}
   end
 
   test "compact slot operand metadata is centralized" do
@@ -81,6 +94,13 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.compact_slot_index(:get_arg2, []) == {:ok, 2}
     assert OpcodeSpec.compact_slot_index(:put_loc3, []) == {:ok, 3}
     assert OpcodeSpec.compact_slot_index(:set_loc8, []) == :error
+    assert OpcodeSpec.slot_metadata(:put_arg1) == %{operation: :put, space: :arg, index: 1}
+
+    assert OpcodeSpec.slot_metadata(:set_loc8) == %{
+             operation: :set,
+             space: :local,
+             index: :operand
+           }
   end
 
   test "small integer push metadata is centralized" do
@@ -93,6 +113,13 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.symbolic_stack_effect({:call, 2}) == {:ok, {3, 1}}
     assert OpcodeSpec.symbolic_stack_effect({:define_method, "m", 0}) == {:ok, {2, 1}}
     assert OpcodeSpec.symbolic_stack_effect(:push_this) == :error
+  end
+
+  test "lowering handler metadata is centralized" do
+    assert OpcodeSpec.lowering_handler(:push_0) == {:push_small_int, :push_0}
+    assert OpcodeSpec.lowering_handler(:get_field) == :get_field
+    assert OpcodeSpec.lowering_handler(:ret) == :ret
+    assert OpcodeSpec.lowering_handler(:invalid) == nil
   end
 
   test "concrete opcode lowering families are stable atoms" do
