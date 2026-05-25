@@ -28,7 +28,10 @@ defmodule QuickBEAM.VM.Compiler.ABIBoundaryTest do
       "(function(C){ return new C(1).x })",
       "(function(){ return ({a:1, ['b']:2, get c(){return 3}}).c })",
       "(function(){ let i=0; while(i<3){ i++; } return i })",
-      "(function(){ return (() => arguments.length)(1,2) })"
+      "(function(){ return (() => arguments.length)(1,2) })",
+      "var abiGlobal = 1; abiGlobal = abiGlobal + 2; delete globalThis.abiMissing; abiGlobal",
+      "var scope = {x: 1}; with (scope) { x = x + 1; } scope.x",
+      "class Base { value(){ return 1 } } class Child extends Base { value(){ return super.value() + 1 } } new Child().value()"
     ]
 
     extfuncs =
