@@ -5,9 +5,6 @@ defmodule QuickBEAM.VM.Runtime.Date do
   import QuickBEAM.VM.Value, only: [is_nullish: 1]
   use QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
-  alias QuickBEAM.VM.Runtime.InstallerHelpers
-
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.{Invocation, JSThrow}
 
@@ -23,54 +20,12 @@ defmodule QuickBEAM.VM.Runtime.Date do
     )
 
     prototype extends: :object do
+      symbol :toPrimitive do
+        method length: 1 do
+          symbol_to_primitive(this, args)
+        end
+      end
     end
-
-    install_with(&__MODULE__.install_builtin/2)
-  end
-
-  def install_builtin(ctor, _opts \\ []) do
-    for name <- static_property_names() do
-      install_static_property(ctor, name)
-    end
-
-    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      sym_key = {:symbol, "Symbol.toPrimitive"}
-
-      to_prim =
-        {:builtin, "[Symbol.toPrimitive]",
-         fn args, this ->
-           symbol_to_primitive(this, args)
-         end}
-
-      InstallerHelpers.install_hidden_static(to_prim, "length", 1)
-      Heap.put_obj_key(proto_ref, sym_key, to_prim)
-      Heap.put_prop_desc(proto_ref, sym_key, PropertyDescriptor.hidden_readonly())
-    end)
-  end
-
-  defp install_static_property(ctor, name) do
-    value = static_property(name)
-    meta = static_property_meta(name) || QuickBEAM.VM.Builtin.meta(name)
-
-    Heap.put_ctor_static(ctor, name, value)
-    Heap.put_ctor_prop_desc(ctor, name, descriptor_from_meta(meta))
-
-    case value do
-      {:builtin, _, _} ->
-        Heap.put_ctor_static(value, "length", QuickBEAM.VM.Builtin.length(meta))
-        Heap.put_ctor_prop_desc(value, "length", PropertyDescriptor.hidden_readonly())
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp descriptor_from_meta(%QuickBEAM.VM.Builtin.Meta{} = meta) do
-    %{
-      writable: meta.writable?,
-      enumerable: meta.enumerable?,
-      configurable: meta.configurable?
-    }
   end
 
   defp coerce_date_value(obj) do
@@ -151,12 +106,6 @@ defmodule QuickBEAM.VM.Runtime.Date do
       nil
     end
   end
-
-  def proto_property({:symbol, "Symbol.toPrimitive"}),
-    do: {:builtin, "[Symbol.toPrimitive]", fn args, this -> symbol_to_primitive(this, args) end}
-
-  def proto_property({:symbol, "Symbol.toPrimitive", _}),
-    do: proto_property({:symbol, "Symbol.toPrimitive"})
 
   # ── Constructor ──
 
