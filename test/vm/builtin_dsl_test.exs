@@ -5,7 +5,11 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
     use QuickBEAM.VM.Builtin
 
     @ecma "99.1"
-    defintrinsic("StructuredSample", constructor: fn _args, this -> this end, length: 1)
+    defintrinsic "StructuredSample" do
+      constructor length: 1 do
+        {args, this}
+      end
+    end
 
     static_methods do
       @ecma "99.1.2.1"
@@ -65,8 +69,9 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
   end
 
   test "defintrinsic and contextual method blocks expose first-class specs" do
-    assert %QuickBEAM.VM.Builtin.Definition{ecma: "99.1"} =
-             StructuredSample.builtin_definition()
+    definition = StructuredSample.builtin_definition()
+    assert %QuickBEAM.VM.Builtin.Definition{ecma: "99.1", length: 1} = definition
+    assert definition.constructor.([:value], :receiver) == {[:value], :receiver}
 
     assert %QuickBEAM.VM.Builtin.FunctionSpec{ecma: "99.1.2.1", kind: :static} =
              StructuredSample.static_property_spec("from")

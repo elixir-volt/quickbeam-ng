@@ -951,7 +951,14 @@ defmodule QuickBEAM.VM.Builtin do
 
   @doc "Defines an ECMAScript intrinsic constructor. Alias for `builtin_definition/2`."
   defmacro defintrinsic(name, opts) do
-    build_builtin_definition(name, opts, __CALLER__)
+    case Keyword.pop(opts, :do) do
+      {nil, opts} ->
+        build_builtin_definition(name, opts, __CALLER__)
+
+      {block, opts} ->
+        opts = Keyword.merge(opts, parse_intrinsic_block(block))
+        build_builtin_definition(name, opts, __CALLER__)
+    end
   end
 
   defmacro defintrinsic(name, opts, do: block) do
@@ -1064,6 +1071,12 @@ defmodule QuickBEAM.VM.Builtin do
       {:phase, _, [phase]} ->
         [phase: phase]
 
+      {:constructor, _, [opts, [do: body]]} when is_list(opts) ->
+        Keyword.put(opts, :constructor, build_constructor_callback(body))
+
+      {:constructor, _, [[do: body]]} ->
+        [constructor: build_constructor_callback(body)]
+
       {:constructor, _, [callback, opts]} when is_list(opts) ->
         Keyword.put(opts, :constructor, callback)
 
@@ -1073,6 +1086,16 @@ defmodule QuickBEAM.VM.Builtin do
       _ ->
         []
     end)
+  end
+
+  defp build_constructor_callback(body) do
+    quote do
+      fn var!(args), var!(this) ->
+        _ = var!(args)
+        _ = var!(this)
+        unquote(body)
+      end
+    end
   end
 
   defp contextual_methods(block, target) do
