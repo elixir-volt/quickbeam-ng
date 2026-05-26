@@ -29,13 +29,14 @@ defmodule QuickBEAM.VM.Runtime.Object do
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
   @ecma "20.1"
-  builtin_definition("Object",
-    constructor: &QuickBEAM.VM.Runtime.ConstructorCallbacks.object/2,
-    length: 1,
-    phase: :core,
-    prototype_parent: nil,
-    after_install: &__MODULE__.install_builtin/2
-  )
+  defintrinsic "Object", prototype_parent: nil do
+    constructor(&QuickBEAM.VM.Runtime.ConstructorCallbacks.object/2,
+      length: 1,
+      phase: :core
+    )
+
+    install_with(&__MODULE__.install_builtin/2)
+  end
 
   def install_builtin(ctor, opts \\ []) do
     obj_proto =
