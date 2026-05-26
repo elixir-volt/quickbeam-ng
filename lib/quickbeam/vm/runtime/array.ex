@@ -2884,6 +2884,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
       map when is_map(map) ->
         copy_within_object(obj, args)
 
+      {:qb_arr, arr} ->
+        Heap.put_obj(ref, {:qb_arr, copy_within_qb_arr(arr, args)})
+        obj
+
       _ ->
         list = Heap.obj_to_list(ref)
         len = copy_within_length!(obj, ref, list)
@@ -2930,6 +2934,37 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp copy_within(_, _), do: :undefined
+
+  defp copy_within_qb_arr(arr, args) do
+    len = :array.size(arr)
+    target = normalize_copy_index(arg(args, 0, 0), len)
+    start_idx = normalize_copy_index(arg(args, 1, 0), len)
+    end_idx = copy_within_end(args, len)
+    count = max(min(end_idx - start_idx, len - target), 0)
+
+    if count <= 0 do
+      arr
+    else
+      {from, to, step} =
+        if start_idx < target and target < start_idx + count,
+          do: {start_idx + count - 1, target + count - 1, -1},
+          else: {start_idx, target, 1}
+
+      Enum.reduce(0..(count - 1)//1, {arr, from, to}, fn _offset, {acc, from_idx, to_idx} ->
+        value = array_value_at(acc, from_idx)
+        {:array.set(to_idx, value, acc), from_idx + step, to_idx + step}
+      end)
+      |> elem(0)
+    end
+  end
+
+  defp copy_within_end(args, len) do
+    case Enum.drop(args, 2) do
+      [] -> len
+      [:undefined | _] -> len
+      [end_value | _] -> normalize_copy_index(end_value, len)
+    end
+  end
 
   defp copy_within_source_has_holes?(obj, start_idx, end_idx, len, target) do
     count = max(min(max(end_idx - start_idx, 0), len - target), 0)
