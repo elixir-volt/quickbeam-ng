@@ -18,49 +18,85 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Runtime.InstallerHelpers
 
   defintrinsic "Iterator", prototype_parent: nil do
     constructor(constructor(), length: 0, phase: :fundamental)
 
-    install_with(&__MODULE__.install_builtin/2)
-  end
+    prototype extends: nil, constructor_link: false do
+      accessor "constructor" do
+        get do
+          Runtime.global_constructor("Iterator")
+        end
 
-  def install_builtin(ctor, _opts \\ []) do
-    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+        set do
+          [value | _] = args
+          set_iterator_proto_slot(this, "constructor", value)
+        end
+      end
 
-    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      Heap.put_obj_key(proto_ref, "constructor", proto_property("constructor"))
-      Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.accessor())
+      method "drop", length: 1 do
+        drop(args, this)
+      end
 
-      InstallerHelpers.install_methods(
-        proto_ref,
-        __MODULE__,
-        ~w(drop filter flatMap forEach map reduce some take toArray every find)
-      )
+      method "filter", length: 1 do
+        filter(args, this)
+      end
 
-      InstallerHelpers.install_symbol_iterator(proto_ref, __MODULE__)
+      method "flatMap", length: 1 do
+        flat_map(args, this)
+      end
 
-      Heap.put_obj_key(
-        proto_ref,
-        {:symbol, "Symbol.dispose"},
-        proto_property({:symbol, "Symbol.dispose"})
-      )
+      method "forEach", length: 1 do
+        for_each(args, this)
+      end
 
-      Heap.put_prop_desc(proto_ref, {:symbol, "Symbol.dispose"}, PropertyDescriptor.method())
+      method "map", length: 1 do
+        map(args, this)
+      end
 
-      Heap.put_obj_key(
-        proto_ref,
-        {:symbol, "Symbol.toStringTag"},
-        proto_property({:symbol, "Symbol.toStringTag"})
-      )
+      method "reduce", length: 1 do
+        reduce(args, this)
+      end
 
-      Heap.put_prop_desc(
-        proto_ref,
-        {:symbol, "Symbol.toStringTag"},
-        PropertyDescriptor.accessor()
-      )
-    end)
+      method "some", length: 1 do
+        some(args, this)
+      end
+
+      method "take", length: 1 do
+        take(args, this)
+      end
+
+      method "toArray", length: 0 do
+        to_array(args, this)
+      end
+
+      method "every", length: 1 do
+        every(args, this)
+      end
+
+      method "find", length: 1 do
+        find(args, this)
+      end
+
+      method {:symbol, "Symbol.iterator"}, length: 0 do
+        this
+      end
+
+      method {:symbol, "Symbol.dispose"}, length: 0 do
+        dispose(args, this)
+      end
+
+      accessor {:symbol, "Symbol.toStringTag"} do
+        get do
+          "Iterator"
+        end
+
+        set do
+          [value | _] = args
+          set_iterator_proto_slot(this, {:symbol, "Symbol.toStringTag"}, value)
+        end
+      end
+    end
   end
 
   def constructor do
@@ -97,61 +133,8 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     zip_keyed(args, this)
   end
 
-  def proto_property({:symbol, "Symbol.iterator"}) do
-    {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-  end
-
-  def proto_property({:symbol, "Symbol.dispose"}), do: method("[Symbol.dispose]", 0, &dispose/2)
-  def proto_property({:symbol, "Symbol.toStringTag"}), do: iterator_proto_accessor(:to_string_tag)
-  def proto_property("constructor"), do: iterator_proto_accessor(:constructor)
-
-  def proto_property("drop"), do: method("drop", 1, &drop/2)
-  def proto_property("filter"), do: method("filter", 1, &filter/2)
-  def proto_property("flatMap"), do: method("flatMap", 1, &flat_map/2)
-  def proto_property("forEach"), do: method("forEach", 1, &for_each/2)
-  def proto_property("map"), do: method("map", 1, &map/2)
-  def proto_property("reduce"), do: method("reduce", 1, &reduce/2)
-  def proto_property("some"), do: method("some", 1, &some/2)
-  def proto_property("take"), do: method("take", 1, &take/2)
-  def proto_property("toArray"), do: method("toArray", 0, &to_array/2)
-  def proto_property("every"), do: method("every", 1, &every/2)
-  def proto_property("find"), do: method("find", 1, &find/2)
-
-  def proto_property(_), do: :undefined
-
-  defp method(name, length, callback) do
-    fun = {:builtin, name, callback}
-    Builtin.put_function_metadata(fun, name, length)
-    Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
-    fun
-  end
-
   def from([value | _], _this), do: from_value(value)
   def from(_, _this), do: JSThrow.type_error!("Iterator.from requires an object")
-
-  def iterator_proto_accessor(:constructor) do
-    getter =
-      {:builtin, "get constructor", fn _args, _this -> Runtime.global_constructor("Iterator") end}
-
-    setter =
-      {:builtin, "set constructor",
-       fn [value | _], this -> set_iterator_proto_slot(this, "constructor", value) end}
-
-    {:accessor, getter, setter}
-  end
-
-  def iterator_proto_accessor(:to_string_tag) do
-    getter = {:builtin, "get [Symbol.toStringTag]", fn _args, _this -> "Iterator" end}
-
-    setter =
-      {:builtin, "set [Symbol.toStringTag]",
-       fn [value | _], this ->
-         set_iterator_proto_slot(this, {:symbol, "Symbol.toStringTag"}, value)
-       end}
-
-    {:accessor, getter, setter}
-  end
 
   defp set_iterator_proto_slot({:obj, ref} = this, key, value) do
     if this == Runtime.global_class_proto("Iterator") or iterator_proto_home_slot?(ref, key) do

@@ -1176,7 +1176,13 @@ defmodule QuickBEAM.VM.Builtin do
   end
 
   defp build_getter_property(target, name, opts, body) do
-    build_accessor_property(target, name, build_builtin("get #{name}", body, opts), nil, opts)
+    build_accessor_property(
+      target,
+      name,
+      build_builtin("get #{builtin_property_name(name)}", body, opts),
+      nil,
+      opts
+    )
   end
 
   defp build_accessor_property(:proto, name, getter, setter, opts) do
@@ -1840,12 +1846,16 @@ defmodule QuickBEAM.VM.Builtin do
     |> normalize_block()
     |> Enum.reduce({nil, nil}, fn
       {:get, _, [[do: body]]}, {_getter, setter} ->
-        {build_builtin("get #{name}", body, pending_opts), setter}
+        {build_builtin("get #{builtin_property_name(name)}", body, pending_opts), setter}
 
       {:set, _, [[do: body]]}, {getter, _setter} ->
-        {getter, build_builtin("set #{name}", body, pending_opts)}
+        {getter, build_builtin("set #{builtin_property_name(name)}", body, pending_opts)}
     end)
   end
+
+  defp builtin_property_name({:symbol, name}), do: "[#{name}]"
+  defp builtin_property_name(name) when is_binary(name), do: name
+  defp builtin_property_name(name), do: inspect(name)
 
   # ── Runtime helpers ──
 
