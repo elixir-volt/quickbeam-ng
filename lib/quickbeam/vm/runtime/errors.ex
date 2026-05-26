@@ -72,9 +72,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
       Heap.put_obj_key(proto_ref, "message", "")
       Heap.put_obj_key(proto_ref, "toString", error_to_string_method())
 
-      for key <- ["name", "message", "constructor", "toString"] do
-        Heap.put_prop_desc(proto_ref, key, PropertyDescriptor.method())
-      end
+      install_data_descriptors(proto_ref, ["name", "message", "constructor", "toString"])
     end
 
     install_error_statics(ctor)
@@ -91,10 +89,12 @@ defmodule QuickBEAM.VM.Runtime.Errors do
       Heap.put_obj_key(proto_ref, "name", name)
       Heap.put_obj_key(proto_ref, "message", "")
 
-      for key <- ["name", "message", "constructor"] do
-        Heap.put_prop_desc(proto_ref, key, PropertyDescriptor.method())
-      end
+      install_data_descriptors(proto_ref, ["name", "message", "constructor"])
     end
+  end
+
+  defp install_data_descriptors(ref, keys) do
+    Enum.each(keys, &Heap.put_prop_desc(ref, &1, PropertyDescriptor.method()))
   end
 
   defp install_error_statics(ctor) do
@@ -213,10 +213,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
       end
     )
 
-    Heap.put_prop_desc(error_proto_ref, "name", PropertyDescriptor.method())
-    Heap.put_prop_desc(error_proto_ref, "message", PropertyDescriptor.method())
-    Heap.put_prop_desc(error_proto_ref, "constructor", PropertyDescriptor.method())
-    Heap.put_prop_desc(error_proto_ref, "toString", PropertyDescriptor.method())
+    install_data_descriptors(error_proto_ref, ["name", "message", "constructor", "toString"])
 
     Constructors.put_prototype(error_ctor, {:obj, error_proto_ref})
     install_function_parent(error_ctor)
@@ -280,9 +277,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
           end
         )
 
-        Heap.put_prop_desc(proto_ref, "name", PropertyDescriptor.method())
-        Heap.put_prop_desc(proto_ref, "message", PropertyDescriptor.method())
-        Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
+        install_data_descriptors(proto_ref, ["name", "message", "constructor"])
 
         Constructors.put_prototype(ctor, {:obj, proto_ref})
         Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
