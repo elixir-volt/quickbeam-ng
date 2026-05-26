@@ -906,13 +906,6 @@ defmodule QuickBEAM.VM.Builtin do
           static_getter: 2,
           static_getter: 3,
           symbol: 2,
-          symbol_method: 2,
-          symbol_method: 3,
-          symbol_accessor: 2,
-          symbol_accessor: 3,
-          symbol_getter: 2,
-          symbol_getter: 3,
-          species_accessor: 0,
           proto_data: 2,
           proto_data: 3,
           property: 2,
@@ -1622,39 +1615,13 @@ defmodule QuickBEAM.VM.Builtin do
   defp prototype_declaration?({:@, _, _}), do: true
   defp prototype_declaration?({:method, _, _}), do: true
   defp prototype_declaration?({:symbol, _, _}), do: true
-  defp prototype_declaration?({:symbol_method, _, _}), do: true
   defp prototype_declaration?({:accessor, _, _}), do: true
-  defp prototype_declaration?({:symbol_accessor, _, _}), do: true
   defp prototype_declaration?({:getter, _, _}), do: true
-  defp prototype_declaration?({:symbol_getter, _, _}), do: true
   defp prototype_declaration?({:property, _, _}), do: true
-  defp prototype_declaration?({:species_accessor, _, _}), do: true
   defp prototype_declaration?(_entry), do: false
 
   defmacro symbol(_name, do: _block) do
     raise ArgumentError, "symbol is only available inside builtin object/spec blocks"
-  end
-
-  defmacro symbol_method(name, opts \\ [], do: body) do
-    key = symbol_key(name)
-
-    quote do
-      static unquote(Macro.escape(key)), unquote(Macro.escape(opts)) do
-        unquote(body)
-      end
-    end
-  end
-
-  defmacro symbol_accessor(name, opts \\ [], do: block) do
-    build_accessor_property(:static, symbol_key(name), opts, block)
-  end
-
-  defmacro symbol_getter(name, opts \\ [], do: body) do
-    build_getter_property(:static, symbol_key(name), opts, body)
-  end
-
-  defmacro species_accessor do
-    build_getter_property(:static, symbol_key(:species), [], {:this, [], nil})
   end
 
   defp contextual_methods(block, target) do
@@ -1673,12 +1640,6 @@ defmodule QuickBEAM.VM.Builtin do
       {:symbol, meta, [name, [do: symbol_block]]} ->
         contextual_symbol_entry(target, meta, name, symbol_block)
 
-      {:symbol_method, meta, [name, [do: body]]} ->
-        {target, meta, [symbol_key(name), [do: body]]}
-
-      {:symbol_method, meta, [name, opts, [do: body]]} ->
-        {target, meta, [symbol_key(name), opts, [do: body]]}
-
       {:property, meta, [name, opts]} when is_list(opts) ->
         value = Keyword.fetch!(opts, :value)
         opts = Keyword.delete(opts, :value)
@@ -1689,20 +1650,9 @@ defmodule QuickBEAM.VM.Builtin do
         target_accessor = if target == :proto, do: :proto_accessor, else: :static_accessor
         {target_accessor, meta, [name, [do: block]]}
 
-      {:symbol_accessor, meta, [name, [do: block]]} ->
-        target_accessor = if target == :proto, do: :proto_accessor, else: :static_accessor
-        {target_accessor, meta, [symbol_key(name), [do: block]]}
-
       {:getter, meta, [name, [do: body]]} ->
         target_getter = if target == :proto, do: :proto_getter, else: :static_getter
         {target_getter, meta, [name, [do: body]]}
-
-      {:symbol_getter, meta, [name, [do: body]]} ->
-        target_getter = if target == :proto, do: :proto_getter, else: :static_getter
-        {target_getter, meta, [symbol_key(name), [do: body]]}
-
-      {:species_accessor, meta, []} ->
-        {:static_getter, meta, [{:symbol, "Symbol.species"}, [do: {:this, [], nil}]]}
 
       other ->
         other
@@ -1920,11 +1870,6 @@ defmodule QuickBEAM.VM.Builtin do
           raise ArgumentError, "symbol #{inspect(name)} must declare method/get/set"
         end
     end
-  end
-
-  defp build_map_entry({:symbol_method, _, [name, [do: body]]}, pending_opts) do
-    key = symbol_key(name)
-    {key, build_builtin(key, body, pending_opts)}
   end
 
   defp build_map_entry({:accessor, _, [name, [do: block]]}, pending_opts) do

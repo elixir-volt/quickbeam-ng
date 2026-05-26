@@ -85,11 +85,13 @@ defmodule QuickBEAM.VM.Host.Web.Headers do
         |> iterator_from()
       end
 
-      symbol_method "Symbol.iterator" do
-        store_ref
-        |> sorted_headers()
-        |> Enum.map(fn {name, value} -> Heap.wrap([name, value]) end)
-        |> iterator_from()
+      symbol :iterator do
+        method do
+          store_ref
+          |> sorted_headers()
+          |> Enum.map(fn {name, value} -> Heap.wrap([name, value]) end)
+          |> iterator_from()
+        end
       end
 
       prop("__store__", {:obj, store_ref})

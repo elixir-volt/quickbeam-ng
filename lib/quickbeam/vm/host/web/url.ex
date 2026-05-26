@@ -420,11 +420,13 @@ defmodule QuickBEAM.VM.Host.Web.URL do
         :undefined
       end
 
-      symbol_method "Symbol.iterator" do
-        entries_ref
-        |> SearchParamsState.entries()
-        |> search_param_pairs()
-        |> iterator_from()
+      symbol :iterator do
+        method do
+          entries_ref
+          |> SearchParamsState.entries()
+          |> search_param_pairs()
+          |> iterator_from()
+        end
       end
 
       accessor "size" do

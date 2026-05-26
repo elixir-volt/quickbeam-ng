@@ -98,11 +98,13 @@ defmodule QuickBEAM.VM.Host.Web.FormData do
         |> iterator_from()
       end
 
-      symbol_method "Symbol.iterator" do
-        entries_ref
-        |> State.entries()
-        |> entry_pairs()
-        |> iterator_from()
+      symbol :iterator do
+        method do
+          entries_ref
+          |> State.entries()
+          |> entry_pairs()
+          |> iterator_from()
+        end
       end
 
       prop("__fd_ref__", entries_ref)
