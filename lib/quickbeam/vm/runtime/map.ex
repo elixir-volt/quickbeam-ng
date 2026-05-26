@@ -52,7 +52,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
       )
 
       InstallerHelpers.install_symbol_iterator(proto_ref, __MODULE__)
-      InstallerHelpers.install_accessor(proto_ref, "size", "get size", &size/1)
+      Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
       InstallerHelpers.install_to_string_tag(proto_ref, "Map")
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
     end)
@@ -239,11 +239,12 @@ defmodule QuickBEAM.VM.Runtime.Map do
   def proto_property("getOrInsertComputed"),
     do: {:builtin, "getOrInsertComputed", &get_or_insert_computed/2}
 
-  def proto_property("size") do
-    {:accessor, {:builtin, "get size", fn _args, this -> size(this) end}, nil}
-  end
-
+  def proto_property("size"), do: map_size_accessor()
   def proto_property(_), do: :undefined
+
+  def proto_property_names, do: ["size"]
+  def proto_property_spec("size"), do: Builtin.accessor_property_spec("size", size_getter())
+  def proto_property_spec(_), do: nil
 
   def weak_proto_property("get"), do: {:builtin, "get", &weak_get/2}
   def weak_proto_property("set"), do: {:builtin, "set", &weak_set/2}
@@ -257,7 +258,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
   def weak_proto_property(_), do: :undefined
 
   defp group_items(list) when is_list(list), do: list
-  defp group_items({:qb_arr, arr}), do: :array.to_list(arr)
+  defp group_items({:qb_arr, arr}), do: qb_arr_to_list(arr)
   defp group_items(text) when is_binary(text), do: String.codepoints(text)
 
   defp group_items({:obj, _} = obj) do
@@ -272,6 +273,19 @@ defmodule QuickBEAM.VM.Runtime.Map do
   end
 
   defp group_items(_), do: JSThrow.type_error!("object is not iterable")
+
+  defp map_size_accessor, do: {:accessor, size_getter(), nil}
+  defp size_getter, do: {:builtin, "get size", fn _args, this -> size(this) end}
+
+  defp qb_arr_to_list(arr) do
+    size = :array.size(arr)
+
+    if size == 0 do
+      []
+    else
+      for index <- 0..(size - 1), do: :array.get(index, arr)
+    end
+  end
 
   defp construct_from_iterable(list, map, adder) when is_list(list) do
     Enum.each(list, fn entry ->

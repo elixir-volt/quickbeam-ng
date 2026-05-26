@@ -50,7 +50,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
       )
 
       InstallerHelpers.install_symbol_iterator(proto_ref, __MODULE__)
-      InstallerHelpers.install_accessor(proto_ref, "size", "get size", &size/1)
+      Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
       InstallerHelpers.install_to_string_tag(proto_ref, "Set")
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
     end)
@@ -178,12 +178,20 @@ defmodule QuickBEAM.VM.Runtime.Set do
   def proto_property("isSubsetOf"), do: {:builtin, "isSubsetOf", &subset?/2}
   def proto_property("isSupersetOf"), do: {:builtin, "isSupersetOf", &superset?/2}
   def proto_property("isDisjointFrom"), do: {:builtin, "isDisjointFrom", &disjoint?/2}
+  def proto_property("size"), do: set_size_accessor()
   def proto_property(_), do: :undefined
+
+  def proto_property_names, do: ["size"]
+  def proto_property_spec("size"), do: Builtin.accessor_property_spec("size", size_getter())
+  def proto_property_spec(_), do: nil
 
   def weak_proto_property("has"), do: {:builtin, "has", &weak_has/2}
   def weak_proto_property("add"), do: {:builtin, "add", &weak_add/2}
   def weak_proto_property("delete"), do: {:builtin, "delete", &weak_delete/2}
   def weak_proto_property(_), do: :undefined
+
+  defp set_size_accessor, do: {:accessor, size_getter(), nil}
+  defp size_getter, do: {:builtin, "get size", fn _args, this -> size(this) end}
 
   defp set_object(_set_ref, items, instance_proto) do
     entries = Enum.with_index(items, 1) |> Enum.map(fn {value, id} -> {id, value, true} end)
