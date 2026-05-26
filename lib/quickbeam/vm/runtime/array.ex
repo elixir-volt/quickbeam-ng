@@ -2081,7 +2081,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp flat_map(:undefined, _),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp flat_map({:qb_arr, arr}, args), do: flat_map(:array.to_list(arr), args)
+  defp flat_map({:qb_arr, _} = value, args), do: flat_map_array_like(value, args)
   defp flat_map(value, args), do: flat_map_array_like(find_receiver(value), args)
 
   defp flat_map_array_like(this, [fun | rest]) do
@@ -2144,8 +2144,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
         Heap.put_obj(ref, new_list)
 
       {:qb_arr, arr} ->
-        new_list = fill_list(:array.to_list(arr), args, array_like_length(obj))
-        Heap.put_obj(ref, new_list)
+        Heap.put_obj(ref, {:qb_arr, fill_qb_arr(arr, args)})
 
       %{typed_array() => true} ->
         fill_typed_array(obj, args)
@@ -2157,7 +2156,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     {:obj, ref}
   end
 
-  defp fill({:qb_arr, arr}, args), do: fill(:array.to_list(arr), args)
+  defp fill({:qb_arr, arr}, args), do: {:qb_arr, fill_qb_arr(arr, args)}
 
   defp fill(list, args) when is_list(list), do: fill_list(list, args, length(list))
 
@@ -2177,6 +2176,19 @@ defmodule QuickBEAM.VM.Runtime.Array do
     Enum.with_index(list, fn item, idx ->
       if idx >= start_idx and idx < end_idx, do: val, else: item
     end)
+  end
+
+  defp fill_qb_arr(arr, args) do
+    len = :array.size(arr)
+    val = arg(args, 0, :undefined)
+    start_idx = fill_start(arg(args, 1, :undefined), len)
+    end_idx = fill_end(arg(args, 2, :undefined), len)
+
+    if start_idx >= end_idx do
+      arr
+    else
+      Enum.reduce(start_idx..(end_idx - 1), arr, fn idx, acc -> :array.set(idx, val, acc) end)
+    end
   end
 
   defp fill_object(obj, args) do
