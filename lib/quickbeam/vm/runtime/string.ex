@@ -14,42 +14,27 @@ defmodule QuickBEAM.VM.Runtime.String do
   alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.RegExp
 
-  @prototype_methods ~w(charAt charCodeAt codePointAt indexOf lastIndexOf includes startsWith endsWith slice substring substr split trim trimStart trimEnd toUpperCase toLowerCase toLocaleUpperCase toLocaleLowerCase repeat padStart padEnd replace replaceAll match matchAll localeCompare search normalize concat toString valueOf at isWellFormed toWellFormed)
-
   @ecma "22.1"
-  builtin_definition("String",
-    constructor: &QuickBEAM.VM.Runtime.ConstructorCallbacks.string/2,
-    length: 1,
-    phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/2
-  )
+  defintrinsic "String" do
+    constructor(&QuickBEAM.VM.Runtime.ConstructorCallbacks.string/2,
+      length: 1,
+      phase: :fundamental
+    )
 
-  @doc "Installs String-specific prototype metadata."
-  def install_builtin(ctor, opts \\ []) do
-    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+    prototype extends: :object do
+      slot(:StringData, "")
+    end
 
-    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_methods(proto_ref, __MODULE__, @prototype_methods)
-
-      proto_ref
-      |> Heap.get_obj(%{})
-      |> Map.put_new(WrappedPrimitive.slot(:string), "")
-      |> put_object_prototype(object_proto)
-      |> then(&Heap.put_obj(proto_ref, &1))
-
-      InstallerHelpers.install_constructor_link(proto_ref, ctor)
-      install_iterator(proto_ref)
-    end)
-
-    Heap.put_ctor_static(ctor, "length", 1)
-    Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+    install_with(&__MODULE__.install_builtin/2)
   end
 
-  defp put_object_prototype(map, {:obj, _} = object_proto),
-    do: Map.put(map, "__proto__", object_proto)
-
-  defp put_object_prototype(map, _object_proto), do: map
+  @doc "Installs String-specific prototype metadata."
+  def install_builtin(ctor, _opts \\ []) do
+    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
+      QuickBEAM.VM.Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
+      install_iterator(proto_ref)
+    end)
+  end
 
   defp install_iterator(proto_ref) do
     sym_iterator = {:symbol, "Symbol.iterator"}
@@ -246,13 +231,13 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   @ecma "22.1.3.29"
-  proto "toString" do
-    unwrap_string(this)
+  proto "toString", receiver: :string do
+    this
   end
 
   @ecma "22.1.3.35"
-  proto "valueOf" do
-    unwrap_string(this)
+  proto "valueOf", receiver: :string do
+    this
   end
 
   @ecma "22.1.3.1"
@@ -451,27 +436,6 @@ defmodule QuickBEAM.VM.Runtime.String do
       Bitwise.bor(0x80, Bitwise.band(Bitwise.bsr(unit, 6), 0x3F)),
       Bitwise.bor(0x80, Bitwise.band(unit, 0x3F))>>
   end
-
-  defp unwrap_string(value) when is_binary(value), do: value
-
-  defp unwrap_string({:obj, ref}) do
-    case QuickBEAM.VM.Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:string) do
-      {:ok, value} -> value
-      :error -> string_value_type_error!()
-    end
-  end
-
-  defp unwrap_string(_), do: string_value_type_error!()
-
-  defp string_value_type_error!,
-    do:
-      throw(
-        {:js_throw,
-         Heap.make_error(
-           "String.prototype.toString requires that 'this' be a String",
-           "TypeError"
-         )}
-      )
 
   defp normalize_string(s, args) do
     form =

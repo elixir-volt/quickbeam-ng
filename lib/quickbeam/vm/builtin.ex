@@ -1737,6 +1737,7 @@ defmodule QuickBEAM.VM.Builtin do
   def require_receiver!(nil, this), do: this
   def require_receiver!(:boolean, this), do: require_wrapped_primitive!(this, :boolean, "Boolean")
   def require_receiver!(:number, this), do: require_wrapped_primitive!(this, :number, "Number")
+  def require_receiver!(:string, this), do: require_wrapped_primitive!(this, :string, "String")
   def require_receiver!(:bigint, this), do: require_bigint_receiver!(this)
   def require_receiver!(:symbol, this), do: require_symbol_receiver!(this)
 
@@ -1756,6 +1757,8 @@ defmodule QuickBEAM.VM.Builtin do
   defp require_wrapped_primitive!(value, :number, _label)
        when is_number(value) or value in [:nan, :infinity, :neg_infinity],
        do: value
+
+  defp require_wrapped_primitive!(value, :string, _label) when is_binary(value), do: value
 
   defp require_wrapped_primitive!(_value, _kind, label),
     do: QuickBEAM.VM.JSThrow.type_error!("#{label} method called on incompatible receiver")
