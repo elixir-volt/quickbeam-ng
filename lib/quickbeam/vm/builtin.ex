@@ -886,6 +886,7 @@ defmodule QuickBEAM.VM.Builtin do
           prototype_object: 1,
           object_parent: 1,
           internal_slot: 2,
+          slot: 2,
           properties: 0,
           prototype_specs: 0,
           constructor_link: 0,
@@ -902,6 +903,7 @@ defmodule QuickBEAM.VM.Builtin do
           arg: 2,
           arg: 3,
           argv: 2,
+          slot_key: 1,
           builtin: 2,
           builtin: 3,
           builtin_args: 2,
@@ -989,7 +991,7 @@ defmodule QuickBEAM.VM.Builtin do
       @__proto_names unquote(name)
 
       def proto_property(unquote(name)) do
-        unquote(build_builtin(name, body))
+        unquote(build_builtin(name, body, opts))
       end
 
       def proto_property_spec(unquote(name)) do
@@ -1021,7 +1023,7 @@ defmodule QuickBEAM.VM.Builtin do
       @__static_names unquote(name)
 
       def static_property(unquote(name)) do
-        unquote(build_builtin(name, body))
+        unquote(build_builtin(name, body, opts))
       end
 
       def static_property_spec(unquote(name)) do
@@ -1125,6 +1127,8 @@ defmodule QuickBEAM.VM.Builtin do
   @doc "Configures the intrinsic prototype object inside an install block."
   defmacro prototype(opts, do: block) when is_list(opts) do
     parent = Keyword.get(opts, :extends, :object)
+    install_properties? = Keyword.get(opts, :properties, true)
+    constructor_link? = Keyword.get(opts, :constructor_link, true)
 
     quote do
       QuickBEAM.VM.Runtime.InstallerHelpers.with_prototype(var!(ctor), fn var!(proto_ref) ->
@@ -1134,6 +1138,8 @@ defmodule QuickBEAM.VM.Builtin do
         )
 
         unquote(block)
+        unquote(prototype_properties(install_properties?))
+        unquote(prototype_constructor_link(constructor_link?))
       end)
     end
   end
@@ -1155,6 +1161,22 @@ defmodule QuickBEAM.VM.Builtin do
 
   defp prototype_parent(parent), do: parent
 
+  defp prototype_properties(true) do
+    quote do
+      QuickBEAM.VM.Builtin.Installer.install_prototype_specs(var!(proto_ref), __MODULE__)
+    end
+  end
+
+  defp prototype_properties(false), do: nil
+
+  defp prototype_constructor_link(true) do
+    quote do
+      QuickBEAM.VM.Runtime.InstallerHelpers.install_constructor_link(var!(proto_ref), var!(ctor))
+    end
+  end
+
+  defp prototype_constructor_link(false), do: nil
+
   @doc "Sets the current prototype object's parent."
   defmacro object_parent(parent) do
     quote do
@@ -1169,6 +1191,13 @@ defmodule QuickBEAM.VM.Builtin do
   defmacro internal_slot(key, value) do
     quote do
       QuickBEAM.VM.Heap.put_obj_key(var!(proto_ref), unquote(key), unquote(value))
+    end
+  end
+
+  @doc "Sets a semantic ECMAScript internal slot on the current prototype object."
+  defmacro slot(name, value) do
+    quote do
+      internal_slot(QuickBEAM.VM.Builtin.slot_key(unquote(name)), unquote(value))
     end
   end
 
@@ -1428,17 +1457,32 @@ defmodule QuickBEAM.VM.Builtin do
     end
   end
 
-  defp build_builtin(name, body, opts \\ []) do
+  defp build_builtin(name, body, opts) do
+    callback_body = build_callback_body(body, Keyword.get(opts, :receiver))
+
     quote do
       QuickBEAM.VM.Builtin.builtin(
         unquote(name),
         fn var!(args), var!(this) ->
           _ = var!(args)
-          _ = var!(this)
-          unquote(body)
+          unquote(callback_body)
         end,
         unquote(Macro.escape(opts))
       )
+    end
+  end
+
+  defp build_callback_body(body, nil) do
+    quote do
+      _ = var!(this)
+      unquote(body)
+    end
+  end
+
+  defp build_callback_body(body, receiver) do
+    quote do
+      var!(this) = QuickBEAM.VM.Builtin.require_receiver!(unquote(receiver), var!(this))
+      unquote(body)
     end
   end
 
@@ -1589,6 +1633,34 @@ defmodule QuickBEAM.VM.Builtin do
 
   def put_if_present(map, _key, nil), do: map
   def put_if_present(map, key, value), do: Map.put(map, key, value)
+
+  @doc "Maps semantic ECMAScript internal slot names to heap storage keys."
+  def slot_key(:BooleanData), do: QuickBEAM.VM.ObjectModel.WrappedPrimitive.slot(:boolean)
+  def slot_key(:NumberData), do: QuickBEAM.VM.ObjectModel.WrappedPrimitive.slot(:number)
+  def slot_key(:StringData), do: QuickBEAM.VM.ObjectModel.WrappedPrimitive.slot(:string)
+  def slot_key(:BigIntData), do: QuickBEAM.VM.ObjectModel.WrappedPrimitive.slot(:bigint)
+  def slot_key(:SymbolData), do: QuickBEAM.VM.ObjectModel.WrappedPrimitive.slot(:symbol)
+  def slot_key(key), do: key
+
+  @doc "Validates and unwraps a builtin method receiver according to a DSL contract."
+  def require_receiver!(nil, this), do: this
+  def require_receiver!(:boolean, this), do: require_wrapped_primitive!(this, :boolean, "Boolean")
+
+  defp require_wrapped_primitive!({:obj, ref}, kind, label) do
+    case QuickBEAM.VM.Heap.get_obj(ref, %{})
+         |> QuickBEAM.VM.ObjectModel.WrappedPrimitive.value(kind) do
+      {:ok, value} ->
+        value
+
+      :error ->
+        QuickBEAM.VM.JSThrow.type_error!("#{label} method called on incompatible receiver")
+    end
+  end
+
+  defp require_wrapped_primitive!(value, :boolean, _label) when is_boolean(value), do: value
+
+  defp require_wrapped_primitive!(_value, _kind, label),
+    do: QuickBEAM.VM.JSThrow.type_error!("#{label} method called on incompatible receiver")
 
   def iterator_from(items) do
     iter = QuickBEAM.VM.Heap.wrap_iterator(items)
