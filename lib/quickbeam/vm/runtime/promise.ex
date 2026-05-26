@@ -11,12 +11,11 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.Promise
 
-  builtin_definition("Promise",
-    constructor: constructor(),
-    length: 1,
-    phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/2
-  )
+  defintrinsic "Promise" do
+    constructor(constructor(), length: 1, phase: :fundamental)
+
+    install_with(&__MODULE__.install_builtin/2)
+  end
 
   def install_builtin(ctor, opts \\ []) do
     object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
