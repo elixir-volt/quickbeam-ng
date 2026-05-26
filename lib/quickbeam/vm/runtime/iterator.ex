@@ -27,11 +27,6 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   def install_builtin(ctor, _opts \\ []) do
-    for name <- ~w(concat from zip zipKeyed) do
-      Heap.put_ctor_static(ctor, name, static_property(name))
-      Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.method())
-    end
-
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
@@ -86,19 +81,20 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  def static_property("from"), do: static_method("from", 1, &from/2)
-  def static_property("concat"), do: static_method("concat", 0, &concat/2)
-  def static_property("zip"), do: static_method("zip", 1, &zip/2)
-  def static_property("zipKeyed"), do: static_method("zipKeyed", 1, &zip_keyed/2)
+  static "from", length: 1 do
+    from(args, this)
+  end
 
-  def static_property(_), do: :undefined
+  static "concat", length: 0 do
+    concat(args, this)
+  end
 
-  defp static_method(name, length, callback) do
-    fun = {:builtin, name, callback}
-    Builtin.put_function_metadata(fun, name, length)
-    Heap.put_ctor_prop_desc(fun, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(fun, "name", PropertyDescriptor.hidden_readonly())
-    fun
+  static "zip", length: 1 do
+    zip(args, this)
+  end
+
+  static "zipKeyed", length: 1 do
+    zip_keyed(args, this)
   end
 
   def proto_property({:symbol, "Symbol.iterator"}) do
