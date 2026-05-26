@@ -16,6 +16,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     WrappedPrimitive
   }
 
+  alias QuickBEAM.VM.Execution.IteratorHelperState
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Runtime
 
@@ -320,7 +321,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     if index >= tuple_size(items) do
       iter_result(:undefined, true)
     else
-      helper_state_put(state_ref, state, "index", index + 1)
+      IteratorHelperState.put(state_ref, state, "index", index + 1)
       iter_result(:erlang.element(index + 1, items), false)
     end
   end
@@ -481,8 +482,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp helper_iterator(state) do
-    state_ref = make_ref()
-    helper_state_replace(state_ref, state)
+    state_ref = IteratorHelperState.new(state)
 
     Heap.wrap(%{
       "__proto__" => wrap_for_valid_iterator_prototype(),
@@ -502,16 +502,6 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   defp helper_next(_), do: JSThrow.type_error!("Iterator helper expected")
 
-  defp helper_state_replace(state_ref, state), do: Heap.put_obj(state_ref, state)
-
-  defp helper_state_put(state_ref, state, key, value) do
-    helper_state_replace(state_ref, Map.put(state, key, value))
-  end
-
-  defp helper_state_merge(state_ref, state, changes) do
-    helper_state_replace(state_ref, Map.merge(state, changes))
-  end
-
   defp helper_next_state(state_ref) do
     state = Heap.get_obj(state_ref, %{})
 
@@ -522,7 +512,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
         JSThrow.type_error!("Iterator helper is already running")
       end
 
-      helper_state_put(state_ref, state, "executing", true)
+      IteratorHelperState.put(state_ref, state, "executing", true)
 
       try do
         result = helper_next_kind(state_ref, Heap.get_obj(state_ref, %{}))
@@ -553,7 +543,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     state = Heap.get_obj(state_ref, %{})
 
     if state["kind"] != :done do
-      helper_state_put(state_ref, state, "executing", false)
+      IteratorHelperState.put(state_ref, state, "executing", false)
     end
   end
 
@@ -828,11 +818,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp zip_next(state_ref, %{"iterators" => iterators, "mode" => :shortest} = state) do
     case zip_step_shortest(iterators, [], []) do
       :done ->
-        helper_state_put(state_ref, state, "open_iterators", [])
+        IteratorHelperState.put(state_ref, state, "open_iterators", [])
         iter_result(:undefined, true)
 
       values ->
-        helper_state_merge(state_ref, state, %{"open_iterators" => iterators, "started" => true})
+        IteratorHelperState.merge(state_ref, state, %{
+          "open_iterators" => iterators,
+          "started" => true
+        })
 
         zip_result(state["keys"], values)
     end
@@ -841,11 +834,14 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp zip_next(state_ref, %{"iterators" => iterators, "mode" => :strict} = state) do
     case zip_step_strict(iterators, [], [], nil) do
       :done ->
-        helper_state_put(state_ref, state, "open_iterators", [])
+        IteratorHelperState.put(state_ref, state, "open_iterators", [])
         iter_result(:undefined, true)
 
       values ->
-        helper_state_merge(state_ref, state, %{"open_iterators" => iterators, "started" => true})
+        IteratorHelperState.merge(state_ref, state, %{
+          "open_iterators" => iterators,
+          "started" => true
+        })
 
         zip_result(state["keys"], values)
     end
@@ -865,7 +861,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
         {_iterator, :done} -> []
       end)
 
-    helper_state_merge(state_ref, state, %{"open_iterators" => open_iterators, "started" => true})
+    IteratorHelperState.merge(state_ref, state, %{
+      "open_iterators" => open_iterators,
+      "started" => true
+    })
 
     if Enum.all?(results, &(&1 == :done)) do
       iter_result(:undefined, true)
@@ -1003,7 +1002,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       do: JSThrow.type_error!("iterator method returned non-object")
 
     record = iterator_record(iterator)
-    helper_state_put(state_ref, state, "active", record)
+    IteratorHelperState.put(state_ref, state, "active", record)
     concat_next(state_ref, Heap.get_obj(state_ref, %{}))
   end
 
@@ -1011,10 +1010,10 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     result = iterator_next(iterator)
 
     if Get.get(result, "done") == true do
-      helper_state_merge(state_ref, state, %{"index" => index + 1, "active" => nil})
+      IteratorHelperState.merge(state_ref, state, %{"index" => index + 1, "active" => nil})
       concat_next(state_ref, Heap.get_obj(state_ref, %{}))
     else
-      helper_state_put(state_ref, state, "started", true)
+      IteratorHelperState.put(state_ref, state, "started", true)
       iter_result(Get.get(result, "value"), false)
     end
   end
@@ -1034,7 +1033,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       result
     else
       next_remaining = if remaining == :infinity, do: :infinity, else: remaining - 1
-      helper_state_put(state_ref, state, "remaining", next_remaining)
+      IteratorHelperState.put(state_ref, state, "remaining", next_remaining)
       iter_result(Get.get(result, "value"), false)
     end
   end
@@ -1044,7 +1043,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
       mark_helper_done(state_ref)
       iter_result(:undefined, true)
     else
-      helper_state_put(state_ref, state, "remaining", 0)
+      IteratorHelperState.put(state_ref, state, "remaining", 0)
       result = iterator_next(iterator)
 
       if Get.get(result, "done") == true do
@@ -1080,7 +1079,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     else
       value = Get.get(result, "value")
       keep = invoke_or_close(iterator, predicate, [value, index])
-      helper_state_put(state_ref, state, "index", index + 1)
+      IteratorHelperState.put(state_ref, state, "index", index + 1)
 
       if Values.truthy?(keep) do
         iter_result(value, false)
@@ -1102,7 +1101,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     else
       value = Get.get(result, "value")
       mapped = invoke_or_close(iterator, mapper, [value, index])
-      helper_state_put(state_ref, state, "index", index + 1)
+      IteratorHelperState.put(state_ref, state, "index", index + 1)
       iter_result(mapped, false)
     end
   end
@@ -1123,7 +1122,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
           index = state["index"]
           mapped = invoke_or_close(state["iterator"], state["mapper"], [value, index])
           inner = flattenable_iterator_record_or_close(state["iterator"], mapped)
-          helper_state_merge(state_ref, state, %{"index" => index + 1, "inner" => inner})
+          IteratorHelperState.merge(state_ref, state, %{"index" => index + 1, "inner" => inner})
           flat_map_next(state_ref, Heap.get_obj(state_ref, %{}))
         end
     end
@@ -1300,7 +1299,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     if state["executing"] == true do
       JSThrow.type_error!("Iterator helper is already running")
     else
-      helper_state_put(state_ref, state, "executing", true)
+      IteratorHelperState.put(state_ref, state, "executing", true)
 
       try do
         close_helper_state(state)
@@ -1333,8 +1332,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp mark_helper_done(state_ref),
-    do: helper_state_replace(state_ref, %{"kind" => :done, "executing" => false})
+  defp mark_helper_done(state_ref), do: IteratorHelperState.mark_done(state_ref)
 
   defp invoke_or_close(iterator, callback, args) do
     Invocation.invoke_with_receiver(callback, args, :undefined)
