@@ -10,24 +10,21 @@ defmodule QuickBEAM.VM.Runtime.FinalizationRegistry do
   @cleanup "__finalization_registry_cleanup__"
   @cells "__finalization_registry_cells__"
 
-  @method_descriptor %{writable: true, enumerable: false, configurable: true}
-  @tag_descriptor %{writable: false, enumerable: false, configurable: true}
+  defintrinsic "FinalizationRegistry", intrinsic_key: :finalization_registry do
+    constructor(constructor(), length: 1, phase: :weak_refs)
 
-  builtin_definition("FinalizationRegistry",
-    constructor: constructor(),
-    length: 1,
-    phase: :weak_refs,
-    intrinsic_key: :finalization_registry,
-    prototype_properties: [
-      %{key: "register", value: proto_property("register"), descriptor: @method_descriptor},
-      %{key: "unregister", value: proto_property("unregister"), descriptor: @method_descriptor},
-      %{
-        key: {:symbol, "Symbol.toStringTag"},
-        value: "FinalizationRegistry",
-        descriptor: @tag_descriptor
-      }
-    ]
-  )
+    prototype extends: :object do
+      method "register" do
+        register(args, this)
+      end
+
+      method "unregister" do
+        unregister(args, this)
+      end
+
+      to_string_tag("FinalizationRegistry")
+    end
+  end
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor do
@@ -54,11 +51,6 @@ defmodule QuickBEAM.VM.Runtime.FinalizationRegistry do
       {:obj, ref}
     end
   end
-
-  @doc "Returns a FinalizationRegistry prototype property value for a JavaScript property key."
-  def proto_property("register"), do: {:builtin, "register", &register/2}
-  def proto_property("unregister"), do: {:builtin, "unregister", &unregister/2}
-  def proto_property(_), do: :undefined
 
   defp register(args, this) do
     ref = require_registry!(this)
