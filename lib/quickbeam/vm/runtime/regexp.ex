@@ -21,7 +21,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   @family_emoji_class "[#{@family_emoji}]"
   @family_emoji_first <<0x1F468::utf8>>
 
-  @accessors ~w(source flags hasIndices global ignoreCase multiline dotAll unicode unicodeSets sticky)
   @symbol_methods [
     {:symbol, "Symbol.match"},
     {:symbol, "Symbol.matchAll"},
@@ -48,6 +47,46 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       method "toString" do
         regexp_to_string(this)
       end
+
+      getter "source" do
+        regexp_source_getter(this)
+      end
+
+      getter "flags" do
+        regexp_flags_getter(this)
+      end
+
+      getter "hasIndices" do
+        regexp_flag_value(this, "hasIndices", "d")
+      end
+
+      getter "global" do
+        regexp_flag_value(this, "global", "g")
+      end
+
+      getter "ignoreCase" do
+        regexp_flag_value(this, "ignoreCase", "i")
+      end
+
+      getter "multiline" do
+        regexp_flag_value(this, "multiline", "m")
+      end
+
+      getter "dotAll" do
+        regexp_flag_value(this, "dotAll", "s")
+      end
+
+      getter "unicode" do
+        regexp_flag_value(this, "unicode", "u")
+      end
+
+      getter "unicodeSets" do
+        regexp_flag_value(this, "unicodeSets", "v")
+      end
+
+      getter "sticky" do
+        regexp_flag_value(this, "sticky", "y")
+      end
     end
 
     install_with(&__MODULE__.install_builtin/2)
@@ -57,7 +96,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     InstallerHelpers.install_species(ctor)
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_accessors_with(proto_ref, @accessors, &proto_accessor/1)
+      Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
       InstallerHelpers.install_methods(proto_ref, __MODULE__, @symbol_methods)
     end)
   end
@@ -131,37 +170,39 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_constructor_object?(value), do: Value.object_like?(value)
 
-  def proto_accessor("source") do
-    {:accessor,
-     {:builtin, "get source",
-      fn _, this ->
-        unless regexp_match_receiver?(this),
-          do: JSThrow.type_error!("RegExp.prototype.source receiver is not an object")
+  def proto_accessor(key), do: proto_property(key)
 
-        regexp_source(this)
-      end}, nil}
+  def regexp_source_getter(this) do
+    unless regexp_match_receiver?(this),
+      do: JSThrow.type_error!("RegExp.prototype.source receiver is not an object")
+
+    regexp_source(this)
   end
 
-  def proto_accessor("flags") do
-    {:accessor,
-     {:builtin, "get flags",
-      fn _, this ->
-        unless regexp_match_receiver?(this),
-          do: JSThrow.type_error!("RegExp.prototype.flags receiver is not an object")
+  def regexp_flags_getter(this) do
+    unless regexp_match_receiver?(this),
+      do: JSThrow.type_error!("RegExp.prototype.flags receiver is not an object")
 
-        regexp_flags_from_properties(this)
-      end}, nil}
+    regexp_flags_from_properties(this)
   end
 
-  def proto_accessor("hasIndices"), do: regexp_flag_accessor("hasIndices", "d")
-  def proto_accessor("global"), do: regexp_flag_accessor("global", "g")
-  def proto_accessor("ignoreCase"), do: regexp_flag_accessor("ignoreCase", "i")
-  def proto_accessor("multiline"), do: regexp_flag_accessor("multiline", "m")
-  def proto_accessor("dotAll"), do: regexp_flag_accessor("dotAll", "s")
-  def proto_accessor("unicode"), do: regexp_flag_accessor("unicode", "u")
-  def proto_accessor("unicodeSets"), do: regexp_flag_accessor("unicodeSets", "v")
-  def proto_accessor("sticky"), do: regexp_flag_accessor("sticky", "y")
-  def proto_accessor(_), do: :undefined
+  def regexp_flag_value(this, name, flag) do
+    case this do
+      {:regexp, bytecode, _source} ->
+        String.contains?(Get.regexp_flags(bytecode), flag)
+
+      {:regexp, bytecode, _source, ref} ->
+        String.contains?(regexp_flags(bytecode, ref), flag)
+
+      {:obj, _} = proto ->
+        if proto == Runtime.global_class_proto("RegExp"),
+          do: :undefined,
+          else: JSThrow.type_error!("RegExp.prototype.#{name} receiver is not a RegExp")
+
+      _ ->
+        JSThrow.type_error!("RegExp.prototype.#{name} receiver is not a RegExp")
+    end
+  end
 
   @doc "Executes compiled QuickJS regexp bytecode against a string via the native regexp engine."
   def nif_exec(bytecode, str, last_index) when is_binary(bytecode) and is_binary(str) do
@@ -2666,28 +2707,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   defp hex_to_codepoint(hex) do
     codepoint = String.to_integer(hex, 16)
     if codepoint <= 0x10FFFF, do: <<codepoint::utf8>>, else: "\\u{#{hex}}"
-  end
-
-  defp regexp_flag_accessor(name, flag) do
-    {:accessor,
-     {:builtin, "get #{name}",
-      fn _, this ->
-        case this do
-          {:regexp, bytecode, _source} ->
-            String.contains?(Get.regexp_flags(bytecode), flag)
-
-          {:regexp, bytecode, _source, ref} ->
-            String.contains?(regexp_flags(bytecode, ref), flag)
-
-          {:obj, _} = proto ->
-            if proto == Runtime.global_class_proto("RegExp"),
-              do: :undefined,
-              else: JSThrow.type_error!("RegExp.prototype.#{name} receiver is not a RegExp")
-
-          _ ->
-            JSThrow.type_error!("RegExp.prototype.#{name} receiver is not a RegExp")
-        end
-      end}, nil}
   end
 
   defp regexp_flags(bytecode, ref) do
