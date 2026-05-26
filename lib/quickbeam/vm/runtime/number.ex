@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime, RuntimeState}
-  alias QuickBEAM.VM.ObjectModel.{PropertyDescriptor, WrappedPrimitive}
+  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.Globals.Numeric
 
@@ -41,7 +41,7 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
       proto_ref
       |> Heap.get_obj(%{})
-      |> Map.put(WrappedPrimitive.slot(:number), 0)
+      |> Map.put(slot_key(:NumberData), 0)
       |> put_object_prototype(object_proto)
       |> then(&Heap.put_obj(proto_ref, &1))
 
@@ -72,42 +72,29 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   # ── Number.prototype ──
 
-  proto "toString", length: 1 do
-    to_string_with_radix(unwrap_number(this), args)
+  proto "toString", length: 1, receiver: :number do
+    to_string_with_radix(this, args)
   end
 
-  proto "toFixed", length: 1 do
-    to_fixed(unwrap_number(this), args)
+  proto "toFixed", length: 1, receiver: :number do
+    to_fixed(this, args)
   end
 
-  proto "valueOf" do
-    unwrap_number(this)
+  proto "valueOf", receiver: :number do
+    this
   end
 
-  proto "toExponential", length: 1 do
-    to_exponential(unwrap_number(this), args)
+  proto "toExponential", length: 1, receiver: :number do
+    to_exponential(this, args)
   end
 
-  proto "toPrecision", length: 1 do
-    to_precision(unwrap_number(this), args)
+  proto "toPrecision", length: 1, receiver: :number do
+    to_precision(this, args)
   end
 
-  proto "toLocaleString" do
-    to_string_with_radix(unwrap_number(this), [])
+  proto "toLocaleString", receiver: :number do
+    to_string_with_radix(this, [])
   end
-
-  defp unwrap_number({:obj, ref}) do
-    case QuickBEAM.VM.Heap.get_obj(ref, %{}) |> WrappedPrimitive.value(:number) do
-      {:ok, value} -> value
-      :error -> QuickBEAM.VM.JSThrow.type_error!("Number method called on incompatible receiver")
-    end
-  end
-
-  defp unwrap_number(value) when is_number(value) or value in [:nan, :infinity, :neg_infinity],
-    do: value
-
-  defp unwrap_number(_),
-    do: QuickBEAM.VM.JSThrow.type_error!("Number method called on incompatible receiver")
 
   # ── Number static ──
 

@@ -1645,6 +1645,7 @@ defmodule QuickBEAM.VM.Builtin do
   @doc "Validates and unwraps a builtin method receiver according to a DSL contract."
   def require_receiver!(nil, this), do: this
   def require_receiver!(:boolean, this), do: require_wrapped_primitive!(this, :boolean, "Boolean")
+  def require_receiver!(:number, this), do: require_wrapped_primitive!(this, :number, "Number")
 
   defp require_wrapped_primitive!({:obj, ref}, kind, label) do
     case QuickBEAM.VM.Heap.get_obj(ref, %{})
@@ -1658,6 +1659,10 @@ defmodule QuickBEAM.VM.Builtin do
   end
 
   defp require_wrapped_primitive!(value, :boolean, _label) when is_boolean(value), do: value
+
+  defp require_wrapped_primitive!(value, :number, _label)
+       when is_number(value) or value in [:nan, :infinity, :neg_infinity],
+       do: value
 
   defp require_wrapped_primitive!(_value, _kind, label),
     do: QuickBEAM.VM.JSThrow.type_error!("#{label} method called on incompatible receiver")
