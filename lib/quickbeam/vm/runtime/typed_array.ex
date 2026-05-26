@@ -128,83 +128,154 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   @doc "Returns generic properties for typed-array constructor prototype objects."
   def prototype_properties do
-    values_method =
-      prototype_method("values", 0, fn _args, this ->
-        {:obj, ref} = this = typed_array_object!(this)
-        ensure_not_out_of_bounds(ref)
-        Array.make_array_iterator(this, :values)
-      end)
-
-    %{
-      "at" => prototype_method("at", 1, fn args, this -> at(this, args) end),
-      "copyWithin" => prototype_ref_method("copyWithin", 2, &copy_within/3),
-      "entries" =>
-        prototype_method("entries", 0, fn _args, this ->
-          {:obj, ref} = this = typed_array_object!(this)
-          ensure_not_out_of_bounds(ref)
-          Array.make_array_iterator(this, :entries)
-        end),
-      "keys" =>
-        prototype_method("keys", 0, fn _args, this ->
-          {:obj, ref} = this = typed_array_object!(this)
-          ensure_not_out_of_bounds(ref)
-          Array.make_array_iterator(this, :keys)
-        end),
-      "values" => values_method,
-      {:symbol, "Symbol.iterator"} => values_method,
-      "every" => prototype_ref_method("every", 1, &every/3),
-      "fill" => prototype_ref_method("fill", 1, fn ref, args, _this -> fill(ref, args) end),
-      "filter" => prototype_ref_method("filter", 1, &filter/3),
-      "find" => prototype_ref_method("find", 1, &find/3),
-      "findIndex" => prototype_ref_method("findIndex", 1, &find_index/3),
-      "findLast" => prototype_ref_method("findLast", 1, &find_last/3),
-      "findLastIndex" => prototype_ref_method("findLastIndex", 1, &find_last_index/3),
-      "forEach" => prototype_ref_method("forEach", 1, &for_each/3),
-      "includes" =>
-        prototype_ref_method("includes", 1, fn ref, args, _this -> includes(ref, args) end),
-      "indexOf" =>
-        prototype_ref_method("indexOf", 1, fn ref, args, _this -> index_of(ref, args) end),
-      "join" => prototype_ref_method("join", 1, fn ref, args, _this -> join(ref, args) end),
-      "lastIndexOf" =>
-        prototype_ref_method("lastIndexOf", 1, fn ref, args, _this -> last_index_of(ref, args) end),
-      "map" => prototype_ref_method("map", 1, &map/3),
-      "reduce" => prototype_ref_method("reduce", 1, &reduce/3),
-      "reduceRight" => prototype_ref_method("reduceRight", 1, &reduce_right/3),
-      "reverse" => prototype_ref_method("reverse", 0, fn ref, _args, _this -> reverse(ref) end),
-      "set" => prototype_ref_method("set", 1, fn ref, args, _this -> set(ref, args) end),
-      "slice" => prototype_ref_method("slice", 2, fn ref, args, _this -> slice(ref, args) end),
-      "some" => prototype_ref_method("some", 1, &some/3),
-      "sort" => prototype_ref_method("sort", 1, fn ref, args, _this -> sort(ref, args) end),
-      "subarray" =>
-        prototype_ref_method("subarray", 2, fn ref, args, _this -> subarray(ref, args) end),
-      "toLocaleString" =>
-        prototype_ref_method("toLocaleString", 0, fn ref, _args, _this ->
-          to_locale_string(ref)
-        end),
-      "toReversed" =>
-        prototype_ref_method("toReversed", 0, fn ref, _args, _this -> to_reversed(ref) end),
-      "toSorted" =>
-        prototype_ref_method("toSorted", 1, fn ref, args, _this -> to_sorted(ref, args) end),
-      "toString" =>
-        prototype_ref_method("toString", 0, fn ref, _args, _this -> join(ref, [","]) end),
-      "with" =>
-        prototype_ref_method("with", 2, fn ref, args, _this -> with_element(ref, args) end)
-    }
+    proto_property_names()
+    |> Enum.reject(
+      &(&1 in ["buffer", "byteLength", "byteOffset", "length", {:symbol, "Symbol.toStringTag"}])
+    )
+    |> Enum.into(%{}, fn key -> {key, proto_property(key)} end)
   end
 
-  defp prototype_ref_method(name, length, callback) do
-    prototype_method(name, length, fn args, this ->
-      {:obj, ref} = typed_array_object!(this)
-      callback.(ref, args, this)
+  proto "at", length: 1 do
+    at(this, args)
+  end
+
+  proto "copyWithin", length: 2 do
+    typed_array_ref_method(this, args, &copy_within/3)
+  end
+
+  proto "entries", length: 0 do
+    typed_array_iterator(this, :entries)
+  end
+
+  proto "keys", length: 0 do
+    typed_array_iterator(this, :keys)
+  end
+
+  proto "values", length: 0 do
+    typed_array_iterator(this, :values)
+  end
+
+  proto {:symbol, "Symbol.iterator"}, length: 0 do
+    typed_array_iterator(this, :values)
+  end
+
+  proto "every", length: 1 do
+    typed_array_ref_method(this, args, &every/3)
+  end
+
+  proto "fill", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> fill(ref, call_args) end)
+  end
+
+  proto "filter", length: 1 do
+    typed_array_ref_method(this, args, &filter/3)
+  end
+
+  proto "find", length: 1 do
+    typed_array_ref_method(this, args, &find/3)
+  end
+
+  proto "findIndex", length: 1 do
+    typed_array_ref_method(this, args, &find_index/3)
+  end
+
+  proto "findLast", length: 1 do
+    typed_array_ref_method(this, args, &find_last/3)
+  end
+
+  proto "findLastIndex", length: 1 do
+    typed_array_ref_method(this, args, &find_last_index/3)
+  end
+
+  proto "forEach", length: 1 do
+    typed_array_ref_method(this, args, &for_each/3)
+  end
+
+  proto "includes", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> includes(ref, call_args) end)
+  end
+
+  proto "indexOf", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> index_of(ref, call_args) end)
+  end
+
+  proto "join", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> join(ref, call_args) end)
+  end
+
+  proto "lastIndexOf", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this ->
+      last_index_of(ref, call_args)
     end)
   end
 
-  defp prototype_method(name, length, callback) do
-    method = {:builtin, name, callback}
-    QuickBEAM.VM.Builtin.put_function_metadata(method, name, length)
-    Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(method, "name", PropertyDescriptor.hidden_readonly())
-    method
+  proto "map", length: 1 do
+    typed_array_ref_method(this, args, &map/3)
+  end
+
+  proto "reduce", length: 1 do
+    typed_array_ref_method(this, args, &reduce/3)
+  end
+
+  proto "reduceRight", length: 1 do
+    typed_array_ref_method(this, args, &reduce_right/3)
+  end
+
+  proto "reverse", length: 0 do
+    typed_array_ref_method(this, args, fn ref, _call_args, _this -> reverse(ref) end)
+  end
+
+  proto "set", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> set(ref, call_args) end)
+  end
+
+  proto "slice", length: 2 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> slice(ref, call_args) end)
+  end
+
+  proto "some", length: 1 do
+    typed_array_ref_method(this, args, &some/3)
+  end
+
+  proto "sort", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> sort(ref, call_args) end)
+  end
+
+  proto "subarray", length: 2 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> subarray(ref, call_args) end)
+  end
+
+  proto "toLocaleString", length: 0 do
+    typed_array_ref_method(this, args, fn ref, _call_args, _this -> to_locale_string(ref) end)
+  end
+
+  proto "toReversed", length: 0 do
+    typed_array_ref_method(this, args, fn ref, _call_args, _this -> to_reversed(ref) end)
+  end
+
+  proto "toSorted", length: 1 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this -> to_sorted(ref, call_args) end)
+  end
+
+  proto "toString", length: 0 do
+    typed_array_ref_method(this, args, fn ref, _call_args, _this -> join(ref, [","]) end)
+  end
+
+  proto "with", length: 2 do
+    typed_array_ref_method(this, args, fn ref, call_args, _this ->
+      with_element(ref, call_args)
+    end)
+  end
+
+  defp typed_array_iterator(this, mode) do
+    {:obj, ref} = this = typed_array_object!(this)
+    ensure_not_out_of_bounds(ref)
+    Array.make_array_iterator(this, mode)
+  end
+
+  defp typed_array_ref_method(this, args, callback) do
+    {:obj, ref} = typed_array_object!(this)
+    callback.(ref, args, this)
   end
 
   @doc "Returns properties installed on %TypedArray%.prototype."
