@@ -13,9 +13,6 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   alias QuickBEAM.VM.{Builtin, Invocation, JSThrow, Value}
 
-  @map_methods ~w(get set has delete clear keys values entries forEach getOrInsert getOrInsertComputed)
-  @map_iterator_methods ~w(keys values entries)
-
   defintrinsics do
     intrinsic("Map",
       constructor: constructor(),
@@ -49,11 +46,6 @@ defmodule QuickBEAM.VM.Runtime.Map do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref, object_proto)
 
-      InstallerHelpers.install_methods(proto_ref, __MODULE__, @map_methods,
-        zero_length: @map_iterator_methods
-      )
-
-      InstallerHelpers.install_symbol_iterator(proto_ref, __MODULE__)
       Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
       InstallerHelpers.install_to_string_tag(proto_ref, "Map")
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
@@ -222,31 +214,64 @@ defmodule QuickBEAM.VM.Runtime.Map do
     end
   end
 
+  prototype_methods do
+    method "get", length: 1 do
+      get(args, this)
+    end
+
+    method "set", length: 2 do
+      set(args, this)
+    end
+
+    method "has", length: 1 do
+      has(args, this)
+    end
+
+    method "delete", length: 1 do
+      delete(args, this)
+    end
+
+    method "clear", length: 0 do
+      clear(args, this)
+    end
+
+    method "keys", length: 0 do
+      keys(args, this)
+    end
+
+    method "values", length: 0 do
+      values(args, this)
+    end
+
+    method "entries", length: 0 do
+      entries(args, this)
+    end
+
+    symbol :iterator do
+      method length: 0 do
+        entries(args, this)
+      end
+    end
+
+    method "forEach", length: 1 do
+      for_each(args, this)
+    end
+
+    method "getOrInsert", length: 2 do
+      get_or_insert(args, this)
+    end
+
+    method "getOrInsertComputed", length: 2 do
+      get_or_insert_computed(args, this)
+    end
+
+    getter "size" do
+      size(this)
+    end
+  end
+
   @doc "Returns the MapData size for Map.prototype.size."
   def size(this), do: this |> require_strong_map_ref!() |> data() |> map_size()
-
-  @doc "Returns a prototype property value for the given JavaScript property key."
-  def proto_property("get"), do: {:builtin, "get", &get/2}
-  def proto_property("set"), do: {:builtin, "set", &set/2}
-  def proto_property("has"), do: {:builtin, "has", &has/2}
-  def proto_property("delete"), do: {:builtin, "delete", &delete/2}
-  def proto_property("clear"), do: {:builtin, "clear", &clear/2}
-  def proto_property("keys"), do: {:builtin, "keys", &keys/2}
-  def proto_property("values"), do: {:builtin, "values", &values/2}
-  def proto_property("entries"), do: {:builtin, "entries", &entries/2}
-  def proto_property({:symbol, "Symbol.iterator"}), do: proto_property("entries")
-  def proto_property("forEach"), do: {:builtin, "forEach", &for_each/2}
-  def proto_property("getOrInsert"), do: {:builtin, "getOrInsert", &get_or_insert/2}
-
-  def proto_property("getOrInsertComputed"),
-    do: {:builtin, "getOrInsertComputed", &get_or_insert_computed/2}
-
-  def proto_property("size"), do: map_size_accessor()
-  def proto_property(_), do: :undefined
-
-  def proto_property_names, do: ["size"]
-  def proto_property_spec("size"), do: Builtin.accessor_property_spec("size", size_getter())
-  def proto_property_spec(_), do: nil
 
   def weak_proto_property("get"), do: {:builtin, "get", &weak_get/2}
   def weak_proto_property("set"), do: {:builtin, "set", &weak_set/2}
@@ -275,9 +300,6 @@ defmodule QuickBEAM.VM.Runtime.Map do
   end
 
   defp group_items(_), do: JSThrow.type_error!("object is not iterable")
-
-  defp map_size_accessor, do: {:accessor, size_getter(), nil}
-  defp size_getter, do: {:builtin, "get size", fn _args, this -> size(this) end}
 
   defp construct_from_iterable(list, map, adder) when is_list(list) do
     Enum.each(list, fn entry ->
