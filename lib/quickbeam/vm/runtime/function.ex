@@ -12,13 +12,14 @@ defmodule QuickBEAM.VM.Runtime.Function do
   alias QuickBEAM.VM.Runtime.TypedArray
   alias QuickBEAM.VM.Realm
 
-  builtin_definition("Function",
-    constructor: &QuickBEAM.VM.Runtime.ConstructorCallbacks.function/2,
-    length: 1,
-    phase: :core,
-    prototype_parent: nil,
-    after_install: &__MODULE__.install_builtin/2
-  )
+  defintrinsic "Function", prototype_parent: nil do
+    constructor(&QuickBEAM.VM.Runtime.ConstructorCallbacks.function/2,
+      length: 1,
+      phase: :core
+    )
+
+    install_with(&__MODULE__.install_builtin/2)
+  end
 
   def install_builtin(ctor, opts \\ []) do
     function_proto = Keyword.get_lazy(opts, :prototype, fn -> prototype() end)
