@@ -2239,7 +2239,9 @@ defmodule QuickBEAM.VM.Runtime.Array do
     JSThrow.type_error!("predicate must be callable")
   end
 
-  defp find_value_at(list, idx) when is_list(list), do: Enum.at(list, idx, :undefined)
+  defp find_value_at(list, idx) when is_list(list), do: list_value_at(list, idx)
+  defp find_value_at({:qb_arr, arr}, idx), do: array_value_at(arr, idx)
+  defp find_value_at({:tuple, tuple}, idx), do: tuple_value_at(tuple, idx)
 
   defp find_value_at({:obj, _} = value, idx) do
     key = Integer.to_string(idx)
@@ -2256,6 +2258,19 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp find_value_at(value, idx), do: Get.get(value, Integer.to_string(idx))
+
+  defp list_value_at(list, idx), do: list |> List.to_tuple() |> tuple_value_at(idx)
+
+  defp tuple_value_at(tuple, idx) when is_integer(idx) and idx >= 0 and idx < tuple_size(tuple),
+    do: :erlang.element(idx + 1, tuple)
+
+  defp tuple_value_at(_tuple, _idx), do: :undefined
+
+  defp array_value_at(arr, idx) when is_integer(idx) and idx >= 0 do
+    if idx < :array.size(arr), do: :array.get(idx, arr), else: :undefined
+  end
+
+  defp array_value_at(_arr, _idx), do: :undefined
 
   defp find_indexes(0, _result_kind), do: []
   defp find_indexes(len, kind) when kind in [:last_value, :last_index], do: (len - 1)..0//-1
@@ -3069,17 +3084,27 @@ defmodule QuickBEAM.VM.Runtime.Array do
         end
 
       _ ->
-        list = Heap.obj_to_list(ref)
-        array_at(list, [idx])
+        len = array_like_length(obj)
+        i = Runtime.to_int(idx)
+        i = if i < 0, do: len + i, else: i
+
+        if i >= 0 and i < len, do: Get.get(obj, Integer.to_string(i)), else: :undefined
     end
   end
 
-  defp array_at({:qb_arr, arr}, args), do: array_at(:array.to_list(arr), args)
+  defp array_at({:qb_arr, arr}, [idx | _]) do
+    len = :array.size(arr)
+    i = Runtime.to_int(idx)
+    i = if i < 0, do: len + i, else: i
+    array_value_at(arr, i)
+  end
 
   defp array_at(list, [idx | _]) when is_list(list) do
+    tuple = List.to_tuple(list)
+    len = tuple_size(tuple)
     i = Runtime.to_int(idx)
-    i = if i < 0, do: length(list) + i, else: i
-    if i >= 0 and i < length(list), do: Enum.at(list, i), else: :undefined
+    i = if i < 0, do: len + i, else: i
+    tuple_value_at(tuple, i)
   end
 
   defp array_at(_, _), do: :undefined
