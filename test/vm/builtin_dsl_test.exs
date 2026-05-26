@@ -346,4 +346,32 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
     assert %QuickBEAM.VM.Builtin.Meta{ecma: "B.2.2.1", annex: :b} =
              QuickBEAM.VM.Runtime.String.proto_property_meta("substr")
   end
+
+  test "builtin object metadata installs descriptors and tags" do
+    object_proto = QuickBEAM.VM.Heap.wrap(%{})
+    QuickBEAM.VM.Heap.put_object_prototype(object_proto)
+
+    math = QuickBEAM.VM.Runtime.Math.object()
+    QuickBEAM.VM.Runtime.Math.install_metadata(math)
+
+    abs = QuickBEAM.VM.Heap.get_ctor_statics(math)["abs"]
+
+    assert QuickBEAM.VM.Heap.get_ctor_statics(abs)["length"] == 1
+
+    assert QuickBEAM.VM.Heap.get_ctor_prop_desc(abs, "length") == %{
+             configurable: true,
+             enumerable: false,
+             writable: false
+           }
+
+    assert QuickBEAM.VM.Heap.get_ctor_statics(math)[{:symbol, "Symbol.toStringTag"}] == "Math"
+
+    assert QuickBEAM.VM.Heap.get_ctor_prop_desc(math, "PI") == %{
+             configurable: false,
+             enumerable: false,
+             writable: false
+           }
+
+    assert {:obj, _} = QuickBEAM.VM.Heap.get_ctor_statics(math)["__proto__"]
+  end
 end
