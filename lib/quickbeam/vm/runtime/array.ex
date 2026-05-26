@@ -1992,8 +1992,8 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
     {target, result} =
       case Heap.get_obj(ref) do
-        {:qb_arr, arr} ->
-          {filter_target(obj), flatten_array(:array.to_list(arr), depth)}
+        {:qb_arr, _arr} ->
+          {filter_target(obj), flat_array_like(obj, depth)}
 
         list when is_list(list) ->
           {filter_target(obj), flatten_array(list, depth)}
@@ -2006,8 +2006,8 @@ defmodule QuickBEAM.VM.Runtime.Array do
     populate_flat_result(target, result)
   end
 
-  defp flat({:qb_arr, arr}, args),
-    do: Heap.wrap(flatten_array(:array.to_list(arr), flat_depth(args)))
+  defp flat({:qb_arr, _} = value, args),
+    do: Heap.wrap(flat_array_like(value, flat_depth(args)))
 
   defp flat(list, args) when is_list(list), do: Heap.wrap(flatten_array(list, flat_depth(args)))
   defp flat(_, _), do: []
@@ -2063,12 +2063,12 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp flat_item(value), do: flat_item(value, 1)
 
-  defp flattenable_array({:qb_arr, arr}), do: {:ok, :array.to_list(arr)}
+  defp flattenable_array({:qb_arr, _} = value), do: {:array_like, value}
   defp flattenable_array(a) when is_list(a), do: {:ok, a}
 
   defp flattenable_array({:obj, ref} = obj) do
     case Heap.get_obj(ref) do
-      {:qb_arr, arr} -> {:ok, :array.to_list(arr)}
+      {:qb_arr, _arr} -> {:array_like, obj}
       a when is_list(a) -> {:ok, a}
       _ -> if(is_array(obj), do: {:array_like, obj}, else: :error)
     end
@@ -2276,7 +2276,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp find_receiver({:symbol, _, _} = value), do: primitive_object(value)
   defp find_receiver({:bigint, _} = value), do: primitive_object(value)
 
-  defp find_receiver({:qb_arr, arr}), do: :array.to_list(arr)
+  defp find_receiver({:qb_arr, _} = value), do: value
   defp find_receiver(value), do: value
 
   defp find_array_like(this, [fun | rest], result_kind) do
@@ -2374,7 +2374,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     |> every_array_like(args)
   end
 
-  defp every_non_callable({:qb_arr, arr}, args), do: every_non_callable(:array.to_list(arr), args)
+  defp every_non_callable({:qb_arr, _} = value, args), do: every_non_callable(value, args)
 
   defp every_non_callable(list, [fun | rest]) when is_list(list) do
     len = length(list)
