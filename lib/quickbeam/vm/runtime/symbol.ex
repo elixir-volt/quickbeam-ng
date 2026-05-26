@@ -8,8 +8,6 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Semantics.Values
 
-  @well_known_symbol_names ~w(iterator toPrimitive hasInstance toStringTag asyncIterator asyncDispose dispose isConcatSpreadable species match matchAll replace search split unscopables)
-
   defintrinsic "Symbol" do
     constructor(constructor(), length: 0, phase: :fundamental)
 
@@ -21,6 +19,10 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
       method "valueOf", receiver: :symbol do
         this
       end
+
+      getter "description" do
+        symbol_description(this)
+      end
     end
 
     install_with(&__MODULE__.install_builtin/2)
@@ -29,10 +31,6 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
   def install_builtin(ctor, _opts \\ []) do
     with {:obj, proto_ref} <- Heap.get_ctor_statics(ctor)["prototype"] do
       install_prototype_properties(proto_ref)
-    end
-
-    for name <- static_property_names() do
-      install_static_property(ctor, name)
     end
   end
 
@@ -49,15 +47,6 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
     Heap.put_ctor_static(primitive, "length", 1)
     Heap.put_ctor_prop_desc(primitive, "length", PropertyDescriptor.hidden_readonly())
 
-    Heap.put_obj_key(
-      proto_ref,
-      "description",
-      {:accessor, {:builtin, "get description", fn _args, this -> symbol_description(this) end},
-       nil}
-    )
-
-    Heap.put_prop_desc(proto_ref, "description", PropertyDescriptor.accessor())
-
     Heap.put_obj_key(proto_ref, {:symbol, "Symbol.toStringTag"}, "Symbol")
 
     Heap.put_prop_desc(
@@ -65,51 +54,6 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
       {:symbol, "Symbol.toStringTag"},
       PropertyDescriptor.hidden_readonly()
     )
-  end
-
-  defp install_static_property(ctor, name) do
-    value = unique_function(static_property(name))
-    meta = static_property_meta(name) || QuickBEAM.VM.Builtin.meta(name)
-
-    Heap.put_ctor_static(ctor, name, value)
-    Heap.put_ctor_prop_desc(ctor, name, descriptor_from_meta(meta))
-
-    case value do
-      {:builtin, _, _} ->
-        QuickBEAM.VM.Builtin.put_builtin_metadata(
-          value,
-          QuickBEAM.VM.Builtin.meta(name,
-            length: QuickBEAM.VM.Builtin.length(meta),
-            constructable: false
-          )
-        )
-
-        Heap.put_ctor_static(value, "length", QuickBEAM.VM.Builtin.length(meta))
-
-        Heap.put_ctor_prop_desc(value, "length", %{
-          writable: false,
-          enumerable: false,
-          configurable: true
-        })
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp unique_function({:builtin, name, cb}) when is_function(cb, 2) do
-    token = make_ref()
-    {:builtin, name, fn args, this -> {token, cb.(args, this)} |> elem(1) end}
-  end
-
-  defp unique_function(value), do: value
-
-  defp descriptor_from_meta(%QuickBEAM.VM.Builtin.Meta{} = meta) do
-    %{
-      writable: meta.writable?,
-      enumerable: meta.enumerable?,
-      configurable: meta.configurable?
-    }
   end
 
   def constructor do
@@ -143,31 +87,23 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
     end
   end
 
-  static_val("iterator", {:symbol, "Symbol.iterator"})
-  static_val("toPrimitive", {:symbol, "Symbol.toPrimitive"})
-  static_val("hasInstance", {:symbol, "Symbol.hasInstance"})
-  static_val("toStringTag", {:symbol, "Symbol.toStringTag"})
-  static_val("asyncIterator", {:symbol, "Symbol.asyncIterator"})
-  static_val("asyncDispose", {:symbol, "Symbol.asyncDispose"})
-  static_val("dispose", {:symbol, "Symbol.dispose"})
-  static_val("isConcatSpreadable", {:symbol, "Symbol.isConcatSpreadable"})
-  static_val("species", {:symbol, "Symbol.species"})
-  static_val("match", {:symbol, "Symbol.match"})
-  static_val("matchAll", {:symbol, "Symbol.matchAll"})
-  static_val("replace", {:symbol, "Symbol.replace"})
-  static_val("search", {:symbol, "Symbol.search"})
-  static_val("split", {:symbol, "Symbol.split"})
-  static_val("unscopables", {:symbol, "Symbol.unscopables"})
+  constant("iterator", {:symbol, "Symbol.iterator"})
+  constant("toPrimitive", {:symbol, "Symbol.toPrimitive"})
+  constant("hasInstance", {:symbol, "Symbol.hasInstance"})
+  constant("toStringTag", {:symbol, "Symbol.toStringTag"})
+  constant("asyncIterator", {:symbol, "Symbol.asyncIterator"})
+  constant("asyncDispose", {:symbol, "Symbol.asyncDispose"})
+  constant("dispose", {:symbol, "Symbol.dispose"})
+  constant("isConcatSpreadable", {:symbol, "Symbol.isConcatSpreadable"})
+  constant("species", {:symbol, "Symbol.species"})
+  constant("match", {:symbol, "Symbol.match"})
+  constant("matchAll", {:symbol, "Symbol.matchAll"})
+  constant("replace", {:symbol, "Symbol.replace"})
+  constant("search", {:symbol, "Symbol.search"})
+  constant("split", {:symbol, "Symbol.split"})
+  constant("unscopables", {:symbol, "Symbol.unscopables"})
 
-  def well_known_symbol_names, do: @well_known_symbol_names
-
-  def static_property_meta(name) when name in @well_known_symbol_names do
-    QuickBEAM.VM.Builtin.meta(name,
-      writable: false,
-      enumerable: false,
-      configurable: false
-    )
-  end
+  def well_known_symbol_names, do: static_property_names()
 
   defp symbol_value(symbol) do
     QuickBEAM.VM.Builtin.require_receiver!(:symbol, symbol)
