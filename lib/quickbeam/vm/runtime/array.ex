@@ -1051,7 +1051,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp index_of(:undefined, _),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp index_of({:qb_arr, arr}, args), do: index_of(:array.to_list(arr), args)
+  defp index_of({:qb_arr, arr}, args), do: index_of_qb_arr(arr, args)
   defp index_of(value, args), do: index_of_array_like(find_receiver(value), args)
 
   defp index_of_array_like(list, [search_element | rest]) when is_list(list) do
@@ -1095,6 +1095,23 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp index_of_array_like(this, []), do: index_of_array_like(this, [:undefined])
   defp index_of_array_like(_this, _args), do: -1
 
+  defp index_of_qb_arr(arr, [search_element | rest]) do
+    len = :array.size(arr)
+
+    case search_start(rest, len) do
+      :past_end ->
+        -1
+
+      start ->
+        find_index_in_range(start, len, fn idx ->
+          strict_equal_for_index?(array_value_at(arr, idx), search_element)
+        end)
+    end
+  end
+
+  defp index_of_qb_arr(arr, []), do: index_of_qb_arr(arr, [:undefined])
+  defp index_of_qb_arr(_arr, _args), do: -1
+
   defp strict_equal_for_index?(left, right), do: Values.strict_eq(left, right)
 
   defp index_of_indexes(_this, len, start) when start >= len, do: []
@@ -1123,7 +1140,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp last_index_of(:undefined, _),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp last_index_of({:qb_arr, arr}, args), do: last_index_of(:array.to_list(arr), args)
+  defp last_index_of({:qb_arr, arr}, args), do: last_index_of_qb_arr(arr, args)
   defp last_index_of(value, args), do: last_index_of_array_like(find_receiver(value), args)
 
   defp last_index_of_array_like(list, [search_element | rest]) when is_list(list) do
@@ -1168,6 +1185,23 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp last_index_of_array_like(this, []), do: last_index_of_array_like(this, [:undefined])
   defp last_index_of_array_like(_this, _args), do: -1
 
+  defp last_index_of_qb_arr(arr, [search_element | rest]) do
+    len = :array.size(arr)
+
+    case last_search_start(rest, len) do
+      :before_start ->
+        -1
+
+      start ->
+        Enum.find_value(start..0//-1, -1, fn idx ->
+          if strict_equal_for_index?(array_value_at(arr, idx), search_element), do: idx
+        end)
+    end
+  end
+
+  defp last_index_of_qb_arr(arr, []), do: last_index_of_qb_arr(arr, [:undefined])
+  defp last_index_of_qb_arr(_arr, _args), do: -1
+
   defp last_index_of_indexes(this, len, start) when len > 100_000 do
     this
     |> sparse_present_indexes(len)
@@ -1197,7 +1231,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp includes(:undefined, _),
     do: JSThrow.type_error!("Cannot convert undefined or null to object")
 
-  defp includes({:qb_arr, arr}, args), do: includes(:array.to_list(arr), args)
+  defp includes({:qb_arr, arr}, args), do: includes_qb_arr(arr, args)
   defp includes(value, args), do: includes_array_like(find_receiver(value), args)
 
   defp includes_array_like(this, [search_element | rest]) do
@@ -1216,6 +1250,23 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp includes_array_like(this, []), do: includes_array_like(this, [:undefined])
   defp includes_array_like(_this, _args), do: false
+
+  defp includes_qb_arr(arr, [search_element | rest]) do
+    len = :array.size(arr)
+
+    case search_start(rest, len) do
+      :past_end ->
+        false
+
+      start ->
+        find_index_in_range(start, len, fn idx ->
+          same_value_zero?(array_value_at(arr, idx), search_element)
+        end) != -1
+    end
+  end
+
+  defp includes_qb_arr(arr, []), do: includes_qb_arr(arr, [:undefined])
+  defp includes_qb_arr(_arr, _args), do: false
 
   defp search_start(_rest, 0), do: :past_end
   defp search_start([value | _], len), do: search_start_from(to_integer_or_infinity(value), len)
@@ -1445,10 +1496,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   defp join(nil, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
   defp join(:undefined, _), do: JSThrow.type_error!("Cannot convert undefined or null to object")
-  defp join({:qb_arr, arr}, args), do: join(:array.to_list(arr), args)
+  defp join({:qb_arr, _} = value, args), do: join_array_like(value, args)
 
   defp join(value, args) do
-    this = find_receiver(value)
+    value |> find_receiver() |> join_array_like(args)
+  end
+
+  defp join_array_like(this, args) do
     len = array_like_length(this)
     separator = join_separator(args)
 
