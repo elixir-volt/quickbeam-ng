@@ -76,6 +76,26 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     this
   end
 
+  proto_getter "buffer" do
+    prototype_buffer(this)
+  end
+
+  proto_getter "byteLength" do
+    prototype_byte_length(this)
+  end
+
+  proto_getter "byteOffset" do
+    prototype_byte_offset(this)
+  end
+
+  proto_getter "length" do
+    prototype_length(this)
+  end
+
+  symbol_getter :toStringTag do
+    prototype_to_string_tag(this)
+  end
+
   @doc "Returns typed-array type descriptors supported by the runtime."
   def types, do: @types
 
@@ -460,15 +480,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
           Heap.put_prop_desc(ta_base_ref, key, PropertyDescriptor.method())
         end
 
-        for key <- [
-              "buffer",
-              "byteLength",
-              "byteOffset",
-              "length",
-              {:symbol, "Symbol.toStringTag"}
-            ] do
-          Heap.put_prop_desc(ta_base_ref, key, PropertyDescriptor.accessor())
-        end
+        QuickBEAM.VM.Builtin.Installer.install_prototype_specs(ta_base_ref, __MODULE__)
 
         Heap.put_prop_desc(ta_base_ref, "constructor", PropertyDescriptor.constructor())
 
