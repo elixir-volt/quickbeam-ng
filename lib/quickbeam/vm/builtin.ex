@@ -1738,6 +1738,7 @@ defmodule QuickBEAM.VM.Builtin do
   def require_receiver!(:boolean, this), do: require_wrapped_primitive!(this, :boolean, "Boolean")
   def require_receiver!(:number, this), do: require_wrapped_primitive!(this, :number, "Number")
   def require_receiver!(:bigint, this), do: require_bigint_receiver!(this)
+  def require_receiver!(:symbol, this), do: require_symbol_receiver!(this)
 
   defp require_wrapped_primitive!({:obj, ref}, kind, label) do
     case QuickBEAM.VM.Heap.get_obj(ref, %{})
@@ -1772,6 +1773,26 @@ defmodule QuickBEAM.VM.Builtin do
 
   defp require_bigint_receiver!(_value),
     do: QuickBEAM.VM.JSThrow.type_error!("BigInt method called on incompatible receiver")
+
+  defp require_symbol_receiver!({:symbol, _} = value), do: value
+  defp require_symbol_receiver!({:symbol, _, _} = value), do: value
+
+  defp require_symbol_receiver!({:obj, ref}) do
+    case QuickBEAM.VM.Heap.get_obj(ref, %{})
+         |> QuickBEAM.VM.ObjectModel.WrappedPrimitive.value(:symbol) do
+      {:ok, value} ->
+        value
+
+      :error ->
+        QuickBEAM.VM.JSThrow.type_error!(
+          "Symbol.prototype method called on incompatible receiver"
+        )
+    end
+  end
+
+  defp require_symbol_receiver!(_value),
+    do:
+      QuickBEAM.VM.JSThrow.type_error!("Symbol.prototype method called on incompatible receiver")
 
   def iterator_from(items) do
     iter = QuickBEAM.VM.Heap.wrap_iterator(items)
