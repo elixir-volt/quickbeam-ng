@@ -17,14 +17,6 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
     Heap.put_obj_key(proto_ref, "__proto__", parent)
   end
 
-  @doc "Installs methods using a custom method lookup function."
-  def install_methods_with(proto_ref, names, lookup_fun) when is_function(lookup_fun, 1) do
-    for name <- names do
-      Heap.put_obj_key(proto_ref, name, lookup_fun.(name))
-      Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
-    end
-  end
-
   @doc "Installs a non-enumerable constructor link on a prototype object."
   def install_constructor_link(proto_ref, ctor) do
     InternalMethods.set({:obj, proto_ref}, "constructor", ctor)

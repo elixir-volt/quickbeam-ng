@@ -58,13 +58,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref, object_proto)
       Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
-
-      InstallerHelpers.install_methods_with(
-        proto_ref,
-        ~w(add has delete),
-        &weak_proto_property/1
-      )
-
+      install_weak_set_methods(proto_ref)
       InstallerHelpers.install_to_string_tag(proto_ref, "WeakSet")
     end)
   end
@@ -221,6 +215,13 @@ defmodule QuickBEAM.VM.Runtime.Set do
 
   @doc "Returns the SetData size for Set.prototype.size."
   def size(this), do: this |> require_strong_set_ref!() |> data() |> length()
+
+  defp install_weak_set_methods(proto_ref) do
+    for name <- ~w(add has delete) do
+      Heap.put_obj_key(proto_ref, name, weak_proto_property(name))
+      Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
+    end
+  end
 
   def weak_proto_property("has"), do: {:builtin, "has", &weak_has/2}
   def weak_proto_property("add"), do: {:builtin, "add", &weak_add/2}

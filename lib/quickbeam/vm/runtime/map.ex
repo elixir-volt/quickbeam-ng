@@ -60,13 +60,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref, object_proto)
       Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
-
-      InstallerHelpers.install_methods_with(
-        proto_ref,
-        ~w(get set has delete getOrInsert getOrInsertComputed),
-        &weak_proto_property/1
-      )
-
+      install_weak_map_methods(proto_ref)
       InstallerHelpers.install_to_string_tag(proto_ref, "WeakMap")
     end)
   end
@@ -272,6 +266,13 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   @doc "Returns the MapData size for Map.prototype.size."
   def size(this), do: this |> require_strong_map_ref!() |> data() |> map_size()
+
+  defp install_weak_map_methods(proto_ref) do
+    for name <- ~w(get set has delete getOrInsert getOrInsertComputed) do
+      Heap.put_obj_key(proto_ref, name, weak_proto_property(name))
+      Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
+    end
+  end
 
   def weak_proto_property("get"), do: {:builtin, "get", &weak_get/2}
   def weak_proto_property("set"), do: {:builtin, "set", &weak_set/2}
