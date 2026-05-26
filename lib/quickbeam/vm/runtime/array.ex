@@ -1332,7 +1332,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp slice_start(args, len) do
-    args |> Enum.at(0, 0) |> to_integer_or_infinity() |> slice_relative_index(len)
+    args |> arg(0, 0) |> to_integer_or_infinity() |> slice_relative_index(len)
   end
 
   defp slice_end(args, len) do
@@ -2538,14 +2538,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end
 
     if length(args) >= 2 do
-      raw_mapfn = Enum.at(args, 1)
+      raw_mapfn = arg(args, 1, :undefined)
 
       if raw_mapfn != :undefined and not QuickBEAM.VM.Builtin.callable?(raw_mapfn) do
         throw({:js_throw, Heap.make_error("mapFn is not a function", "TypeError")})
       end
     end
 
-    this_arg = Enum.at(args, 2, :undefined)
+    this_arg = arg(args, 2, :undefined)
 
     result =
       cond do
@@ -2912,7 +2912,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
             if copy_within_source_has_holes?(obj, start_idx, end_idx, len, target) do
               copy_within_present_properties(obj, len, target, start_idx, end_idx)
             else
-              slice = Enum.slice(list, start_idx, max(end_idx - start_idx, 0))
+              slice =
+                list |> Enum.slice(start_idx, max(end_idx - start_idx, 0)) |> List.to_tuple()
+
+              slice_len = tuple_size(slice)
 
               new_list =
                 list
@@ -2920,8 +2923,8 @@ defmodule QuickBEAM.VM.Runtime.Array do
                 |> Enum.map(fn {item, i} ->
                   offset = i - target
 
-                  if i >= target and offset < length(slice),
-                    do: Enum.at(slice, offset),
+                  if i >= target and offset < slice_len,
+                    do: tuple_value_at(slice, offset),
                     else: item
                 end)
 
@@ -3310,14 +3313,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp array_with(value, args) do
     receiver = find_receiver(value)
     len = array_like_length(receiver)
-    relative_index = args |> Enum.at(0, :undefined) |> to_integer_or_infinity()
+    relative_index = args |> arg(0, :undefined) |> to_integer_or_infinity()
     actual_index = with_actual_index(relative_index, len)
 
     if actual_index < 0 or actual_index >= len do
       JSThrow.range_error!("Invalid index")
     end
 
-    replacement = Enum.at(args, 1, :undefined)
+    replacement = arg(args, 1, :undefined)
     target = copy_array_target(len)
 
     if len > 0 do
