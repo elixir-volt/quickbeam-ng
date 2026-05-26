@@ -109,7 +109,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
          _symbol_proto
        )
        when is_boolean(value),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:boolean) => value, "__proto__" => boolean_proto})
+       do: Heap.wrap(%{slot_key(:BooleanData) => value, "__proto__" => boolean_proto})
 
   defp object_value(
          value,
@@ -121,7 +121,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
          _symbol_proto
        )
        when is_number(value),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:number) => value, "__proto__" => number_proto})
+       do: Heap.wrap(%{slot_key(:NumberData) => value, "__proto__" => number_proto})
 
   defp object_value(
          {:bigint, _} = value,
@@ -132,7 +132,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
          _string_proto,
          _symbol_proto
        ),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:bigint) => value, "__proto__" => bigint_proto})
+       do: Heap.wrap(%{slot_key(:BigIntData) => value, "__proto__" => bigint_proto})
 
   defp object_value(
          value,
@@ -144,7 +144,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
          _symbol_proto
        )
        when is_binary(value),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:string) => value, "__proto__" => string_proto})
+       do: Heap.wrap(%{slot_key(:StringData) => value, "__proto__" => string_proto})
 
   defp object_value(
          {:symbol, _} = value,
@@ -155,7 +155,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
          _string_proto,
          symbol_proto
        ),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
+       do: Heap.wrap(%{slot_key(:SymbolData) => value, "__proto__" => symbol_proto})
 
   defp object_value(
          {:symbol, _, _} = value,
@@ -166,7 +166,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
          _string_proto,
          symbol_proto
        ),
-       do: Heap.wrap(%{WrappedPrimitive.slot(:symbol) => value, "__proto__" => symbol_proto})
+       do: Heap.wrap(%{slot_key(:SymbolData) => value, "__proto__" => symbol_proto})
 
   defp object_value(
          _value,
