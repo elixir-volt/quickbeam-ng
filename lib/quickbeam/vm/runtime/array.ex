@@ -63,53 +63,16 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
   def prototype(object_proto \\ Heap.get_object_prototype()) do
-    mod = __MODULE__
-    methods = ~w(push pop shift unshift map filter reduce reduceRight forEach indexOf
-      lastIndexOf toString toLocaleString includes slice splice join concat reverse sort
-      flat find findIndex findLast findLastIndex some every fill copyWithin entries keys values
-      at flatMap toReversed toSorted toSpliced with)
-
-    proto_map =
-      Enum.reduce(methods, %{}, fn name, acc ->
-        Map.put(
-          acc,
-          name,
-          builtin(
-            name,
-            fn args, this ->
-              {:builtin, _, cb} = mod.proto_property(name)
-              cb.(args, this)
-            end,
-            mod.proto_property_meta(name) || []
-          )
-        )
-      end)
-
-    sym_iter = {:symbol, "Symbol.iterator"}
-
-    proto_map = Map.put(proto_map, sym_iter, Map.fetch!(proto_map, "values"))
-
-    for name <- ~w(entries keys values) do
-      method = Map.fetch!(proto_map, name)
-      Heap.put_ctor_static(method, "length", 0)
-
-      Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
-    end
-
     proto_map =
       case object_proto do
-        {:obj, _} -> Map.put(proto_map, "__proto__", object_proto)
-        _ -> proto_map
+        {:obj, _} -> %{"__proto__" => object_proto}
+        _ -> %{}
       end
 
     proto = Heap.wrap(proto_map)
     {:obj, ref} = proto
 
-    for name <- methods do
-      Heap.put_prop_desc(ref, name, PropertyDescriptor.method())
-    end
-
-    Heap.put_prop_desc(ref, sym_iter, PropertyDescriptor.method())
+    QuickBEAM.VM.Builtin.Installer.install_prototype_specs(ref, __MODULE__)
 
     unscopables_map = %{
       "copyWithin" => true,
