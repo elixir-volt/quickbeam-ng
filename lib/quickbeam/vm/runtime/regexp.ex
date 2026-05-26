@@ -22,7 +22,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   @family_emoji_first <<0x1F468::utf8>>
 
   @accessors ~w(source flags hasIndices global ignoreCase multiline dotAll unicode unicodeSets sticky)
-  @prototype_methods ~w(exec test toString)
   @symbol_methods [
     {:symbol, "Symbol.match"},
     {:symbol, "Symbol.matchAll"},
@@ -31,19 +30,33 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     {:symbol, "Symbol.split"}
   ]
 
-  builtin_definition("RegExp",
-    constructor: &QuickBEAM.VM.Runtime.ConstructorCallbacks.regexp/2,
-    length: 2,
-    phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/2
-  )
+  defintrinsic "RegExp" do
+    constructor(&QuickBEAM.VM.Runtime.ConstructorCallbacks.regexp/2,
+      length: 2,
+      phase: :fundamental
+    )
+
+    prototype extends: :object do
+      method "test" do
+        test(this, args)
+      end
+
+      method "exec" do
+        exec(this, args)
+      end
+
+      method "toString" do
+        regexp_to_string(this)
+      end
+    end
+
+    install_with(&__MODULE__.install_builtin/2)
+  end
 
   def install_builtin(ctor, _opts \\ []) do
-    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
     InstallerHelpers.install_species(ctor)
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_methods(proto_ref, __MODULE__, @prototype_methods)
       InstallerHelpers.install_accessors_with(proto_ref, @accessors, &proto_accessor/1)
       InstallerHelpers.install_methods(proto_ref, __MODULE__, @symbol_methods)
     end)
@@ -56,19 +69,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     end
   end
 
-  proto "test" do
-    test(this, args)
-  end
-
-  proto "exec" do
-    exec(this, args)
-  end
-
   def exec_result(regexp, string) when is_binary(string), do: exec(regexp, [string])
-
-  proto "toString" do
-    regexp_to_string(this)
-  end
 
   def proto_property({:symbol, "Symbol.match"}) do
     {:builtin, "[Symbol.match]", fn args, this -> regexp_match(this, args) end}
