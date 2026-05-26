@@ -32,8 +32,12 @@ defmodule QuickBEAM.VM.Runtime.Map do
     )
   end
 
-  symbol_getter :species do
-    this
+  static_methods do
+    symbol :species do
+      get do
+        this
+      end
+    end
   end
 
   def install_map_builtin(ctor, opts \\ []) do

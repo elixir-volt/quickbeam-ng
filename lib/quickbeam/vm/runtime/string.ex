@@ -258,11 +258,15 @@ defmodule QuickBEAM.VM.Runtime.String do
   end
 
   @ecma "22.1.3.36"
-  proto {:symbol, "Symbol.iterator"} do
-    this
-    |> coerce_string_this()
-    |> string_iterator_items()
-    |> string_iterator_from()
+  prototype_methods do
+    symbol :iterator do
+      method do
+        this
+        |> coerce_string_this()
+        |> string_iterator_items()
+        |> string_iterator_from()
+      end
+    end
   end
 
   # ── Implementations ──

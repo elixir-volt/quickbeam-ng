@@ -92,8 +92,12 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
     install_with(&__MODULE__.install_builtin/2)
   end
 
-  symbol_getter :species do
-    this
+  static_methods do
+    symbol :species do
+      get do
+        this
+      end
+    end
   end
 
   def install_builtin(ctor, _opts \\ []) do

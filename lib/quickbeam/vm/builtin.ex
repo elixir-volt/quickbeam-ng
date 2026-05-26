@@ -24,7 +24,9 @@ defmodule QuickBEAM.VM.Builtin do
         args_method "from", &from_args/1
         receiver_method "slice", &slice/2
         this_method "toJSON", &to_json/1
-        symbol_method :iterator do ... end
+        symbol :iterator do
+          method do ... end
+        end
         accessor "size" do
           get do ... end
         end
@@ -903,6 +905,7 @@ defmodule QuickBEAM.VM.Builtin do
           proto_getter: 3,
           static_getter: 2,
           static_getter: 3,
+          symbol: 2,
           symbol_method: 2,
           symbol_method: 3,
           symbol_accessor: 2,
@@ -1618,6 +1621,7 @@ defmodule QuickBEAM.VM.Builtin do
 
   defp prototype_declaration?({:@, _, _}), do: true
   defp prototype_declaration?({:method, _, _}), do: true
+  defp prototype_declaration?({:symbol, _, _}), do: true
   defp prototype_declaration?({:symbol_method, _, _}), do: true
   defp prototype_declaration?({:accessor, _, _}), do: true
   defp prototype_declaration?({:symbol_accessor, _, _}), do: true
@@ -1626,6 +1630,10 @@ defmodule QuickBEAM.VM.Builtin do
   defp prototype_declaration?({:property, _, _}), do: true
   defp prototype_declaration?({:species_accessor, _, _}), do: true
   defp prototype_declaration?(_entry), do: false
+
+  defmacro symbol(_name, do: _block) do
+    raise ArgumentError, "symbol is only available inside builtin object/spec blocks"
+  end
 
   defmacro symbol_method(name, opts \\ [], do: body) do
     key = symbol_key(name)
@@ -1662,6 +1670,9 @@ defmodule QuickBEAM.VM.Builtin do
       {:method, meta, [name, opts, [do: body]]} ->
         {target, meta, [name, opts, [do: body]]}
 
+      {:symbol, meta, [name, [do: symbol_block]]} ->
+        contextual_symbol_entry(target, meta, name, symbol_block)
+
       {:symbol_method, meta, [name, [do: body]]} ->
         {target, meta, [symbol_key(name), [do: body]]}
 
@@ -1696,6 +1707,26 @@ defmodule QuickBEAM.VM.Builtin do
       other ->
         other
     end)
+  end
+
+  defp contextual_symbol_entry(target, meta, name, block) do
+    key = symbol_key(name)
+
+    case normalize_block(block) do
+      [{:method, method_meta, [[do: body]]}] ->
+        {target, method_meta, [key, [do: body]]}
+
+      [{:method, method_meta, [opts, [do: body]]}] when is_list(opts) ->
+        {target, method_meta, [key, opts, [do: body]]}
+
+      entries when is_list(entries) ->
+        if Enum.any?(entries, &match?({kind, _, _} when kind in [:get, :set], &1)) do
+          target_accessor = if target == :proto, do: :proto_accessor, else: :static_accessor
+          {target_accessor, meta, [key, [do: block]]}
+        else
+          raise ArgumentError, "symbol #{inspect(name)} must declare method/get/set"
+        end
+    end
   end
 
   defp symbol_key({:symbol, _} = key), do: key
@@ -1871,8 +1902,29 @@ defmodule QuickBEAM.VM.Builtin do
     {name, quote(do: QuickBEAM.VM.Builtin.builtin_this(unquote(name), unquote(callback)))}
   end
 
+  defp build_map_entry({:symbol, _, [name, [do: block]]}, pending_opts) do
+    key = symbol_key(name)
+
+    case normalize_block(block) do
+      [{:method, _, [[do: body]]}] ->
+        {key, build_builtin(key, body, pending_opts)}
+
+      [{:method, _, [opts, [do: body]]}] when is_list(opts) ->
+        {key, build_builtin(key, body, Keyword.merge(pending_opts, opts))}
+
+      entries when is_list(entries) ->
+        if Enum.any?(entries, &match?({kind, _, _} when kind in [:get, :set], &1)) do
+          {getter, setter} = build_accessor_parts(key, block, pending_opts)
+          {key, quote(do: {:accessor, unquote(getter), unquote(setter)})}
+        else
+          raise ArgumentError, "symbol #{inspect(name)} must declare method/get/set"
+        end
+    end
+  end
+
   defp build_map_entry({:symbol_method, _, [name, [do: body]]}, pending_opts) do
-    {{:symbol, name}, build_builtin("[#{name}]", body, pending_opts)}
+    key = symbol_key(name)
+    {key, build_builtin(key, body, pending_opts)}
   end
 
   defp build_map_entry({:accessor, _, [name, [do: block]]}, pending_opts) do

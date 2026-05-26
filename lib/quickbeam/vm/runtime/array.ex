@@ -36,8 +36,12 @@ defmodule QuickBEAM.VM.Runtime.Array do
     install_with(&__MODULE__.install_builtin/2)
   end
 
-  symbol_getter :species do
-    this
+  static_methods do
+    symbol :species do
+      get do
+        this
+      end
+    end
   end
 
   @doc "Installs Array-specific prototype and constructor metadata."
@@ -336,9 +340,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   @ecma "23.1.3.40"
-  proto {:symbol, "Symbol.iterator"} do
-    require_object_coercible!(this)
-    make_array_iterator(this, :values)
+  prototype_methods do
+    symbol :iterator do
+      method do
+        require_object_coercible!(this)
+        make_array_iterator(this, :values)
+      end
+    end
   end
 
   @doc "Returns a prototype property value for the given JavaScript property key."
@@ -3205,8 +3213,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
       object do
         prop("next", {:builtin, "next", fn _args, this -> array_iterator_next(this) end})
 
-        symbol_method :iterator do
-          this
+        symbol :iterator do
+          method do
+            this
+          end
         end
       end
 

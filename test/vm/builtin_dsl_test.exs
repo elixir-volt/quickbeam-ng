@@ -58,11 +58,13 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
           "prototype"
         end
 
-        symbol_method :iterator do
-          this
+        symbol :iterator do
+          method do
+            this
+          end
         end
 
-        symbol_accessor :toStringTag do
+        symbol :toStringTag do
           get do
             "PrototypeBlockSample"
           end

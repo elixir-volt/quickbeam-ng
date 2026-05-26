@@ -72,8 +72,12 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     static_of(args, this)
   end
 
-  symbol_getter :species do
-    this
+  static_methods do
+    symbol :species do
+      get do
+        this
+      end
+    end
   end
 
   proto_getter "buffer" do
@@ -92,8 +96,12 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     prototype_length(this)
   end
 
-  symbol_getter :toStringTag do
-    prototype_to_string_tag(this)
+  prototype_methods do
+    symbol :toStringTag do
+      get do
+        prototype_to_string_tag(this)
+      end
+    end
   end
 
   @doc "Returns typed-array type descriptors supported by the runtime."
@@ -155,8 +163,12 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     typed_array_iterator(this, :values)
   end
 
-  proto {:symbol, "Symbol.iterator"}, length: 0 do
-    typed_array_iterator(this, :values)
+  prototype_methods do
+    symbol :iterator do
+      method length: 0 do
+        typed_array_iterator(this, :values)
+      end
+    end
   end
 
   proto "every", length: 1 do
@@ -280,24 +292,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   @doc "Returns properties installed on %TypedArray%.prototype."
   def base_prototype_properties do
-    Map.merge(prototype_properties(), %{
-      "buffer" => {:accessor, accessor_getter("get buffer", &prototype_buffer/1), nil},
-      "byteLength" =>
-        {:accessor, accessor_getter("get byteLength", &prototype_byte_length/1), nil},
-      "byteOffset" =>
-        {:accessor, accessor_getter("get byteOffset", &prototype_byte_offset/1), nil},
-      "length" => {:accessor, accessor_getter("get length", &prototype_length/1), nil},
-      {:symbol, "Symbol.toStringTag"} =>
-        {:accessor, accessor_getter("get [Symbol.toStringTag]", &prototype_to_string_tag/1), nil}
-    })
-  end
-
-  defp accessor_getter(name, callback) do
-    getter = {:builtin, name, fn _args, this -> callback.(this) end}
-    Heap.put_ctor_static(getter, "length", 0)
-    Heap.put_ctor_prop_desc(getter, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(getter, "name", PropertyDescriptor.hidden_readonly())
-    getter
+    proto_property_names()
+    |> Enum.into(%{}, fn key -> {key, proto_property(key)} end)
   end
 
   defp prototype_buffer(this), do: typed_array_state!(this) |> Map.get("buffer", :undefined)

@@ -26,8 +26,12 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
     )
   end
 
-  symbol_getter :species do
-    this
+  static_methods do
+    symbol :species do
+      get do
+        this
+      end
+    end
   end
 
   def install_builtin(ctor) do
