@@ -16,24 +16,24 @@ defmodule QuickBEAM.VM.Runtime.Date do
   @epoch_gs 719_528 * 86_400
   @time_clip_limit 8_640_000_000_000_000
 
-  builtin_definition("Date",
-    constructor: &__MODULE__.constructor/2,
-    length: 7,
-    phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/2
-  )
+  defintrinsic "Date" do
+    constructor(&__MODULE__.constructor/2,
+      length: 7,
+      phase: :fundamental
+    )
+
+    prototype extends: :object do
+    end
+
+    install_with(&__MODULE__.install_builtin/2)
+  end
 
   def install_builtin(ctor, _opts \\ []) do
-    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
-
     for name <- static_property_names() do
       install_static_property(ctor, name)
     end
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_methods(proto_ref, __MODULE__, proto_property_names())
-      Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
-
       sym_key = {:symbol, "Symbol.toPrimitive"}
 
       to_prim =
