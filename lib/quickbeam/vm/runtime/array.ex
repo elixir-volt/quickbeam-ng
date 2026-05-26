@@ -2305,25 +2305,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
     JSThrow.type_error!("predicate must be callable")
   end
 
-  defp find_value_at(list, idx) when is_list(list), do: list_value_at(list, idx)
-  defp find_value_at({:qb_arr, arr}, idx), do: array_value_at(arr, idx)
-  defp find_value_at({:tuple, tuple}, idx), do: tuple_value_at(tuple, idx)
-
-  defp find_value_at({:obj, _} = value, idx) do
-    key = Integer.to_string(idx)
-    current = Get.get(value, key)
-
-    if current == :undefined and not OwnProperty.present?(value, key) do
-      case InternalMethods.get_prototype_of(value) do
-        {:obj, _} = proto -> Get.get(proto, key)
-        _ -> current
-      end
-    else
-      current
-    end
-  end
-
-  defp find_value_at(value, idx), do: Get.get(value, Integer.to_string(idx))
+  defp find_value_at(value, idx), do: value |> array_source() |> source_get(idx)
 
   defp list_value_at(list, idx), do: list |> List.to_tuple() |> tuple_value_at(idx)
 
@@ -2437,7 +2419,40 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp primitive_object(value),
     do: QuickBEAM.VM.Runtime.ConstructorCallbacks.object([value], nil)
 
-  defp array_like_length({:obj, ref}) do
+  defp array_source({:obj, _} = obj), do: {:object, obj}
+  defp array_source({:qb_arr, arr}), do: {:qb_arr, arr}
+  defp array_source({:tuple, tuple}), do: {:tuple, tuple}
+  defp array_source(list) when is_list(list), do: {:list, list}
+  defp array_source(value), do: {:value, value}
+
+  defp source_length({:object, obj}), do: object_array_like_length(obj)
+  defp source_length({:qb_arr, arr}), do: :array.size(arr)
+  defp source_length({:tuple, tuple}), do: tuple_size(tuple)
+  defp source_length({:list, list}), do: length(list)
+  defp source_length({:value, value}), do: to_length(Get.get(value, "length"))
+
+  defp source_get({:object, value}, idx) do
+    key = Integer.to_string(idx)
+    current = Get.get(value, key)
+
+    if current == :undefined and not OwnProperty.present?(value, key) do
+      case InternalMethods.get_prototype_of(value) do
+        {:obj, _} = proto -> Get.get(proto, key)
+        _ -> current
+      end
+    else
+      current
+    end
+  end
+
+  defp source_get({:qb_arr, arr}, idx), do: array_value_at(arr, idx)
+  defp source_get({:tuple, tuple}, idx), do: tuple_value_at(tuple, idx)
+  defp source_get({:list, list}, idx), do: list_value_at(list, idx)
+  defp source_get({:value, value}, idx), do: Get.get(value, Integer.to_string(idx))
+
+  defp array_like_length(value), do: value |> array_source() |> source_length()
+
+  defp object_array_like_length({:obj, ref}) do
     if Heap.get_array_prop(ref, "__arguments__") == true do
       to_length(Get.get({:obj, ref}, "length"))
     else
@@ -2453,10 +2468,6 @@ defmodule QuickBEAM.VM.Runtime.Array do
       end
     end
   end
-
-  defp array_like_length({:qb_arr, arr}), do: :array.size(arr)
-  defp array_like_length(list) when is_list(list), do: length(list)
-  defp array_like_length(value), do: to_length(Get.get(value, "length"))
 
   defp array_like_object_length(obj) do
     length = to_length(Get.get(obj, "length"))
@@ -3353,16 +3364,18 @@ defmodule QuickBEAM.VM.Runtime.Array do
         QuickBEAM.VM.Runtime.TypedArray.element_count(obj)
 
       _ ->
-        array_like_length(obj)
+        source_length(array_source(obj))
     end
   end
 
-  defp array_iterator_length({:qb_arr, arr}), do: :array.size(arr)
-  defp array_iterator_length({:tuple, tuple}), do: tuple_size(tuple)
-  defp array_iterator_length(_), do: 0
+  defp array_iterator_length(target), do: target |> array_source() |> source_length()
 
-  defp array_iterator_value({:obj, _} = obj, index), do: Get.get(obj, Integer.to_string(index))
-  defp array_iterator_value({:qb_arr, arr}, index), do: :array.get(index, arr)
-  defp array_iterator_value({:tuple, tuple}, index), do: :erlang.element(index + 1, tuple)
-  defp array_iterator_value(_target, _index), do: :undefined
+  defp array_iterator_value({:obj, ref} = obj, index) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} -> Get.get(obj, Integer.to_string(index))
+      _ -> source_get(array_source(obj), index)
+    end
+  end
+
+  defp array_iterator_value(target, index), do: target |> array_source() |> source_get(index)
 end
