@@ -532,20 +532,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       _ ->
         ta_base_ref = make_ref()
 
-        Heap.put_obj(
-          ta_base_ref,
-          base_prototype_properties()
-          |> Map.put("constructor", ta_base)
-          |> Map.put(
-            "toString",
-            QuickBEAM.VM.ObjectModel.Get.get(Heap.get_array_proto(), "toString")
-          )
-          |> Map.put("__proto__", Heap.get_object_prototype())
-        )
-
-        for key <- Map.keys(prototype_properties()) do
-          Heap.put_prop_desc(ta_base_ref, key, PropertyDescriptor.method())
-        end
+        Heap.put_obj(ta_base_ref, %{
+          "constructor" => ta_base,
+          "__proto__" => Heap.get_object_prototype()
+        })
 
         QuickBEAM.VM.Builtin.Installer.install_prototype_specs(ta_base_ref, __MODULE__)
 
