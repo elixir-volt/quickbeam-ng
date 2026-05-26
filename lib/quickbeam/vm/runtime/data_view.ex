@@ -13,41 +13,29 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   alias QuickBEAM.VM.Semantics.Coercion
 
   @slot "__data_view__"
-  @methods ~w(
-    getBigInt64 getBigUint64 getFloat16 getFloat32 getFloat64 getInt8 getInt16 getInt32
-    getUint8 getUint16 getUint32 setBigInt64 setBigUint64 setFloat16 setFloat32 setFloat64
-    setInt8 setInt16 setInt32 setUint8 setUint16 setUint32
-  )
+  defintrinsic "DataView" do
+    constructor(&__MODULE__.constructor/2,
+      length: 1,
+      phase: :fundamental
+    )
 
-  builtin_definition("DataView",
-    constructor: &__MODULE__.constructor/2,
-    length: 1,
-    phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/2
-  )
+    prototype extends: :object do
+      to_string_tag("DataView")
+    end
 
-  def install_builtin(ctor, opts \\ []) do
-    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+    install_with(&__MODULE__.install_builtin/2)
+  end
 
-    Heap.put_ctor_static(ctor, "length", 1)
-    Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
-
+  def install_builtin(ctor, _opts \\ []) do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_object_parent(proto_ref, object_proto)
-      InstallerHelpers.install_constructor_link(proto_ref, ctor)
-
       for name <- ~w(buffer byteLength byteOffset) do
         Heap.put_obj_key(proto_ref, name, accessor(name))
         Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.accessor())
       end
 
-      InstallerHelpers.install_methods(proto_ref, __MODULE__, proto_property_names())
-      InstallerHelpers.install_to_string_tag(proto_ref, "DataView")
+      QuickBEAM.VM.Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
     end)
   end
-
-  def proto_property_names, do: @methods
 
   def prevalidate_construct_args!([{:obj, buffer_ref}, offset | rest])
       when is_integer(offset) or is_float(offset) do
