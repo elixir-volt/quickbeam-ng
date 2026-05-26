@@ -882,9 +882,11 @@ defmodule QuickBEAM.VM.Builtin do
           property: 3,
           defintrinsic: 2,
           defintrinsic: 3,
+          prototype: 2,
           prototype_object: 1,
           object_parent: 1,
           internal_slot: 2,
+          properties: 0,
           prototype_specs: 0,
           constructor_link: 0,
           prototype_methods: 1,
@@ -1120,6 +1122,22 @@ defmodule QuickBEAM.VM.Builtin do
     build_builtin_definition(name, opts, __CALLER__)
   end
 
+  @doc "Configures the intrinsic prototype object inside an install block."
+  defmacro prototype(opts, do: block) when is_list(opts) do
+    parent = Keyword.get(opts, :extends, :object)
+
+    quote do
+      QuickBEAM.VM.Runtime.InstallerHelpers.with_prototype(var!(ctor), fn var!(proto_ref) ->
+        QuickBEAM.VM.Runtime.InstallerHelpers.install_object_parent(
+          var!(proto_ref),
+          unquote(prototype_parent(parent))
+        )
+
+        unquote(block)
+      end)
+    end
+  end
+
   @doc "Runs an install block against the intrinsic prototype object."
   defmacro prototype_object(do: block) do
     quote do
@@ -1128,6 +1146,14 @@ defmodule QuickBEAM.VM.Builtin do
       end)
     end
   end
+
+  defp prototype_parent(:object) do
+    quote do
+      Keyword.get(var!(opts), :object_proto, QuickBEAM.VM.Heap.get_object_prototype())
+    end
+  end
+
+  defp prototype_parent(parent), do: parent
 
   @doc "Sets the current prototype object's parent."
   defmacro object_parent(parent) do
@@ -1146,10 +1172,17 @@ defmodule QuickBEAM.VM.Builtin do
     end
   end
 
+  @doc "Installs declared properties in the current object context."
+  defmacro properties do
+    quote do
+      QuickBEAM.VM.Builtin.Installer.install_prototype_specs(var!(proto_ref), __MODULE__)
+    end
+  end
+
   @doc "Installs declared prototype property specs on the current prototype object."
   defmacro prototype_specs do
     quote do
-      QuickBEAM.VM.Builtin.Installer.install_prototype_specs(var!(proto_ref), __MODULE__)
+      properties()
     end
   end
 

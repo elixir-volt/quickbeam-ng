@@ -21,12 +21,9 @@ defmodule QuickBEAM.VM.Runtime.Boolean do
     end
 
     install do
-      object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
-
-      prototype_object do
-        object_parent(object_proto)
+      prototype extends: :object do
         internal_slot(WrappedPrimitive.slot(:boolean), false)
-        prototype_specs()
+        properties()
         constructor_link()
       end
     end
