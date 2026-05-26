@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   alias QuickBEAM.VM.Runtime
 
   defintrinsics do
-    intrinsic "ArrayBuffer", [] do
+    intrinsic "ArrayBuffer" do
       constructor(&__MODULE__.constructor/2, length: 1, phase: :fundamental)
 
       prototype extends: :object do
@@ -17,7 +17,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
       end
     end
 
-    intrinsic "SharedArrayBuffer", [] do
+    intrinsic "SharedArrayBuffer" do
       constructor(&__MODULE__.constructor/2, length: 1, phase: :fundamental)
 
       prototype extends: :object do

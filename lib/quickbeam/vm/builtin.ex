@@ -1252,12 +1252,24 @@ defmodule QuickBEAM.VM.Builtin do
     raise ArgumentError, "intrinsic/3 is only available inside defintrinsics blocks"
   end
 
-  defp multi_intrinsic_definition({:intrinsic, _, [name, opts]}, caller) when is_list(opts) do
-    build_definition_struct(name, opts, caller)
+  defp multi_intrinsic_definition({:intrinsic, _, [name, [do: block]]}, caller) do
+    multi_intrinsic_block_definition(name, [], block, caller)
   end
 
   defp multi_intrinsic_definition({:intrinsic, _, [name, opts, [do: block]]}, caller)
        when is_list(opts) do
+    multi_intrinsic_block_definition(name, opts, block, caller)
+  end
+
+  defp multi_intrinsic_definition({:intrinsic, _, [name, opts]}, caller) when is_list(opts) do
+    build_definition_struct(name, opts, caller)
+  end
+
+  defp multi_intrinsic_definition(other, _caller) do
+    raise ArgumentError, "unsupported defintrinsics entry: #{Macro.to_string(other)}"
+  end
+
+  defp multi_intrinsic_block_definition(name, opts, block, caller) do
     {block_opts, declarations} = parse_intrinsic_block(block)
 
     if declarations != [] do
@@ -1266,10 +1278,6 @@ defmodule QuickBEAM.VM.Builtin do
     end
 
     build_definition_struct(name, Keyword.merge(opts, block_opts), caller)
-  end
-
-  defp multi_intrinsic_definition(other, _caller) do
-    raise ArgumentError, "unsupported defintrinsics entry: #{Macro.to_string(other)}"
   end
 
   @doc "Defines an ECMAScript intrinsic constructor. Alias for `builtin_definition/2`."
