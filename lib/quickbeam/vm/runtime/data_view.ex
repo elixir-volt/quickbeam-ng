@@ -7,7 +7,6 @@ defmodule QuickBEAM.VM.Runtime.DataView do
   import QuickBEAM.VM.Heap.Keys, only: [buffer: 0, typed_array: 0]
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime}
-  alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Semantics.Coercion
 
@@ -33,14 +32,6 @@ defmodule QuickBEAM.VM.Runtime.DataView do
 
       to_string_tag("DataView")
     end
-
-    install_with(&__MODULE__.install_builtin/2)
-  end
-
-  def install_builtin(ctor, _opts \\ []) do
-    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      QuickBEAM.VM.Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
-    end)
   end
 
   def prevalidate_construct_args!([{:obj, buffer_ref}, offset | rest])
