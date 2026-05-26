@@ -6,30 +6,15 @@ defmodule QuickBEAM.VM.Runtime.Proxy do
 
   use QuickBEAM.VM.Builtin
 
-  builtin_definition("Proxy",
-    constructor: &ConstructorCallbacks.proxy/2,
-    length: 2,
-    phase: :fundamental,
-    module: __MODULE__,
-    after_install: &__MODULE__.install_builtin/1
-  )
+  defintrinsic "Proxy" do
+    constructor(&ConstructorCallbacks.proxy/2,
+      length: 2,
+      phase: :fundamental
+    )
+  end
 
-  def install_builtin(ctor) do
-    revocable = {:builtin, "revocable", &revocable/2}
-    Heap.put_ctor_static(ctor, "revocable", revocable)
-    QuickBEAM.VM.Builtin.put_function_metadata(revocable, "revocable", 2)
-
-    Heap.put_ctor_prop_desc(revocable, "length", %{
-      writable: false,
-      enumerable: false,
-      configurable: true
-    })
-
-    Heap.put_ctor_prop_desc(revocable, "name", %{
-      writable: false,
-      enumerable: false,
-      configurable: true
-    })
+  static "revocable", length: 2 do
+    revocable(args, this)
   end
 
   defp revocable([target, handler | _], _this) do
