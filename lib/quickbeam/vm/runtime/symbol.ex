@@ -5,7 +5,6 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
 
   alias QuickBEAM.VM.{Heap, JSThrow}
 
-  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
   alias QuickBEAM.VM.Semantics.Values
 
   defintrinsic "Symbol" do
@@ -23,37 +22,15 @@ defmodule QuickBEAM.VM.Runtime.Symbol do
       getter "description" do
         symbol_description(this)
       end
+
+      symbol :toPrimitive do
+        method length: 1, writable: false, configurable: false do
+          symbol_value(this)
+        end
+      end
+
+      to_string_tag("Symbol")
     end
-
-    install_with(&__MODULE__.install_builtin/2)
-  end
-
-  def install_builtin(ctor, _opts \\ []) do
-    with {:obj, proto_ref} <- Heap.get_ctor_statics(ctor)["prototype"] do
-      install_prototype_properties(proto_ref)
-    end
-  end
-
-  defp install_prototype_properties(proto_ref) do
-    primitive = {:builtin, "[Symbol.toPrimitive]", fn _args, this -> symbol_value(this) end}
-    Heap.put_obj_key(proto_ref, {:symbol, "Symbol.toPrimitive"}, primitive)
-
-    Heap.put_prop_desc(
-      proto_ref,
-      {:symbol, "Symbol.toPrimitive"},
-      PropertyDescriptor.hidden_readonly()
-    )
-
-    Heap.put_ctor_static(primitive, "length", 1)
-    Heap.put_ctor_prop_desc(primitive, "length", PropertyDescriptor.hidden_readonly())
-
-    Heap.put_obj_key(proto_ref, {:symbol, "Symbol.toStringTag"}, "Symbol")
-
-    Heap.put_prop_desc(
-      proto_ref,
-      {:symbol, "Symbol.toStringTag"},
-      PropertyDescriptor.hidden_readonly()
-    )
   end
 
   def constructor do
