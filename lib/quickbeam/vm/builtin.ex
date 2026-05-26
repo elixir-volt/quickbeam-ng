@@ -905,6 +905,9 @@ defmodule QuickBEAM.VM.Builtin do
           property: 3,
           defintrinsic: 2,
           defintrinsic: 3,
+          defintrinsics: 1,
+          intrinsic: 2,
+          intrinsic: 3,
           prototype: 2,
           prototype_object: 1,
           object_parent: 1,
@@ -1202,6 +1205,48 @@ defmodule QuickBEAM.VM.Builtin do
     end
   end
 
+  @doc "Defines multiple ECMAScript intrinsic constructors from one runtime module."
+  defmacro defintrinsics(do: block) do
+    definitions =
+      block
+      |> normalize_block()
+      |> Enum.map(&multi_intrinsic_definition(&1, __CALLER__))
+
+    quote do
+      def builtin_definitions do
+        unquote(definitions)
+      end
+    end
+  end
+
+  defmacro intrinsic(_name, _opts) do
+    raise ArgumentError, "intrinsic/2 is only available inside defintrinsics blocks"
+  end
+
+  defmacro intrinsic(_name, _opts, do: _block) do
+    raise ArgumentError, "intrinsic/3 is only available inside defintrinsics blocks"
+  end
+
+  defp multi_intrinsic_definition({:intrinsic, _, [name, opts]}, caller) when is_list(opts) do
+    build_definition_struct(name, opts, caller)
+  end
+
+  defp multi_intrinsic_definition({:intrinsic, _, [name, opts, [do: block]]}, caller)
+       when is_list(opts) do
+    {block_opts, declarations} = parse_intrinsic_block(block)
+
+    if declarations != [] do
+      raise ArgumentError,
+            "intrinsic blocks inside defintrinsics currently support constructor/install metadata only"
+    end
+
+    build_definition_struct(name, Keyword.merge(opts, block_opts), caller)
+  end
+
+  defp multi_intrinsic_definition(other, _caller) do
+    raise ArgumentError, "unsupported defintrinsics entry: #{Macro.to_string(other)}"
+  end
+
   @doc "Defines an ECMAScript intrinsic constructor. Alias for `builtin_definition/2`."
   defmacro defintrinsic(name, opts) do
     case Keyword.pop(opts, :do) do
@@ -1358,6 +1403,23 @@ defmodule QuickBEAM.VM.Builtin do
   end
 
   defp build_builtin_definition(name, opts, caller) do
+    definition = build_definition_struct(name, opts, caller)
+
+    quote do
+      def builtin_definition do
+        unquote(definition)
+      end
+
+      def builtin_spec do
+        QuickBEAM.VM.Builtin.intrinsic_spec(__MODULE__, builtin_definition())
+      end
+
+      @ecma nil
+      @annex nil
+    end
+  end
+
+  defp build_definition_struct(name, opts, caller) do
     constructor = Keyword.fetch!(opts, :constructor)
     length = Keyword.get(opts, :length)
     phase = Keyword.get(opts, :phase, :runtime)
@@ -1372,47 +1434,38 @@ defmodule QuickBEAM.VM.Builtin do
     auto_install? = Keyword.get(opts, :auto_install?, true)
 
     quote do
-      def builtin_definition do
-        builtin_attrs =
-          QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
-            unquote(Macro.escape(opts)),
-            @ecma,
-            @annex
-          )
+      builtin_attrs =
+        QuickBEAM.VM.Builtin.opts_with_builtin_attrs(
+          unquote(Macro.escape(opts)),
+          @ecma,
+          @annex
+        )
 
-        struct!(QuickBEAM.VM.Builtin.Definition, %{
-          name: unquote(name),
-          constructor: unquote(constructor),
-          length: unquote(length),
-          phase: unquote(phase),
-          module: unquote(module),
-          prototype_parent: unquote(prototype_parent),
-          constructor_descriptor:
-            Map.merge(
-              unquote(Macro.escape(PropertyDescriptor.constructor())),
-              unquote(Macro.escape(constructor_descriptor))
-            ),
-          prototype_descriptor:
-            Map.merge(
-              unquote(Macro.escape(PropertyDescriptor.prototype())),
-              unquote(Macro.escape(prototype_descriptor))
-            ),
-          prototype_properties: unquote(prototype_properties),
-          constructable?: unquote(constructable?),
-          intrinsic_key: unquote(intrinsic_key),
-          ecma: Keyword.get(builtin_attrs, :ecma),
-          annex: Keyword.get(builtin_attrs, :annex),
-          after_install: unquote(after_install),
-          auto_install?: unquote(auto_install?)
-        })
-      end
-
-      def builtin_spec do
-        QuickBEAM.VM.Builtin.intrinsic_spec(__MODULE__, builtin_definition())
-      end
-
-      @ecma nil
-      @annex nil
+      struct!(QuickBEAM.VM.Builtin.Definition, %{
+        name: unquote(name),
+        constructor: unquote(constructor),
+        length: unquote(length),
+        phase: unquote(phase),
+        module: unquote(module),
+        prototype_parent: unquote(prototype_parent),
+        constructor_descriptor:
+          Map.merge(
+            unquote(Macro.escape(PropertyDescriptor.constructor())),
+            unquote(Macro.escape(constructor_descriptor))
+          ),
+        prototype_descriptor:
+          Map.merge(
+            unquote(Macro.escape(PropertyDescriptor.prototype())),
+            unquote(Macro.escape(prototype_descriptor))
+          ),
+        prototype_properties: unquote(prototype_properties),
+        constructable?: unquote(constructable?),
+        intrinsic_key: unquote(intrinsic_key),
+        ecma: Keyword.get(builtin_attrs, :ecma),
+        annex: Keyword.get(builtin_attrs, :annex),
+        after_install: unquote(after_install),
+        auto_install?: unquote(auto_install?)
+      })
     end
   end
 

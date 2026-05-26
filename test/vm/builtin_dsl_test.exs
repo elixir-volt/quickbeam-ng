@@ -61,6 +61,25 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
     end
   end
 
+  defmodule MultiIntrinsicSample do
+    use QuickBEAM.VM.Builtin
+
+    defintrinsics do
+      intrinsic("MultiMap",
+        constructor: fn _args, this -> this end,
+        length: 0,
+        phase: :collections
+      )
+
+      intrinsic("MultiWeakMap",
+        constructor: fn _args, this -> this end,
+        length: 0,
+        phase: :collections,
+        after_install: fn _ctor, _opts -> :ok end
+      )
+    end
+  end
+
   defmodule Sample do
     use QuickBEAM.VM.Builtin
 
@@ -101,6 +120,15 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
         end
       end
     end
+  end
+
+  test "defintrinsics emits grouped runtime definitions" do
+    assert [strong, weak] = MultiIntrinsicSample.builtin_definitions()
+    assert strong.name == "MultiMap"
+    assert strong.length == 0
+    assert strong.phase == :collections
+    assert weak.name == "MultiWeakMap"
+    assert is_function(weak.after_install, 2)
   end
 
   test "defintrinsic and contextual method blocks expose first-class specs" do

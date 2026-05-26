@@ -3,8 +3,8 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   import QuickBEAM.VM.Heap.Keys
   import QuickBEAM.VM.Value, only: [is_nullish: 1]
+  use QuickBEAM.VM.Builtin
 
-  alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.Execution.IteratorState
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
@@ -16,25 +16,20 @@ defmodule QuickBEAM.VM.Runtime.Map do
   @map_methods ~w(get set has delete clear keys values entries forEach getOrInsert getOrInsertComputed)
   @map_iterator_methods ~w(keys values entries)
 
-  def builtin_definitions do
-    [
-      %Definition{
-        name: "Map",
-        constructor: constructor(),
-        length: 0,
-        phase: :collections,
-        module: __MODULE__,
-        after_install: &__MODULE__.install_map_builtin/2
-      },
-      %Definition{
-        name: "WeakMap",
-        constructor: weak_constructor(),
-        length: 0,
-        phase: :collections,
-        module: __MODULE__,
-        after_install: &__MODULE__.install_weak_map_builtin/2
-      }
-    ]
+  defintrinsics do
+    intrinsic("Map",
+      constructor: constructor(),
+      length: 0,
+      phase: :collections,
+      after_install: &__MODULE__.install_map_builtin/2
+    )
+
+    intrinsic("WeakMap",
+      constructor: weak_constructor(),
+      length: 0,
+      phase: :collections,
+      after_install: &__MODULE__.install_weak_map_builtin/2
+    )
   end
 
   def install_map_builtin(ctor, opts \\ []) do

@@ -6,7 +6,6 @@ defmodule QuickBEAM.VM.Runtime.Set do
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.Builtin
-  alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.Execution.IteratorState
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Invocation
@@ -18,25 +17,20 @@ defmodule QuickBEAM.VM.Runtime.Set do
   @set_methods ~w(has add delete clear values keys entries forEach difference intersection union symmetricDifference isSubsetOf isSupersetOf isDisjointFrom)
   @set_iterator_methods ~w(keys values entries)
 
-  def builtin_definitions do
-    [
-      %Definition{
-        name: "Set",
-        constructor: constructor(),
-        length: 0,
-        phase: :collections,
-        module: __MODULE__,
-        after_install: &__MODULE__.install_set_builtin/2
-      },
-      %Definition{
-        name: "WeakSet",
-        constructor: weak_constructor(),
-        length: 0,
-        phase: :collections,
-        module: __MODULE__,
-        after_install: &__MODULE__.install_weak_set_builtin/2
-      }
-    ]
+  defintrinsics do
+    intrinsic("Set",
+      constructor: constructor(),
+      length: 0,
+      phase: :collections,
+      after_install: &__MODULE__.install_set_builtin/2
+    )
+
+    intrinsic("WeakSet",
+      constructor: weak_constructor(),
+      length: 0,
+      phase: :collections,
+      after_install: &__MODULE__.install_weak_set_builtin/2
+    )
   end
 
   def install_set_builtin(ctor, opts \\ []) do
