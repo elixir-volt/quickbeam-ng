@@ -1325,22 +1325,16 @@ defmodule QuickBEAM.VM.Builtin do
     |> normalize_block()
     |> Enum.reduce({[], []}, fn
       {:install, _, [[do: body]]}, {opts, declarations} ->
-        {Keyword.put(opts, :after_install, build_install_callback(body)), declarations}
+        {append_after_install(opts, build_install_callback(body)), declarations}
 
       {:prototype, _, [prototype_opts, [do: body]]}, {opts, declarations}
       when is_list(prototype_opts) ->
-        opts =
-          Keyword.put(
-            opts,
-            :after_install,
-            build_prototype_install_callback(prototype_opts, body)
-          )
-
+        opts = append_after_install(opts, build_prototype_install_callback(prototype_opts, body))
         declarations = declarations ++ prototype_method_declarations(body)
         {opts, declarations}
 
       {:install_with, _, [callback]}, {opts, declarations} ->
-        {Keyword.put(opts, :after_install, callback), declarations}
+        {append_after_install(opts, callback), declarations}
 
       {:phase, _, [phase]}, {opts, declarations} ->
         {Keyword.put(opts, :phase, phase), declarations}
@@ -1365,6 +1359,25 @@ defmodule QuickBEAM.VM.Builtin do
       _, acc ->
         acc
     end)
+  end
+
+  defp append_after_install(opts, callback) do
+    case Keyword.get(opts, :after_install) do
+      nil ->
+        Keyword.put(opts, :after_install, callback)
+
+      existing ->
+        Keyword.put(opts, :after_install, build_install_sequence(existing, callback))
+    end
+  end
+
+  defp build_install_sequence(first, second) do
+    quote do
+      fn var!(ctor), var!(opts) ->
+        QuickBEAM.VM.Builtin.run_install_callback(unquote(first), var!(ctor), var!(opts))
+        QuickBEAM.VM.Builtin.run_install_callback(unquote(second), var!(ctor), var!(opts))
+      end
+    end
   end
 
   defp build_constructor_callback(body) do
@@ -1696,6 +1709,13 @@ defmodule QuickBEAM.VM.Builtin do
 
   def put_if_present(map, _key, nil), do: map
   def put_if_present(map, key, value), do: Map.put(map, key, value)
+
+  @doc "Runs an intrinsic install callback with either supported callback arity."
+  def run_install_callback(callback, ctor, opts) when is_function(callback, 2),
+    do: callback.(ctor, opts)
+
+  def run_install_callback(callback, ctor, _opts) when is_function(callback, 1),
+    do: callback.(ctor)
 
   @doc "Maps semantic ECMAScript internal slot names to heap storage keys."
   def slot_key(:BooleanData), do: QuickBEAM.VM.ObjectModel.WrappedPrimitive.slot(:boolean)

@@ -5,95 +5,60 @@ defmodule QuickBEAM.VM.Runtime.Number do
 
   alias QuickBEAM.VM.{Heap, JSThrow, Runtime, RuntimeState}
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
-  alias QuickBEAM.VM.Runtime.InstallerHelpers
   alias QuickBEAM.VM.Runtime.Globals.Numeric
 
-  @prototype_methods ~w(toString toFixed valueOf toExponential toPrecision toLocaleString)
   @constant_properties ~w(NaN POSITIVE_INFINITY NEGATIVE_INFINITY MAX_SAFE_INTEGER MIN_SAFE_INTEGER EPSILON MAX_VALUE MIN_VALUE)
 
-  builtin_definition("Number",
-    constructor: &QuickBEAM.VM.Runtime.ConstructorCallbacks.number/2,
-    length: 1,
-    phase: :fundamental,
-    after_install: &__MODULE__.install_builtin/2
-  )
+  defintrinsic "Number" do
+    constructor(&QuickBEAM.VM.Runtime.ConstructorCallbacks.number/2,
+      length: 1,
+      phase: :fundamental
+    )
 
-  @doc "Installs Number-specific prototype and numeric constant metadata."
-  def install_builtin(ctor, opts \\ []) do
-    object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
+    prototype extends: :object do
+      slot(:NumberData, 0)
 
-    InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      InstallerHelpers.install_methods(proto_ref, __MODULE__, @prototype_methods)
-
-      for name <- @prototype_methods do
-        case Heap.get_obj(proto_ref, %{}) do
-          %{^name => method} ->
-            length =
-              QuickBEAM.VM.Builtin.length(QuickBEAM.VM.Builtin.proto_meta(__MODULE__, name))
-
-            Heap.put_ctor_static(method, "length", length)
-            Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
-
-          _ ->
-            :ok
-        end
+      method "toString", length: 1, receiver: :number do
+        to_string_with_radix(this, args)
       end
 
-      proto_ref
-      |> Heap.get_obj(%{})
-      |> Map.put(slot_key(:NumberData), 0)
-      |> put_object_prototype(object_proto)
-      |> then(&Heap.put_obj(proto_ref, &1))
+      method "toFixed", length: 1, receiver: :number do
+        to_fixed(this, args)
+      end
 
-      InstallerHelpers.install_constructor_link(proto_ref, ctor)
-    end)
+      method "valueOf", receiver: :number do
+        this
+      end
 
-    Heap.put_ctor_static(ctor, "length", 1)
-    Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
+      method "toExponential", length: 1, receiver: :number do
+        to_exponential(this, args)
+      end
 
+      method "toPrecision", length: 1, receiver: :number do
+        to_precision(this, args)
+      end
+
+      method "toLocaleString", receiver: :number do
+        to_string_with_radix(this, [])
+      end
+    end
+
+    install_with(&__MODULE__.install_builtin/2)
+  end
+
+  @doc "Installs Number-specific numeric constant metadata."
+  def install_builtin(ctor, _opts \\ []) do
     for name <- @constant_properties do
       Heap.put_ctor_static(ctor, name, static_property(name))
       Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.prototype())
     end
   end
 
-  defp put_object_prototype(map, {:obj, _} = object_proto),
-    do: Map.put(map, "__proto__", object_proto)
-
-  defp put_object_prototype(map, _object_proto), do: map
-
   # ── Number statics ──
 
   static "isSafeInteger", length: 1 do
     val = arg(args, 0, :undefined)
     is_number(val) and val == trunc(val * 1.0) and abs(val) <= 9_007_199_254_740_991
-  end
-
-  # ── Number.prototype ──
-
-  proto "toString", length: 1, receiver: :number do
-    to_string_with_radix(this, args)
-  end
-
-  proto "toFixed", length: 1, receiver: :number do
-    to_fixed(this, args)
-  end
-
-  proto "valueOf", receiver: :number do
-    this
-  end
-
-  proto "toExponential", length: 1, receiver: :number do
-    to_exponential(this, args)
-  end
-
-  proto "toPrecision", length: 1, receiver: :number do
-    to_precision(this, args)
-  end
-
-  proto "toLocaleString", receiver: :number do
-    to_string_with_radix(this, [])
   end
 
   # ── Number static ──
