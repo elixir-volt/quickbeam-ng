@@ -1,7 +1,6 @@
 defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
   @moduledoc "Reusable helpers for installing constructor/prototype metadata."
 
-  alias QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.{InternalMethods, PropertyDescriptor}
 
@@ -16,18 +15,6 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
   @doc "Sets a prototype object's parent to Object.prototype."
   def install_object_parent(proto_ref, parent \\ Heap.get_object_prototype()) do
     Heap.put_obj_key(proto_ref, "__proto__", parent)
-  end
-
-  @doc "Installs prototype methods using a runtime module's proto_property/1 callback."
-  def install_methods(proto_ref, module, names, opts \\ []) do
-    zero_length_names = Keyword.get(opts, :zero_length, [])
-
-    for name <- names do
-      method = attach_proto_metadata(module, name, module.proto_property(name))
-      Heap.put_obj_key(proto_ref, name, method)
-      install_zero_length(method, name in zero_length_names)
-      Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
-    end
   end
 
   @doc "Installs methods using a custom method lookup function."
@@ -51,38 +38,9 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
     Heap.put_prop_desc(proto_ref, sym_to_string_tag, PropertyDescriptor.hidden_readonly())
   end
 
-  @doc "Installs Symbol.iterator using the runtime module's proto_property/1 callback."
-  def install_symbol_iterator(proto_ref, module) do
-    sym_iter = {:symbol, "Symbol.iterator"}
-
-    Heap.put_obj_key(
-      proto_ref,
-      sym_iter,
-      attach_proto_metadata(module, sym_iter, module.proto_property(sym_iter))
-    )
-
-    Heap.put_prop_desc(proto_ref, sym_iter, PropertyDescriptor.method())
-  end
-
   @doc "Installs a hidden readonly constructor/function static."
   def install_hidden_static(ctor, name, value) do
     Heap.put_ctor_static(ctor, name, value)
     Heap.put_ctor_prop_desc(ctor, name, PropertyDescriptor.hidden_readonly())
   end
-
-  defp attach_proto_metadata(module, name, {:builtin, _, _} = method) do
-    case Builtin.proto_meta(module, name) do
-      %Builtin.Meta{} = meta -> Builtin.builtin(elem(method, 1), elem(method, 2), meta)
-      _ -> method
-    end
-  end
-
-  defp attach_proto_metadata(_module, _name, method), do: method
-
-  defp install_zero_length(method, true) do
-    Heap.put_ctor_static(method, "length", 0)
-    Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
-  end
-
-  defp install_zero_length(_method, false), do: :ok
 end
