@@ -60,10 +60,20 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     )
 
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
-    install_static_methods(ctor)
-    install_species(ctor)
     Heap.put_ctor_static(ctor, "__proto__", ta_base)
     Heap.put_ctor_static(ctor, "BYTES_PER_ELEMENT", elem_size(type))
+  end
+
+  static "from", length: 1 do
+    static_from(args, this)
+  end
+
+  static "of", length: 0 do
+    static_of(args, this)
+  end
+
+  symbol_getter :species do
+    this
   end
 
   @doc "Returns typed-array type descriptors supported by the runtime."
@@ -464,37 +474,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
         ConstructorRegistry.put_prototype(ta_base, {:obj, ta_base_ref})
         Heap.put_ctor_prop_desc(ta_base, "prototype", PropertyDescriptor.prototype())
-        install_static_methods(ta_base)
-        install_species(ta_base)
+        QuickBEAM.VM.Builtin.Installer.install_static_specs(ta_base, __MODULE__)
     end
-  end
-
-  defp install_static_methods(ctor) do
-    from = {:builtin, "from", fn args, this -> static_from(args, this) end}
-    of = {:builtin, "of", fn args, this -> static_of(args, this) end}
-
-    Heap.put_ctor_static(from, "length", 1)
-    Heap.put_ctor_prop_desc(from, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(from, "name", PropertyDescriptor.hidden_readonly())
-
-    Heap.put_ctor_static(of, "length", 0)
-    Heap.put_ctor_prop_desc(of, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(of, "name", PropertyDescriptor.hidden_readonly())
-
-    Heap.put_ctor_static(ctor, "from", from)
-    Heap.put_ctor_static(ctor, "of", of)
-    Heap.put_ctor_prop_desc(ctor, "from", PropertyDescriptor.method())
-    Heap.put_ctor_prop_desc(ctor, "of", PropertyDescriptor.method())
-  end
-
-  defp install_species(ctor) do
-    getter = {:builtin, "get [Symbol.species]", fn _args, this -> this end}
-    Heap.put_ctor_static(getter, "length", 0)
-    Heap.put_ctor_prop_desc(getter, "length", PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(getter, "name", PropertyDescriptor.hidden_readonly())
-
-    Heap.put_ctor_static(ctor, {:symbol, "Symbol.species"}, {:accessor, getter, nil})
-    Heap.put_ctor_prop_desc(ctor, {:symbol, "Symbol.species"}, PropertyDescriptor.accessor())
   end
 
   defp abstract_prototype do

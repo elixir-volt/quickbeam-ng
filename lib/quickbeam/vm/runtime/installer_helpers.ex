@@ -44,19 +44,6 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
     Heap.put_prop_desc(proto_ref, "constructor", PropertyDescriptor.method())
   end
 
-  @doc "Installs a default Symbol.species accessor returning this."
-  def install_species(ctor) do
-    sym_species = {:symbol, "Symbol.species"}
-
-    Heap.put_ctor_static(
-      ctor,
-      sym_species,
-      {:accessor, {:builtin, "get [Symbol.species]", fn _args, this -> this end}, nil}
-    )
-
-    Heap.put_ctor_prop_desc(ctor, sym_species, PropertyDescriptor.accessor())
-  end
-
   @doc "Installs Symbol.toStringTag on a prototype object."
   def install_to_string_tag(proto_ref, label) do
     sym_to_string_tag = {:symbol, "Symbol.toStringTag"}
