@@ -17,12 +17,15 @@ defmodule QuickBEAM.VM.Runtime.Promise do
     install_with(&__MODULE__.install_builtin/2)
   end
 
+  static_getter {:symbol, "Symbol.species"} do
+    this
+  end
+
   def install_builtin(ctor, opts \\ []) do
     object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
 
     ConstructorRegistry.put_prototype(ctor, prototype(object_proto))
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
-    InstallerHelpers.install_species(ctor)
 
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       InstallerHelpers.install_object_parent(proto_ref, object_proto)

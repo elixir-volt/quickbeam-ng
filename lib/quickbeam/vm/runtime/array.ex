@@ -36,6 +36,10 @@ defmodule QuickBEAM.VM.Runtime.Array do
     install_with(&__MODULE__.install_builtin/2)
   end
 
+  static_getter {:symbol, "Symbol.species"} do
+    this
+  end
+
   @doc "Installs Array-specific prototype and constructor metadata."
   def install_builtin(ctor, opts \\ []) do
     object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
@@ -48,7 +52,6 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
     {:obj, proto_ref} = proto
     InstallerHelpers.install_constructor_link(proto_ref, ctor)
-    InstallerHelpers.install_species(ctor)
     Heap.put_ctor_static(ctor, "length", 1)
     Heap.put_ctor_prop_desc(ctor, "length", PropertyDescriptor.hidden_readonly())
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())

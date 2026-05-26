@@ -33,6 +33,10 @@ defmodule QuickBEAM.VM.Runtime.Set do
     )
   end
 
+  static_getter {:symbol, "Symbol.species"} do
+    this
+  end
+
   def install_set_builtin(ctor, opts \\ []) do
     object_proto = Keyword.get(opts, :object_proto, Heap.get_object_prototype())
 
@@ -48,8 +52,6 @@ defmodule QuickBEAM.VM.Runtime.Set do
       InstallerHelpers.install_to_string_tag(proto_ref, "Set")
       InstallerHelpers.install_constructor_link(proto_ref, ctor)
     end)
-
-    InstallerHelpers.install_species(ctor)
   end
 
   def install_weak_set_builtin(ctor, opts \\ []) do
