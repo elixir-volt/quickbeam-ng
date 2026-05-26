@@ -69,7 +69,7 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
 
     @ecma "B.3.1"
     @annex :b
-    static "legacy", length: 0 do
+    static "annexMethod", length: 0 do
       :ok
     end
 
@@ -91,7 +91,7 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
 
         @ecma "B.3.1"
         @annex :b
-        method "legacy", length: 0 do
+        method "annexMethod", length: 0 do
           :ok
         end
       end
@@ -210,7 +210,7 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
 
   test "@annex annotates the next builtin metadata" do
     assert %QuickBEAM.VM.Builtin.Meta{ecma: "B.3.1", annex: :b} =
-             Sample.static_property_meta("legacy")
+             Sample.static_property_meta("annexMethod")
   end
 
   test "@ecma annotates the next prototype builtin metadata" do
@@ -224,10 +224,10 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
     assert %QuickBEAM.VM.Builtin.Meta{ecma: "20.1.3.6", length: 0} =
              QuickBEAM.VM.Builtin.metadata_for(method)
 
-    legacy = Sample.inline_methods()["legacy"]
+    annex_method = Sample.inline_methods()["annexMethod"]
 
     assert %QuickBEAM.VM.Builtin.Meta{ecma: "B.3.1", annex: :b} =
-             QuickBEAM.VM.Builtin.metadata_for(legacy)
+             QuickBEAM.VM.Builtin.metadata_for(annex_method)
   end
 
   test "runtime builtins can expose ECMA clause metadata" do

@@ -17,14 +17,17 @@ defmodule QuickBEAM.VM.Builtin.Installer do
 
   @doc "Installs a builtin module's declared static specs on a constructor."
   def install_static_specs(ctor, module) when is_atom(module) do
-    spec = module.builtin_spec()
-    install_property_specs({:constructor, ctor}, module, spec.statics, :static)
+    install_property_specs({:constructor, ctor}, module, module_specs(module, :static), :static)
   end
 
   @doc "Installs a builtin module's declared prototype specs on an object reference."
   def install_prototype_specs(proto_ref, module) when is_atom(module) do
-    spec = module.builtin_spec()
-    install_property_specs({:object, proto_ref}, module, spec.prototype.properties, :prototype)
+    install_property_specs(
+      {:object, proto_ref},
+      module,
+      module_specs(module, :prototype),
+      :prototype
+    )
   end
 
   @doc "Installs property specs on a constructor or object target."
@@ -45,6 +48,37 @@ defmodule QuickBEAM.VM.Builtin.Installer do
 
     ctor
   end
+
+  defp module_specs(module, :prototype) do
+    if function_exported?(module, :builtin_spec, 0) do
+      module.builtin_spec().prototype.properties
+    else
+      declared_specs(module, :proto_property_names, :proto_property_spec)
+    end
+  end
+
+  defp module_specs(module, :static) do
+    if function_exported?(module, :builtin_spec, 0) do
+      module.builtin_spec().statics
+    else
+      declared_specs(module, :static_property_names, :static_property_spec)
+    end
+  end
+
+  defp declared_specs(module, names_fun, spec_fun) do
+    if function_exported?(module, names_fun, 0) and function_exported?(module, spec_fun, 1) do
+      module
+      |> apply(names_fun, [])
+      |> Enum.map(fn key -> module |> apply(spec_fun, [key]) |> property_spec(key) end)
+      |> Enum.reject(&is_nil/1)
+    else
+      []
+    end
+  end
+
+  defp property_spec(%FunctionSpec{} = spec, key), do: Builtin.property_spec(key, spec)
+  defp property_spec(%PropertySpec{} = spec, _key), do: spec
+  defp property_spec(nil, _key), do: nil
 
   defp install_property_spec(target, module, %PropertySpec{} = spec, namespace) do
     value = property_value(spec, module, namespace)

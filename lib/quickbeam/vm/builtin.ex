@@ -252,7 +252,7 @@ defmodule QuickBEAM.VM.Builtin do
   def length(%Meta{length: length}), do: length
   def length(_), do: 0
 
-  @doc "Returns metadata attached to a builtin function, falling back to legacy name metadata."
+  @doc "Returns metadata attached to a builtin function, falling back to built-in name metadata."
   def metadata_for({:builtin, name, _} = builtin) do
     Map.get(Heap.get_ctor_statics(builtin), :__builtin_meta__) || named_meta(name)
   end

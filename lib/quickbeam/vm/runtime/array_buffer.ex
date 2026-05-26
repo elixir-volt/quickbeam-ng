@@ -26,12 +26,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
 
   def install_builtin(ctor) do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
-      specs =
-        Enum.map(proto_property_names(), fn name ->
-          QuickBEAM.VM.Builtin.property_spec(name, proto_property_spec(name))
-        end)
-
-      Installer.install_property_specs({:object, proto_ref}, __MODULE__, specs, :prototype)
+      Installer.install_prototype_specs(proto_ref, __MODULE__)
     end)
 
     Heap.put_ctor_static(
