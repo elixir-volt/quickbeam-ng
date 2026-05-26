@@ -219,22 +219,22 @@ defmodule QuickBEAM.VM.Runtime.Object do
           end
 
           @ecma "20.1.3.9.1"
-          method "__defineGetter__" do
+          method "__defineGetter__", length: 2 do
             define_accessor_property(args, this, :get)
           end
 
           @ecma "20.1.3.9.2"
-          method "__defineSetter__" do
+          method "__defineSetter__", length: 2 do
             define_accessor_property(args, this, :set)
           end
 
           @ecma "20.1.3.9.3"
-          method "__lookupGetter__" do
+          method "__lookupGetter__", length: 1 do
             lookup_accessor_property(args, this, :get)
           end
 
           @ecma "20.1.3.9.4"
-          method "__lookupSetter__" do
+          method "__lookupSetter__", length: 1 do
             lookup_accessor_property(args, this, :set)
           end
 
