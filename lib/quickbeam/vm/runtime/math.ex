@@ -4,11 +4,10 @@ defmodule QuickBEAM.VM.Runtime.Math do
   use QuickBEAM.VM.Builtin
 
   import Bitwise
-  import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
-  alias QuickBEAM.VM.{Heap, Invocation}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation}
   alias QuickBEAM.VM.Semantics.Values
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
+  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Semantics.Iterators
 
@@ -55,41 +54,10 @@ defmodule QuickBEAM.VM.Runtime.Math do
   @constants ~w(E LN10 LN2 LOG10E LOG2E PI SQRT1_2 SQRT2 MAX_SAFE_INTEGER MIN_SAFE_INTEGER)
 
   def install_metadata({:builtin, _name, map} = math) when is_map(map) do
-    Enum.each(@method_lengths, fn {name, length} ->
-      method = Map.get(map, name)
-      Heap.put_ctor_static(math, name, method)
-      Heap.put_prop_desc(math, name, PropertyDescriptor.method())
-      Heap.put_ctor_prop_desc(math, name, PropertyDescriptor.method())
-
-      case method do
-        {:builtin, _, _} = method ->
-          Heap.put_ctor_static(method, "length", length)
-          Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
-
-        _ ->
-          :ok
-      end
-    end)
-
-    Enum.each(@constants, fn name ->
-      descriptor =
-        PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
-
-      Heap.put_prop_desc(math, name, descriptor)
-      Heap.put_ctor_prop_desc(math, name, descriptor)
-    end)
-
-    tag = {:symbol, "Symbol.toStringTag"}
-    Heap.put_ctor_static(math, tag, "Math")
-    Heap.put_prop_desc(math, tag, PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(math, tag, PropertyDescriptor.hidden_readonly())
-
-    case Heap.get_object_prototype() do
-      {:obj, _} = object_proto -> Heap.put_ctor_static(math, proto(), object_proto)
-      _ -> :ok
-    end
-
-    math
+    Builtin.install_object_metadata(math, @method_lengths,
+      constants: @constants,
+      to_string_tag: "Math"
+    )
   end
 
   js_object "Math" do

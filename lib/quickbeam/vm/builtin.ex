@@ -57,6 +57,8 @@ defmodule QuickBEAM.VM.Builtin do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
 
+  require QuickBEAM.VM.Heap.Keys
+
   defmodule FunctionSpec do
     @moduledoc "Declarative metadata for an ECMAScript builtin function."
 
@@ -296,6 +298,57 @@ defmodule QuickBEAM.VM.Builtin do
     Heap.put_ctor_static(function, "length", length)
     Heap.put_ctor_static(function, "name", name)
     function
+  end
+
+  @doc "Installs descriptors and function lengths for named builtin objects."
+  def install_object_metadata({:builtin, _name, map} = object, method_lengths, opts \\ [])
+      when is_map(map) and is_map(method_lengths) do
+    Enum.each(method_lengths, fn {name, length} ->
+      method = Map.get(map, name)
+      Heap.put_ctor_static(object, name, method)
+      Heap.put_prop_desc(object, name, PropertyDescriptor.method())
+      Heap.put_ctor_prop_desc(object, name, PropertyDescriptor.method())
+
+      case method do
+        {:builtin, _, _} = method ->
+          Heap.put_ctor_static(method, "length", length)
+          Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
+
+        _ ->
+          :ok
+      end
+    end)
+
+    Enum.each(Keyword.get(opts, :constants, []), fn name ->
+      descriptor =
+        PropertyDescriptor.attrs(writable: false, enumerable: false, configurable: false)
+
+      Heap.put_prop_desc(object, name, descriptor)
+      Heap.put_ctor_prop_desc(object, name, descriptor)
+    end)
+
+    case Keyword.get(opts, :to_string_tag) do
+      nil ->
+        :ok
+
+      label ->
+        tag = {:symbol, "Symbol.toStringTag"}
+        Heap.put_ctor_static(object, tag, label)
+        Heap.put_prop_desc(object, tag, PropertyDescriptor.hidden_readonly())
+        Heap.put_ctor_prop_desc(object, tag, PropertyDescriptor.hidden_readonly())
+    end
+
+    if Keyword.get(opts, :object_prototype, true) do
+      case Heap.get_object_prototype() do
+        {:obj, _} = object_proto ->
+          Heap.put_ctor_static(object, QuickBEAM.VM.Heap.Keys.proto(), object_proto)
+
+        _ ->
+          :ok
+      end
+    end
+
+    object
   end
 
   @doc "Returns built-in function metadata by JavaScript-visible function name."

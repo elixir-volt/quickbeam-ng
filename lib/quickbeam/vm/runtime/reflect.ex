@@ -3,16 +3,15 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
 
   use QuickBEAM.VM.Builtin
 
-  import QuickBEAM.VM.Heap.Keys
+  import QuickBEAM.VM.Heap.Keys, only: [proxy_handler: 0, proxy_target: 0]
 
-  alias QuickBEAM.VM.{Heap, JSThrow, Value}
+  alias QuickBEAM.VM.{Builtin, Heap, JSThrow, Value}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Invocation
 
   alias QuickBEAM.VM.ObjectModel.{
     Get,
     InternalMethods,
-    PropertyDescriptor,
     PropertyKey,
     Prototype
   }
@@ -37,34 +36,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
   }
 
   def install_metadata({:builtin, _name, map} = reflect) when is_map(map) do
-    Enum.each(@method_lengths, fn {name, length} ->
-      method = Map.get(map, name)
-      Heap.put_ctor_static(reflect, name, method)
-      Heap.put_prop_desc(reflect, name, PropertyDescriptor.method())
-      Heap.put_ctor_prop_desc(reflect, name, PropertyDescriptor.method())
-
-      case method do
-        {:builtin, _, _} = method ->
-          Heap.put_ctor_static(method, "length", length)
-
-          Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
-
-        _ ->
-          :ok
-      end
-    end)
-
-    tag = {:symbol, "Symbol.toStringTag"}
-    Heap.put_ctor_static(reflect, tag, "Reflect")
-    Heap.put_prop_desc(reflect, tag, PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(reflect, tag, PropertyDescriptor.hidden_readonly())
-
-    case Heap.get_object_prototype() do
-      {:obj, _} = object_proto -> Heap.put_ctor_static(reflect, proto(), object_proto)
-      _ -> :ok
-    end
-
-    reflect
+    Builtin.install_object_metadata(reflect, @method_lengths, to_string_tag: "Reflect")
   end
 
   js_object "Reflect" do

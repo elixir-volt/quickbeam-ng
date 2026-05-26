@@ -7,6 +7,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.Execution.JSONState
+  alias QuickBEAM.VM.Builtin
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Value
@@ -23,33 +24,7 @@ defmodule QuickBEAM.VM.Runtime.JSON do
 
   @method_lengths %{"parse" => 2, "stringify" => 3, "rawJSON" => 1, "isRawJSON" => 1}
   def install_metadata({:builtin, _name, map} = json) when is_map(map) do
-    Enum.each(@method_lengths, fn {name, length} ->
-      method = Map.get(map, name)
-      Heap.put_ctor_static(json, name, method)
-      Heap.put_prop_desc(json, name, PropertyDescriptor.method())
-      Heap.put_ctor_prop_desc(json, name, PropertyDescriptor.method())
-
-      case method do
-        {:builtin, _, _} = method ->
-          Heap.put_ctor_static(method, "length", length)
-          Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
-
-        _ ->
-          :ok
-      end
-    end)
-
-    tag = {:symbol, "Symbol.toStringTag"}
-    Heap.put_ctor_static(json, tag, "JSON")
-    Heap.put_prop_desc(json, tag, PropertyDescriptor.hidden_readonly())
-    Heap.put_ctor_prop_desc(json, tag, PropertyDescriptor.hidden_readonly())
-
-    case Heap.get_object_prototype() do
-      {:obj, _} = object_proto -> Heap.put_ctor_static(json, proto(), object_proto)
-      _ -> :ok
-    end
-
-    json
+    Builtin.install_object_metadata(json, @method_lengths, to_string_tag: "JSON")
   end
 
   js_object "JSON" do
