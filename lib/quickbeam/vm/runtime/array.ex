@@ -2618,14 +2618,14 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
       true ->
         case Heap.get_obj(ref) do
-          {:qb_arr, arr} -> qb_arr_to_list(arr)
+          {:qb_arr, _} = array -> ArraySource.to_list(array)
           l when is_list(l) -> l
           _ -> array_like_to_list(obj)
         end
     end
   end
 
-  defp coerce_to_list({:qb_arr, arr}), do: qb_arr_to_list(arr)
+  defp coerce_to_list({:qb_arr, _} = array), do: ArraySource.to_list(array)
   defp coerce_to_list(l) when is_list(l), do: l
   defp coerce_to_list(s) when is_binary(s), do: String.codepoints(s)
 
@@ -2638,16 +2638,6 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp coerce_to_list(n) when is_number(n), do: []
   defp coerce_to_list(b) when is_boolean(b), do: []
   defp coerce_to_list(_), do: []
-
-  defp qb_arr_to_list(arr) do
-    size = :array.size(arr)
-
-    if size == 0 do
-      []
-    else
-      for index <- 0..(size - 1), do: :array.get(index, arr)
-    end
-  end
 
   defp array_like_source?({:obj, _} = obj) do
     iterator_method = Get.get(obj, {:symbol, "Symbol.iterator"})

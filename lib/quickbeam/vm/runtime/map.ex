@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Runtime.{Collections, InstallerHelpers}
+  alias QuickBEAM.VM.Runtime.{ArraySource, Collections, InstallerHelpers}
 
   alias QuickBEAM.VM.{Builtin, Invocation, JSThrow, Value}
 
@@ -256,7 +256,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
   def weak_proto_property(_), do: :undefined
 
   defp group_items(list) when is_list(list), do: list
-  defp group_items({:qb_arr, arr}), do: qb_arr_to_list(arr)
+  defp group_items({:qb_arr, _} = array), do: ArraySource.to_list(array)
   defp group_items(text) when is_binary(text), do: String.codepoints(text)
 
   defp group_items({:obj, _} = obj) do
@@ -274,16 +274,6 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
   defp map_size_accessor, do: {:accessor, size_getter(), nil}
   defp size_getter, do: {:builtin, "get size", fn _args, this -> size(this) end}
-
-  defp qb_arr_to_list(arr) do
-    size = :array.size(arr)
-
-    if size == 0 do
-      []
-    else
-      for index <- 0..(size - 1), do: :array.get(index, arr)
-    end
-  end
 
   defp construct_from_iterable(list, map, adder) when is_list(list) do
     Enum.each(list, fn entry ->

@@ -17,6 +17,17 @@ defmodule QuickBEAM.VM.Runtime.ArraySource do
 
   def get(value, index), do: value |> new() |> source_get(index)
 
+  def to_list(value) do
+    source = new(value)
+    len = source_length(source)
+
+    if len == 0 do
+      []
+    else
+      for index <- 0..(len - 1), do: source_get(source, index)
+    end
+  end
+
   defp source_length({:object, obj}), do: object_length(obj)
   defp source_length({:qb_arr, arr}), do: :array.size(arr)
   defp source_length({:tuple, tuple}), do: tuple_size(tuple)
