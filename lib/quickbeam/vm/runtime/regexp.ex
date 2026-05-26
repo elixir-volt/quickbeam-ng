@@ -21,14 +21,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   @family_emoji_class "[#{@family_emoji}]"
   @family_emoji_first <<0x1F468::utf8>>
 
-  @symbol_methods [
-    {:symbol, "Symbol.match"},
-    {:symbol, "Symbol.matchAll"},
-    {:symbol, "Symbol.replace"},
-    {:symbol, "Symbol.search"},
-    {:symbol, "Symbol.split"}
-  ]
-
   defintrinsic "RegExp" do
     constructor(&QuickBEAM.VM.Runtime.ConstructorCallbacks.regexp/2,
       length: 2,
@@ -87,6 +79,42 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
       getter "sticky" do
         regexp_flag_value(this, "sticky", "y")
       end
+
+      symbol :match do
+        method do
+          regexp_match(this, args)
+        end
+      end
+
+      symbol :matchAll do
+        method do
+          regexp_match_all(this, args)
+        end
+      end
+
+      symbol :replace do
+        method do
+          regexp_replace(this, args)
+        end
+      end
+
+      symbol :search do
+        method do
+          regexp_search(this, args)
+        end
+      end
+
+      symbol :split do
+        method do
+          unless regexp_match_receiver?(this),
+            do: JSThrow.type_error!("RegExp split receiver is not an object")
+
+          string = List.first(args, :undefined) |> regexp_to_string_hint()
+          limit = args |> Enum.drop(1) |> List.first(:undefined)
+          splitter = regexp_splitter(this)
+          JSString.regexp_split(string, splitter, limit)
+        end
+      end
     end
 
     install_with(&__MODULE__.install_builtin/2)
@@ -103,7 +131,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   def install_builtin(ctor, _opts \\ []) do
     InstallerHelpers.with_prototype(ctor, fn proto_ref ->
       Builtin.Installer.install_prototype_specs(proto_ref, __MODULE__)
-      InstallerHelpers.install_methods(proto_ref, __MODULE__, @symbol_methods)
     end)
   end
 
@@ -115,35 +142,6 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   end
 
   def exec_result(regexp, string) when is_binary(string), do: exec(regexp, [string])
-
-  def proto_property({:symbol, "Symbol.match"}) do
-    {:builtin, "[Symbol.match]", fn args, this -> regexp_match(this, args) end}
-  end
-
-  def proto_property({:symbol, "Symbol.matchAll"}) do
-    {:builtin, "[Symbol.matchAll]", fn args, this -> regexp_match_all(this, args) end}
-  end
-
-  def proto_property({:symbol, "Symbol.replace"}) do
-    {:builtin, "[Symbol.replace]", fn args, this -> regexp_replace(this, args) end}
-  end
-
-  def proto_property({:symbol, "Symbol.search"}) do
-    {:builtin, "[Symbol.search]", fn args, this -> regexp_search(this, args) end}
-  end
-
-  def proto_property({:symbol, "Symbol.split"}) do
-    {:builtin, "[Symbol.split]",
-     fn args, this ->
-       unless regexp_match_receiver?(this),
-         do: JSThrow.type_error!("RegExp split receiver is not an object")
-
-       string = List.first(args, :undefined) |> regexp_to_string_hint()
-       limit = args |> Enum.drop(1) |> List.first(:undefined)
-       splitter = regexp_splitter(this)
-       JSString.regexp_split(string, splitter, limit)
-     end}
-  end
 
   defp regexp_splitter(regexp) do
     constructor = regexp_species_constructor(regexp)
