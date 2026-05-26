@@ -8,7 +8,7 @@ defmodule QuickBEAM.VM.Builtin do
 
       proto "push" do ... end         # → def proto_property("push")
       static "isArray" do ... end     # → def static_property("isArray")
-      static_val "PI", :math.pi()    # → def static_property("PI"), do: value
+      constant "PI", :math.pi()      # → def static_property("PI"), do: value
 
   ## Named object (generates def object/0)
 
@@ -889,8 +889,8 @@ defmodule QuickBEAM.VM.Builtin do
           proto: 3,
           static: 2,
           static: 3,
-          static_val: 2,
-          static_val: 3,
+          static_data: 2,
+          static_data: 3,
           static_constant: 2,
           static_constant: 3,
           constant: 2,
@@ -903,8 +903,8 @@ defmodule QuickBEAM.VM.Builtin do
           proto_getter: 3,
           static_getter: 2,
           static_getter: 3,
-          proto_val: 2,
-          proto_val: 3,
+          proto_data: 2,
+          proto_data: 3,
           property: 2,
           property: 3,
           defintrinsic: 2,
@@ -1108,13 +1108,13 @@ defmodule QuickBEAM.VM.Builtin do
     build_getter_property(:static, name, opts, body)
   end
 
-  @doc "Defines a prototype property as a fixed value."
-  defmacro proto_val(name, value, opts \\ []) do
+  @doc "Defines a prototype data property."
+  defmacro proto_data(name, value, opts \\ []) do
     build_value_property(:proto, name, value, opts)
   end
 
-  @doc "Defines a constructor/static property as a fixed value."
-  defmacro static_val(name, value, opts \\ []) do
+  @doc "Defines a constructor/static data property."
+  defmacro static_data(name, value, opts \\ []) do
     build_value_property(:static, name, value, opts)
   end
 
@@ -1626,7 +1626,7 @@ defmodule QuickBEAM.VM.Builtin do
       {:property, meta, [name, opts]} when is_list(opts) ->
         value = Keyword.fetch!(opts, :value)
         opts = Keyword.delete(opts, :value)
-        target_val = if target == :proto, do: :proto_val, else: :static_val
+        target_val = if target == :proto, do: :proto_data, else: :static_data
         {target_val, meta, [name, value, opts]}
 
       {:accessor, meta, [name, [do: block]]} ->
