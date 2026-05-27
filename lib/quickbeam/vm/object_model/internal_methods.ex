@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   @moduledoc "Dispatch facade for ECMAScript object internal methods."
 
-  import QuickBEAM.VM.Heap.Keys, only: [proxy_target: 0, typed_array: 0]
+  import QuickBEAM.VM.Heap.Keys, only: [proxy_handler: 0, proxy_target: 0, typed_array: 0]
 
   alias QuickBEAM.VM.Heap
 
@@ -63,12 +63,21 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
 
   def set_prototype_of(obj, proto), do: set_prototype_of_by_kind(kind(obj), obj, proto)
 
-  defp get_by_kind(:proxy, obj, key, receiver), do: Get.get(obj, key, receiver)
-  defp get_by_kind(:ordinary, obj, key, receiver), do: Get.get(obj, key, receiver)
-  defp get_by_kind(:array, obj, key, receiver), do: Get.get(obj, key, receiver)
-  defp get_by_kind(:typed_array, obj, key, receiver), do: Get.get(obj, key, receiver)
-  defp get_by_kind(:function, obj, key, receiver), do: Get.get(obj, key, receiver)
-  defp get_by_kind(:primitive, obj, key, receiver), do: Get.get(obj, key, receiver)
+  defp get_by_kind(:proxy, {:obj, ref} = obj, key, receiver) do
+    case Heap.get_obj_raw(ref) do
+      %{proxy_target() => target, proxy_handler() => handler} = proxy ->
+        Get.proxy(proxy, target, handler, key, receiver)
+
+      _ ->
+        Get.ordinary(obj, key, receiver)
+    end
+  end
+
+  defp get_by_kind(:ordinary, obj, key, receiver), do: Get.ordinary(obj, key, receiver)
+  defp get_by_kind(:array, obj, key, receiver), do: Get.ordinary(obj, key, receiver)
+  defp get_by_kind(:typed_array, obj, key, receiver), do: Get.ordinary(obj, key, receiver)
+  defp get_by_kind(:function, obj, key, receiver), do: Get.ordinary(obj, key, receiver)
+  defp get_by_kind(:primitive, obj, key, receiver), do: Get.ordinary(obj, key, receiver)
 
   defp set_by_kind(:proxy, obj, key, value, receiver),
     do: ProxySet.dispatch(obj, key, value, receiver, &Put.ordinary_set/4)

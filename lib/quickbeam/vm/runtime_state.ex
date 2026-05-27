@@ -62,7 +62,12 @@ defmodule QuickBEAM.VM.RuntimeState do
     do: Process.put({:qb_iterator_result_owner, result}, iter_obj)
 
   @doc "Returns the iterator that produced an iterator result object, when known."
-  def get_iterator_result_owner(result), do: Process.get({:qb_iterator_result_owner, result})
+  def get_iterator_result_owner(result), do: Process.get(iterator_result_owner_key(result))
+
+  @doc "Consumes the iterator owner for an iterator result object, when known."
+  def consume_iterator_result_owner(result), do: Process.delete(iterator_result_owner_key(result))
+
+  defp iterator_result_owner_key(result), do: {:qb_iterator_result_owner, result}
 
   @doc "Runs a function while rooting values owned by a suspended interpreter frame."
   def with_suspended_roots(roots, fun) when is_list(roots) and is_function(fun, 0) do

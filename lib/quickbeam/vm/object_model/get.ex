@@ -63,6 +63,11 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   def get(value, key, receiver) when is_binary(key), do: ordinary_get(value, key, receiver)
 
+  def ordinary(value, key, receiver), do: ordinary_get(value, key, receiver)
+
+  def proxy(proxy, target, handler, key, receiver),
+    do: ProxyGet.dispatch(proxy, target, handler, key, receiver, &ordinary_get/3, &target_slot/2)
+
   defp ordinary_get(value, key, receiver),
     do: OrdinaryGet.property(value, key, receiver, ordinary_get_callbacks())
 
@@ -138,7 +143,7 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       )
 
   defp proxy_get(proxy, target, handler, key, receiver),
-    do: ProxyGet.dispatch(proxy, target, handler, key, receiver, &ordinary_get/3, &target_slot/2)
+    do: proxy(proxy, target, handler, key, receiver)
 
   defp typed_array_callbacks, do: GetCallbacks.typed_array(&get_map_property/3)
 

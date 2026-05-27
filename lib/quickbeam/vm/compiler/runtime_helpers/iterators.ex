@@ -42,11 +42,15 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
     try do
       done = Get.get(result, "done")
 
-      if Runtime.truthy?(done) do
-        {true, :undefined}
-      else
-        {false, Get.get(result, "value")}
-      end
+      value_done =
+        if Runtime.truthy?(done) do
+          {true, :undefined}
+        else
+          {false, Get.get(result, "value")}
+        end
+
+      RuntimeState.consume_iterator_result_owner(result)
+      value_done
     catch
       {:js_throw, error} ->
         close_iterator_result_owner(result)
@@ -102,7 +106,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Iterators do
   end
 
   defp close_iterator_result_owner(result) do
-    case RuntimeState.get_iterator_result_owner(result) do
+    case RuntimeState.consume_iterator_result_owner(result) do
       nil ->
         :ok
 
