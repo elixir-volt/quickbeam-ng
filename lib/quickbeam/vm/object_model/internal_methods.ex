@@ -16,6 +16,7 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
     ProxyHas,
     ProxyOwnKeys,
     ProxyOwnProperty,
+    ProxyPreventExtensions,
     ProxyPrototype,
     ProxySet,
     Put,
@@ -62,6 +63,8 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   def get_prototype_of(obj), do: get_prototype_of_by_kind(kind(obj), obj)
 
   def set_prototype_of(obj, proto), do: set_prototype_of_by_kind(kind(obj), obj, proto)
+
+  def prevent_extensions(obj), do: prevent_extensions_by_kind(kind(obj), obj)
 
   defp get_by_kind(:proxy, {:obj, ref} = obj, key, receiver) do
     case Heap.get_obj_raw(ref) do
@@ -174,6 +177,18 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   defp extensible_by_kind(:typed_array, obj), do: ordinary_extensible?(obj)
   defp extensible_by_kind(:function, obj), do: ordinary_extensible?(obj)
   defp extensible_by_kind(:primitive, obj), do: ordinary_extensible?(obj)
+
+  defp prevent_extensions_by_kind(:proxy, obj),
+    do: ProxyPreventExtensions.dispatch(obj, &ordinary_prevent_extensions/1)
+
+  defp prevent_extensions_by_kind(_kind, obj), do: ordinary_prevent_extensions(obj)
+
+  defp ordinary_prevent_extensions({:obj, ref}) do
+    Heap.prevent_extensions(ref)
+    true
+  end
+
+  defp ordinary_prevent_extensions(_), do: false
 
   defp get_prototype_of_by_kind(:proxy, {:obj, ref}) do
     case Heap.get_obj(ref, %{}) do

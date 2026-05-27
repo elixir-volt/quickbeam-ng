@@ -114,11 +114,61 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
+  test "ownKeys validates array-like trap results and property keys", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let p = new Proxy({}, { ownKeys(){ return {0: "x", length: "1"}; } }); Reflect.ownKeys(p).join(",")|,
+      "x"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let p = new Proxy({}, { ownKeys(){ return 1; } }); try { Reflect.ownKeys(p); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let p = new Proxy({}, { ownKeys(){ return [1]; } }); try { Reflect.ownKeys(p); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
   test "ownKeys invariants are enforced through Object.keys", %{rt: rt} do
     assert_modes(
       rt,
       ~S|let target = {}; Object.defineProperty(target, "fixed", {value: 1, configurable: false}); let p = new Proxy(target, {ownKeys(){ return []; }}); try { Object.keys(p); "ok"; } catch (e) { e.name; }|,
       "TypeError"
+    )
+  end
+
+  test "preventExtensions traps use handler receiver and revoked checks", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let receiver; let target = {}; Object.preventExtensions(target); let handler = { preventExtensions(){ receiver = this; return true; } }; let p = new Proxy(target, handler); Reflect.preventExtensions(p); receiver === handler|,
+      true
+    )
+
+    assert_modes(
+      rt,
+      ~S|let r = Proxy.revocable({}, {}); r.revoke(); try { Reflect.preventExtensions(r.proxy); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
+  test "getOwnPropertyDescriptor validates frozen data descriptor compatibility", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let target = {}; Object.defineProperty(target, "x", {value: 1, writable: false, configurable: false}); let p = new Proxy(target, {getOwnPropertyDescriptor(){ return {value: 2, writable: false, configurable: false}; }}); try { Object.getOwnPropertyDescriptor(p, "x"); "ok"; } catch (e) { e.name; }|,
+      "TypeError"
+    )
+  end
+
+  test "set invariant validation does not invoke target getters", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let calls = 0; let target = {}; Object.defineProperty(target, "x", { get(){ calls++; return 1; }, set: undefined, configurable: false }); let p = new Proxy(target, { set(){ return true; } }); try { Reflect.set(p, "x", 2); } catch (_) {} calls|,
+      0
     )
   end
 
@@ -130,9 +180,9 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
 
     assert {:error, %QuickBEAM.JS.Error{name: "TypeError"}} =
-             QuickBEAM.eval(rt, ~S|let r = Proxy.revocable({}, {}); r.revoke(); delete r.proxy.x;|,
-               mode: :beam
-             )
+             QuickBEAM.eval(
+               rt,
+               ~S|let r = Proxy.revocable({}, {}); r.revoke(); delete r.proxy.x;|, mode: :beam)
 
     assert_modes(
       rt,

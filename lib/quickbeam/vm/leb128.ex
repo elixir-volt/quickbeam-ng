@@ -26,10 +26,13 @@ defmodule QuickBEAM.VM.LEB128 do
 
   defp read_signed(<<0::1, value::7, rest::binary>>, acc, shift) do
     result = acc + (value <<< shift)
-    # Sign extend if the last byte's high bit is set
     size = shift + 7
-    # Sign-extend: shift left to put sign bit at position 63, then arithmetic shift right
-    {:ok, (result <<< (64 - size)) >>> (64 - size), rest}
+
+    if band(value, 0x40) != 0 do
+      {:ok, result - (1 <<< size), rest}
+    else
+      {:ok, result, rest}
+    end
   end
 
   defp read_signed(_, _, _), do: {:error, :bad_sleb128}

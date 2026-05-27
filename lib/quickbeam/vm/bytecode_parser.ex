@@ -38,7 +38,8 @@ defmodule QuickBEAM.VM.BytecodeParser do
          :ok <- validate_version(version),
          <<_checksum::little-unsigned-32, rest2::binary>> <- rest,
          {:ok, atoms, rest3} <- read_atoms(rest2),
-         {:ok, value, _rest4} <- read_object(rest3, atoms) do
+         {:ok, value, rest4} <- read_object(rest3, atoms),
+         :ok <- ensure_consumed(rest4) do
       {:ok,
        %QuickBEAM.VM.Program{version: version, atoms: atoms, value: attach_atoms(value, atoms)}}
     else
@@ -363,9 +364,9 @@ defmodule QuickBEAM.VM.BytecodeParser do
          {:ok, stack_size, rest} <- LEB128.read_unsigned(rest),
          {:ok, var_ref_count, rest} <- LEB128.read_unsigned(rest),
          {:ok, closure_var_count, rest} <- LEB128.read_unsigned(rest),
-         {:ok, cpool_count, rest} <- LEB128.read_signed(rest),
-         {:ok, byte_code_len, rest} <- LEB128.read_signed(rest),
-         {:ok, local_count, rest} <- LEB128.read_signed(rest),
+         {:ok, cpool_count, rest} <- LEB128.read_unsigned(rest),
+         {:ok, byte_code_len, rest} <- LEB128.read_unsigned(rest),
+         {:ok, local_count, rest} <- LEB128.read_unsigned(rest),
          {:ok, locals, rest} <- read_vardefs(rest, local_count, atoms),
          {:ok, closure_vars, rest} <- read_closure_vars(rest, closure_var_count, atoms),
          {:ok, cpool, rest} <- read_cpool(rest, cpool_count, atoms) do
@@ -374,9 +375,8 @@ defmodule QuickBEAM.VM.BytecodeParser do
       else
         <<byte_code::binary-size(byte_code_len), rest::binary>> = rest
 
-        with {:ok, instructions} <- QuickBEAM.VM.InstructionDecoder.decode(byte_code, arg_count) do
-          {debug_info, rest} = read_debug_info(rest, flags_map.has_debug_info, atoms)
-
+        with {:ok, instructions} <- QuickBEAM.VM.InstructionDecoder.decode(byte_code, arg_count),
+             {:ok, debug_info, rest} <- read_debug_info(rest, flags_map.has_debug_info, atoms) do
           fun = %QuickBEAM.VM.Function{
             id: :erlang.unique_integer([:positive, :monotonic]),
             name: func_name,
@@ -501,8 +501,8 @@ defmodule QuickBEAM.VM.BytecodeParser do
 
   defp read_closure_vars_loop(data, count, atoms, acc) do
     with {:ok, name, rest} <- read_atom_ref(data, atoms),
-         {:ok, var_idx, rest} <- LEB128.read_signed(rest),
-         {:ok, flags, rest} <- LEB128.read_signed(rest) do
+         {:ok, var_idx, rest} <- LEB128.read_unsigned(rest),
+         {:ok, flags, rest} <- LEB128.read_unsigned(rest) do
       closure_type = band(flags, 0x7)
       is_const = band(bsr(flags, 3), 1) == 1
       is_lexical = band(bsr(flags, 4), 1) == 1
@@ -533,21 +533,25 @@ defmodule QuickBEAM.VM.BytecodeParser do
     end
   end
 
+  defp ensure_consumed(<<>>), do: :ok
+  defp ensure_consumed(rest), do: {:error, {:trailing_bytes, byte_size(rest)}}
+
   defp read_debug_info(data, false, _atoms) do
-    {%{filename: nil, line_num: 1, col_num: 1, pc2line: <<>>, source: <<>>}, data}
+    {:ok, %{filename: nil, line_num: 1, col_num: 1, pc2line: <<>>, source: <<>>}, data}
   end
 
   defp read_debug_info(data, true, atoms) do
     with {:ok, filename, rest} <- read_atom_ref(data, atoms),
          {:ok, line_num, rest} <- LEB128.read_signed(rest),
          {:ok, col_num, rest} <- LEB128.read_signed(rest),
-         {:ok, pc2line_len, rest} <- LEB128.read_signed(rest),
+         {:ok, pc2line_len, rest} <- LEB128.read_unsigned(rest),
          true <- byte_size(rest) >= pc2line_len,
          <<pc2line::binary-size(pc2line_len), rest::binary>> <- rest,
-         {:ok, source_len, rest} <- LEB128.read_signed(rest),
+         {:ok, source_len, rest} <- LEB128.read_unsigned(rest),
          true <- byte_size(rest) >= source_len,
          <<source::binary-size(source_len), rest::binary>> <- rest do
-      {%{
+      {:ok,
+       %{
          filename: filename,
          line_num: line_num,
          col_num: col_num,
@@ -555,7 +559,9 @@ defmodule QuickBEAM.VM.BytecodeParser do
          source: source
        }, rest}
     else
-      _ -> {%{filename: nil, line_num: 1, col_num: 1, pc2line: <<>>, source: <<>>}, data}
+      {:error, _} = err -> err
+      false -> {:error, :malformed_debug_info}
+      _ -> {:error, :malformed_debug_info}
     end
   end
 

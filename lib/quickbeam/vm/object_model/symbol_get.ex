@@ -32,20 +32,22 @@ defmodule QuickBEAM.VM.ObjectModel.SymbolGet do
     end
   end
 
-  def property(value, sym_key, callbacks) do
+  def property(value, sym_key, callbacks, receiver \\ nil) do
+    receiver = receiver || value
+
     case callbacks.get_own.(value, sym_key) do
-      :undefined -> missing_own_property(value, sym_key, callbacks)
-      {:accessor, getter, _} when getter != nil -> callbacks.call_getter.(getter, value)
+      :undefined -> missing_own_property(value, sym_key, callbacks, receiver)
+      {:accessor, getter, _} when getter != nil -> callbacks.call_getter.(getter, receiver)
       value -> value
     end
   end
 
-  defp missing_own_property(value, sym_key, callbacks) do
+  defp missing_own_property(value, sym_key, callbacks, receiver) do
     if callbacks.explicit_own?.(value, sym_key) do
       :undefined
     else
       case callbacks.get_from_prototype.(value, sym_key) do
-        {:accessor, getter, _} when getter != nil -> callbacks.call_getter.(getter, value)
+        {:accessor, getter, _} when getter != nil -> callbacks.call_getter.(getter, receiver)
         {:accessor, nil, _} -> :undefined
         value -> value
       end

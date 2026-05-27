@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.ProxySet do
   import QuickBEAM.VM.Heap.Keys, only: [proxy_target: 0]
 
   alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.{Get, ProxyDispatch, ProxyTrap, Semantics}
+  alias QuickBEAM.VM.ObjectModel.{ProxyDispatch, ProxyTrap, Semantics}
   alias QuickBEAM.VM.Semantics.Values
 
   def dispatch({:obj, ref} = proxy, key, value, receiver, fallback)
@@ -28,14 +28,14 @@ defmodule QuickBEAM.VM.ObjectModel.ProxySet do
   def dispatch(target, key, value, receiver, fallback) when is_function(fallback, 4),
     do: fallback.(target, key, value, receiver || target)
 
-  def validate_invariant({:obj, target_ref} = target, key, value, trap_result) do
+  def validate_invariant({:obj, target_ref}, key, value, trap_result) do
     if Values.truthy?(trap_result) do
       desc = Heap.get_prop_desc(target_ref, key)
-      target_value = Get.get(target, key)
 
       cond do
         match?(%{configurable: false, writable: false}, desc) and
-            not Semantics.same_value?(value, target_value) ->
+          data_property?(target_ref, key) and
+            not Semantics.same_value?(value, raw_target_value(target_ref, key)) ->
           JSThrow.type_error!("proxy set trap violates invariant")
 
         match?(%{configurable: false}, desc) and getter_only_accessor?(target_ref, key) ->
@@ -50,6 +50,21 @@ defmodule QuickBEAM.VM.ObjectModel.ProxySet do
   end
 
   def validate_invariant(_target, _key, _value, trap_result), do: trap_result
+
+  defp data_property?(target_ref, key) do
+    case Heap.raw_fetch(Heap.get_obj_raw(target_ref), key) do
+      {:ok, {:accessor, _, _}} -> false
+      {:ok, _value} -> true
+      :error -> false
+    end
+  end
+
+  defp raw_target_value(target_ref, key) do
+    case Heap.raw_fetch(Heap.get_obj_raw(target_ref), key) do
+      {:ok, value} -> value
+      :error -> :undefined
+    end
+  end
 
   defp getter_only_accessor?(target_ref, key) do
     case Heap.raw_fetch(Heap.get_obj_raw(target_ref), key) do

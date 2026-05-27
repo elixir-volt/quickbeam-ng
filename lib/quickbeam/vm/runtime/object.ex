@@ -753,33 +753,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     Heap.freeze(ref)
   end
 
-  defp prevent_extensions_object({:obj, ref}) do
-    case Heap.get_obj(ref, %{}) do
-      %{proxy_target() => target, proxy_handler() => handler} ->
-        trap = Get.get(handler, "preventExtensions")
-
-        cond do
-          Value.nullish?(trap) ->
-            prevent_extensions_object(target)
-
-          not Values.truthy?(Invocation.invoke_callback_or_throw(trap, [target])) ->
-            false
-
-          Heap.extensible?(target) ->
-            throw(
-              {:js_throw,
-               Heap.make_error("proxy preventExtensions trap violates invariant", "TypeError")}
-            )
-
-          true ->
-            true
-        end
-
-      _ ->
-        Heap.prevent_extensions(ref)
-        true
-    end
-  end
+  defp prevent_extensions_object({:obj, _} = obj), do: InternalMethods.prevent_extensions(obj)
 
   defp seal_object({:obj, ref} = obj) do
     case Heap.get_obj(ref, %{}) do

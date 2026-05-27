@@ -180,8 +180,11 @@ defmodule QuickBEAM.VM.Heap.GC do
   defp quickbeam_cache_key?(key) when is_atom(key),
     do: key |> Atom.to_string() |> String.starts_with?("qb_")
 
-  defp quickbeam_cache_key?({key, _}) when is_atom(key),
-    do: key |> Atom.to_string() |> String.starts_with?("qb_")
+  defp quickbeam_cache_key?(key) when is_tuple(key) and tuple_size(key) > 0 do
+    key
+    |> elem(0)
+    |> quickbeam_cache_key?()
+  end
 
   defp quickbeam_cache_key?(_), do: false
 

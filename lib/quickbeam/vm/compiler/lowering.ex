@@ -326,7 +326,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering do
       {op, []} ->
         case CFG.opcode_name(op) do
           {:ok, :object} ->
-            case ObjectLiteralFastPath.try_lower(instructions, size, idx, arg_count, state) do
+            case ObjectLiteralFastPath.try_lower(instructions, next_entry, idx, arg_count, state) do
               {:ok, state, skip_to} ->
                 lower_block(
                   instructions,

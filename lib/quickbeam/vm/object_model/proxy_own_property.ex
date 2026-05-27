@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnProperty do
   @moduledoc "Proxy [[GetOwnProperty]] dispatch and invariant validation."
 
   alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.{ProxyDispatch, ProxyTrap}
+  alias QuickBEAM.VM.ObjectModel.{OwnProperty, ProxyDispatch, ProxyTrap, Semantics}
 
   def dispatch(proxy_map, prop_name, fallback, target_flags)
       when is_function(fallback, 2) and is_function(target_flags, 2) do
@@ -61,22 +61,70 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnProperty do
     do: JSThrow.type_error!("proxy getOwnPropertyDescriptor trap returned non-object")
 
   defp validate_descriptor_object(target, prop_name, result_desc, result, target_flags) do
+    target_flags = target_flags.(target, prop_name)
+    target_desc = target_descriptor(target, prop_name)
+
     cond do
-      not target_extensible?(target) and target_flags.(target, prop_name) == nil ->
+      not target_extensible?(target) and target_flags == nil ->
         invariant_error()
 
       Map.get(result_desc, "configurable") == false and
-          not match?(%{configurable: false}, target_flags.(target, prop_name)) ->
+          not match?(%{configurable: false}, target_flags) ->
         invariant_error()
 
       Map.get(result_desc, "configurable") == false and Map.get(result_desc, "writable") == false and
-          match?(%{writable: true}, target_flags.(target, prop_name)) ->
+          match?(%{writable: true}, target_flags) ->
+        invariant_error()
+
+      not compatible_with_target?(result_desc, target_desc) ->
         invariant_error()
 
       true ->
         result
     end
   end
+
+  defp compatible_with_target?(_result_desc, :undefined), do: true
+  defp compatible_with_target?(_result_desc, nil), do: true
+
+  defp compatible_with_target?(result_desc, target_desc) do
+    cond do
+      descriptor_field(result_desc, "configurable", true) == true ->
+        true
+
+      descriptor_field(target_desc, "configurable", true) == true ->
+        true
+
+      descriptor_field(result_desc, "writable", descriptor_field(target_desc, "writable", nil)) ==
+        false and
+        descriptor_field(target_desc, "writable", nil) == false and
+        Map.has_key?(result_desc, "value") and
+        Map.has_key?(target_desc, "value") and
+          not Semantics.same_value?(Map.get(result_desc, "value"), Map.get(target_desc, "value")) ->
+        false
+
+      Map.has_key?(result_desc, "get") and Map.has_key?(target_desc, "get") and
+          not Semantics.same_value?(Map.get(result_desc, "get"), Map.get(target_desc, "get")) ->
+        false
+
+      Map.has_key?(result_desc, "set") and Map.has_key?(target_desc, "set") and
+          not Semantics.same_value?(Map.get(result_desc, "set"), Map.get(target_desc, "set")) ->
+        false
+
+      true ->
+        true
+    end
+  end
+
+  defp target_descriptor(target, prop_name) do
+    case OwnProperty.descriptor(target, prop_name) do
+      {:obj, ref} -> Heap.get_obj(ref, %{})
+      :undefined -> :undefined
+      other -> other
+    end
+  end
+
+  defp descriptor_field(desc, key, default), do: Map.get(desc, key, default)
 
   defp target_extensible?({:obj, ref}), do: Heap.extensible?(ref)
   defp target_extensible?(_target), do: true

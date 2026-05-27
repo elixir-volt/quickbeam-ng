@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnKeys do
 
   import QuickBEAM.VM.Heap.Keys, only: [proxy_target: 0]
 
-  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.{Heap, JSThrow, Runtime, Value}
   alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, ProxyDispatch, ProxyTrap}
 
   def dispatch({:obj, ref} = proxy, fallback) when is_function(fallback, 1) do
@@ -24,14 +24,35 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyOwnKeys do
   def dispatch(target, fallback) when is_function(fallback, 1), do: fallback.(target)
 
   def result_list(result) do
-    length = Get.get(result, "length")
-
-    if is_integer(length) and length > 0 do
-      for index <- 0..(length - 1), do: Get.get(result, Integer.to_string(index))
-    else
-      []
+    unless Value.object_like?(result) do
+      JSThrow.type_error!("proxy ownKeys trap result is not an object")
     end
+
+    length = result |> Get.get("length") |> Runtime.to_number() |> to_length()
+
+    result =
+      if length > 0 do
+        for index <- 0..(length - 1), do: Get.get(result, Integer.to_string(index))
+      else
+        []
+      end
+
+    Enum.each(result, &validate_property_key!/1)
+    result
   end
+
+  defp to_length(:nan), do: 0
+  defp to_length(:infinity), do: 9_007_199_254_740_991
+  defp to_length(:neg_infinity), do: 0
+  defp to_length(value) when is_number(value), do: value |> trunc() |> max(0)
+  defp to_length(_), do: 0
+
+  defp validate_property_key!(key) when is_binary(key), do: :ok
+  defp validate_property_key!({:symbol, _}), do: :ok
+  defp validate_property_key!({:symbol, _, _}), do: :ok
+
+  defp validate_property_key!(_key),
+    do: JSThrow.type_error!("proxy ownKeys trap result contains non-property key")
 
   def validate_invariant(trap_keys, target) do
     target_keys = InternalMethods.own_keys(target)

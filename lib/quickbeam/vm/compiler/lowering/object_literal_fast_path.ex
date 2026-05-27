@@ -6,30 +6,15 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
   alias QuickBEAM.VM.OpcodeSpec
 
   @doc "Attempts to lower an object literal followed by define_field opcodes."
-  def try_lower(instructions, size, idx, arg_count, state) do
+  def try_lower(instructions, block_limit, idx, arg_count, state) do
+    block_limit = min(block_limit, tuple_size(instructions))
+
     with {:ok, map_pairs, skip_to, state} <-
-           collect_define_fields(instructions, size, idx + 1, arg_count, state) do
+           collect_define_fields(instructions, block_limit, idx + 1, arg_count, state) do
       keys_list = Enum.map(map_pairs, &elem(&1, 0))
       vals_list = Enum.map(map_pairs, &elem(&1, 1))
       keys_tuple = Builder.tuple_expr(keys_list)
       vals_tuple = Builder.tuple_expr(vals_list)
-
-      ct_offsets =
-        map_pairs
-        |> Enum.with_index()
-        |> Enum.reduce(%{}, fn {{key_expr, _value_expr, _safe_value?}, field_idx}, acc ->
-          case Literals.string_lossy(key_expr) do
-            key when is_binary(key) -> Map.put(acc, key, field_idx)
-            _ -> acc
-          end
-        end)
-
-      value_map =
-        map_pairs
-        |> Enum.filter(fn {_key_expr, _value_expr, safe_value?} -> safe_value? end)
-        |> Map.new(fn {key_expr, value_expr, _safe_value?} ->
-          {Literals.string_lossy(key_expr), value_expr}
-        end)
 
       {obj, state} =
         Emit.bind(
@@ -38,7 +23,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ObjectLiteralFastPath do
           State.abi_call(state, :wrap_keyed_object_literal, [keys_tuple, vals_tuple])
         )
 
-      {:ok, Emit.push(state, obj, {:shaped_object, ct_offsets, value_map}), skip_to}
+      {:ok, Emit.push(state, obj, :object), skip_to}
     end
   end
 

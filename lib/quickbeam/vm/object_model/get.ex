@@ -51,6 +51,17 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
   def get(value, key, receiver) when is_integer(key),
     do: get(value, Integer.to_string(key), receiver)
 
+  def get(value, {:symbol, "Symbol.hasInstance"} = sym_key, _receiver),
+    do: get_callable_symbol(value, sym_key)
+
+  def get(value, {:symbol, "Symbol.hasInstance", _} = sym_key, _receiver),
+    do: get_callable_symbol(value, SymbolGet.normalize(sym_key))
+
+  def get(value, {:symbol, _} = sym_key, receiver), do: get_symbol(value, sym_key, receiver)
+
+  def get(value, {:symbol, _, _} = sym_key, receiver),
+    do: get_symbol(value, SymbolGet.normalize(sym_key), receiver)
+
   def get({:obj, ref} = value, key, receiver) when is_binary(key) do
     case Heap.get_obj_raw(ref) do
       %{proxy_target() => target, proxy_handler() => handler} = proxy ->
@@ -85,6 +96,9 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
 
   defp get_symbol(value, sym_key),
     do: SymbolGet.property(value, sym_key, symbol_get_callbacks())
+
+  defp get_symbol(value, sym_key, receiver),
+    do: SymbolGet.property(value, sym_key, symbol_get_callbacks(), receiver)
 
   defp symbol_get_callbacks,
     do:

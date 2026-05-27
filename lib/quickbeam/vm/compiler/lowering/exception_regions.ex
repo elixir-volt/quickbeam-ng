@@ -459,7 +459,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.ExceptionRegions do
            instruction,
            idx,
            CFG.next_entry(entries, idx),
-           0,
+           state.arg_count,
            state,
            stack_depths,
            constants,

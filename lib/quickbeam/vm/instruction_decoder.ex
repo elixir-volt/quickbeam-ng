@@ -101,9 +101,21 @@ defmodule QuickBEAM.VM.InstructionDecoder do
     {:ok, OpcodeSpec.short_form_operands(op, ac)}
   end
 
-  defp operands_for(bc, pos, _op, fmt, offset_map, ac) do
-    decode_operands(bc, pos, fmt, offset_map, ac)
+  defp operands_for(bc, pos, op, fmt, offset_map, ac) do
+    with {:ok, operands} <- decode_operands(bc, pos, fmt, offset_map, ac) do
+      {:ok, normalize_operands(op, operands, ac)}
+    end
   end
+
+  defp normalize_operands(op, [atom_idx, local_idx], ac) do
+    if op == Opcodes.num(:make_loc_ref) do
+      [atom_idx, local_idx + ac]
+    else
+      [atom_idx, local_idx]
+    end
+  end
+
+  defp normalize_operands(_op, operands, _ac), do: operands
 
   defp decode_operands(bc, pos, :u8, _om, _ac), do: {:ok, [get_u8(bc, pos)]}
   defp decode_operands(bc, pos, :i8, _om, _ac), do: {:ok, [get_i8(bc, pos)]}
