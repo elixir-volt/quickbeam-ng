@@ -11,7 +11,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Semantics.Coercion
-  alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, PropertyDescriptor}
+  alias QuickBEAM.VM.ObjectModel.{InternalMethods, PropertyDescriptor}
   alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.ConstructorRegistry, as: Constructors
@@ -114,14 +114,14 @@ defmodule QuickBEAM.VM.Runtime.Errors do
        end
 
        name =
-         case QuickBEAM.VM.ObjectModel.Get.get(this, "name") do
+         case InternalMethods.get(this, "name") do
            nil -> "Error"
            :undefined -> "Error"
            n -> stringify_error_slot(n)
          end
 
        msg =
-         case QuickBEAM.VM.ObjectModel.Get.get(this, "message") do
+         case InternalMethods.get(this, "message") do
            nil -> ""
            :undefined -> ""
            m -> stringify_error_slot(m)
@@ -182,14 +182,14 @@ defmodule QuickBEAM.VM.Runtime.Errors do
          end
 
          name =
-           case QuickBEAM.VM.ObjectModel.Get.get(this, "name") do
+           case InternalMethods.get(this, "name") do
              nil -> "Error"
              :undefined -> "Error"
              n -> stringify_error_slot(n)
            end
 
          msg =
-           case QuickBEAM.VM.ObjectModel.Get.get(this, "message") do
+           case InternalMethods.get(this, "message") do
              nil -> ""
              :undefined -> ""
              m -> stringify_error_slot(m)
@@ -309,7 +309,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   defp maybe_install_cause({:obj, error_ref}, {:obj, _} = options) do
     if InternalMethods.has_property(options, "cause") do
-      Heap.put_obj_key(error_ref, "cause", Get.get(options, "cause"))
+      Heap.put_obj_key(error_ref, "cause", InternalMethods.get(options, "cause"))
       Heap.put_prop_desc(error_ref, "cause", PropertyDescriptor.method())
     end
   end
@@ -362,21 +362,21 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
       map when is_map(map) ->
         sym_iter = {:symbol, "Symbol.iterator"}
-        iter_fn = Get.get(errors, sym_iter)
+        iter_fn = InternalMethods.get(errors, sym_iter)
 
         cond do
           QuickBEAM.VM.Builtin.callable?(iter_fn) ->
             iter = Invocation.invoke_with_receiver(iter_fn, [], errors)
             unless match?({:obj, _}, iter), do: JSThrow.type_error!("iterator is not an object")
-            next_fn = Get.get(iter, "next")
+            next_fn = InternalMethods.get(iter, "next")
 
             unless QuickBEAM.VM.Builtin.callable?(next_fn),
               do: JSThrow.type_error!("iterator.next is not callable")
 
             collect_iterable(iter, next_fn, [])
 
-          QuickBEAM.VM.Builtin.callable?(Get.get(errors, "next")) ->
-            collect_iterable(errors, Get.get(errors, "next"), [])
+          QuickBEAM.VM.Builtin.callable?(InternalMethods.get(errors, "next")) ->
+            collect_iterable(errors, InternalMethods.get(errors, "next"), [])
 
           true ->
             JSThrow.type_error!("object is not iterable")
@@ -401,10 +401,10 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     result = Invocation.invoke_with_receiver(next_fn, [], iter)
     unless match?({:obj, _}, result), do: JSThrow.type_error!("iterator result is not an object")
 
-    if Get.get(result, "done") == true do
+    if InternalMethods.get(result, "done") == true do
       Enum.reverse(acc)
     else
-      collect_iterable(iter, next_fn, [Get.get(result, "value") | acc])
+      collect_iterable(iter, next_fn, [InternalMethods.get(result, "value") | acc])
     end
   end
 
