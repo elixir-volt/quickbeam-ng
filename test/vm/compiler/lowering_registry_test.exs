@@ -74,21 +74,26 @@ defmodule QuickBEAM.VM.Compiler.LoweringRegistryTest do
     assert missing == []
   end
 
+  test "opcode specs point registered handlers at their lowering modules" do
+    mismatches =
+      registered_modules()
+      |> Enum.flat_map(fn module ->
+        module.registered_opcodes()
+        |> Enum.flat_map(fn opcode ->
+          case OpcodeSpec.opcode(opcode) do
+            {:ok, spec} -> [{opcode, spec.lowering_module, module}]
+            :error -> []
+          end
+        end)
+      end)
+      |> Enum.reject(fn {_opcode, expected, actual} -> expected == actual end)
+
+    assert mismatches == []
+  end
+
   test "lowering handlers are unique across families" do
     registered =
-      [
-        Stack,
-        Locals,
-        Globals,
-        Arithmetic,
-        Objects,
-        Calls,
-        Control,
-        Iterators,
-        Classes,
-        Generators,
-        WithScope
-      ]
+      registered_modules()
       |> Enum.flat_map(fn module ->
         Enum.map(module.registered_opcodes(), &{&1, module})
       end)
@@ -114,6 +119,12 @@ defmodule QuickBEAM.VM.Compiler.LoweringRegistryTest do
   end
 
   defp all_registered_opcodes do
+    registered_modules()
+    |> Enum.flat_map(& &1.registered_opcodes())
+    |> MapSet.new()
+  end
+
+  defp registered_modules do
     [
       Stack,
       Locals,
@@ -127,7 +138,5 @@ defmodule QuickBEAM.VM.Compiler.LoweringRegistryTest do
       Generators,
       WithScope
     ]
-    |> Enum.flat_map(& &1.registered_opcodes())
-    |> MapSet.new()
   end
 end
