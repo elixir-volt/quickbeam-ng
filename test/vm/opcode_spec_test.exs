@@ -90,6 +90,19 @@ defmodule QuickBEAM.VM.OpcodeSpecTest do
     assert OpcodeSpec.branch_target(:push_0, []) == :error
   end
 
+  test "every label opcode exposes control-flow target metadata" do
+    label_formats = MapSet.new([:label, :label8, :label16])
+
+    missing =
+      for {_num, {name, _size, _pops, _pushes, format}} <- Opcodes.table(),
+          MapSet.member?(label_formats, format),
+          OpcodeSpec.branch_target(name, [0]) == :error,
+          OpcodeSpec.control_flow_family(name) != :finally_control,
+          do: name
+
+    assert missing == []
+  end
+
   test "call arity metadata is centralized" do
     assert OpcodeSpec.call_arity(:call, [4]) == {:ok, 4}
     assert OpcodeSpec.call_arity(:call2, []) == {:ok, 2}
