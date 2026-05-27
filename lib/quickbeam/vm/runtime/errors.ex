@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
   import QuickBEAM.VM.Value, only: [is_nullish: 1]
 
-  alias QuickBEAM.VM.{Heap, Invocation}
+  alias QuickBEAM.VM.{Builtin, Heap, Invocation}
   alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Semantics.Coercion
@@ -19,6 +19,17 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   @error_types ~w(Error TypeError RangeError SyntaxError ReferenceError URIError EvalError AggregateError SuppressedError)
 
+  @error_ecma %{
+    "Error" => "20.5.1.1",
+    "EvalError" => "20.5.6.1.1",
+    "RangeError" => "20.5.6.1.1",
+    "ReferenceError" => "20.5.6.1.1",
+    "SyntaxError" => "20.5.6.1.1",
+    "TypeError" => "20.5.6.1.1",
+    "URIError" => "20.5.6.1.1",
+    "AggregateError" => "20.5.7.1.1"
+  }
+
   def builtin_definitions do
     Enum.map(@error_types, fn name ->
       %Definition{
@@ -27,7 +38,8 @@ defmodule QuickBEAM.VM.Runtime.Errors do
         length: if(name == "AggregateError", do: 2, else: 1),
         phase: :fundamental,
         module: __MODULE__,
-        auto_install?: false
+        auto_install?: false,
+        ecma: Map.get(@error_ecma, name)
       }
     end)
   end
@@ -107,32 +119,35 @@ defmodule QuickBEAM.VM.Runtime.Errors do
   end
 
   defp error_to_string_method do
-    {:builtin, "toString",
-     fn _args, this ->
-       unless match?({:obj, _}, this) do
-         JSThrow.type_error!("Error.prototype.toString called on non-object")
-       end
+    Builtin.builtin(
+      "toString",
+      fn _args, this ->
+        unless match?({:obj, _}, this) do
+          JSThrow.type_error!("Error.prototype.toString called on non-object")
+        end
 
-       name =
-         case InternalMethods.get(this, "name") do
-           nil -> "Error"
-           :undefined -> "Error"
-           n -> stringify_error_slot(n)
-         end
+        name =
+          case InternalMethods.get(this, "name") do
+            nil -> "Error"
+            :undefined -> "Error"
+            n -> stringify_error_slot(n)
+          end
 
-       msg =
-         case InternalMethods.get(this, "message") do
-           nil -> ""
-           :undefined -> ""
-           m -> stringify_error_slot(m)
-         end
+        msg =
+          case InternalMethods.get(this, "message") do
+            nil -> ""
+            :undefined -> ""
+            m -> stringify_error_slot(m)
+          end
 
-       cond do
-         name == "" -> msg
-         msg == "" -> name
-         true -> name <> ": " <> msg
-       end
-     end}
+        cond do
+          name == "" -> msg
+          msg == "" -> name
+          true -> name <> ": " <> msg
+        end
+      end,
+      ecma: "20.5.3.4"
+    )
   end
 
   defp error_is_error_method do

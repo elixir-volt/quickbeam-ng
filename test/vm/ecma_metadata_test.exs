@@ -25,6 +25,15 @@ defmodule QuickBEAM.VM.ECMAMetadataTest do
     assert invalid == []
   end
 
+  test "specialized Error definitions expose ECMA metadata where standard" do
+    definitions = Map.new(QuickBEAM.VM.Runtime.Errors.builtin_definitions(), &{&1.name, &1.ecma})
+
+    assert definitions["Error"] == "20.5.1.1"
+    assert definitions["TypeError"] == "20.5.6.1.1"
+    assert definitions["AggregateError"] == "20.5.7.1.1"
+    assert definitions["SuppressedError"] == nil
+  end
+
   test "proposal and host declarations stay out of ECMA metadata" do
     for {module, function, key} <- @proposal_or_host_declarations do
       assert %{ecma: nil} = apply(module, function, [key])
