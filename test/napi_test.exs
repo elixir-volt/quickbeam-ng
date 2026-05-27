@@ -160,6 +160,22 @@ defmodule QuickBEAM.NapiTest do
 
       QuickBEAM.stop(rt)
     end
+
+    test "repeated wrapped-object shutdown stays stable" do
+      for _ <- 1..5 do
+        {:ok, rt} = QuickBEAM.start()
+        {:ok, _} = QuickBEAM.load_addon(rt, @test_addon, as: "addon")
+
+        assert {:ok, 1234} = QuickBEAM.eval(rt, "addon.wrapAndUnwrap()")
+        assert {:ok, 1} = QuickBEAM.eval(rt, "addon.clearWrapKeepalive()")
+
+        assert {:ok, [7, 8, 9, 10]} =
+                 QuickBEAM.eval(rt, "Array.from(addon.addExternalBufferFinalizer())")
+
+        assert {:ok, 1} = QuickBEAM.eval(rt, "addon.clearExternalBufferKeepalive()")
+        QuickBEAM.stop(rt)
+      end
+    end
   end
 
   describe "error handling" do
