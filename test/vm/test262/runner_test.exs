@@ -96,7 +96,7 @@ defmodule QuickBEAM.VM.Test262Test do
               :throw, {:js_throw, err} -> {:error, err}
             end
 
-          case {result, unquote(negative != nil)} do
+          case {result, expected_error?(unquote(Macro.escape(negative)))} do
             {{:ok, _}, false} -> :ok
             {{:error, _}, true} -> :ok
             {{:ok, _}, true} -> flunk("Expected error but test passed")
@@ -113,4 +113,6 @@ defmodule QuickBEAM.VM.Test262Test do
     {:ok, rt} = QuickBEAM.start(mode: :beam)
     %{rt: rt}
   end
+
+  defp expected_error?(negative), do: negative != nil
 end
