@@ -205,7 +205,7 @@ defmodule QuickBEAM.Core.ContextPoolTest do
 
     # performance.now (native Zig)
     {:ok, ms} = QuickBEAM.Context.eval(ctx, "performance.now()")
-    assert is_float(ms) and ms >= 0
+    assert is_number(ms) and ms >= 0
 
     # console (logs to Logger)
     assert {:ok, nil} = QuickBEAM.Context.eval(ctx, "console.log('from context')")

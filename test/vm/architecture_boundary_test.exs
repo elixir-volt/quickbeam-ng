@@ -30,6 +30,10 @@ defmodule QuickBEAM.VM.ArchitectureBoundaryTest do
     install_hidden_static
   )
 
+  @removed_builtin_dsl_regexes Enum.map(@removed_builtin_dsl_patterns, fn pattern ->
+                                 {pattern, Regex.compile!("\\b#{pattern}\\b")}
+                               end)
+
   test "runtime-facing VM code uses InternalMethods instead of low-level object model calls" do
     violations =
       @runtime_boundary_paths
@@ -72,7 +76,9 @@ defmodule QuickBEAM.VM.ArchitectureBoundaryTest do
 
   defp removed_builtin_dsl_references(path) do
     scan_lines(path, fn line ->
-      Enum.filter(@removed_builtin_dsl_patterns, &Regex.match?(~r/\b#{&1}\b/, line))
+      @removed_builtin_dsl_regexes
+      |> Enum.filter(fn {_pattern, regex} -> Regex.match?(regex, line) end)
+      |> Enum.map(fn {pattern, _regex} -> pattern end)
     end)
   end
 
