@@ -589,7 +589,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
-  @ecma "20.1.2.11"
+  @ecma "20.1.2.16"
   static "isExtensible", length: 1 do
     case hd(args) do
       {:builtin, "ThrowTypeError", _} -> false
@@ -597,7 +597,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
-  @ecma "20.1.2.20"
+  @ecma "20.1.2.22"
   static "seal", length: 1 do
     case hd(args) do
       {:obj, _ref} = obj ->
@@ -617,7 +617,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
-  @ecma "20.1.2.12"
+  @ecma "20.1.2.17"
   static "isFrozen", length: 1 do
     case hd(args) do
       {:obj, _ref} = obj -> frozen_object?(obj)
@@ -625,7 +625,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
-  @ecma "20.1.2.13"
+  @ecma "20.1.2.18"
   static "isSealed", length: 1 do
     case hd(args) do
       {:obj, _ref} = obj -> sealed_object?(obj)
