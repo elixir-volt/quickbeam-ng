@@ -59,10 +59,7 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
 
   @doc "Lowers a VM instruction or function into compiler IR."
   def lower(state, constants, arg_count, name_args) do
-    case lower_registered(state, constants, arg_count, name_args) do
-      :not_handled -> lower_fallback(state, constants, arg_count, name_args)
-      result -> result
-    end
+    lower_registered(state, constants, arg_count, name_args)
   end
 
   defp lower_registered(state, constants, arg_count, {{:ok, name}, args}) do
@@ -148,137 +145,6 @@ defmodule QuickBEAM.VM.Compiler.Lowering.Ops.Stack do
   defp lower_handler(:perm5, state, _constants, _arg_count, []), do: lower_perm5(state)
   defp lower_handler(:nop, state, _constants, _arg_count, []), do: {:ok, state}
   defp lower_handler(_handler, _state, _constants, _arg_count, _args), do: :not_handled
-
-  defp lower_fallback(state, constants, arg_count, name_args) do
-    case name_args do
-      {{:ok, :push_i32}, [value]} ->
-        {:ok, Emit.push(state, Builder.integer(value))}
-
-      {{:ok, :push_i16}, [value]} ->
-        {:ok, Emit.push(state, Builder.integer(value))}
-
-      {{:ok, :push_i8}, [value]} ->
-        {:ok, Emit.push(state, Builder.integer(value))}
-
-      {{:ok, name}, [_]} ->
-        if OpcodeSpec.small_int_push?(name) do
-          {:ok, value} = OpcodeSpec.small_int_push(name)
-          {:ok, Emit.push(state, Builder.integer(value))}
-        else
-          :not_handled
-        end
-
-      {{:ok, :push_true}, []} ->
-        {:ok, Emit.push(state, Builder.atom(true))}
-
-      {{:ok, :push_false}, []} ->
-        {:ok, Emit.push(state, Builder.atom(false))}
-
-      {{:ok, :null}, []} ->
-        {:ok, Emit.push(state, Builder.atom(nil))}
-
-      {{:ok, :undefined}, []} ->
-        {:ok, Emit.push(state, Builder.atom(:undefined))}
-
-      {{:ok, :push_empty_string}, []} ->
-        {:ok, Emit.push(state, Builder.literal(""))}
-
-      {{:ok, :push_bigint_i32}, [value]} ->
-        {:ok,
-         Emit.push(state, Builder.tuple_expr([Builder.atom(:bigint), Builder.integer(value)]))}
-
-      {{:ok, :push_atom_value}, [atom_idx]} ->
-        {:ok, Emit.push(state, Builder.literal(Builder.atom_name(state, atom_idx)), :string)}
-
-      {{:ok, :push_this}, []} ->
-        {:ok, Emit.push(state, State.abi_call(state, :push_this, []), :object)}
-
-      {{:ok, :push_const}, [const_idx]} ->
-        push_const(state, constants, arg_count, const_idx)
-
-      {{:ok, :push_const8}, [const_idx]} ->
-        push_const(state, constants, arg_count, const_idx)
-
-      {{:ok, :fclosure}, [const_idx]} ->
-        lower_fclosure(state, constants, arg_count, const_idx)
-
-      {{:ok, :fclosure8}, [const_idx]} ->
-        lower_fclosure(state, constants, arg_count, const_idx)
-
-      {{:ok, :private_symbol}, [atom_idx]} ->
-        {:ok,
-         Emit.push(
-           state,
-           State.constant_call(state, :private_symbol, [
-             Builder.literal(Builder.atom_name(state, atom_idx))
-           ]),
-           :unknown
-         )}
-
-      {{:ok, :dup}, []} ->
-        Emit.duplicate_top(state)
-
-      {{:ok, :dup1}, []} ->
-        lower_dup1(state)
-
-      {{:ok, :dup2}, []} ->
-        Emit.duplicate_top_two(state)
-
-      {{:ok, :dup3}, []} ->
-        lower_dup3(state)
-
-      {{:ok, :insert2}, []} ->
-        Emit.insert_top_two(state)
-
-      {{:ok, :insert3}, []} ->
-        Emit.insert_top_three(state)
-
-      {{:ok, :insert4}, []} ->
-        lower_insert4(state)
-
-      {{:ok, :drop}, []} ->
-        Emit.drop_top(state)
-
-      {{:ok, :nip}, []} ->
-        lower_nip(state)
-
-      {{:ok, :nip1}, []} ->
-        lower_nip1(state)
-
-      {{:ok, :swap}, []} ->
-        Emit.swap_top(state)
-
-      {{:ok, :swap2}, []} ->
-        lower_swap2(state)
-
-      {{:ok, :rot3l}, []} ->
-        lower_rot3l(state)
-
-      {{:ok, :rot3r}, []} ->
-        lower_rot3r(state)
-
-      {{:ok, :rot4l}, []} ->
-        lower_rot4l(state)
-
-      {{:ok, :rot5l}, []} ->
-        lower_rot5l(state)
-
-      {{:ok, :perm3}, []} ->
-        Emit.permute_top_three(state)
-
-      {{:ok, :perm4}, []} ->
-        lower_perm4(state)
-
-      {{:ok, :perm5}, []} ->
-        lower_perm5(state)
-
-      {{:ok, :nop}, []} ->
-        {:ok, state}
-
-      _ ->
-        :not_handled
-    end
-  end
 
   defp push_const(state, constants, arg_count, idx) do
     case Enum.at(constants, idx) do
