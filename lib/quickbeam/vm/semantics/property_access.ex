@@ -2,7 +2,7 @@ defmodule QuickBEAM.VM.Semantics.PropertyAccess do
   @moduledoc "Shared JavaScript property-access boundary for nullish checks and key conversion."
 
   alias QuickBEAM.VM.{Heap, Value}
-  alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey, Put}
+  alias QuickBEAM.VM.ObjectModel.{InternalMethods, PropertyKey, Put}
 
   def require_object_for_property!(nil, key),
     do: nullish_property_error!("null", key)
@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.Semantics.PropertyAccess do
 
   def get_property(_ctx \\ nil, receiver, key) do
     prop_key = to_property_key_for_access(receiver, key)
-    Get.get(receiver, prop_key)
+    InternalMethods.get(receiver, prop_key)
   end
 
   def set_property(ctx \\ nil, receiver, key, value) do

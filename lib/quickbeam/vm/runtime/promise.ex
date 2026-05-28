@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   import QuickBEAM.VM.Heap.Keys
 
   alias QuickBEAM.VM.{Heap, Invocation, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.PropertyDescriptor
+  alias QuickBEAM.VM.ObjectModel.{InternalMethods, PropertyDescriptor}
   alias QuickBEAM.VM.Semantics.Iterators
   alias QuickBEAM.VM.Promise
 
@@ -238,7 +238,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   defp combinator_inputs(constructor, iterable) do
     try do
       {iter, next_fn} = Iterators.for_of_start(iterable)
-      resolve = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+      resolve = InternalMethods.get(constructor, "resolve")
 
       unless QuickBEAM.VM.Builtin.callable?(resolve) do
         JSThrow.type_error!("Promise resolve is not callable")
@@ -277,13 +277,12 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   defp promise_for_of_next(_next_fn, {:list_iter, []}), do: {true, :undefined, :undefined}
 
   defp promise_for_of_next(_next_fn, {:array_iter, obj, index}) do
-    length = QuickBEAM.VM.Runtime.to_int(QuickBEAM.VM.ObjectModel.Get.get(obj, "length"))
+    length = QuickBEAM.VM.Runtime.to_int(InternalMethods.get(obj, "length"))
 
     if index >= length do
       {true, :undefined, :undefined}
     else
-      {false, QuickBEAM.VM.ObjectModel.Get.get(obj, Integer.to_string(index)),
-       {:array_iter, obj, index + 1}}
+      {false, InternalMethods.get(obj, Integer.to_string(index)), {:array_iter, obj, index + 1}}
     end
   end
 
@@ -293,10 +292,10 @@ defmodule QuickBEAM.VM.Runtime.Promise do
     unless QuickBEAM.VM.Semantics.Iterators.iterator_result_object?(result),
       do: JSThrow.type_error!("iterator result is not an object")
 
-    if QuickBEAM.VM.Runtime.truthy?(QuickBEAM.VM.ObjectModel.Get.get(result, "done")) do
+    if QuickBEAM.VM.Runtime.truthy?(InternalMethods.get(result, "done")) do
       {true, :undefined, :undefined}
     else
-      {false, QuickBEAM.VM.ObjectModel.Get.get(result, "value"), iter_obj}
+      {false, InternalMethods.get(result, "value"), iter_obj}
     end
   end
 
@@ -313,7 +312,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
 
     try do
       {iter, next_fn} = Iterators.for_of_start(iterable)
-      promise_resolve_fn = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+      promise_resolve_fn = InternalMethods.get(constructor, "resolve")
 
       unless QuickBEAM.VM.Builtin.callable?(promise_resolve_fn) do
         JSThrow.type_error!("Promise resolve is not callable")
@@ -353,7 +352,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
         try do
           next_promise = Invocation.invoke_with_receiver(promise_resolve_fn, [value], constructor)
           index = append_pending_all_value(state_ref)
-          then = QuickBEAM.VM.ObjectModel.Get.get(next_promise, "then")
+          then = InternalMethods.get(next_promise, "then")
 
           unless QuickBEAM.VM.Builtin.callable?(then) do
             JSThrow.type_error!("Promise then is not callable")
@@ -413,7 +412,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
 
     try do
       {iter, next_fn} = Iterators.for_of_start(iterable)
-      promise_resolve_fn = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+      promise_resolve_fn = InternalMethods.get(constructor, "resolve")
 
       unless QuickBEAM.VM.Builtin.callable?(promise_resolve_fn) do
         JSThrow.type_error!("Promise resolve is not callable")
@@ -463,7 +462,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
         try do
           next_promise = Invocation.invoke_with_receiver(promise_resolve_fn, [value], constructor)
           index = append_pending_all_value(state_ref)
-          then = QuickBEAM.VM.ObjectModel.Get.get(next_promise, "then")
+          then = InternalMethods.get(next_promise, "then")
 
           unless QuickBEAM.VM.Builtin.callable?(then) do
             JSThrow.type_error!("Promise then is not callable")
@@ -516,7 +515,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
 
     try do
       {iter, next_fn} = Iterators.for_of_start(iterable)
-      promise_resolve_fn = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+      promise_resolve_fn = InternalMethods.get(constructor, "resolve")
 
       unless QuickBEAM.VM.Builtin.callable?(promise_resolve_fn) do
         JSThrow.type_error!("Promise resolve is not callable")
@@ -556,7 +555,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
         try do
           next_promise = Invocation.invoke_with_receiver(promise_resolve_fn, [value], constructor)
           index = append_pending_any_error(state_ref)
-          then = QuickBEAM.VM.ObjectModel.Get.get(next_promise, "then")
+          then = InternalMethods.get(next_promise, "then")
 
           unless QuickBEAM.VM.Builtin.callable?(then) do
             JSThrow.type_error!("Promise then is not callable")
@@ -622,7 +621,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
 
     try do
       {iter, next_fn} = Iterators.for_of_start(iterable)
-      promise_resolve_fn = QuickBEAM.VM.ObjectModel.Get.get(constructor, "resolve")
+      promise_resolve_fn = InternalMethods.get(constructor, "resolve")
 
       unless QuickBEAM.VM.Builtin.callable?(promise_resolve_fn) do
         JSThrow.type_error!("Promise resolve is not callable")
@@ -645,7 +644,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
       {false, value, next_iter} ->
         try do
           next_promise = Invocation.invoke_with_receiver(promise_resolve_fn, [value], constructor)
-          then = QuickBEAM.VM.ObjectModel.Get.get(next_promise, "then")
+          then = InternalMethods.get(next_promise, "then")
 
           unless QuickBEAM.VM.Builtin.callable?(then) do
             JSThrow.type_error!("Promise then is not callable")
@@ -669,7 +668,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   defp promise_resolve({:builtin, "Promise", _} = constructor, {:obj, ref} = value) do
     case Heap.get_obj(ref, %{}) do
       %{promise_state() => state} when state in [:resolved, :rejected, :pending] ->
-        if QuickBEAM.VM.ObjectModel.Get.get(value, "constructor") == constructor do
+        if InternalMethods.get(value, "constructor") == constructor do
           value
         else
           Promise.resolved(value)
@@ -713,7 +712,7 @@ defmodule QuickBEAM.VM.Runtime.Promise do
   end
 
   defp observe_input_then({:obj, _} = promise) do
-    then = QuickBEAM.VM.ObjectModel.Get.get(promise, "then")
+    then = InternalMethods.get(promise, "then")
 
     if QuickBEAM.VM.Builtin.callable?(then) do
       Invocation.invoke_with_receiver(

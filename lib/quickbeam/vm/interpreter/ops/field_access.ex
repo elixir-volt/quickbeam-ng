@@ -7,7 +7,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.FieldAccess do
 
       alias QuickBEAM.VM.{Heap, Names}
       alias QuickBEAM.VM.Interpreter.Completion
-      alias QuickBEAM.VM.ObjectModel.{Get, Put}
+      alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, Put}
       alias QuickBEAM.VM.Semantics.PropertyAccess
       alias QuickBEAM.VM.Interpreter.Ops.PropertyKeys
 
@@ -19,7 +19,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.FieldAccess do
       defp run({@op_get_field, [atom_idx]}, pc, frame, [obj | rest], gas, ctx) do
         key = Names.resolve_atom(ctx, atom_idx)
 
-        case Completion.capture(ctx, fn -> Get.get(obj, key) end) do
+        case Completion.capture(ctx, fn -> InternalMethods.get(obj, key) end) do
           {:ok, value, ctx} ->
             run(pc + 1, frame, [value | rest], gas, ctx)
 
@@ -73,7 +73,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.FieldAccess do
       defp run({@op_get_field2, [atom_idx]}, pc, frame, [obj | rest], gas, ctx) do
         key = Names.resolve_atom(ctx, atom_idx)
 
-        case Completion.capture(ctx, fn -> Get.get(obj, key) end) do
+        case Completion.capture(ctx, fn -> InternalMethods.get(obj, key) end) do
           {:ok, value, ctx} ->
             run(pc + 1, frame, [value, obj | rest], gas, ctx)
 
