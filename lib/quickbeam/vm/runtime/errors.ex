@@ -3,11 +3,11 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
-  import QuickBEAM.VM.Builtin, only: [arg: 3, object: 2]
+  import QuickBEAM.VM.Builtin, only: [arg: 3, build_methods: 1, object: 2]
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
   import QuickBEAM.VM.Value, only: [is_nullish: 1]
 
-  alias QuickBEAM.VM.{Builtin, Heap, Invocation}
+  alias QuickBEAM.VM.{Heap, Invocation}
   alias QuickBEAM.VM.Builtin.Definition
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Semantics.Coercion
@@ -118,10 +118,10 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     Heap.put_ctor_static(ctor, "stackTraceLimit", 10)
   end
 
-  defp error_to_string_method do
-    Builtin.builtin(
-      "toString",
-      fn _args, this ->
+  defp error_prototype_methods do
+    build_methods do
+      @ecma "20.5.3.4"
+      method "toString" do
         unless match?({:obj, _}, this) do
           JSThrow.type_error!("Error.prototype.toString called on non-object")
         end
@@ -145,10 +145,11 @@ defmodule QuickBEAM.VM.Runtime.Errors do
           msg == "" -> name
           true -> name <> ": " <> msg
         end
-      end,
-      ecma: "20.5.3.4"
-    )
+      end
+    end
   end
+
+  defp error_to_string_method, do: Map.fetch!(error_prototype_methods(), "toString")
 
   defp error_is_error_method do
     {:builtin, "isError",
@@ -189,33 +190,7 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     error_proto_ref = make_ref()
     error_ctor = {:builtin, "Error", fn args, this -> construct_error("Error", args, this) end}
 
-    error_tostring =
-      {:builtin, "toString",
-       fn _args, this ->
-         unless match?({:obj, _}, this) do
-           JSThrow.type_error!("Error.prototype.toString called on non-object")
-         end
-
-         name =
-           case InternalMethods.get(this, "name") do
-             nil -> "Error"
-             :undefined -> "Error"
-             n -> stringify_error_slot(n)
-           end
-
-         msg =
-           case InternalMethods.get(this, "message") do
-             nil -> ""
-             :undefined -> ""
-             m -> stringify_error_slot(m)
-           end
-
-         cond do
-           name == "" -> msg
-           msg == "" -> name
-           true -> name <> ": " <> msg
-         end
-       end}
+    error_tostring = error_to_string_method()
 
     Heap.put_obj(
       error_proto_ref,
