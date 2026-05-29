@@ -246,7 +246,7 @@ defmodule QuickBEAM.VM.Runtime.String do
 
     proto =
       object extends: QuickBEAM.VM.Runtime.global_class_proto("Iterator") do
-        prop("next", next_fn)
+        property("next", value: next_fn, descriptor: PropertyDescriptor.method())
 
         symbol :iterator do
           method do
@@ -255,20 +255,9 @@ defmodule QuickBEAM.VM.Runtime.String do
         end
 
         symbol :toStringTag do
-          data("String Iterator")
+          data("String Iterator", writable: false, enumerable: false, configurable: true)
         end
       end
-
-    with {:obj, proto_ref} <- proto do
-      Heap.put_prop_desc(proto_ref, "next", PropertyDescriptor.method())
-      Heap.put_prop_desc(proto_ref, {:symbol, "Symbol.iterator"}, PropertyDescriptor.method())
-
-      Heap.put_prop_desc(
-        proto_ref,
-        {:symbol, "Symbol.toStringTag"},
-        PropertyDescriptor.hidden_readonly()
-      )
-    end
 
     with {:obj, ref} <- iter do
       Heap.put_obj_key(ref, "next", next_fn)

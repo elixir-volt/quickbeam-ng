@@ -3180,32 +3180,21 @@ defmodule QuickBEAM.VM.Runtime.Array do
   end
 
   defp build_array_iterator_prototype do
-    proto =
-      object extends: QuickBEAM.VM.Runtime.global_class_proto("Iterator") do
-        method "next" do
-          array_iterator_next(this)
-        end
+    object extends: QuickBEAM.VM.Runtime.global_class_proto("Iterator") do
+      method "next" do
+        array_iterator_next(this)
+      end
 
-        symbol :iterator do
-          method do
-            this
-          end
+      symbol :iterator do
+        method do
+          this
         end
       end
 
-    with {:obj, proto_ref} <- proto do
-      Heap.put_prop_desc(proto_ref, "next", PropertyDescriptor.method())
-      Heap.put_prop_desc(proto_ref, {:symbol, "Symbol.iterator"}, PropertyDescriptor.method())
-      Heap.put_obj_key(proto_ref, {:symbol, "Symbol.toStringTag"}, "Array Iterator")
-
-      Heap.put_prop_desc(
-        proto_ref,
-        {:symbol, "Symbol.toStringTag"},
-        PropertyDescriptor.hidden_readonly()
-      )
+      symbol :toStringTag do
+        data("Array Iterator", writable: false, enumerable: false, configurable: true)
+      end
     end
-
-    proto
   end
 
   defp array_iterator_next({:obj, ref}) do

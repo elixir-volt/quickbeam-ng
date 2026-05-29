@@ -704,21 +704,16 @@ defmodule QuickBEAM.VM.Runtime.Map do
 
     proto =
       object extends: QuickBEAM.VM.Runtime.global_class_proto("Iterator") do
-        prop("next", next_fn)
-        prop({:symbol, "Symbol.iterator"}, iterator_fn)
-        prop({:symbol, "Symbol.toStringTag"}, "Map Iterator")
+        property("next", value: next_fn, descriptor: PropertyDescriptor.method())
+
+        symbol :iterator do
+          data(iterator_fn, writable: true, enumerable: false, configurable: true)
+        end
+
+        symbol :toStringTag do
+          data("Map Iterator", writable: false, enumerable: false, configurable: true)
+        end
       end
-
-    with {:obj, proto_ref} <- proto do
-      Heap.put_prop_desc(proto_ref, "next", PropertyDescriptor.method())
-      Heap.put_prop_desc(proto_ref, {:symbol, "Symbol.iterator"}, PropertyDescriptor.method())
-
-      Heap.put_prop_desc(
-        proto_ref,
-        {:symbol, "Symbol.toStringTag"},
-        PropertyDescriptor.hidden_readonly()
-      )
-    end
 
     Heap.put_obj(
       iter_ref,

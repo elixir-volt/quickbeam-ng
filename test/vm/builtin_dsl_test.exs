@@ -133,7 +133,7 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
         end
 
         symbol :toStringTag do
-          data("Sample Iterator")
+          data("Sample Iterator", writable: false, enumerable: false, configurable: true)
         end
       end
     end
@@ -401,6 +401,12 @@ defmodule QuickBEAM.VM.BuiltinDSLTest do
     assert obj["__proto__"] == parent
     assert obj[{:symbol, "Symbol.toStringTag"}] == "Sample Iterator"
     assert {:builtin, "next", _} = obj["next"]
+
+    assert QuickBEAM.VM.Heap.get_prop_desc(ref, "next") ==
+             QuickBEAM.VM.ObjectModel.PropertyDescriptor.method()
+
+    assert QuickBEAM.VM.Heap.get_prop_desc(ref, {:symbol, "Symbol.toStringTag"}) ==
+             QuickBEAM.VM.ObjectModel.PropertyDescriptor.hidden_readonly()
   end
 
   test "builtin object metadata installs descriptors and tags" do

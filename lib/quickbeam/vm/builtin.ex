@@ -300,6 +300,17 @@ defmodule QuickBEAM.VM.Builtin do
     function
   end
 
+  @doc "Installs property descriptors declared by the inline object DSL."
+  def install_object_descriptors({:obj, ref} = object, descriptors) when is_list(descriptors) do
+    Enum.each(descriptors, fn {key, descriptor} ->
+      Heap.put_prop_desc(ref, key, descriptor)
+    end)
+
+    object
+  end
+
+  def install_object_descriptors(object, _descriptors), do: object
+
   @doc "Installs descriptors and function lengths for named builtin objects."
   def install_object_metadata({:builtin, _name, map} = object, method_lengths, opts \\ [])
       when is_map(map) and is_map(method_lengths) do
@@ -1771,16 +1782,22 @@ defmodule QuickBEAM.VM.Builtin do
   end
 
   defmacro object(opts \\ [], do: block) do
+    entries = normalize_block(block)
+
     map_entries =
       opts
       |> object_parent_entries()
-      |> Kernel.++(build_map_entries(normalize_block(block)))
+      |> Kernel.++(build_map_entries(entries))
 
+    descriptors = build_object_descriptor_entries(entries)
     heap? = Keyword.get(opts, :heap, true)
 
     if heap? do
       quote do
-        QuickBEAM.VM.Heap.wrap(%{unquote_splicing(map_entries)})
+        QuickBEAM.VM.Builtin.install_object_descriptors(
+          QuickBEAM.VM.Heap.wrap(%{unquote_splicing(map_entries)}),
+          unquote(descriptors)
+        )
       end
     else
       quote do: %{unquote_splicing(map_entries)}
@@ -1812,6 +1829,84 @@ defmodule QuickBEAM.VM.Builtin do
   end
 
   defp object_dsl_parent(parent), do: parent
+
+  defp build_object_descriptor_entries(entries) do
+    {descriptors, _pending_opts} =
+      Enum.reduce(entries, {[], []}, fn
+        {:@, _, [{:ecma, _, [ecma]}]}, {built, pending_opts} ->
+          {built, Keyword.put(pending_opts, :ecma, ecma)}
+
+        {:@, _, [{:annex, _, [annex]}]}, {built, pending_opts} ->
+          {built, Keyword.put(pending_opts, :annex, annex)}
+
+        {:@, _, [{:doc, _, [_doc]}]}, {built, pending_opts} ->
+          {built, pending_opts}
+
+        entry, {built, _pending_opts} ->
+          {object_descriptor_entry(entry) ++ built, []}
+      end)
+
+    descriptors
+    |> Enum.reverse()
+    |> build_descriptor_list_ast()
+  end
+
+  defp object_descriptor_entry({:method, _, [name, [do: _body]]}),
+    do: [{name, PropertyDescriptor.method()}]
+
+  defp object_descriptor_entry({:method, _, [name, opts, [do: _body]]}) when is_list(opts),
+    do: [{name, descriptor_from_opts(Keyword.put_new(opts, :writable, true))}]
+
+  defp object_descriptor_entry({:symbol, _, [name, [do: block]]}) do
+    key = symbol_key(name)
+
+    case normalize_block(block) do
+      [{:method, _, [[do: _body]]}] ->
+        [{key, PropertyDescriptor.method()}]
+
+      [{:method, _, [opts, [do: _body]]}] when is_list(opts) ->
+        [{key, descriptor_from_opts(Keyword.put_new(opts, :writable, true))}]
+
+      [{:data, _, [_value, opts]}] when is_list(opts) ->
+        [{key, descriptor_from_opts(opts)}]
+
+      entries when is_list(entries) ->
+        if Enum.any?(entries, &match?({kind, _, _} when kind in [:get, :set], &1)) do
+          [{key, PropertyDescriptor.accessor()}]
+        else
+          []
+        end
+    end
+  end
+
+  defp object_descriptor_entry({:accessor, _, [name, [do: _block]]}),
+    do: [{name, PropertyDescriptor.accessor()}]
+
+  defp object_descriptor_entry({:getter, _, [name, [do: _body]]}),
+    do: [{name, PropertyDescriptor.accessor()}]
+
+  defp object_descriptor_entry({:property, _, [name, opts]}) when is_list(opts) do
+    case Keyword.fetch(opts, :descriptor) do
+      {:ok, descriptor} -> [{name, descriptor}]
+      :error -> []
+    end
+  end
+
+  defp object_descriptor_entry(_entry), do: []
+
+  defp build_descriptor_list_ast(descriptors) do
+    entries =
+      Enum.map(descriptors, fn {key, descriptor} ->
+        quote do
+          {unquote(Macro.escape(key)), unquote(descriptor_ast(descriptor))}
+        end
+      end)
+
+    quote do: [unquote_splicing(entries)]
+  end
+
+  defp descriptor_ast(%{} = descriptor), do: Macro.escape(descriptor)
+  defp descriptor_ast(descriptor), do: descriptor
 
   @doc "Builds a heap-wrapped object from builtin method/property entries."
   defmacro build_object(do: block) do
