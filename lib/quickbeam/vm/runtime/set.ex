@@ -237,16 +237,32 @@ defmodule QuickBEAM.VM.Runtime.Set do
   def size(this), do: this |> require_strong_set_ref!() |> data() |> length()
 
   defp install_weak_set_methods(proto_ref) do
-    for name <- ~w(add has delete) do
-      Heap.put_obj_key(proto_ref, name, weak_proto_property(name))
+    for {name, method} <- weak_set_prototype_methods() do
+      Heap.put_obj_key(proto_ref, name, method)
       Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
     end
   end
 
-  def weak_proto_property("has"), do: {:builtin, "has", &weak_has/2}
-  def weak_proto_property("add"), do: {:builtin, "add", &weak_add/2}
-  def weak_proto_property("delete"), do: {:builtin, "delete", &weak_delete/2}
-  def weak_proto_property(_), do: :undefined
+  def weak_proto_property(name), do: Map.get(weak_set_prototype_methods(), name, :undefined)
+
+  defp weak_set_prototype_methods do
+    build_methods do
+      @ecma "24.4.3.1"
+      method "add", length: 1 do
+        weak_add(args, this)
+      end
+
+      @ecma "24.4.3.4"
+      method "has", length: 1 do
+        weak_has(args, this)
+      end
+
+      @ecma "24.4.3.3"
+      method "delete", length: 1 do
+        weak_delete(args, this)
+      end
+    end
+  end
 
   defp set_object(_set_ref, items, instance_proto) do
     entries = Enum.with_index(items, 1) |> Enum.map(fn {value, id} -> {id, value, true} end)

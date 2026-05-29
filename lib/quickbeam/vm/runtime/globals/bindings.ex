@@ -1,41 +1,88 @@
 defmodule QuickBEAM.VM.Runtime.Globals.Bindings do
   @moduledoc "Builds global function and small host-object bindings."
 
-  import QuickBEAM.VM.Builtin, only: [object: 1]
+  import QuickBEAM.VM.Builtin, only: [build_methods: 1, object: 1]
 
-  alias QuickBEAM.VM.{Builtin, Heap}
+  alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Globals.Numeric
   alias QuickBEAM.VM.Runtime.Globals.Functions
 
   @doc "Returns non-constructor global function bindings."
   def bindings do
-    %{
-      "parseInt" => builtin("parseInt", &Numeric.parse_int/2),
-      "parseFloat" => builtin("parseFloat", &Numeric.parse_float/2),
-      "isNaN" => builtin("isNaN", &Numeric.nan?/2),
-      "isFinite" => builtin("isFinite", &Numeric.finite?/2),
-      "eval" => builtin("eval", &Functions.js_eval/2),
-      "decodeURI" => builtin("decodeURI", &Functions.decode_uri/2),
-      "decodeURIComponent" => builtin("decodeURIComponent", &Functions.decode_uri_component/2),
-      "encodeURI" => builtin("encodeURI", &Functions.encode_uri/2),
-      "encodeURIComponent" => builtin("encodeURIComponent", &Functions.encode_uri_component/2),
-      "require" => builtin("require", &Functions.js_require/2),
-      "structuredClone" => builtin("structuredClone", &structured_clone/2),
-      "queueMicrotask" => builtin("queueMicrotask", &Functions.queue_microtask/2),
-      "gc" => builtin("gc", fn _, _ -> :undefined end),
+    Map.merge(global_function_bindings(), %{
       "os" => Heap.wrap(%{"platform" => "elixir"}),
       "qjs" => qjs_object(),
       "globalThis" => Runtime.new_object(),
       "NaN" => :nan,
       "Infinity" => :infinity,
       "undefined" => :undefined
-    }
+    })
   end
 
-  defp builtin(name, fun) do
-    value = {:builtin, name, fun}
-    Builtin.put_builtin_metadata(value, Builtin.meta(name, constructable: false))
+  defp global_function_bindings do
+    build_methods do
+      @ecma "19.2.1"
+      method "eval", constructable: false do
+        Functions.js_eval(args, this)
+      end
+
+      @ecma "19.2.2"
+      method "isFinite", constructable: false do
+        Numeric.finite?(args, this)
+      end
+
+      @ecma "19.2.3"
+      method "isNaN", constructable: false do
+        Numeric.nan?(args, this)
+      end
+
+      @ecma "19.2.4"
+      method "parseFloat", constructable: false do
+        Numeric.parse_float(args, this)
+      end
+
+      @ecma "19.2.5"
+      method "parseInt", constructable: false do
+        Numeric.parse_int(args, this)
+      end
+
+      @ecma "19.2.6.1"
+      method "decodeURI", constructable: false do
+        Functions.decode_uri(args, this)
+      end
+
+      @ecma "19.2.6.2"
+      method "decodeURIComponent", constructable: false do
+        Functions.decode_uri_component(args, this)
+      end
+
+      @ecma "19.2.6.3"
+      method "encodeURI", constructable: false do
+        Functions.encode_uri(args, this)
+      end
+
+      @ecma "19.2.6.4"
+      method "encodeURIComponent", constructable: false do
+        Functions.encode_uri_component(args, this)
+      end
+
+      method "require", constructable: false do
+        Functions.js_require(args, this)
+      end
+
+      method "structuredClone", constructable: false do
+        structured_clone(args, this)
+      end
+
+      method "queueMicrotask", constructable: false do
+        Functions.queue_microtask(args, this)
+      end
+
+      method "gc", constructable: false do
+        :undefined
+      end
+    end
   end
 
   defp structured_clone([val | _], _this), do: QuickBEAM.VM.Runtime.StructuredClone.clone(val)

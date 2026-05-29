@@ -69,11 +69,16 @@ defmodule QuickBEAM.VM.Runtime.Map do
   end
 
   defp install_static_group_by(ctor) do
-    Heap.put_ctor_static(
-      ctor,
-      "groupBy",
-      {:builtin, "groupBy", fn args, _this -> group_by(args) end}
-    )
+    Heap.put_ctor_static(ctor, "groupBy", Map.fetch!(map_static_methods(), "groupBy"))
+  end
+
+  defp map_static_methods do
+    build_methods do
+      @ecma "24.1.2.1"
+      method "groupBy", length: 2 do
+        group_by(args)
+      end
+    end
   end
 
   @doc "Implements Map.groupBy(items, callbackfn)."
@@ -282,22 +287,45 @@ defmodule QuickBEAM.VM.Runtime.Map do
   def size(this), do: this |> require_strong_map_ref!() |> data() |> map_size()
 
   defp install_weak_map_methods(proto_ref) do
-    for name <- ~w(get set has delete getOrInsert getOrInsertComputed) do
-      Heap.put_obj_key(proto_ref, name, weak_proto_property(name))
+    for {name, method} <- weak_map_prototype_methods() do
+      Heap.put_obj_key(proto_ref, name, method)
       Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
     end
   end
 
-  def weak_proto_property("get"), do: {:builtin, "get", &weak_get/2}
-  def weak_proto_property("set"), do: {:builtin, "set", &weak_set/2}
-  def weak_proto_property("has"), do: {:builtin, "has", &weak_has/2}
-  def weak_proto_property("delete"), do: {:builtin, "delete", &weak_delete/2}
-  def weak_proto_property("getOrInsert"), do: {:builtin, "getOrInsert", &weak_get_or_insert/2}
+  def weak_proto_property(name), do: Map.get(weak_map_prototype_methods(), name, :undefined)
 
-  def weak_proto_property("getOrInsertComputed"),
-    do: {:builtin, "getOrInsertComputed", &weak_get_or_insert_computed/2}
+  defp weak_map_prototype_methods do
+    build_methods do
+      @ecma "24.3.3.3"
+      method "get", length: 1 do
+        weak_get(args, this)
+      end
 
-  def weak_proto_property(_), do: :undefined
+      @ecma "24.3.3.5"
+      method "set", length: 2 do
+        weak_set(args, this)
+      end
+
+      @ecma "24.3.3.4"
+      method "has", length: 1 do
+        weak_has(args, this)
+      end
+
+      @ecma "24.3.3.2"
+      method "delete", length: 1 do
+        weak_delete(args, this)
+      end
+
+      method "getOrInsert", length: 2 do
+        weak_get_or_insert(args, this)
+      end
+
+      method "getOrInsertComputed", length: 2 do
+        weak_get_or_insert_computed(args, this)
+      end
+    end
+  end
 
   defp group_items(list) when is_list(list), do: list
   defp group_items({:qb_arr, _} = array), do: ArraySource.to_list(array)
