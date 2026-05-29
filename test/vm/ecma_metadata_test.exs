@@ -25,6 +25,19 @@ defmodule QuickBEAM.VM.ECMAMetadataTest do
     assert invalid == []
   end
 
+  test "specialized Function prototype methods expose ECMA metadata" do
+    {:obj, ref} = QuickBEAM.VM.Runtime.Function.prototype(cache: false)
+    proto = QuickBEAM.VM.Heap.get_obj(ref)
+
+    assert %{ecma: "20.2.3.1"} = QuickBEAM.VM.Builtin.metadata_for(proto["apply"])
+    assert %{ecma: "20.2.3.2"} = QuickBEAM.VM.Builtin.metadata_for(proto["bind"])
+    assert %{ecma: "20.2.3.3"} = QuickBEAM.VM.Builtin.metadata_for(proto["call"])
+    assert %{ecma: "20.2.3.5"} = QuickBEAM.VM.Builtin.metadata_for(proto["toString"])
+
+    assert %{ecma: "20.2.3.6"} =
+             QuickBEAM.VM.Builtin.metadata_for(proto[{:symbol, "Symbol.hasInstance"}])
+  end
+
   test "specialized Error definitions expose ECMA metadata where standard" do
     definitions = Map.new(QuickBEAM.VM.Runtime.Errors.builtin_definitions(), &{&1.name, &1.ecma})
 
