@@ -323,12 +323,23 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     state_ref = make_ref()
     Heap.put_obj(state_ref, %{"items" => List.to_tuple(items), "index" => 0})
 
-    Heap.wrap(%{
-      "__proto__" => wrap_for_valid_iterator_prototype(),
-      "next" => {:builtin, "next", fn _args, _this -> list_iterator_next(state_ref) end},
-      "return" => {:builtin, "return", fn _args, _this -> iter_result(:undefined, true) end},
-      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-    })
+    object do
+      prop("__proto__", wrap_for_valid_iterator_prototype())
+
+      method "next" do
+        list_iterator_next(state_ref)
+      end
+
+      method "return" do
+        iter_result(:undefined, true)
+      end
+
+      symbol :iterator do
+        method do
+          this
+        end
+      end
+    end
   end
 
   defp list_iterator_next(state_ref) do
@@ -348,14 +359,25 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     proto = wrap_for_valid_iterator_prototype()
     next = Get.get(iterator, "next")
 
-    Heap.wrap(%{
-      "__proto__" => proto,
-      "__wrapped_iterator__" => iterator,
-      "__wrapped_next__" => next,
-      "next" => {:builtin, "next", fn _args, this -> wrapper_next(this) end},
-      "return" => {:builtin, "return", fn _args, this -> wrapper_return(this) end},
-      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-    })
+    object do
+      prop("__proto__", proto)
+      prop("__wrapped_iterator__", iterator)
+      prop("__wrapped_next__", next)
+
+      method "next" do
+        wrapper_next(this)
+      end
+
+      method "return" do
+        wrapper_return(this)
+      end
+
+      symbol :iterator do
+        method do
+          this
+        end
+      end
+    end
   end
 
   def wrap_for_valid_iterator_prototype do
@@ -377,12 +399,23 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   end
 
   defp build_wrap_for_valid_iterator_prototype do
-    Heap.wrap(%{
-      "__proto__" => Runtime.global_class_proto("Iterator"),
-      "next" => {:builtin, "next", fn _args, this -> wrapper_next(this) end},
-      "return" => {:builtin, "return", fn _args, this -> wrapper_return(this) end},
-      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-    })
+    object do
+      prop("__proto__", Runtime.global_class_proto("Iterator"))
+
+      method "next" do
+        wrapper_next(this)
+      end
+
+      method "return" do
+        wrapper_return(this)
+      end
+
+      symbol :iterator do
+        method do
+          this
+        end
+      end
+    end
   end
 
   def drop(args, this) do
@@ -502,13 +535,24 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   defp helper_iterator(state) do
     state_ref = IteratorHelperState.new(state)
 
-    Heap.wrap(%{
-      "__proto__" => wrap_for_valid_iterator_prototype(),
-      "__iterator_helper_state__" => state_ref,
-      "next" => {:builtin, "next", fn _args, this -> helper_next(this) end},
-      "return" => {:builtin, "return", fn _args, this -> helper_return(this) end},
-      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-    })
+    object do
+      prop("__proto__", wrap_for_valid_iterator_prototype())
+      prop("__iterator_helper_state__", state_ref)
+
+      method "next" do
+        helper_next(this)
+      end
+
+      method "return" do
+        helper_return(this)
+      end
+
+      symbol :iterator do
+        method do
+          this
+        end
+      end
+    end
   end
 
   defp helper_next({:obj, ref}) do

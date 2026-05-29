@@ -790,20 +790,17 @@ defmodule QuickBEAM.VM.Runtime.Set do
     state_ref = IteratorState.new({0, false})
     {:obj, iter_ref} = iter = Heap.wrap(%{})
 
-    next_fn =
-      {:builtin, "next",
-       fn _, this ->
-         {set_ref, iter_state, iter_mode} = require_set_iterator!(this)
-         next_set_iterator_value(set_ref, iter_state, iter_mode)
-       end}
+    iterator_methods = set_iterator_methods()
+    next_fn = Map.fetch!(iterator_methods, "next")
+    iterator_fn = Map.fetch!(iterator_methods, {:symbol, "Symbol.iterator"})
 
     proto =
-      Heap.wrap(%{
-        "__proto__" => QuickBEAM.VM.Runtime.global_class_proto("Iterator"),
-        "next" => next_fn,
-        {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _, this -> this end},
-        {:symbol, "Symbol.toStringTag"} => tag
-      })
+      object do
+        prop("__proto__", QuickBEAM.VM.Runtime.global_class_proto("Iterator"))
+        prop("next", next_fn)
+        prop({:symbol, "Symbol.iterator"}, iterator_fn)
+        prop({:symbol, "Symbol.toStringTag"}, tag)
+      end
 
     with {:obj, proto_ref} <- proto do
       Heap.put_prop_desc(proto_ref, "next", PropertyDescriptor.method())
@@ -822,10 +819,25 @@ defmodule QuickBEAM.VM.Runtime.Set do
       "__set_iterator_state__" => state_ref,
       "__set_iterator_mode__" => mode,
       "next" => next_fn,
-      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _, this -> this end}
+      {:symbol, "Symbol.iterator"} => iterator_fn
     })
 
     iter
+  end
+
+  defp set_iterator_methods do
+    build_methods do
+      method "next" do
+        {set_ref, iter_state, iter_mode} = require_set_iterator!(this)
+        next_set_iterator_value(set_ref, iter_state, iter_mode)
+      end
+
+      symbol :iterator do
+        method do
+          this
+        end
+      end
+    end
   end
 
   defp require_set_iterator!({:obj, ref}) do
