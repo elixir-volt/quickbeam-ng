@@ -35,58 +35,51 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
   @doc "Builds the JavaScript prototype object for this runtime builtin."
   def prototype(opts \\ []) do
-    has_instance =
-      Builtin.builtin(
-        "[Symbol.hasInstance]",
-        fn args, this ->
-          obj = Builtin.arg(args, 0, :undefined)
-          ordinary_has_instance(this, obj)
-        end,
-        ecma: "20.2.3.6"
-      )
-
     proto =
-      Heap.wrap(%{
-        "length" => 0,
-        "name" => "",
-        "call" =>
-          Builtin.builtin("call", fn args, this -> fn_call(this, args, this) end,
-            ecma: "20.2.3.3"
-          ),
-        "apply" =>
-          Builtin.builtin("apply", fn args, this -> fn_apply(this, args, this) end,
-            ecma: "20.2.3.1"
-          ),
-        "bind" =>
-          Builtin.builtin(
-            "bind",
-            fn args, this ->
-              unless Builtin.callable?(this),
-                do:
-                  throw(
-                    {:js_throw, Heap.make_error("Bind must be called on a function", "TypeError")}
-                  )
+      object heap: true do
+        prop("length", 0)
+        prop("name", "")
 
-              fn_bind(this, args, this)
-            end,
-            ecma: "20.2.3.2"
-          ),
-        "toString" =>
-          Builtin.builtin(
-            "toString",
-            fn _args, this ->
-              unless Builtin.callable?(this),
-                do: throw({:js_throw, Heap.make_error("not a function", "TypeError")})
+        @ecma "20.2.3.1"
+        method "apply" do
+          fn_apply(this, args, this)
+        end
 
-              case this do
-                {:obj, _} -> "function () { [native code] }"
-                _ -> elem(proto_property(this, "toString"), 2).([], this)
-              end
-            end,
-            ecma: "20.2.3.5"
-          ),
-        {:symbol, "Symbol.hasInstance"} => has_instance
-      })
+        @ecma "20.2.3.2"
+        method "bind" do
+          unless Builtin.callable?(this),
+            do:
+              throw(
+                {:js_throw, Heap.make_error("Bind must be called on a function", "TypeError")}
+              )
+
+          fn_bind(this, args, this)
+        end
+
+        @ecma "20.2.3.3"
+        method "call" do
+          fn_call(this, args, this)
+        end
+
+        @ecma "20.2.3.5"
+        method "toString" do
+          unless Builtin.callable?(this),
+            do: throw({:js_throw, Heap.make_error("not a function", "TypeError")})
+
+          case this do
+            {:obj, _} -> "function () { [native code] }"
+            _ -> elem(proto_property(this, "toString"), 2).([], this)
+          end
+        end
+
+        @ecma "20.2.3.6"
+        symbol :hasInstance do
+          method do
+            obj = Builtin.arg(args, 0, :undefined)
+            ordinary_has_instance(this, obj)
+          end
+        end
+      end
 
     {:obj, ref} = proto
 
