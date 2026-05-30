@@ -633,6 +633,54 @@ pub const WorkerState = struct {
         result.json = "ok";
     }
 
+    fn handle_napi_async_complete(self: *WorkerState, work: *napi_mod.AsyncWork) void {
+        _ = self;
+        if (work.complete) |complete| {
+            const status: nt.napi_status = if (work.status.load(.seq_cst) == .cancelled)
+                @intFromEnum(nt.Status.cancelled)
+            else
+                @intFromEnum(nt.Status.ok);
+            complete(work.env, status, work.data);
+        }
+        work.deinit();
+    }
+
+    fn handle_napi_tsfn_call(self: *WorkerState, tsfn: *napi_mod.ThreadSafeFunction) void {
+        tsfn.lock.lock();
+        if (tsfn.queue.items.len == 0) {
+            const should_finalize = tsfn.closing.load(.seq_cst) and !tsfn.finalized.load(.seq_cst);
+            tsfn.lock.unlock();
+            if (should_finalize and tsfn.finalized.cmpxchgStrong(false, true, .seq_cst, .seq_cst) == null) {
+                if (tsfn.finalize_cb) |cb| cb(tsfn.env, tsfn.ctx, null);
+                tsfn.deinit();
+            }
+            return;
+        }
+
+        const data = tsfn.queue.orderedRemove(0);
+        tsfn.condvar.signal();
+        const should_finalize_after = tsfn.closing.load(.seq_cst) and tsfn.queue.items.len == 0 and !tsfn.finalized.load(.seq_cst);
+        tsfn.lock.unlock();
+
+        if (tsfn.call_js_cb) |cb| {
+            const napi_val: napi_mod.napi_value = if (tsfn.callback) |c| blk: {
+                const slot = gpa.create(qjs.JSValue) catch break :blk null;
+                slot.* = c;
+                break :blk slot;
+            } else null;
+            cb(tsfn.env, napi_val, tsfn.ctx, data);
+            if (napi_val) |slot| gpa.destroy(slot);
+        } else if (tsfn.callback) |cb| {
+            const ret = qjs.JS_Call(self.ctx, cb, js.js_undefined(), 0, null);
+            qjs.JS_FreeValue(self.ctx, ret);
+        }
+
+        if (should_finalize_after and tsfn.finalized.cmpxchgStrong(false, true, .seq_cst, .seq_cst) == null) {
+            if (tsfn.finalize_cb) |cb| cb(tsfn.env, tsfn.ctx, null);
+            tsfn.deinit();
+        }
+    }
+
     fn await_promise(self: *WorkerState, promise: qjs.JSValue, result: *Result, unwrap_async: bool) void {
         for (0..10000) |_| {
             const state = qjs.JS_PromiseState(self.ctx, promise);
@@ -683,29 +731,8 @@ pub const WorkerState = struct {
                     .delete_globals => |dg| self.delete_global_names(dg),
                     .snapshot_globals => self.snapshot_globals(),
                     .list_globals => |lg| self.list_globals(lg),
-                    .napi_async_complete => |p| {
-                        if (p.work.complete) |complete| {
-                            const ns: nt.napi_status = if (p.work.status.load(.seq_cst) == .cancelled)
-                                @intFromEnum(nt.Status.cancelled)
-                            else
-                                @intFromEnum(nt.Status.ok);
-                            complete(p.work.env, ns, p.work.data);
-                        }
-                    },
-                    .napi_tsfn_call => |p| {
-                        const tsfn = p.tsfn;
-                        if (tsfn.call_js_cb) |cb| {
-                            const napi_val: napi_mod.napi_value = if (tsfn.callback) |c| blk: {
-                                const slot = gpa.create(qjs.JSValue) catch break :blk null;
-                                slot.* = c;
-                                break :blk slot;
-                            } else null;
-                            cb(tsfn.env, napi_val, tsfn.ctx, p.data);
-                        } else if (tsfn.callback) |cb| {
-                            const ret = qjs.JS_Call(self.ctx, cb, js.js_undefined(), 0, null);
-                            qjs.JS_FreeValue(self.ctx, ret);
-                        }
-                    },
+                    .napi_async_complete => |p| self.handle_napi_async_complete(p.work),
+                    .napi_tsfn_call => |p| self.handle_napi_tsfn_call(p.tsfn),
                     .stop => {
                         result.ok = false;
                         result.json = "Runtime stopped";
@@ -1084,54 +1111,8 @@ pub fn worker_main(rd: *types.RuntimeData, owner_pid: beam.pid) void {
                     qjs.JS_ResetCoverage(state.rt);
                     types.send_reply(p.caller_pid, p.ref_env, p.ref_term, true, null, 0, "true");
                 },
-                .napi_async_complete => |p| {
-                    const work = p.work;
-                    if (work.complete) |complete| {
-                        const napi_status: nt.napi_status = if (work.status.load(.seq_cst) == .cancelled)
-                            @intFromEnum(nt.Status.cancelled)
-                        else
-                            @intFromEnum(nt.Status.ok);
-                        complete(work.env, napi_status, work.data);
-                    }
-                    work.deinit();
-                },
-                .napi_tsfn_call => |p| {
-                    const tsfn = p.tsfn;
-
-                    tsfn.lock.lock();
-                    if (tsfn.queue.items.len == 0) {
-                        const should_finalize = tsfn.closing.load(.seq_cst) and !tsfn.finalized.load(.seq_cst);
-                        tsfn.lock.unlock();
-                        if (should_finalize and tsfn.finalized.cmpxchgStrong(false, true, .seq_cst, .seq_cst) == null) {
-                            if (tsfn.finalize_cb) |cb| cb(tsfn.env, tsfn.ctx, null);
-                            tsfn.deinit();
-                        }
-                        break;
-                    }
-
-                    const data = tsfn.queue.orderedRemove(0);
-                    tsfn.condvar.signal();
-                    const should_finalize_after = tsfn.closing.load(.seq_cst) and tsfn.queue.items.len == 0 and !tsfn.finalized.load(.seq_cst);
-                    tsfn.lock.unlock();
-
-                    if (tsfn.call_js_cb) |cb| {
-                        const napi_val: napi_mod.napi_value = if (tsfn.callback) |c| blk: {
-                            const slot = gpa.create(qjs.JSValue) catch break :blk null;
-                            slot.* = c;
-                            break :blk slot;
-                        } else null;
-                        cb(tsfn.env, napi_val, tsfn.ctx, data);
-                        if (napi_val) |slot| gpa.destroy(slot);
-                    } else if (tsfn.callback) |cb| {
-                        const ret = qjs.JS_Call(state.ctx, cb, js.js_undefined(), 0, null);
-                        qjs.JS_FreeValue(state.ctx, ret);
-                    }
-
-                    if (should_finalize_after and tsfn.finalized.cmpxchgStrong(false, true, .seq_cst, .seq_cst) == null) {
-                        if (tsfn.finalize_cb) |cb| cb(tsfn.env, tsfn.ctx, null);
-                        tsfn.deinit();
-                    }
-                },
+                .napi_async_complete => |p| state.handle_napi_async_complete(p.work),
+                .napi_tsfn_call => |p| state.handle_napi_tsfn_call(p.tsfn),
                 .load_addon => |p| {
                     var result = Result{};
                     state.do_load_addon(p.path, p.global_name, &result);
