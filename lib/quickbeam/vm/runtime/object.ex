@@ -24,9 +24,9 @@ defmodule QuickBEAM.VM.Runtime.Object do
   }
 
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.Runtime.ObjectEnumeration
   alias QuickBEAM.VM.Runtime.ObjectIntegrity
   alias QuickBEAM.VM.Runtime.ConstructorRegistry, as: ConstructorRegistry
-  alias QuickBEAM.VM.Runtime.String, as: JSString
 
   @ecma "20.1"
   defintrinsic "Object", prototype_parent: nil do
@@ -556,17 +556,17 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   @ecma "20.1.2.19"
   static "keys", length: 1 do
-    keys(args)
+    ObjectEnumeration.keys(args)
   end
 
   @ecma "20.1.2.24"
   static "values", length: 1 do
-    values(args)
+    ObjectEnumeration.values(args)
   end
 
   @ecma "20.1.2.5"
   static "entries", length: 1 do
-    entries(args)
+    ObjectEnumeration.entries(args)
   end
 
   @ecma "20.1.2.1"
@@ -733,7 +733,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   @ecma "20.1.2.10"
   static "getOwnPropertyNames", length: 1 do
-    get_own_property_names(args)
+    ObjectEnumeration.own_property_names(args)
   end
 
   @ecma "20.1.2.8"
@@ -1093,66 +1093,6 @@ defmodule QuickBEAM.VM.Runtime.Object do
     end
   end
 
-  defp keys([target | _]) when is_nullish(target) do
-    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
-  end
-
-  defp keys([{:obj, ref} | _]) do
-    data = Heap.get_obj(ref, %{})
-
-    if is_list(data) or match?({:qb_arr, _}, data) do
-      Heap.wrap(enumerable_keys(ref))
-    else
-      keys_from_map(ref, data)
-    end
-  end
-
-  defp keys([target | _]) do
-    if is_object_like?(target) do
-      target
-      |> OwnProperty.descriptor_keys()
-      |> Enum.filter(&(is_binary(&1) and OwnProperty.enumerable?(target, &1)))
-      |> Heap.wrap()
-    else
-      Heap.wrap([])
-    end
-  end
-
-  defp keys(_) do
-    Heap.wrap([])
-  end
-
-  defp keys_from_map(_ref, {:qb_arr, arr}) do
-    for i <- 0..(:array.size(arr) - 1), do: Integer.to_string(i)
-  end
-
-  defp keys_from_map(_ref, list) when is_list(list) do
-    Heap.wrap(array_indices(list))
-  end
-
-  defp keys_from_map(ref, map) when is_map(map) do
-    Heap.wrap(enumerable_keys(ref))
-  end
-
-  defp get_own_property_names([target | _]) when is_nullish(target) do
-    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
-  end
-
-  defp get_own_property_names([{:obj, ref} | _]) do
-    Heap.wrap(OwnProperty.descriptor_keys({:obj, ref}) |> Enum.filter(&is_binary/1))
-  end
-
-  defp get_own_property_names([target | _]) do
-    target
-    |> OwnProperty.descriptor_keys()
-    |> Enum.filter(&is_binary/1)
-    |> Heap.wrap()
-  end
-
-  defp get_own_property_names(_) do
-    Heap.wrap([])
-  end
-
   defp get_own_property_descriptors([target | _]) when is_nullish(target) do
     throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
   end
@@ -1177,144 +1117,6 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp descriptor_result_key_order(keys) do
     if Enum.all?(keys, &is_symbol/1), do: keys, else: Enum.reverse(keys)
-  end
-
-  defp enumerable_keys(ref) do
-    data = Heap.get_obj(ref, %{})
-
-    case data do
-      {:qb_arr, arr} ->
-        Semantics.enumerable_array_keys(ref, arr, array_prop_keys(ref))
-
-      list when is_list(list) ->
-        (array_indices(list) ++ array_prop_keys(ref)) |> Runtime.sort_numeric_keys()
-
-      map when is_map(map) and is_map_key(map, proxy_target()) ->
-        {:obj, ref}
-        |> OwnProperty.descriptor_keys()
-        |> Enum.filter(&(is_binary(&1) and proxy_enumerable_key?({:obj, ref}, &1)))
-
-      map when is_map(map) ->
-        map
-        |> enumerable_key_pairs()
-        |> Enum.map(fn {key, _raw_key} -> key end)
-        |> Runtime.sort_numeric_keys()
-        |> Enum.filter(fn key -> enumerable_object_key?(ref, map, key) end)
-
-      _ ->
-        []
-    end
-  end
-
-  defp proxy_enumerable_key?(obj, key), do: InternalMethods.enumerable_own_property?(obj, key)
-
-  defp array_prop_keys(ref) do
-    ref
-    |> Heap.get_array_props()
-    |> Map.keys()
-    |> Enum.filter(fn key ->
-      is_binary(key) and not internal?(key) and
-        not match?(%{enumerable: false}, Heap.get_prop_desc(ref, key))
-    end)
-  end
-
-  defp enumerable_key_pairs(map) do
-    raw =
-      case Map.get(map, key_order()) do
-        order when is_list(order) -> Enum.reverse(order)
-        _ -> []
-      end
-
-    raw = raw ++ (Map.keys(map) -- raw)
-
-    Enum.flat_map(raw, fn
-      key when is_binary(key) -> [{key, key}]
-      key when is_integer(key) and key >= 0 -> [{Integer.to_string(key), key}]
-      _ -> []
-    end)
-  end
-
-  defp enumerable_object_key?(ref, map, key) do
-    raw_key = if Map.has_key?(map, key), do: key, else: integer_property_key(key)
-
-    raw_key = if raw_key != :error and Map.has_key?(map, raw_key), do: raw_key, else: key
-
-    is_binary(key) and not internal_namespace?(key) and Map.has_key?(map, raw_key) and
-      not match?(%{enumerable: false}, Heap.get_prop_desc(ref, raw_key))
-  end
-
-  defp enumerable_value(obj, map, key) when is_map(map) do
-    raw_key = integer_property_key(key)
-
-    cond do
-      match?({:accessor, _, _}, Map.get(map, key)) -> Get.get(obj, key)
-      Map.has_key?(map, key) -> Map.get(map, key)
-      raw_key != :error and match?({:accessor, _, _}, Map.get(map, raw_key)) -> Get.get(obj, key)
-      raw_key != :error and Map.has_key?(map, raw_key) -> Map.get(map, raw_key)
-      true -> Get.get(obj, key)
-    end
-  end
-
-  defp enumerable_value(obj, _data, key), do: Get.get(obj, key)
-
-  defp integer_property_key(key) do
-    case PropertyKey.array_index(key) do
-      {:ok, index} -> index
-      :error -> :error
-    end
-  end
-
-  defp values([target | _]) when is_nullish(target) do
-    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
-  end
-
-  defp values([{:obj, _ref} = obj | _]) do
-    obj
-    |> InternalMethods.own_keys()
-    |> Enum.filter(&(is_binary(&1) and InternalMethods.enumerable_own_property?(obj, &1)))
-    |> Enum.map(&Get.get(obj, &1))
-    |> Heap.wrap()
-  end
-
-  defp values([string | _]) when is_binary(string) do
-    string
-    |> JSString.utf16_code_units()
-    |> Heap.wrap()
-  end
-
-  defp values([map | _]) when is_map(map), do: Map.values(map)
-  defp values(_), do: []
-
-  defp entries([target | _]) when is_nullish(target) do
-    throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
-  end
-
-  defp entries([{:obj, _ref} = obj | _]) do
-    keys = obj |> InternalMethods.own_keys() |> Enum.filter(&is_binary/1)
-    Heap.wrap(enumerable_descriptor_pairs(obj, keys))
-  end
-
-  defp entries([callable | _]) when is_tuple(callable) or is_struct(callable) do
-    Heap.wrap(enumerable_descriptor_pairs(callable, InternalMethods.own_keys(callable)))
-  end
-
-  defp entries([map | _]) when is_map(map) do
-    Enum.map(Map.to_list(map), fn {k, v} -> [k, v] end)
-  end
-
-  defp entries([string | _]) when is_binary(string) do
-    string
-    |> string_indexed_entries()
-    |> Enum.map(fn {index, char} -> Heap.wrap([index, char]) end)
-    |> Heap.wrap()
-  end
-
-  defp entries(_), do: []
-
-  defp enumerable_descriptor_pairs(target, keys) do
-    keys
-    |> Enum.filter(&InternalMethods.enumerable_own_property?(target, &1))
-    |> Enum.map(&Heap.wrap([&1, Get.get(target, &1)]))
   end
 
   defp assign([target | _sources]) when is_nullish(target) do
@@ -1406,9 +1208,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   defp to_assign_target({:obj, _} = object), do: object
   defp to_assign_target(target), do: object_value_of(target)
 
-  defp string_assign_entries(string), do: string_indexed_entries(string)
-
-  defp string_indexed_entries(string), do: JSString.utf16_indexed_entries(string)
+  defp string_assign_entries(string), do: ObjectEnumeration.string_indexed_entries(string)
 
   defp enumerable_assign_entries(ref) do
     data = Heap.get_obj(ref, %{})
@@ -1416,8 +1216,8 @@ defmodule QuickBEAM.VM.Runtime.Object do
     if is_map(data) and Map.has_key?(data, proxy_target()) do
       proxy_assign_entries({:obj, ref}, data)
     else
-      (enumerable_keys(ref) ++ enumerable_symbol_keys(ref, data))
-      |> Enum.map(fn key -> {key, enumerable_value({:obj, ref}, data, key)} end)
+      (ObjectEnumeration.enumerable_keys(ref) ++ enumerable_symbol_keys(ref, data))
+      |> Enum.map(fn key -> {key, ObjectEnumeration.enumerable_value({:obj, ref}, data, key)} end)
     end
   end
 
@@ -1428,7 +1228,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
           trap |> Runtime.call_callback([target]) |> Heap.to_list()
 
         _ ->
-          enumerable_keys(elem(target, 1))
+          ObjectEnumeration.enumerable_keys(elem(target, 1))
       end
 
     descriptor_trap = Get.get(handler, "getOwnPropertyDescriptor")
@@ -1675,7 +1475,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
         end)
 
       _ ->
-        enumerable_keys(props_ref)
+        ObjectEnumeration.enumerable_keys(props_ref)
     end
   end
 
@@ -1689,8 +1489,4 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   defp get_own_property_descriptor([target]), do: InternalMethods.own_property(target, :undefined)
   defp get_own_property_descriptor(_), do: :undefined
-
-  defp array_indices(list) do
-    list |> Enum.with_index() |> Enum.map(fn {_, i} -> Integer.to_string(i) end)
-  end
 end
