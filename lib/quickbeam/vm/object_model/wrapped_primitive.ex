@@ -1,6 +1,8 @@
 defmodule QuickBEAM.VM.ObjectModel.WrappedPrimitive do
   @moduledoc "Helpers for boxed primitive object slots."
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Runtime.ConstructorRegistry, as: Constructors
 
@@ -48,19 +50,21 @@ defmodule QuickBEAM.VM.ObjectModel.WrappedPrimitive do
   def wrap(type, value) do
     slot = slot(type)
 
-    data =
-      case Map.fetch(@constructors, type) do
-        {:ok, constructor_name} ->
-          case active_class_proto(constructor_name) do
-            {:obj, _} = proto -> %{slot => value, "__proto__" => proto}
-            _ -> %{slot => value}
-          end
+    case Map.fetch(@constructors, type) do
+      {:ok, constructor_name} ->
+        case active_class_proto(constructor_name) do
+          {:obj, _} = proto ->
+            QuickBEAM.VM.Builtin.object extends: proto do
+              prop(slot, value)
+            end
 
-        :error ->
-          %{slot => value}
-      end
+          _ ->
+            Heap.wrap(%{slot => value})
+        end
 
-    Heap.wrap(data)
+      :error ->
+        Heap.wrap(%{slot => value})
+    end
   end
 
   defp active_class_proto(constructor_name) do

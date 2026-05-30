@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.Interpreter.Generator do
   @moduledoc "Generator and async function execution: suspends/resumes frames and wraps results in iterator or Promise objects."
 
-  import QuickBEAM.VM.Builtin, only: [object: 1]
+  import QuickBEAM.VM.Builtin, only: [object: 2]
 
   alias QuickBEAM.VM.{Heap, RuntimeState}
   alias QuickBEAM.VM.Interpreter
@@ -168,29 +168,25 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
   defp done_result(val), do: Heap.wrap(%{"value" => val, "done" => true})
 
   defp build_iterator(gen_ref, next_impl, return_impl, generator_fun) do
-    next_fn =
-      {:builtin, "next",
-       fn
-         [arg | _], _this -> next_impl.(gen_ref, arg)
-         [], _this -> next_impl.(gen_ref, :undefined)
-       end}
+    object extends: generator_object_prototype(generator_fun) do
+      method "next" do
+        next_impl.(gen_ref, argument_or_undefined(args))
+      end
 
-    return_fn =
-      {:builtin, "return",
-       fn
-         [val | _], _this -> return_impl.(gen_ref, val)
-         [], _this -> return_impl.(gen_ref, :undefined)
-       end}
+      method "return" do
+        return_impl.(gen_ref, argument_or_undefined(args))
+      end
 
-    iterator_symbol = {:builtin, "[Symbol.iterator]", fn _, this -> this end}
-
-    object do
-      prop("__proto__", generator_object_prototype(generator_fun))
-      prop("next", next_fn)
-      prop("return", return_fn)
-      prop({:symbol, "Symbol.iterator"}, iterator_symbol)
+      symbol :iterator do
+        method do
+          this
+        end
+      end
     end
   end
+
+  defp argument_or_undefined([value | _]), do: value
+  defp argument_or_undefined([]), do: :undefined
 
   defp generator_object_prototype(generator_fun) do
     case QuickBEAM.VM.ObjectModel.Get.get(generator_fun, "prototype") do

@@ -594,21 +594,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp abstract_prototype do
     cached_prototype(:qb_typed_array_abstract_proto, fn ->
-      Heap.wrap(
-        base_prototype_properties()
-        |> Map.put(
-          "constructor",
-          {:builtin, "TypedArray",
-           fn _args, _this ->
-             JSThrow.type_error!("Abstract class TypedArray cannot be called")
-           end}
-        )
-        |> Map.put(
-          "toString",
-          QuickBEAM.VM.ObjectModel.Get.get(Heap.get_array_proto(), "toString")
-        )
-        |> Map.put("__proto__", Heap.get_object_prototype())
+      base_prototype_properties()
+      |> Map.merge(
+        object heap: false, extends: Heap.get_object_prototype() do
+          prop("constructor", abstract_typed_array_constructor())
+          prop("toString", QuickBEAM.VM.ObjectModel.Get.get(Heap.get_array_proto(), "toString"))
+        end
       )
+      |> Heap.wrap()
     end)
   end
 
