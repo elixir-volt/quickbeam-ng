@@ -14,7 +14,14 @@ defmodule QuickBEAM.VM.Runtime.InstallerHelpers do
 
   @doc "Sets a prototype object's parent to Object.prototype."
   def install_object_parent(proto_ref, parent \\ Heap.get_object_prototype()) do
-    Heap.put_obj_key(proto_ref, "__proto__", parent)
+    case Heap.put_shape_proto(proto_ref, parent) do
+      :ok ->
+        :ok
+
+      :error ->
+        Heap.put_obj_key(proto_ref, :__internal_proto__, parent)
+        :ok
+    end
   end
 
   @doc "Installs a non-enumerable constructor link on a prototype object."
