@@ -5,6 +5,8 @@ defmodule QuickBEAM.VM.Runtime.ConstructorCallbacks do
   import QuickBEAM.VM.Builtin, only: [arg: 3, object: 1, slot_key: 1]
   import QuickBEAM.VM.Value, only: [is_builtin: 1, is_closure: 1, is_nullish: 1]
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.{Heap, RuntimeState, Value}
   alias QuickBEAM.VM.Execution.{Eval, RegexpState}
   alias QuickBEAM.VM.JSThrow
@@ -81,8 +83,12 @@ defmodule QuickBEAM.VM.Runtime.ConstructorCallbacks do
 
     data =
       case QuickBEAM.VM.Runtime.ConstructorRegistry.class_proto("Object") do
-        {:obj, _} = proto -> %{"__proto__" => proto}
-        _ -> %{}
+        {:obj, _} = proto ->
+          QuickBEAM.VM.Builtin.object heap: false, extends: proto do
+          end
+
+        _ ->
+          %{}
       end
 
     Heap.put_obj(ref, data)
