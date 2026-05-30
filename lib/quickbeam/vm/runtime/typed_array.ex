@@ -15,27 +15,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.Value
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
+  alias QuickBEAM.VM.Runtime.TypedArray.Metadata
   alias QuickBEAM.VM.Runtime.TypedArrayCoercion
   alias QuickBEAM.VM.Runtime.TypedArrayInstallation
   alias QuickBEAM.VM.Semantics.Iterators
 
-  @types %{
-    "Uint8Array" => :uint8,
-    "Int8Array" => :int8,
-    "Uint8ClampedArray" => :uint8_clamped,
-    "Uint16Array" => :uint16,
-    "Int16Array" => :int16,
-    "Uint32Array" => :uint32,
-    "Int32Array" => :int32,
-    "Float32Array" => :float32,
-    "Float64Array" => :float64,
-    "Float16Array" => :float16,
-    "BigInt64Array" => :bigint64,
-    "BigUint64Array" => :biguint64
-  }
-
   def builtin_definitions do
-    for {name, type} <- @types do
+    for {name, type} <- Metadata.types() do
       %Definition{
         name: name,
         constructor: constructor(type),
@@ -48,7 +34,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   def install_builtin({:builtin, _name, _} = ctor) do
-    TypedArrayInstallation.install_builtin(ctor)
+    TypedArrayInstallation.install_builtin(ctor, __MODULE__)
   end
 
   @ecma "23.2.2.1"
@@ -100,11 +86,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   @doc "Returns typed-array type descriptors supported by the runtime."
-  def types, do: @types
+  defdelegate types, to: Metadata
 
   @doc "Returns the typed-array element type for a constructor name, when known."
-  def constructor_type(name) when is_binary(name), do: Map.get(@types, name)
-  def constructor_type(_), do: nil
+  defdelegate constructor_type(name), to: Metadata
 
   @doc "Returns whether an object map stores a typed-array instance for a constructor name."
   def instance_for_constructor?(
@@ -116,18 +101,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   def instance_for_constructor?(_, _), do: false
 
   @doc "Returns the byte width for a typed-array element type."
-  def elem_size(:uint8), do: 1
-  def elem_size(:int8), do: 1
-  def elem_size(:uint8_clamped), do: 1
-  def elem_size(:uint16), do: 2
-  def elem_size(:int16), do: 2
-  def elem_size(:uint32), do: 4
-  def elem_size(:int32), do: 4
-  def elem_size(:float16), do: 2
-  def elem_size(:float32), do: 4
-  def elem_size(:float64), do: 8
-  def elem_size(:bigint64), do: 8
-  def elem_size(:biguint64), do: 8
+  defdelegate elem_size(type), to: Metadata
 
   @doc "Returns generic properties for typed-array constructor prototype objects."
   def prototype_properties do
@@ -342,7 +316,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp prototype_to_string_tag({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
-      %{typed_array() => true, type_key() => type} -> typed_array_name(type)
+      %{typed_array() => true, type_key() => type} -> Metadata.name(type)
       _ -> :undefined
     end
   end
@@ -464,12 +438,6 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp typed_array_name(type) do
-    @types
-    |> Enum.find_value(fn {name, candidate} -> if candidate == type, do: name end)
-    |> Kernel.||("TypedArray")
-  end
-
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor(type) do
     fn args, this ->
@@ -537,13 +505,15 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   def constructor_static_property(_name, _ctor, _key), do: :undefined
 
   def constructor_prototype(name, ctor),
-    do: TypedArrayInstallation.constructor_prototype(name, ctor)
+    do: TypedArrayInstallation.constructor_prototype(name, ctor, __MODULE__)
 
   defp class_proto_for(type) do
-    Runtime.global_class_proto(typed_array_name(type)) ||
+    name = Metadata.name(type)
+
+    Runtime.global_class_proto(name) ||
       constructor_prototype(
-        typed_array_name(type),
-        {:builtin, typed_array_name(type), constructor(type)}
+        name,
+        {:builtin, name, constructor(type)}
       )
   end
 

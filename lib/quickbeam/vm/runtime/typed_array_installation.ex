@@ -10,12 +10,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.ConstructorRegistry
-  alias QuickBEAM.VM.Runtime.TypedArray
+  alias QuickBEAM.VM.Runtime.TypedArray.Metadata
 
-  def install_builtin({:builtin, name, _} = ctor) do
-    type = Map.fetch!(TypedArray.types(), name)
+  def install_builtin(ctor, spec_module) do
+    {:builtin, name, _} = ctor
+    type = Map.fetch!(Metadata.types(), name)
     typed_array_base = abstract_constructor()
-    install_base_prototype(typed_array_base)
+    install_base_prototype(typed_array_base, spec_module)
     base_proto = Heap.get_class_proto(typed_array_base)
 
     ConstructorRegistry.put_prototype(
@@ -27,13 +28,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
 
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
     Heap.put_ctor_static(ctor, "__proto__", typed_array_base)
-    Heap.put_ctor_static(ctor, "BYTES_PER_ELEMENT", TypedArray.elem_size(type))
+    Heap.put_ctor_static(ctor, "BYTES_PER_ELEMENT", Metadata.elem_size(type))
   end
 
-  def constructor_prototype(name, ctor) do
+  def constructor_prototype(name, ctor, spec_module) do
     Runtime.global_class_proto(name) ||
       cached_prototype({:qb_typed_array_constructor_proto, name}, fn ->
-        object extends: abstract_prototype() do
+        object extends: abstract_prototype(spec_module) do
           prop("constructor", ctor)
         end
       end)
@@ -47,9 +48,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
     JSThrow.type_error!("Abstract class TypedArray cannot be called")
   end
 
-  def abstract_prototype do
+  def abstract_prototype(spec_module) do
     cached_prototype(:qb_typed_array_abstract_proto, fn ->
-      TypedArray.base_prototype_properties()
+      spec_module.base_prototype_properties()
       |> Map.merge(
         object heap: false, extends: Heap.get_object_prototype() do
           prop("constructor", abstract_constructor())
@@ -60,7 +61,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
     end)
   end
 
-  defp install_base_prototype(typed_array_base) do
+  defp install_base_prototype(typed_array_base, spec_module) do
     case Heap.get_class_proto(typed_array_base) do
       {:obj, _} ->
         :ok
@@ -75,12 +76,12 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
           end
         )
 
-        Installer.install_prototype_specs(typed_array_base_ref, TypedArray)
+        Installer.install_prototype_specs(typed_array_base_ref, spec_module)
         Heap.put_prop_desc(typed_array_base_ref, "constructor", PropertyDescriptor.constructor())
 
         ConstructorRegistry.put_prototype(typed_array_base, {:obj, typed_array_base_ref})
         Heap.put_ctor_prop_desc(typed_array_base, "prototype", PropertyDescriptor.prototype())
-        Installer.install_static_specs(typed_array_base, TypedArray)
+        Installer.install_static_specs(typed_array_base, spec_module)
     end
   end
 
