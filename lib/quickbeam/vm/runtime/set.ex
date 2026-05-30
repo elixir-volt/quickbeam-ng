@@ -12,7 +12,7 @@ defmodule QuickBEAM.VM.Runtime.Set do
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Runtime.{Collections, InstallerHelpers}
+  alias QuickBEAM.VM.Runtime.{Collections, InstallerHelpers, IteratorResult}
 
   defintrinsics do
     intrinsic "Set" do
@@ -856,17 +856,17 @@ defmodule QuickBEAM.VM.Runtime.Set do
   defp next_set_iterator_value(ref, state_ref, mode) do
     case IteratorState.get(state_ref, {0, false}) do
       {_cursor, true} ->
-        Heap.wrap(%{"value" => :undefined, "done" => true})
+        IteratorResult.done()
 
       {cursor, false} ->
         case next_set_iterator_entry(ref, cursor) do
           :done ->
             IteratorState.put(state_ref, {cursor, true})
-            Heap.wrap(%{"value" => :undefined, "done" => true})
+            IteratorResult.done()
 
           {entry_id, value} ->
             IteratorState.put(state_ref, {entry_id, false})
-            Heap.wrap(%{"value" => set_iterator_result(mode, value), "done" => false})
+            IteratorResult.new(set_iterator_result(mode, value), false)
         end
     end
   end

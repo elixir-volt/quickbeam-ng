@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
 
   use QuickBEAM.VM.Builtin
 
-  import QuickBEAM.VM.Heap.Keys, only: [internal_namespace?: 1, key_order: 0]
+  import QuickBEAM.VM.Heap.Keys, only: [internal_namespace?: 1]
 
   alias QuickBEAM.VM.{Builtin, Heap, Invocation, JSThrow, Value}
 
@@ -19,6 +19,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
   alias QuickBEAM.VM.Execution.IteratorHelperState
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.Runtime.IteratorResult
 
   defintrinsic "Iterator", prototype_parent: nil do
     constructor(constructor(), length: 0, phase: :fundamental)
@@ -1494,13 +1495,7 @@ defmodule QuickBEAM.VM.Runtime.Iterator do
     end
   end
 
-  defp iter_result(value, done) do
-    object extends: Heap.get_object_prototype() do
-      prop("value", value)
-      prop("done", done)
-      prop(key_order(), ["done", "value"])
-    end
-  end
+  defp iter_result(value, done), do: IteratorResult.new(value, done)
 
   defp non_negative_integer_limit_or_close(this, value) do
     non_negative_integer_limit(value)

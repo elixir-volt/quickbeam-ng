@@ -12,6 +12,7 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, PropertyDescriptor}
+  alias QuickBEAM.VM.Runtime.IteratorResult
   alias QuickBEAM.VM.Runtime.String, as: JSString
 
   @han_ideograph <<0x20BB7::utf8>>
@@ -2151,12 +2152,12 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
 
   defp regexp_string_iterator_exec_next(state_ref, regexp, string, exec) do
     if IteratorState.get(state_ref, false) do
-      iterator_result(:undefined, true)
+      IteratorResult.done()
     else
       case Invocation.invoke_with_receiver(exec, [string], regexp) do
         nil ->
           IteratorState.put(state_ref, true)
-          iterator_result(:undefined, true)
+          IteratorResult.done()
 
         match when is_tuple(match) and elem(match, 0) == :obj ->
           if regexp_match_all_global?(regexp) do
@@ -2165,15 +2166,13 @@ defmodule QuickBEAM.VM.Runtime.RegExp do
             IteratorState.put(state_ref, true)
           end
 
-          iterator_result(match, false)
+          IteratorResult.new(match, false)
 
         _ ->
           JSThrow.type_error!("RegExp exec method returned a non-object")
       end
     end
   end
-
-  defp iterator_result(value, done), do: Heap.wrap(%{"value" => value, "done" => done})
 
   defp regexp_match_all_global?(regexp),
     do: regexp_match_all_flags(regexp) |> String.contains?("g")

@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Value
-  alias QuickBEAM.VM.Runtime.{ArraySource, InstallerHelpers}
+  alias QuickBEAM.VM.Runtime.{ArraySource, InstallerHelpers, IteratorResult}
 
   @max_array_length 4_294_967_295
   @max_safe_integer 9_007_199_254_740_991
@@ -3204,13 +3204,13 @@ defmodule QuickBEAM.VM.Runtime.Array do
         i = Map.get(state, "index", 0)
 
         if Map.get(state, "done") == true do
-          Heap.wrap(%{"value" => :undefined, "done" => true})
+          IteratorResult.done()
         else
           target = Map.get(state, "target")
 
           if i >= array_iterator_length(target) do
             Heap.put_obj(state_ref, Map.put(state, "done", true))
-            Heap.wrap(%{"value" => :undefined, "done" => true})
+            IteratorResult.done()
           else
             Heap.put_obj(state_ref, Map.put(state, "index", i + 1))
 
@@ -3221,7 +3221,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
                 :entries -> Heap.wrap([i, array_iterator_value(target, i)])
               end
 
-            Heap.wrap(%{"value" => value, "done" => false})
+            IteratorResult.new(value, false)
           end
         end
 

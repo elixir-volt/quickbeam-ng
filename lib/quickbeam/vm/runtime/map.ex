@@ -9,7 +9,7 @@ defmodule QuickBEAM.VM.Runtime.Map do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.{Get, PropertyDescriptor}
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Runtime.{ArraySource, Collections, InstallerHelpers}
+  alias QuickBEAM.VM.Runtime.{ArraySource, Collections, InstallerHelpers, IteratorResult}
 
   alias QuickBEAM.VM.{Builtin, Invocation, JSThrow, Value}
 
@@ -764,22 +764,19 @@ defmodule QuickBEAM.VM.Runtime.Map do
   defp next_map_iterator_value(ref, state_ref, mode) do
     case IteratorState.get(state_ref, {[], false}) do
       {_seen, true} ->
-        Heap.wrap(%{"value" => :undefined, "done" => true})
+        IteratorResult.done()
 
       {seen, false} ->
         case next_present_key(ref, seen) do
           :done ->
             IteratorState.put(state_ref, {seen, true})
-            Heap.wrap(%{"value" => :undefined, "done" => true})
+            IteratorResult.done()
 
           key ->
             IteratorState.put(state_ref, {[key | seen], false})
             data = Heap.get_obj(ref, %{}) |> Map.get(map_data(), %{})
 
-            Heap.wrap(%{
-              "value" => map_iterator_result(mode, key, Map.get(data, key)),
-              "done" => false
-            })
+            IteratorResult.new(map_iterator_result(mode, key, Map.get(data, key)), false)
         end
     end
   end
