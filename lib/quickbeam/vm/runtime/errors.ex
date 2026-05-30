@@ -79,12 +79,18 @@ defmodule QuickBEAM.VM.Runtime.Errors do
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
 
     with {:obj, proto_ref} <- Heap.get_class_proto(ctor) do
-      Heap.put_obj_key(proto_ref, "__proto__", object_proto)
-      Heap.put_obj_key(proto_ref, "name", "Error")
-      Heap.put_obj_key(proto_ref, "message", "")
-      Heap.put_obj_key(proto_ref, "toString", error_to_string_method())
+      constructor = Heap.get_obj(proto_ref, %{}) |> Map.get("constructor")
 
-      install_data_descriptors(proto_ref, ["name", "message", "constructor", "toString"])
+      object into: proto_ref, extends: object_proto do
+        property("name", value: "Error", descriptor: PropertyDescriptor.method())
+        property("message", value: "", descriptor: PropertyDescriptor.method())
+        property("constructor", value: constructor, descriptor: PropertyDescriptor.method())
+
+        property("toString",
+          value: error_to_string_method(),
+          descriptor: PropertyDescriptor.method()
+        )
+      end
     end
 
     install_error_statics(ctor)
@@ -97,16 +103,14 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
     with {:obj, proto_ref} <- Heap.get_class_proto(ctor),
          {:obj, _} = error_proto <- Heap.get_class_proto(error_ctor) do
-      Heap.put_obj_key(proto_ref, "__proto__", error_proto)
-      Heap.put_obj_key(proto_ref, "name", name)
-      Heap.put_obj_key(proto_ref, "message", "")
+      constructor = Heap.get_obj(proto_ref, %{}) |> Map.get("constructor")
 
-      install_data_descriptors(proto_ref, ["name", "message", "constructor"])
+      object into: proto_ref, extends: error_proto do
+        property("name", value: name, descriptor: PropertyDescriptor.method())
+        property("message", value: "", descriptor: PropertyDescriptor.method())
+        property("constructor", value: constructor, descriptor: PropertyDescriptor.method())
+      end
     end
-  end
-
-  defp install_data_descriptors(ref, keys) do
-    Enum.each(keys, &Heap.put_prop_desc(ref, &1, PropertyDescriptor.method()))
   end
 
   defp install_error_statics(ctor) do
@@ -192,17 +196,12 @@ defmodule QuickBEAM.VM.Runtime.Errors do
 
     error_tostring = error_to_string_method()
 
-    Heap.put_obj(
-      error_proto_ref,
-      object heap: false, extends: Heap.get_object_prototype() do
-        prop("name", "Error")
-        prop("message", "")
-        prop("constructor", error_ctor)
-        prop("toString", error_tostring)
-      end
-    )
-
-    install_data_descriptors(error_proto_ref, ["name", "message", "constructor", "toString"])
+    object into: error_proto_ref, extends: Heap.get_object_prototype() do
+      property("name", value: "Error", descriptor: PropertyDescriptor.method())
+      property("message", value: "", descriptor: PropertyDescriptor.method())
+      property("constructor", value: error_ctor, descriptor: PropertyDescriptor.method())
+      property("toString", value: error_tostring, descriptor: PropertyDescriptor.method())
+    end
 
     Constructors.put_prototype(error_ctor, {:obj, error_proto_ref})
     install_function_parent(error_ctor)
@@ -256,16 +255,11 @@ defmodule QuickBEAM.VM.Runtime.Errors do
         proto_ref = make_ref()
         ctor = {:builtin, name, fn args, this -> construct_error(name, args, this) end}
 
-        Heap.put_obj(
-          proto_ref,
-          object heap: false, extends: {:obj, error_proto_ref} do
-            prop("name", name)
-            prop("message", "")
-            prop("constructor", ctor)
-          end
-        )
-
-        install_data_descriptors(proto_ref, ["name", "message", "constructor"])
+        object into: proto_ref, extends: {:obj, error_proto_ref} do
+          property("name", value: name, descriptor: PropertyDescriptor.method())
+          property("message", value: "", descriptor: PropertyDescriptor.method())
+          property("constructor", value: ctor, descriptor: PropertyDescriptor.method())
+        end
 
         Constructors.put_prototype(ctor, {:obj, proto_ref})
         Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())

@@ -1792,15 +1792,37 @@ defmodule QuickBEAM.VM.Builtin do
     descriptors = build_object_descriptor_entries(entries)
     heap? = Keyword.get(opts, :heap, true)
 
-    if heap? do
-      quote do
-        QuickBEAM.VM.Builtin.install_object_descriptors(
-          QuickBEAM.VM.Heap.wrap(%{unquote_splicing(map_entries)}),
-          unquote(descriptors)
-        )
-      end
-    else
-      quote do: %{unquote_splicing(map_entries)}
+    cond do
+      Keyword.has_key?(opts, :into) ->
+        ref = Keyword.fetch!(opts, :into)
+
+        quote do
+          var!(object_ref) = unquote(ref)
+
+          QuickBEAM.VM.Heap.put_obj(
+            var!(object_ref),
+            Map.merge(
+              QuickBEAM.VM.Heap.get_obj(var!(object_ref), %{}),
+              %{unquote_splicing(map_entries)}
+            )
+          )
+
+          QuickBEAM.VM.Builtin.install_object_descriptors(
+            {:obj, var!(object_ref)},
+            unquote(descriptors)
+          )
+        end
+
+      heap? ->
+        quote do
+          QuickBEAM.VM.Builtin.install_object_descriptors(
+            QuickBEAM.VM.Heap.wrap(%{unquote_splicing(map_entries)}),
+            unquote(descriptors)
+          )
+        end
+
+      true ->
+        quote do: %{unquote_splicing(map_entries)}
     end
   end
 
