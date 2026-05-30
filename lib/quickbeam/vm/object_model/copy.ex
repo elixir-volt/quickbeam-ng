@@ -297,7 +297,9 @@ defmodule QuickBEAM.VM.ObjectModel.Copy do
   defp enumerable_keys_from_raw(obj, ref, raw) do
     case raw || %{} do
       %{proxy_target() => _target, proxy_handler() => _handler} ->
-        obj |> InternalMethods.own_keys() |> Enum.map(&to_string/1)
+        obj
+        |> InternalMethods.own_keys()
+        |> Enum.filter(&(is_binary(&1) and InternalMethods.enumerable_own_property?(obj, &1)))
 
       {:qb_arr, arr} ->
         Semantics.enumerable_array_keys(ref, arr, array_prop_keys(ref))

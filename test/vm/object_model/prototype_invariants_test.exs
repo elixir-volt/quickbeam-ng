@@ -1,0 +1,55 @@
+defmodule QuickBEAM.VM.ObjectModel.PrototypeInvariantsTest do
+  use ExUnit.Case, async: true
+
+  defp eval(source, mode) do
+    {:ok, runtime} = QuickBEAM.start(apis: false)
+
+    try do
+      QuickBEAM.eval(runtime, source, mode: mode)
+    after
+      QuickBEAM.stop(runtime)
+    end
+  end
+
+  for mode <- [:beam, :beam_compiler] do
+    @mode mode
+
+    test "#{mode} setPrototypeOf rejects cycles" do
+      assert {:ok, [false, false]} =
+               eval(
+                 ~S'''
+                 var a = {};
+                 var b = {};
+                 Object.setPrototypeOf(b, a);
+                 [Reflect.setPrototypeOf(a, b), Object.getPrototypeOf(a) === b];
+                 ''',
+                 @mode
+               )
+    end
+
+    test "#{mode} setPrototypeOf rejects changing non-extensible object prototype" do
+      assert {:ok, [false, false]} =
+               eval(
+                 ~S'''
+                 var a = {};
+                 var b = {};
+                 Object.preventExtensions(a);
+                 [Reflect.setPrototypeOf(a, b), Object.getPrototypeOf(a) === b];
+                 ''',
+                 @mode
+               )
+    end
+
+    test "#{mode} proxy deleteProperty rejects deleting existing property on non-extensible target" do
+      assert {:error, %QuickBEAM.JS.Error{name: "TypeError"}} =
+               eval(
+                 ~S'''
+                 var target = { a: 1 };
+                 Object.preventExtensions(target);
+                 delete new Proxy(target, { deleteProperty: function() { return true; } }).a;
+                 ''',
+                 @mode
+               )
+    end
+  end
+end

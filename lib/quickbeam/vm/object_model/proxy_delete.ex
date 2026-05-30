@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyDelete do
   import QuickBEAM.VM.Heap.Keys, only: [proxy_target: 0]
 
   alias QuickBEAM.VM.{Heap, JSThrow}
-  alias QuickBEAM.VM.ObjectModel.{ProxyDispatch, ProxyTrap}
+  alias QuickBEAM.VM.ObjectModel.{OwnProperty, ProxyDispatch, ProxyTrap}
   alias QuickBEAM.VM.Semantics.Values
 
   def dispatch({:obj, ref} = proxy, key, fallback) when is_function(fallback, 2) do
@@ -31,7 +31,11 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyDelete do
         JSThrow.type_error!("proxy deleteProperty trap violates invariant")
 
       _ ->
-        true
+        if OwnProperty.present?({:obj, target_ref}, key) and not Heap.extensible?(target_ref) do
+          JSThrow.type_error!("proxy deleteProperty trap violates invariant")
+        else
+          true
+        end
     end
   end
 

@@ -235,7 +235,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp collect_custom_iterator(obj, iter_fn) do
     iterator = Invocation.invoke_with_receiver(iter_fn, [], Runtime.gas_budget(), obj)
 
-    unless is_object(iterator), do: not_iterable!()
+    unless Value.object_like?(iterator), do: not_iterable!()
 
     next_fn = Get.get(iterator, "next")
     unless Builtin.callable?(next_fn), do: not_iterable!()
@@ -309,7 +309,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
     end
   end
 
-  defp object_for_of(ctx, obj_ref, map) do
+  defp object_for_of(ctx, obj_ref, _map) do
     iter_fn = Get.get(obj_ref, {:symbol, "Symbol.iterator"})
 
     cond do
@@ -318,9 +318,6 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
 
       not Value.nullish?(iter_fn) ->
         throw({:js_throw, Heap.make_error("[Symbol.iterator] is not a function", "TypeError")})
-
-      Map.has_key?(map, "next") ->
-        {obj_ref, Get.get(obj_ref, "next")}
 
       true ->
         throw({:js_throw, Heap.make_error("object is not iterable", "TypeError")})
@@ -361,7 +358,9 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   end
 
   defp validate_iterator_close_result!(result) do
-    unless is_object(result), do: iterator_type_error!("iterator return result is not an object")
+    unless iterator_result_object?(result),
+      do: iterator_type_error!("iterator return result is not an object")
+
     result
   end
 
@@ -398,7 +397,7 @@ defmodule QuickBEAM.VM.Semantics.Iterators do
   defp invoke_custom_iter(_ctx, iter_fn, obj) do
     iter_obj = Invocation.invoke_with_receiver(iter_fn, [], Runtime.gas_budget(), obj)
 
-    unless is_object(iter_obj) do
+    unless Value.object_like?(iter_obj) do
       throw(
         {:js_throw,
          Heap.make_error("Result of the Symbol.iterator method is not an object", "TypeError")}

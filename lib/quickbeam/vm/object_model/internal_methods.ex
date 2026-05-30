@@ -234,9 +234,34 @@ defmodule QuickBEAM.VM.ObjectModel.InternalMethods do
   defp set_prototype_of_by_kind(:function, obj, proto), do: ordinary_set_prototype_of(obj, proto)
   defp set_prototype_of_by_kind(:primitive, obj, proto), do: ordinary_set_prototype_of(obj, proto)
 
+  defp ordinary_set_prototype_of({:obj, ref} = obj, proto) do
+    current = Prototype.get(obj)
+
+    cond do
+      current == proto ->
+        true
+
+      not Heap.extensible?(ref) ->
+        false
+
+      match?({:obj, _}, proto) and Prototype.ordinary_chain_contains?(proto, ref) ->
+        false
+
+      true ->
+        Prototype.set(obj, proto)
+        true
+    end
+  end
+
   defp ordinary_set_prototype_of(obj, proto) do
-    Prototype.set(obj, proto)
-    true
+    current = Prototype.get(obj)
+
+    if current == proto do
+      true
+    else
+      Prototype.set(obj, proto)
+      true
+    end
   end
 
   defp ordinary_extensible?({:obj, ref}), do: Heap.extensible?(ref)
