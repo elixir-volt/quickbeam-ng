@@ -3,15 +3,22 @@ defmodule QuickBEAM.VM.Host.Web.Encoding do
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.JSThrow
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
-    %{
-      "btoa" => {:builtin, "btoa", &btoa/2},
-      "atob" => {:builtin, "atob", &atob/2}
-    }
+    QuickBEAM.VM.Builtin.build_methods do
+      method "btoa" do
+        btoa(args, this)
+      end
+
+      method "atob" do
+        atob(args, this)
+      end
+    end
   end
 
   defp btoa([arg | _], _) do

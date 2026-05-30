@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Host.Web.Blob do
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
-  import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, object: 1]
+  import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, object: 2]
 
   alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.Semantics.Values
@@ -100,11 +100,10 @@ defmodule QuickBEAM.VM.Host.Web.Blob do
     blob_ctor = get_blob_ctor()
     blob_proto = Runtime.global_class_proto("Blob")
 
-    object do
+    object extends: blob_proto do
       prop("size", byte_size(content))
       prop("type", mime_type)
       prop("constructor", blob_ctor)
-      prop("__proto__", blob_proto)
 
       method "text" do
         content_ref

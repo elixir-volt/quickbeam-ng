@@ -3,17 +3,30 @@ defmodule QuickBEAM.VM.Host.Web.Timers do
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.Heap.Caches
   alias QuickBEAM.VM.Interpreter
 
   @doc "Returns the JavaScript global bindings provided by this module."
   def bindings do
-    %{
-      "setTimeout" => {:builtin, "setTimeout", &set_timeout/2},
-      "clearTimeout" => {:builtin, "clearTimeout", &clear_timeout/2},
-      "setInterval" => {:builtin, "setInterval", &set_interval/2},
-      "clearInterval" => {:builtin, "clearInterval", &clear_interval/2}
-    }
+    QuickBEAM.VM.Builtin.build_methods do
+      method "setTimeout" do
+        set_timeout(args, this)
+      end
+
+      method "clearTimeout" do
+        clear_timeout(args, this)
+      end
+
+      method "setInterval" do
+        set_interval(args, this)
+      end
+
+      method "clearInterval" do
+        clear_interval(args, this)
+      end
+    end
   end
 
   # ── Timer queue (stored in process dictionary) ──

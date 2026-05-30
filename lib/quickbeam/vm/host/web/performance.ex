@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Host.Web.Performance do
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
-  import QuickBEAM.VM.Builtin, only: [arg: 3, constructor: 2, object: 1]
+  import QuickBEAM.VM.Builtin, only: [arg: 3, constructor: 2, object: 1, object: 2]
 
   alias QuickBEAM.VM.{Heap, JSThrow}
   alias QuickBEAM.VM.ObjectModel.Get
@@ -218,14 +218,13 @@ defmodule QuickBEAM.VM.Host.Web.Performance do
   defp make_perf_entry(entry_type, name, start_time, duration, detail, ctor) do
     proto = Heap.get_class_proto(ctor)
 
-    object do
+    object extends: proto do
       prop("name", name)
       prop("entryType", entry_type)
       prop("startTime", start_time)
       prop("duration", duration)
       prop("detail", detail)
       prop("constructor", ctor)
-      prop("__proto__", proto)
 
       method "toJSON" do
         det = Get.get(this, "detail")

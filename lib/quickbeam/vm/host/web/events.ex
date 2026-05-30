@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.Host.Web.Events do
 
   @behaviour QuickBEAM.VM.Runtime.BindingProvider
 
-  import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, constructor: 3, object: 1]
+  import QuickBEAM.VM.Builtin, only: [arg: 3, argv: 2, constructor: 3, object: 1, object: 2]
 
   alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.ObjectModel.Get
@@ -108,11 +108,10 @@ defmodule QuickBEAM.VM.Host.Web.Events do
 
     dom_exc_proto = get_dom_exception_proto()
 
-    object do
+    object extends: dom_exc_proto do
       prop("message", message)
       prop("name", name)
       prop("code", 0)
-      prop("__proto__", dom_exc_proto)
     end
   end
 
