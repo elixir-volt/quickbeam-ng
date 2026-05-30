@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Runtime.ObjectEnumeration do
+defmodule QuickBEAM.VM.Runtime.Object.Enumeration do
   @moduledoc "Enumeration operations for Object.keys/values/entries and related helpers."
 
   import QuickBEAM.VM.Heap.Keys

@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Runtime.ObjectEntries do
+defmodule QuickBEAM.VM.Runtime.Object.Entries do
   @moduledoc "Object.fromEntries and Object.groupBy helpers."
 
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0, proto: 0]

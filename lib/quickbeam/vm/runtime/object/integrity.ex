@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Runtime.ObjectIntegrity do
+defmodule QuickBEAM.VM.Runtime.Object.Integrity do
   @moduledoc "Object integrity operations for Object.freeze/seal/preventExtensions checks."
 
   import QuickBEAM.VM.Heap.Keys, only: [proxy_handler: 0, proxy_target: 0, typed_array: 0]

@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Runtime.ObjectDescriptors do
+defmodule QuickBEAM.VM.Runtime.Object.Descriptors do
   @moduledoc "Descriptor operations for Object.defineProperty and related statics."
 
   import QuickBEAM.VM.Heap.Keys
@@ -15,7 +15,7 @@ defmodule QuickBEAM.VM.Runtime.ObjectDescriptors do
     PropertyKey
   }
 
-  alias QuickBEAM.VM.Runtime.ObjectEnumeration
+  alias QuickBEAM.VM.Runtime.Object.Enumeration
   alias QuickBEAM.VM.Semantics.Values
 
   def own_property_descriptors([target | _]) when is_nullish(target) do
@@ -261,7 +261,7 @@ defmodule QuickBEAM.VM.Runtime.ObjectDescriptors do
         end)
 
       _ ->
-        ObjectEnumeration.enumerable_keys(props_ref)
+        Enumeration.enumerable_keys(props_ref)
     end
   end
 end

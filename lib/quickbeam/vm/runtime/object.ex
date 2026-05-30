@@ -20,11 +20,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
   }
 
   alias QuickBEAM.VM.Runtime
-  alias QuickBEAM.VM.Runtime.ObjectAssign
-  alias QuickBEAM.VM.Runtime.ObjectDescriptors
-  alias QuickBEAM.VM.Runtime.ObjectEnumeration
-  alias QuickBEAM.VM.Runtime.ObjectEntries
-  alias QuickBEAM.VM.Runtime.ObjectIntegrity
+  alias QuickBEAM.VM.Runtime.Object.{Assign, Descriptors, Enumeration, Entries, Integrity}
   alias QuickBEAM.VM.Runtime.ConstructorRegistry, as: ConstructorRegistry
 
   @ecma "20.1"
@@ -555,52 +551,52 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   @ecma "20.1.2.19"
   static "keys", length: 1 do
-    ObjectEnumeration.keys(args)
+    Enumeration.keys(args)
   end
 
   @ecma "20.1.2.24"
   static "values", length: 1 do
-    ObjectEnumeration.values(args)
+    Enumeration.values(args)
   end
 
   @ecma "20.1.2.5"
   static "entries", length: 1 do
-    ObjectEnumeration.entries(args)
+    Enumeration.entries(args)
   end
 
   @ecma "20.1.2.1"
   static "assign", length: 2, constructable: false do
-    ObjectAssign.assign(args)
+    Assign.assign(args)
   end
 
   @ecma "20.1.2.6"
   static "freeze", length: 1 do
-    args |> hd() |> ObjectIntegrity.freeze()
+    args |> hd() |> Integrity.freeze()
   end
 
   @ecma "20.1.2.17"
   static "preventExtensions", length: 1 do
-    args |> hd() |> ObjectIntegrity.prevent_extensions()
+    args |> hd() |> Integrity.prevent_extensions()
   end
 
   @ecma "20.1.2.16"
   static "isExtensible", length: 1 do
-    args |> hd() |> ObjectIntegrity.extensible?()
+    args |> hd() |> Integrity.extensible?()
   end
 
   @ecma "20.1.2.22"
   static "seal", length: 1 do
-    args |> hd() |> ObjectIntegrity.seal()
+    args |> hd() |> Integrity.seal()
   end
 
   @ecma "20.1.2.17"
   static "isFrozen", length: 1 do
-    args |> hd() |> ObjectIntegrity.frozen?()
+    args |> hd() |> Integrity.frozen?()
   end
 
   @ecma "20.1.2.18"
   static "isSealed", length: 1 do
-    args |> hd() |> ObjectIntegrity.sealed?()
+    args |> hd() |> Integrity.sealed?()
   end
 
   defp is_object_like?(value), do: Value.object_like?(value)
@@ -652,7 +648,7 @@ defmodule QuickBEAM.VM.Runtime.Object do
     case rest do
       [] -> obj
       [:undefined | _] -> obj
-      [props | _] -> ObjectDescriptors.define_properties([obj, props])
+      [props | _] -> Descriptors.define_properties([obj, props])
     end
   end
 
@@ -722,37 +718,37 @@ defmodule QuickBEAM.VM.Runtime.Object do
 
   @ecma "20.1.2.4"
   static "defineProperty", length: 3, constructable: false do
-    ObjectDescriptors.define_property(args)
+    Descriptors.define_property(args)
   end
 
   @ecma "20.1.2.3"
   static "defineProperties", length: 2, constructable: false do
-    ObjectDescriptors.define_properties(args)
+    Descriptors.define_properties(args)
   end
 
   @ecma "20.1.2.10"
   static "getOwnPropertyNames", length: 1 do
-    ObjectEnumeration.own_property_names(args)
+    Enumeration.own_property_names(args)
   end
 
   @ecma "20.1.2.8"
   static "getOwnPropertyDescriptor", length: 2 do
-    ObjectDescriptors.own_property_descriptor(args)
+    Descriptors.own_property_descriptor(args)
   end
 
   @ecma "20.1.2.9"
   static "getOwnPropertyDescriptors", length: 1 do
-    ObjectDescriptors.own_property_descriptors(args)
+    Descriptors.own_property_descriptors(args)
   end
 
   @ecma "20.1.2.7"
   static "fromEntries", length: 1 do
-    ObjectEntries.from_entries(args)
+    Entries.from_entries(args)
   end
 
   @ecma "20.1.2.13"
   static "groupBy", length: 2 do
-    ObjectEntries.group_by(args)
+    Entries.group_by(args)
   end
 
   @ecma "20.1.2.11"

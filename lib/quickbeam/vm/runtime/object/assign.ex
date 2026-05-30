@@ -1,4 +1,4 @@
-defmodule QuickBEAM.VM.Runtime.ObjectAssign do
+defmodule QuickBEAM.VM.Runtime.Object.Assign do
   @moduledoc "Implementation helpers for Object.assign."
 
   import QuickBEAM.VM.Heap.Keys
@@ -6,7 +6,7 @@ defmodule QuickBEAM.VM.Runtime.ObjectAssign do
 
   alias QuickBEAM.VM.{Heap, Runtime, Value}
   alias QuickBEAM.VM.ObjectModel.{Get, InternalMethods, PropertyKey, WrappedPrimitive}
-  alias QuickBEAM.VM.Runtime.{ObjectDescriptors, ObjectEnumeration}
+  alias QuickBEAM.VM.Runtime.Object.{Descriptors, Enumeration}
 
   def assign([target | _sources]) when is_nullish(target) do
     throw({:js_throw, Heap.make_error("Cannot convert undefined or null to object", "TypeError")})
@@ -28,7 +28,7 @@ defmodule QuickBEAM.VM.Runtime.ObjectAssign do
 
       source, {:obj, _} = target_obj when is_binary(source) ->
         source
-        |> ObjectEnumeration.string_indexed_entries()
+        |> Enumeration.string_indexed_entries()
         |> Enum.each(fn {key, value} -> assign_put(target_obj, key, value) end)
 
         target_obj
@@ -117,8 +117,10 @@ defmodule QuickBEAM.VM.Runtime.ObjectAssign do
     if is_map(data) and Map.has_key?(data, proxy_target()) do
       proxy_assign_entries({:obj, ref}, data)
     else
-      (ObjectEnumeration.enumerable_keys(ref) ++ enumerable_symbol_keys(ref, data))
-      |> Enum.map(fn key -> {key, ObjectEnumeration.enumerable_value({:obj, ref}, data, key)} end)
+      (Enumeration.enumerable_keys(ref) ++ enumerable_symbol_keys(ref, data))
+      |> Enum.map(fn key ->
+        {key, Enumeration.enumerable_value({:obj, ref}, data, key)}
+      end)
     end
   end
 
@@ -129,7 +131,7 @@ defmodule QuickBEAM.VM.Runtime.ObjectAssign do
           trap |> Runtime.call_callback([target]) |> Heap.to_list()
 
         _ ->
-          ObjectEnumeration.enumerable_keys(elem(target, 1))
+          Enumeration.enumerable_keys(elem(target, 1))
       end
 
     descriptor_trap = Get.get(handler, "getOwnPropertyDescriptor")
@@ -146,7 +148,7 @@ defmodule QuickBEAM.VM.Runtime.ObjectAssign do
       if not Value.nullish?(descriptor_trap) do
         Runtime.call_callback(descriptor_trap, [target, key])
       else
-        ObjectDescriptors.own_property_descriptor([target, key])
+        Descriptors.own_property_descriptor([target, key])
       end
 
     descriptor != :undefined and Get.get(descriptor, "enumerable") == true
