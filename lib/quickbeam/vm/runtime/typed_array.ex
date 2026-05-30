@@ -11,11 +11,11 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.ObjectModel.Get
-  alias QuickBEAM.VM.Semantics.Coercion
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Value
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.Array
+  alias QuickBEAM.VM.Runtime.TypedArrayCoercion
   alias QuickBEAM.VM.Runtime.TypedArrayInstallation
   alias QuickBEAM.VM.Semantics.Iterators
 
@@ -628,7 +628,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       :ok
     else
       t = Map.get(ta, type_key(), :uint8)
-      value = coerce_element_value(val, t)
+      value = TypedArrayCoercion.element_value(val, t)
 
       unless out_of_bounds?({:obj, ref}) do
         new_buf = write_element(buf(ref) || <<>>, idx, value, t)
@@ -761,7 +761,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         end
 
         len = element_count(obj)
-        relative_index = args |> Enum.at(0, :undefined) |> to_integer_or_infinity()
+
+        relative_index =
+          args |> Enum.at(0, :undefined) |> TypedArrayCoercion.integer_or_infinity()
 
         case relative_index do
           :infinity ->
@@ -790,7 +792,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp set(ref, args) do
     source = arg(args, 0, :undefined)
-    offset = args |> arg(1, 0) |> to_integer_or_infinity()
+    offset = args |> arg(1, 0) |> TypedArrayCoercion.integer_or_infinity()
 
     if offset in [:infinity, :neg_infinity] or offset < 0 do
       JSThrow.range_error!("offset is out of bounds")
@@ -961,7 +963,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp relative_index(value, len) do
-    case to_integer_or_infinity(value) do
+    case TypedArrayCoercion.integer_or_infinity(value) do
       :neg_infinity -> 0
       :infinity -> len
       index when index < 0 -> max(len + index, 0)
@@ -1273,7 +1275,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp includes(_ref, _args), do: false
 
   defp last_index_start(value, len) do
-    case to_integer_or_infinity(value) do
+    case TypedArrayCoercion.integer_or_infinity(value) do
       :neg_infinity -> -1
       :infinity -> len - 1
       index when index < 0 -> len + index
@@ -1504,7 +1506,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     ensure_not_out_of_bounds(ref)
     l = len(ref)
     t = type(ref)
-    relative = to_integer_or_infinity(arg(args, 0, :undefined))
+    relative = TypedArrayCoercion.integer_or_infinity(arg(args, 0, :undefined))
 
     index =
       case relative do
@@ -1514,7 +1516,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         n -> n
       end
 
-    numeric_value = coerce_element_value(arg(args, 1, :undefined), t)
+    numeric_value = TypedArrayCoercion.element_value(arg(args, 1, :undefined), t)
     current_len = len(ref)
 
     if index < 0 or index >= current_len do
@@ -1646,7 +1648,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     l = len(ref)
     t = type(ref)
-    val = arg(args, 0, :undefined) |> coerce_element_value(t)
+    val = arg(args, 0, :undefined) |> TypedArrayCoercion.element_value(t)
     start = relative_index(arg(args, 1, 0), l)
 
     final =
@@ -1815,7 +1817,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
             bin = Map.get(buf, buffer())
             es = elem_size(type)
-            off = to_index(Enum.at(rest, 0, :undefined))
+            off = TypedArrayCoercion.index(Enum.at(rest, 0, :undefined))
             length_arg = Enum.at(rest, 1, :undefined)
             auto_length? = Value.nullish?(length_arg)
             length_tracking? = auto_length? and Map.has_key?(buf, "maxByteLength")
@@ -1829,7 +1831,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
                 JSThrow.range_error!("Invalid typed array byteOffset")
 
               true ->
-                len = if auto_length?, do: div(available, es), else: to_index(length_arg)
+                len =
+                  if auto_length?,
+                    do: div(available, es),
+                    else: TypedArrayCoercion.index(length_arg)
 
                 if not auto_length? and len * es > available do
                   JSThrow.range_error!("Invalid typed array length")
@@ -2059,13 +2064,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp write_element(buf, pos, val, :bigint64) when pos * 8 + 7 < byte_size(buf) do
     bp = pos * 8
     <<pre::binary-size(bp), _::64, rest::binary>> = buf
-    <<pre::binary, bigint_value(val)::little-signed-64, rest::binary>>
+    <<pre::binary, TypedArrayCoercion.bigint_value(val)::little-signed-64, rest::binary>>
   end
 
   defp write_element(buf, pos, val, :biguint64) when pos * 8 + 7 < byte_size(buf) do
     bp = pos * 8
     <<pre::binary-size(bp), _::64, rest::binary>> = buf
-    <<pre::binary, bigint_value(val)::little-unsigned-64, rest::binary>>
+    <<pre::binary, TypedArrayCoercion.bigint_value(val)::little-unsigned-64, rest::binary>>
   end
 
   defp write_element(buf, pos, val, type) do
@@ -2121,57 +2126,6 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp coerce_element_value(value, type) when type in [:bigint64, :biguint64],
-    do: {:bigint, bigint_value(value)}
-
-  defp coerce_element_value(value, _type), do: Runtime.to_number(value)
-
-  defp bigint_value({:bigint, n}), do: n
-  defp bigint_value(true), do: 1
-  defp bigint_value(false), do: 0
-
-  defp bigint_value(value) when is_binary(value) do
-    value
-    |> String.trim()
-    |> parse_bigint_string()
-    |> case do
-      {:ok, n} -> n
-      :error -> JSThrow.syntax_error!("Cannot convert value to BigInt")
-    end
-  end
-
-  defp bigint_value({:obj, _} = value),
-    do: value |> Coercion.to_primitive("number") |> bigint_value()
-
-  defp bigint_value(_), do: JSThrow.type_error!("Cannot convert value to BigInt")
-
-  defp parse_bigint_string(""), do: {:ok, 0}
-  defp parse_bigint_string("0x" <> digits), do: parse_bigint_digits(digits, 16)
-  defp parse_bigint_string("0X" <> digits), do: parse_bigint_digits(digits, 16)
-  defp parse_bigint_string("0o" <> digits), do: parse_bigint_digits(digits, 8)
-  defp parse_bigint_string("0O" <> digits), do: parse_bigint_digits(digits, 8)
-  defp parse_bigint_string("0b" <> digits), do: parse_bigint_digits(digits, 2)
-  defp parse_bigint_string("0B" <> digits), do: parse_bigint_digits(digits, 2)
-  defp parse_bigint_string("+" <> digits), do: parse_bigint_digits(digits, 10)
-
-  defp parse_bigint_string("-" <> digits) do
-    case parse_bigint_digits(digits, 10) do
-      {:ok, n} -> {:ok, -n}
-      :error -> :error
-    end
-  end
-
-  defp parse_bigint_string(digits), do: parse_bigint_digits(digits, 10)
-
-  defp parse_bigint_digits("", _base), do: :error
-
-  defp parse_bigint_digits(digits, base) do
-    case Integer.parse(digits, base) do
-      {n, ""} -> {:ok, n}
-      _ -> :error
-    end
-  end
-
   defp list_to_buffer(list, type) do
     es = elem_size(type)
     buf = :binary.copy(<<0>>, length(list) * es)
@@ -2179,29 +2133,6 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     list
     |> Enum.with_index()
     |> Enum.reduce(buf, fn {val, i}, acc -> write_element(acc, i, val, type) end)
-  end
-
-  defp to_integer_or_infinity({:bigint, _}),
-    do: JSThrow.type_error!("Cannot convert BigInt to number")
-
-  defp to_integer_or_infinity(value) do
-    case Runtime.to_number(value) do
-      :infinity -> :infinity
-      :neg_infinity -> :neg_infinity
-      :nan -> 0
-      number when is_number(number) -> trunc(number)
-      _ -> 0
-    end
-  end
-
-  defp to_index(value) when is_nullish(value), do: 0
-
-  defp to_index(value) do
-    case to_integer_or_infinity(value) do
-      index when index in [:infinity, :neg_infinity] -> JSThrow.range_error!("Invalid index")
-      index when index < 0 -> JSThrow.range_error!("Invalid index")
-      index -> index
-    end
   end
 
   defp make_buffer_ref(buffer_data) do
