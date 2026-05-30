@@ -21,7 +21,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Value
-  alias QuickBEAM.VM.Runtime.{ArraySource, InstallerHelpers, IteratorResult}
+  alias QuickBEAM.VM.Runtime.{ArrayIterator, ArraySource, InstallerHelpers}
 
   @max_array_length 4_294_967_295
   @max_safe_integer 9_007_199_254_740_991
@@ -3143,125 +3143,5 @@ defmodule QuickBEAM.VM.Runtime.Array do
     end)
   end
 
-  def make_array_iterator(arr, mode) do
-    state_ref = make_ref()
-    iterator_ref = make_ref()
-
-    Heap.put_obj(state_ref, %{
-      "target" => array_iterator_target(arr),
-      "mode" => mode,
-      "index" => 0,
-      "done" => false
-    })
-
-    Heap.put_obj(
-      iterator_ref,
-      object heap: false, extends: array_iterator_prototype() do
-        prop("__array_iterator_state__", {:obj, state_ref})
-      end
-    )
-
-    {:obj, iterator_ref}
-  end
-
-  defp array_iterator_prototype do
-    array_ctor = Runtime.global_constructor("Array")
-    statics = Heap.get_ctor_statics(array_ctor)
-
-    case Map.get(statics, :__array_iterator_prototype__) do
-      {:obj, _} = proto ->
-        proto
-
-      _ ->
-        proto = build_array_iterator_prototype()
-        Heap.put_ctor_static(array_ctor, :__array_iterator_prototype__, proto)
-        proto
-    end
-  end
-
-  defp build_array_iterator_prototype do
-    object extends: QuickBEAM.VM.Runtime.global_class_proto("Iterator") do
-      method "next" do
-        array_iterator_next(this)
-      end
-
-      symbol :iterator do
-        method do
-          this
-        end
-      end
-
-      symbol :toStringTag do
-        data("Array Iterator", writable: false, enumerable: false, configurable: true)
-      end
-    end
-  end
-
-  defp array_iterator_next({:obj, ref}) do
-    case Heap.get_obj(ref, %{}) do
-      %{"__array_iterator_state__" => {:obj, state_ref}} ->
-        state = Heap.get_obj(state_ref, %{})
-        i = Map.get(state, "index", 0)
-
-        if Map.get(state, "done") == true do
-          IteratorResult.done()
-        else
-          target = Map.get(state, "target")
-
-          if i >= array_iterator_length(target) do
-            Heap.put_obj(state_ref, Map.put(state, "done", true))
-            IteratorResult.done()
-          else
-            Heap.put_obj(state_ref, Map.put(state, "index", i + 1))
-
-            value =
-              case Map.get(state, "mode") do
-                :values -> array_iterator_value(target, i)
-                :keys -> i
-                :entries -> Heap.wrap([i, array_iterator_value(target, i)])
-              end
-
-            IteratorResult.new(value, false)
-          end
-        end
-
-      _ ->
-        JSThrow.type_error!("Array Iterator next called on incompatible receiver")
-    end
-  end
-
-  defp array_iterator_next(_),
-    do: JSThrow.type_error!("Array Iterator next called on incompatible receiver")
-
-  defp array_iterator_target(list) when is_list(list), do: {:tuple, List.to_tuple(list)}
-
-  defp array_iterator_target(string) when is_binary(string),
-    do: {:tuple, string |> String.codepoints() |> List.to_tuple()}
-
-  defp array_iterator_target(target), do: target
-
-  defp array_iterator_length({:obj, ref} = obj) do
-    case Heap.get_obj(ref, %{}) do
-      %{typed_array() => true} ->
-        if QuickBEAM.VM.Runtime.TypedArray.out_of_bounds?(obj) do
-          JSThrow.type_error!("TypedArray is out of bounds")
-        end
-
-        QuickBEAM.VM.Runtime.TypedArray.element_count(obj)
-
-      _ ->
-        ArraySource.length(obj)
-    end
-  end
-
-  defp array_iterator_length(target), do: ArraySource.length(target)
-
-  defp array_iterator_value({:obj, ref} = obj, index) do
-    case Heap.get_obj(ref, %{}) do
-      %{typed_array() => true} -> Get.get(obj, Integer.to_string(index))
-      _ -> ArraySource.get(obj, index)
-    end
-  end
-
-  defp array_iterator_value(target, index), do: ArraySource.get(target, index)
+  def make_array_iterator(arr, mode), do: ArrayIterator.new(arr, mode)
 end
