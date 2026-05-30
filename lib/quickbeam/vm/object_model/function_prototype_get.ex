@@ -1,6 +1,8 @@
 defmodule QuickBEAM.VM.ObjectModel.FunctionPrototypeGet do
   @moduledoc "Function prototype-chain lookup helpers."
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.{Heap}
   alias QuickBEAM.VM.Execution.PrototypeState
   alias QuickBEAM.VM.ObjectModel.{Get, Prototype, PrototypeLookup, Static}
@@ -76,11 +78,13 @@ defmodule QuickBEAM.VM.ObjectModel.FunctionPrototypeGet do
           existing
 
         _ ->
-          Heap.wrap(%{
-            "constructor" => ctor,
-            {:symbol, "Symbol.toStringTag"} => name,
-            "__proto__" => Heap.get_func_proto()
-          })
+          QuickBEAM.VM.Builtin.object extends: Heap.get_func_proto() do
+            prop("constructor", ctor)
+
+            symbol :toStringTag do
+              data(name, writable: false, enumerable: false, configurable: true)
+            end
+          end
       end
     end)
   end

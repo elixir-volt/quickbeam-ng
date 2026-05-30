@@ -1,6 +1,8 @@
 defmodule QuickBEAM.VM.Realm do
   @moduledoc "Realm-specific global objects and intrinsic prototype lookup."
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.Execution.RealmState
   alias QuickBEAM.VM.{Heap, Runtime}
   alias QuickBEAM.VM.Runtime.Array
@@ -400,14 +402,16 @@ defmodule QuickBEAM.VM.Realm do
   defp error_object(type_error_ctor, message) do
     proto = Heap.get_class_proto(type_error_ctor)
 
-    Heap.wrap(%{
-      "message" => message,
-      "name" => "TypeError",
-      "stack" => "",
-      "__error_name__" => "TypeError",
-      "__proto__" => proto,
-      {:symbol, "Symbol.toStringTag"} => "Error"
-    })
+    QuickBEAM.VM.Builtin.object extends: proto do
+      prop("message", message)
+      prop("name", "TypeError")
+      prop("stack", "")
+      prop("__error_name__", "TypeError")
+
+      symbol :toStringTag do
+        data("Error", writable: false, enumerable: false, configurable: true)
+      end
+    end
   end
 
   defp map_builtin_definition(name),
@@ -555,7 +559,9 @@ defmodule QuickBEAM.VM.Realm do
           do: function_proto,
           else: InternalMethods.get_prototype_of(this)
 
-      function_prototype = Heap.wrap(%{"__proto__" => object_proto})
+      function_prototype =
+        QuickBEAM.VM.Builtin.object extends: object_proto do
+        end
 
       Heap.put_ctor_static(fun, "__proto__", function_object_proto || function_proto)
       Heap.put_ctor_static(fun, "prototype", function_prototype)

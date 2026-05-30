@@ -1,6 +1,8 @@
 defmodule QuickBEAM.VM.Host.Test262 do
   @moduledoc "Minimal Test262 host hooks used by compatibility tests."
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Realm
   import QuickBEAM.VM.Heap.Keys, only: [buffer: 0]
@@ -11,11 +13,15 @@ defmodule QuickBEAM.VM.Host.Test262 do
   def bindings, do: %{"$262" => object()}
 
   def object do
-    Heap.wrap(%{
-      "createRealm" => {:builtin, "createRealm", fn _, _ -> Realm.create() end},
-      "detachArrayBuffer" =>
-        {:builtin, "detachArrayBuffer", fn args, _ -> detach_array_buffer(args) end}
-    })
+    QuickBEAM.VM.Builtin.object do
+      method "createRealm" do
+        Realm.create()
+      end
+
+      method "detachArrayBuffer" do
+        detach_array_buffer(args)
+      end
+    end
   end
 
   defp detach_array_buffer([{:obj, ref} | _]) do
