@@ -56,6 +56,7 @@ pub const WorkerState = struct {
     buf: [4096]u8 = @splat(0),
     drain_fn: ?DrainFn = null,
     napi_env: ?*napi_mod.NapiEnv = null,
+    retired_napi_envs: std.ArrayListUnmanaged(*napi_mod.NapiEnv) = .{},
     max_reductions: i64 = 0,
     run_gc_on_context_release: bool = true,
 
@@ -94,12 +95,20 @@ pub const WorkerState = struct {
         // until pool shutdown instead of collecting during context churn.
         if (self.run_gc_on_context_release) qjs.JS_RunGC(self.rt);
         qjs.JS_FreeContext(self.ctx);
+    }
 
+    pub fn deinit_napi_envs(self: *WorkerState) void {
         if (self.napi_env) |nenv| {
             nenv.deinit();
             gpa.destroy(nenv);
             self.napi_env = null;
         }
+
+        for (self.retired_napi_envs.items) |nenv| {
+            nenv.deinit();
+            gpa.destroy(nenv);
+        }
+        self.retired_napi_envs.deinit(gpa);
     }
 
     pub fn drain_jobs(self: *WorkerState) void {
@@ -604,16 +613,16 @@ pub const WorkerState = struct {
             self.message_handler = js.JS_UNDEFINED;
         }
 
-        if (self.napi_env) |nenv| {
-            nenv.releaseValues();
-            nenv.deinit();
-            gpa.destroy(nenv);
-            self.napi_env = null;
-        }
+        const old_napi_env = self.napi_env;
+        if (old_napi_env) |nenv| nenv.releaseValues();
         self.atoms.deinit(self.ctx);
         wasm_js.destroy_context(self.ctx);
         if (self.run_gc_on_context_release) qjs.JS_RunGC(self.rt);
         qjs.JS_FreeContext(self.ctx);
+        if (old_napi_env) |nenv| {
+            self.retired_napi_envs.append(gpa, nenv) catch {};
+            self.napi_env = null;
+        }
         self.ctx = qjs.JS_NewContext(self.rt) orelse {
             result.ok = false;
             result.json = "Failed to create new context";
@@ -924,7 +933,6 @@ fn interrupt_handler(_: ?*qjs.JSRuntime, user_data: ?*anyopaque) callconv(.c) c_
 
 pub fn worker_main(rd: *types.RuntimeData, owner_pid: beam.pid) void {
     const rt = qjs.JS_NewRuntime() orelse return;
-    defer qjs.JS_FreeRuntime(rt);
 
     qjs.JS_SetMemoryLimit(rt, rd.memory_limit);
     qjs.JS_SetMaxStackSize(rt, rd.max_stack_size);
@@ -941,7 +949,10 @@ pub fn worker_main(rd: *types.RuntimeData, owner_pid: beam.pid) void {
     beam_proxy.initRuntime(rt);
     napi_mod.initRuntime(rt);
 
-    const ctx = qjs.JS_NewContext(rt) orelse return;
+    const ctx = qjs.JS_NewContext(rt) orelse {
+        qjs.JS_FreeRuntime(rt);
+        return;
+    };
 
     var state = WorkerState{
         .ctx = ctx,
@@ -953,7 +964,11 @@ pub fn worker_main(rd: *types.RuntimeData, owner_pid: beam.pid) void {
         .start_time = std.time.nanoTimestamp(),
         .max_reductions = 0,
     };
-    defer state.deinit();
+    defer {
+        state.deinit();
+        qjs.JS_FreeRuntime(rt);
+        state.deinit_napi_envs();
+    }
 
     state.install_globals();
 
