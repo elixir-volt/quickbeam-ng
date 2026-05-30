@@ -7,58 +7,51 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
   body from the yield point with `arg` as the yield return value.
   """
 
+  require QuickBEAM.VM.Builtin
+
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.ObjectModel.InternalMethods
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.Runtime.IteratorResult
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.Promise, as: Promise
 
   @doc "Builds the runtime value represented by this module."
   def build(gen_ref, generator_fun \\ nil) do
-    next_fn =
-      {:builtin, "next",
-       fn
-         [arg | _], _this -> do_next(gen_ref, arg)
-         [], _this -> do_next(gen_ref, :undefined)
-       end}
+    QuickBEAM.VM.Builtin.object extends: generator_object_prototype(generator_fun) do
+      method "next" do
+        do_next(gen_ref, argument_or_undefined(args))
+      end
 
-    return_fn =
-      {:builtin, "return",
-       fn
-         [val | _], _this -> do_return(gen_ref, val)
-         [], _this -> do_return(gen_ref, :undefined)
-       end}
+      method "return" do
+        do_return(gen_ref, argument_or_undefined(args))
+      end
 
-    Heap.wrap(%{
-      "__proto__" => generator_object_prototype(generator_fun),
-      "next" => next_fn,
-      "return" => return_fn,
-      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-    })
+      symbol :iterator do
+        method do
+          this
+        end
+      end
+    end
   end
 
   @doc "Builds async data for iterator protocol for compiled generator functions."
   def build_async(gen_ref, generator_fun \\ nil) do
-    next_fn =
-      {:builtin, "next",
-       fn
-         [arg | _], _this -> Promise.resolved(do_next(gen_ref, arg))
-         [], _this -> Promise.resolved(do_next(gen_ref, :undefined))
-       end}
+    QuickBEAM.VM.Builtin.object extends: generator_object_prototype(generator_fun) do
+      method "next" do
+        Promise.resolved(do_next(gen_ref, argument_or_undefined(args)))
+      end
 
-    return_fn =
-      {:builtin, "return",
-       fn
-         [val | _], _this -> Promise.resolved(do_return(gen_ref, val))
-         [], _this -> Promise.resolved(do_return(gen_ref, :undefined))
-       end}
+      method "return" do
+        Promise.resolved(do_return(gen_ref, argument_or_undefined(args)))
+      end
 
-    Heap.wrap(%{
-      "__proto__" => generator_object_prototype(generator_fun),
-      "next" => next_fn,
-      "return" => return_fn,
-      {:symbol, "Symbol.iterator"} => {:builtin, "[Symbol.iterator]", fn _args, this -> this end}
-    })
+      symbol :iterator do
+        method do
+          this
+        end
+      end
+    end
   end
 
   defp generator_object_prototype(generator_fun) do
@@ -118,6 +111,9 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
       throw(thrown)
   end
 
-  defp yield(val), do: Heap.wrap(%{"value" => val, "done" => false})
-  defp done(val), do: Heap.wrap(%{"value" => val, "done" => true})
+  defp argument_or_undefined([value | _]), do: value
+  defp argument_or_undefined([]), do: :undefined
+
+  defp yield(val), do: IteratorResult.new(val, false)
+  defp done(val), do: IteratorResult.new(val, true)
 end
