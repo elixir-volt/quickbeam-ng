@@ -21,28 +21,9 @@ Secondary metrics:
 
 ## Current active workload
 
-QuickJS-accepted call expression slice:
-
-```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=language/expressions/call ./autoresearch.sh
-```
-
-Latest local result:
-
-```text
-compatibility_cases=85
-compatibility_pass=85
-compatibility_failures=0
-compiler_errors=0
-compiler_crashes=0
-compiler_fails=0
-both_fail=0
-interpreter_fail_compiler_pass=0
-```
-
 The previous `language/expressions/object` QuickJS-accepted slice is clean at `941/941`, and `language/expressions/call` is clean at `85/85`.
 
-Current broader active slice:
+Current active slice:
 
 ```sh
 AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Object TEST262_ERROR_LIMIT=20 ./autoresearch.sh

@@ -6,30 +6,24 @@ Drive BEAM interpreter/compiler behavior toward QuickJS NIF parity on Test262, p
 
 ## Active workload
 
-Use a QuickJS-accepted call expression slice after cleaning `language/expressions/object`:
+Continue the QuickJS-accepted `built-ins/Object` slice:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=language/expressions/call ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Object TEST262_ERROR_LIMIT=20 ./autoresearch.sh
 ```
 
 Latest result:
 
 ```text
-compatibility_cases=85
-compatibility_pass=85
-compatibility_failures=0
-both_fail=0
+compatibility_cases=3408
+compatibility_pass=3381
+compatibility_failures=27
+both_fail=11
 interpreter_fail_compiler_pass=0
-compiler_fails=0
+compiler_fails=16
 compiler_crashes=0
 compiler_errors=0
 ```
-
-Recent kept fixes:
-
-- interpreter `in` now uses ToPropertyKey and refreshes frame-visible global writes after proxy `has` traps;
-- proxy newTarget default-prototype lookup recurses to the target function realm;
-- Test262 realm objects expose `evalScript` that evaluates in the created realm.
 
 ## Efficient loop
 
@@ -94,13 +88,15 @@ Recent kept fixes reduced the slice from 52 to 27 failures:
 
 Promising current clusters:
 
-- compiler-only `Object.defineProperty` failures on `arguments` objects and generic/index properties (`15.2.3.6-4-293` through `-324`);
-- both-fail non-object invalid `getOwnPropertyNames` / `getOwnPropertySymbols` side effects where captured lexical updates made before a TypeError are not visible after `assert.throws`;
-- symbol order for `Object.getOwnPropertySymbols` after assignment/define (`order-after-define-property`) — focused repro can be improved, but the isolated key-order change did not move the active metric.
+- compiler-only `Object.defineProperty` failures on `arguments` objects and generic/index properties (`15.2.3.6-4-293` through `-324`); focused probes point at compiler catch/call boundaries around caught `Object.defineProperty` TypeErrors and later `verifyProperty(arguments, ...)` calls.
+- both-fail non-object invalid `getOwnPropertyNames` / `getOwnPropertySymbols` side effects where captured lexical updates made before a TypeError are not visible after `assert.throws`.
+- descriptor/order cluster around symbols: isolated object/array `getOwnPropertySymbols` order can be fixed, but as a standalone experiment it did not move the active metric because `getOwnPropertyDescriptors/order-after-define-property.js` remains in the same cluster.
 
 Tried and reverted as ineffective:
 
 - syncing captured locals in interpreter `catch_and_dispatch` throw branches did not improve the non-object invalid count cases because compiler also fails and the captured update is deeper than the caller frame.
+- avoiding stale `arguments` globals/fallback cached arguments objects did not improve `Object.keys(arguments)` or the active metric.
+- preserving symbol order for object/array assignment passed focused symbol probes but did not improve the active metric; only revisit with descriptor ordering in the same patch.
 
 ### 2. Completed direct eval with spread
 
