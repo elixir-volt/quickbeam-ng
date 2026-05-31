@@ -82,6 +82,10 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor(args, this \\ nil) do
+    unless match?({:obj, _}, this) do
+      JSThrow.type_error!("ArrayBuffer constructor requires 'new'")
+    end
+
     byte_length = args |> arg(0, :undefined) |> array_buffer_index!()
     max_byte_length = args |> arg(1, :undefined) |> max_byte_length_option()
 
@@ -101,7 +105,9 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
     }
 
     map = if max_byte_length, do: Map.put(map, "maxByteLength", max_byte_length), else: map
-    Heap.wrap(map)
+    {:obj, ref} = this
+    Heap.put_obj(ref, Map.merge(Heap.get_obj(ref, %{}), map))
+    this
   end
 
   @ecma "25.1.6.8"
