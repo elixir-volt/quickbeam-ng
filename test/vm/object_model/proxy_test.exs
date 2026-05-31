@@ -188,6 +188,14 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
+  test "realm objects expose evalScript for revoked proxy errors", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let other = $262.createRealm(); let F = other.evalScript(`(function() { var pair = Proxy.revocable(function(){}, {}); pair.revoke(); return pair.proxy(); })`); try { F(); "ok"; } catch (e) { e instanceof other.global.TypeError; }|,
+      true
+    )
+  end
+
   test "revoked callable proxies cannot be called or constructed", %{rt: rt} do
     assert beam!(
              rt,

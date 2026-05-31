@@ -264,7 +264,11 @@ defmodule QuickBEAM.VM.Realm do
     )
 
     RealmState.put_global(realm_id, global)
-    Heap.wrap(%{"global" => global})
+
+    Heap.wrap(%{
+      "global" => global,
+      "evalScript" => {:builtin, "evalScript", fn args, _ -> Functions.js_eval_global(args, global) end}
+    })
   end
 
   def associate_intrinsics(function, intrinsics) do
