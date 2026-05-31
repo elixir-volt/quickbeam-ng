@@ -15,11 +15,12 @@ AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Functi
 Latest result:
 
 ```text
-compatibility_cases=3408
-compatibility_pass=3408
-compatibility_failures=0
-both_fail=0
-interpreter_fail_compiler_pass=0
+category=built-ins/Function
+compatibility_cases=495
+compatibility_pass=455
+compatibility_failures=40
+both_fail=32
+interpreter_fail_compiler_pass=8
 compiler_fails=0
 compiler_crashes=0
 compiler_errors=0
@@ -75,6 +76,17 @@ AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Functi
 Latest result:
 
 ```text
+compatibility_cases=495
+compatibility_pass=455
+compatibility_failures=40
+both_fail=32
+interpreter_fail_compiler_pass=8
+compiler_fails=0
+```
+
+Latest result:
+
+```text
 compatibility_cases=3408
 compatibility_pass=3408
 compatibility_failures=0
@@ -102,6 +114,17 @@ Recent kept fixes reduced the slice from 52 to 0 failures:
 
 The `built-ins/Object` QuickJS-accepted slice is clean at `3408/3408`. The adjacent `built-ins/Reflect` slice is also clean at `153/153`; fixes covered abrupt `ToPropertyKey` ordering in `Reflect.defineProperty` and preserving `Reflect.get` receiver through prototype accessors.
 
+Function slice progress:
+
+- Set ECMA lengths for `Function.prototype.apply`, `bind`, `call`, and `Symbol.hasInstance`; failures dropped `45 → 40`.
+
+Promising current clusters:
+
+- `Function.prototype.caller` / restricted `caller` residuals (`15.3.5.4_2-*gs`) throw `ThrowTypeError` where QuickJS accepts; likely tied to strict-function metadata or restricted own accessors, not just `strict_active_caller?/1`.
+- `Function.prototype.apply` / `call` FACTORY tests throw `not a function` around dynamic `Function("...").apply()` and method receiver plumbing.
+- Interpreter-only dynamic `Function` constructor/global-this cases pass in compiler and native but fail in interpreter.
+- Bound function instance `length` tests still fail around redefining function `length`; a naive virtual length descriptor fallback did not change the active metric.
+
 Tried and reverted as ineffective:
 
 - syncing captured locals in interpreter `catch_and_dispatch` throw branches did not improve the non-object invalid count cases because compiler also fails and the captured update is deeper than the caller frame.
@@ -112,6 +135,8 @@ Tried and reverted as ineffective:
 - forcing functions whose source mentions `arguments` through interpreter fallback at invocation did not improve the `defineProperty(arguments)` cluster.
 - ignoring stale `arguments` entries in interpreter `ArgumentsObject.get/3` did not fix the former `Object.keys(arguments)` case; the actual fix was narrower `in`-operator frame sync.
 - broad compiler fallbacks for mapped arguments were unnecessary for the final Object slice fix; preserving local `arguments` during frame/global sync fixed the residual cluster.
+- removing `strict_active_caller?/1` from `Function.caller` did not improve the Function caller cluster; the thrown `ThrowTypeError` appears to come from restricted own accessor/function metadata instead.
+- adding a virtual `length`/`name` static descriptor fallback in `Define.property/4` did not improve the bound function length cluster.
 
 ### 2. Completed direct eval with spread
 

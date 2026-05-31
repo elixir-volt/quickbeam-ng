@@ -29,18 +29,18 @@ Current active slice:
 AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Function TEST262_ERROR_LIMIT=20 ./autoresearch.sh
 ```
 
-Latest completed local result:
+Latest local result:
 
 ```text
-category=built-ins/Reflect
-compatibility_cases=153
-compatibility_pass=153
-compatibility_failures=0
+category=built-ins/Function
+compatibility_cases=495
+compatibility_pass=455
+compatibility_failures=40
 compiler_errors=0
 compiler_crashes=0
 compiler_fails=0
-both_fail=0
-interpreter_fail_compiler_pass=0
+both_fail=32
+interpreter_fail_compiler_pass=8
 ```
 
 ## How to run
