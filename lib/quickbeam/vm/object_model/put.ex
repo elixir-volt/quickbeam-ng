@@ -495,7 +495,21 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
-  def ordinary_set(target, key, val, _receiver), do: put(target, key, val)
+  def ordinary_set({:regexp, _, _, _} = regexp, key, val, _receiver) do
+    key = normalize_key(key)
+
+    if regexp_getter_only_property?(regexp, key) do
+      false
+    else
+      put(regexp, key, val)
+      true
+    end
+  end
+
+  def ordinary_set(target, key, val, _receiver) do
+    put(target, key, val)
+    true
+  end
 
   defp set_property(ref, raw, key, val, receiver) do
     case raw do
@@ -530,6 +544,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
             {:accessor, _, setter} when setter != nil ->
               invoke_setter(setter, val, receiver)
               true
+
+            {:accessor, _, nil} ->
+              false
 
             _ ->
               if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
@@ -685,6 +702,21 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     else
       false
     end
+  end
+
+  defp regexp_getter_only_property?(_regexp, key) do
+    key in [
+      "source",
+      "flags",
+      "hasIndices",
+      "global",
+      "ignoreCase",
+      "multiline",
+      "dotAll",
+      "unicode",
+      "unicodeSets",
+      "sticky"
+    ]
   end
 
   defp typed_array_metadata_slot_without_own_property?(ref, map, key) do

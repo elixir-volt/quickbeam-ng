@@ -31,6 +31,26 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
+  test "missing set trap forwards through proxy targets", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let value; let target = { get foo() {}, set bar(v) { value = v; } }; let proxy = new Proxy(new Proxy(target, {}), {}); proxy.bar = 1; value|,
+      1
+    )
+
+    assert_modes(
+      rt,
+      ~S|let target = { get foo() {} }; let proxy = new Proxy(new Proxy(target, {}), {}); (function(){ "use strict"; try { proxy.foo = 2; return "ok"; } catch (e) { return e.name; } })()|,
+      "TypeError"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let re = /(?:)/g; let proxy = new Proxy(new Proxy(re, {}), {}); [Reflect.set(proxy, "global", true), (proxy.lastIndex = 1, re.lastIndex)].join(",")|,
+      "false,1"
+    )
+  end
+
   test "set trap cannot report success for getter-only non-configurable accessor", %{rt: rt} do
     assert_modes(
       rt,
