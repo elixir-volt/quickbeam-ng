@@ -15,9 +15,9 @@ AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/TypedA
 Latest completed result:
 
 ```text
-category=built-ins/Function
-compatibility_cases=495
-compatibility_pass=495
+category=built-ins/Array
+compatibility_cases=2970
+compatibility_pass=2970
 compatibility_failures=0
 both_fail=0
 interpreter_fail_compiler_pass=0
@@ -96,7 +96,16 @@ Function slice progress:
 - Direct eval cleanup preserves unrelated global object side effects from nested calls while still cleaning eval-created declared/assigned names; failures dropped `7 → 3`.
 - `Object.defineProperty` on callable virtual `length`/`name` metadata now uses those virtual descriptors as existing attributes; failures dropped `3 → 0`.
 
-The `built-ins/Function` QuickJS-accepted slice is clean at `495/495`. The `built-ins/Array` QuickJS-accepted slice is clean at `2970/2970`; fixes covered Array method arities, iterator identity, generic typed-array length handling, copyWithin ordinary property semantics, and BigInt locale-string lookup. Next, rebaseline `built-ins/TypedArray` and pick a current failure cluster.
+The `built-ins/Function` QuickJS-accepted slice is clean at `495/495`. The `built-ins/Array` QuickJS-accepted slice is clean at `2970/2970`; fixes covered Array method arities, iterator identity, generic typed-array length handling, copyWithin ordinary property semantics, and BigInt locale-string lookup.
+
+TypedArray full-category baseline was too slow for a tight loop (`~423s`, 34 failures, checks timed out). Use focused sub-slices instead:
+
+- `built-ins/TypedArray/prototype/reduce,built-ins/TypedArray/prototype/reduceRight` is clean at `92/92`; fix was closure-aware mapped arguments offsets.
+- `built-ins/TypedArray/prototype/join,built-ins/TypedArray/prototype/toString` is clean at `29/29`; fix was Number prototype lookup for `NaN`/`±Infinity`.
+- `built-ins/TypedArray/prototype/Symbol.iterator` rechecked clean at `1/1`.
+- Current remaining focused candidate: `built-ins/TypedArray/prototype/set` has one QuickJS-accepted interpreter timeout in `typedarray-arg-src-backed-by-resizable-buffer.js`; decide whether to optimize generic `set` or defer because the test is intentionally broad/nested.
+
+Next useful clusters from the full TypedArray baseline: species constructor behavior under resizable buffers for `filter`/`map`/`slice`.
 
 Tried and reverted as ineffective:
 
