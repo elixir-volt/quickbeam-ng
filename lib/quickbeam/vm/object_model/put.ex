@@ -506,6 +506,18 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
+  def ordinary_set(%QuickBEAM.VM.Function{} = fun, key, val, _receiver),
+    do: ordinary_set_callable(fun, key, val)
+
+  def ordinary_set({:closure, _, %QuickBEAM.VM.Function{}} = fun, key, val, _receiver),
+    do: ordinary_set_callable(fun, key, val)
+
+  def ordinary_set({:builtin, _, _} = fun, key, val, _receiver),
+    do: ordinary_set_callable(fun, key, val)
+
+  def ordinary_set({:bound, _, _, _, _} = fun, key, val, _receiver),
+    do: ordinary_set_callable(fun, key, val)
+
   def ordinary_set(target, key, val, _receiver) do
     put(target, key, val)
     true
@@ -530,31 +542,36 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         set_array_property(ref, list, key, val, receiver)
 
       map when is_map(map) ->
-        if typed_array_metadata_slot_without_own_property?(ref, map, key) do
-          false
-        else
-          case Map.get(map, key) do
-            nil ->
-              if prototype_present?(Map.get(map, proto())) do
-                set(Map.get(map, proto()), key, val, receiver)
-              else
-                write_receiver(receiver, key, val)
-              end
+        cond do
+          typed_array_metadata_slot_without_own_property?(ref, map, key) ->
+            false
 
-            {:accessor, _, setter} when setter != nil ->
-              invoke_setter(setter, val, receiver)
-              true
+          wrapped_string_virtual_readonly?(map, key) ->
+            false
 
-            {:accessor, _, nil} ->
-              false
+          true ->
+            case Map.get(map, key) do
+              nil ->
+                if prototype_present?(Map.get(map, proto())) do
+                  set(Map.get(map, proto()), key, val, receiver)
+                else
+                  write_receiver(receiver, key, val)
+                end
 
-            _ ->
-              if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
+              {:accessor, _, setter} when setter != nil ->
+                invoke_setter(setter, val, receiver)
+                true
+
+              {:accessor, _, nil} ->
                 false
-              else
-                write_receiver(receiver, key, val)
-              end
-          end
+
+              _ ->
+                if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
+                  false
+                else
+                  write_receiver(receiver, key, val)
+                end
+            end
         end
 
       _ ->
@@ -640,8 +657,14 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     case Heap.get_obj_raw(ref) do
       %{proxy_target() => _target, proxy_handler() => _handler} ->
         desc = receiver_write_descriptor(receiver, key, val)
-        Define.property(receiver, key, Heap.wrap(desc), desc)
-        true
+
+        try do
+          Define.property(receiver, key, Heap.wrap(desc), desc)
+          true
+        catch
+          {:js_throw, reason} ->
+            if define_property_failure?(reason), do: false, else: throw({:js_throw, reason})
+        end
 
       raw when is_tuple(raw) ->
         cond do
@@ -703,6 +726,31 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       false
     end
   end
+
+  defp ordinary_set_callable(fun, key, val) do
+    key = normalize_key(key)
+
+    cond do
+      key in ["length", "name"] and not match?(%{writable: true}, callable_prop_desc(fun, key)) ->
+        false
+
+      match?(%{writable: false}, callable_prop_desc(fun, key)) ->
+        false
+
+      true ->
+        put(fun, key, val)
+        true
+    end
+  end
+
+  defp define_property_failure?({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{"message" => "Cannot define property"} -> true
+      _ -> false
+    end
+  end
+
+  defp define_property_failure?(_), do: false
 
   defp regexp_getter_only_property?(_regexp, key) do
     key in [

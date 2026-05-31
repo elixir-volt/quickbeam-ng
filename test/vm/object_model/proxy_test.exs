@@ -31,7 +31,7 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
-  test "missing set trap forwards through proxy targets", %{rt: rt} do
+  test "nullish set trap forwards through proxy targets", %{rt: rt} do
     assert_modes(
       rt,
       ~S|let value; let target = { get foo() {}, set bar(v) { value = v; } }; let proxy = new Proxy(new Proxy(target, {}), {}); proxy.bar = 1; value|,
@@ -48,6 +48,24 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
       rt,
       ~S|let re = /(?:)/g; let proxy = new Proxy(new Proxy(re, {}), {}); [Reflect.set(proxy, "global", true), (proxy.lastIndex = 1, re.lastIndex)].join(",")|,
       "false,1"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let array = [1, 2, 3]; let proxy = new Proxy(new Proxy(array, {}), { set: null }); proxy.length = 0; Object.preventExtensions(array); [(array.length === 0), Reflect.set(proxy, "foo", 2), (function(){ "use strict"; try { proxy[0] = 3; return "ok"; } catch (e) { return e.name; } })()].join(",")|,
+      "true,false,TypeError"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let string = new String("str"); let proxy = new Proxy(new Proxy(string, {}), { set: null }); proxy[4] = 1; [string[4], Reflect.set(proxy, "0", "s"), Reflect.set(proxy, "length", 3)].join(",")|,
+      "1,false,false"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let fn = function() {}; let proxy = new Proxy(new Proxy(fn, {}), { set: undefined }); [Reflect.set(proxy, "prototype", null), fn.prototype === null, Reflect.set(proxy, "length", 2), (function(){ "use strict"; try { proxy.name = "foo"; return "ok"; } catch (e) { return e.name; } })()].join(",")|,
+      "true,true,false,TypeError"
     )
   end
 
