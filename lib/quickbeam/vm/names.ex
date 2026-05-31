@@ -31,7 +31,7 @@ defmodule QuickBEAM.VM.Names do
     PredefinedAtoms.lookup(idx) || "atom_#{idx}"
   end
 
-  def resolve_atom(_atoms, {:tagged_int, val}), do: val
+  def resolve_atom(_atoms, {:tagged_int, val}), do: Integer.to_string(val)
 
   def resolve_atom(atoms, idx) when is_integer(idx) and idx >= 0 and is_tuple(atoms) do
     if idx < tuple_size(atoms), do: elem(atoms, idx), else: {:atom, idx}

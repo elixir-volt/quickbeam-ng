@@ -28,6 +28,11 @@ defmodule QuickBEAM.VM.ObjectModel.PrototypeInvariantsTest do
                )
     end
 
+    test "#{mode} BigInt literal property names work in destructuring" do
+      assert {:ok, "foo"} =
+               eval(~S|let { 1n: a } = { "1": "foo" }; a|, @mode)
+    end
+
     test "#{mode} setPrototypeOf rejects cycles" do
       assert {:ok, [false, false]} =
                eval(
