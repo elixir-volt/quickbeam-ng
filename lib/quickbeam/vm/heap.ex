@@ -325,7 +325,11 @@ defmodule QuickBEAM.VM.Heap do
         put_prop_desc(ref, key, %{writable: true, enumerable: false, configurable: true})
       end
 
-      put_prop_desc(ref, {:symbol, "Symbol.toStringTag"}, %{writable: false, enumerable: false, configurable: true})
+      put_prop_desc(ref, {:symbol, "Symbol.toStringTag"}, %{
+        writable: false,
+        enumerable: false,
+        configurable: true
+      })
     end
 
     if get_ctx() != nil,
