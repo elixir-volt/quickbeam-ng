@@ -65,6 +65,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayTest do
     )
   end
 
+  test "typed-array ArrayBuffer view length distinguishes omitted and null", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|const ab = new ArrayBuffer(3); [new Uint16Array(ab, 0, null).length, (() => { try { new Uint16Array(ab); return "ok"; } catch (e) { return e.name; } })()].join(",")|,
+      "0,RangeError"
+    )
+  end
+
   test "defineProperty treats integer-index keys beyond array-index range as typed-array indexes",
        %{
          rt: rt
@@ -73,6 +81,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayTest do
       rt,
       ~S|let a = new Uint8Array(1); try { Object.defineProperty(a, "4294967295", {value: 1}); "ok"; } catch (e) { e.name; }|,
       "TypeError"
+    )
+  end
+
+  test "typed-array primitive constructor length uses ToIndex", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|[new Uint8Array("3").length, new Uint8Array(true).length, new Uint8Array(1.9).length, (() => { try { new Uint8Array(-1); return "ok"; } catch (e) { return e.name; } })()].join(",")|,
+      "3,1,1,RangeError"
     )
   end
 

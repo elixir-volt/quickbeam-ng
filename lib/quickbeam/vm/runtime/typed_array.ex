@@ -1809,7 +1809,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             es = elem_size(type)
             off = TypedArrayCoercion.index(Enum.at(rest, 0, :undefined))
             length_arg = Enum.at(rest, 1, :undefined)
-            auto_length? = Value.nullish?(length_arg)
+            auto_length? = length_arg == :undefined
             length_tracking? = auto_length? and Map.has_key?(buf, "maxByteLength")
             available = byte_size(bin) - off
 
@@ -1819,6 +1819,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
               off > byte_size(bin) ->
                 JSThrow.range_error!("Invalid typed array byteOffset")
+
+              auto_length? and rem(available, es) != 0 ->
+                JSThrow.range_error!("Invalid typed array length")
 
               true ->
                 len =
@@ -1838,19 +1841,16 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
             {list_to_buffer(list, type), 0, length(list), nil, false}
         end
 
-      [n | _] when is_integer(n) ->
-        if n < 0 do
-          JSThrow.range_error!("Invalid typed array length")
-        end
-
-        {:binary.copy(<<0>>, n * elem_size(type)), 0, n, nil, false}
-
       [{:qb_arr, arr} | _] ->
         list = :array.to_list(arr)
         {list_to_buffer(list, type), 0, length(list), nil, false}
 
       [list | _] when is_list(list) ->
         {list_to_buffer(list, type), 0, length(list), nil, false}
+
+      [length_value | _] ->
+        len = TypedArrayCoercion.index(length_value)
+        {:binary.copy(<<0>>, len * elem_size(type)), 0, len, nil, false}
 
       _ ->
         {<<>>, 0, 0, nil, false}
