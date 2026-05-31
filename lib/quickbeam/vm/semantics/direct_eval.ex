@@ -421,6 +421,40 @@ defmodule QuickBEAM.VM.Semantics.DirectEval do
       end)
 
     Heap.put_persistent_globals(cleaned)
+    clean_eval_global_object(pre_eval_globals, preserved_globals)
+  end
+
+  defp clean_eval_global_object(pre_eval_globals, preserved_globals) do
+    case Map.get(pre_eval_globals, "globalThis") do
+      {:obj, ref} ->
+        case Heap.get_obj(ref, %{}) do
+          map when is_map(map) ->
+            preserved_existing = Map.take(preserved_globals, Map.keys(pre_eval_globals))
+
+            cleaned =
+              Enum.reduce(map, map, fn
+                {key, _val}, acc when is_binary(key) ->
+                  case Map.fetch(pre_eval_globals, key) do
+                    {:ok, old_val} ->
+                      Map.put(acc, key, Map.get(preserved_existing, key, old_val))
+
+                    :error ->
+                      if Map.has_key?(preserved_globals, key), do: acc, else: Map.delete(acc, key)
+                  end
+
+                _entry, acc ->
+                  acc
+              end)
+
+            Heap.put_obj(ref, cleaned)
+
+          _ ->
+            :ok
+        end
+
+      _ ->
+        :ok
+    end
   end
 
   defp eval_arguments_object(merged_globals, ctx, arguments_key) do

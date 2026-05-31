@@ -277,6 +277,40 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
       end)
 
     Heap.put_persistent_globals(restored_globals)
+    restore_eval_global_object(locals, pre_globals, post_globals)
+  end
+
+  defp restore_eval_global_object(locals, pre_globals, post_globals) do
+    local_names =
+      locals
+      |> Enum.map(&local_name/1)
+      |> Enum.filter(&is_binary/1)
+
+    case Map.get(pre_globals, "globalThis") do
+      {:obj, ref} ->
+        case Heap.get_obj(ref, %{}) do
+          map when is_map(map) ->
+            restored =
+              Enum.reduce(local_names, map, fn name, acc ->
+                if Map.has_key?(post_globals, name) do
+                  case Map.fetch(pre_globals, name) do
+                    {:ok, value} -> Map.put(acc, name, value)
+                    :error -> Map.delete(acc, name)
+                  end
+                else
+                  acc
+                end
+              end)
+
+            Heap.put_obj(ref, restored)
+
+          _ ->
+            :ok
+        end
+
+      _ ->
+        :ok
+    end
   end
 
   defp local_name(%{name: name}), do: Names.resolve_display_name(name)

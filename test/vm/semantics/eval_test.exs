@@ -35,6 +35,22 @@ defmodule QuickBEAM.VM.Semantics.EvalTest do
              )
   end
 
+  test "direct eval assignment to local vars does not update global object", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S<var x = "global"; function noop() {} var local = (function() { var x = "local"; eval("x = 1;"); noop(); return x; })(); [local, x].join("|")>,
+      "1|global"
+    )
+  end
+
+  test "direct eval with spread assignment to local vars does not update global object", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S<var x = "global"; function noop() {} var args = ["x = 1;"]; var local = (function() { var x = "local"; eval(...args); noop(); return x; })(); [local, x].join("|")>,
+      "1|global"
+    )
+  end
+
   test "direct eval assignments to global vars survive later calls", %{rt: rt} do
     assert_modes(
       rt,
