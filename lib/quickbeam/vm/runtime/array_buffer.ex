@@ -327,50 +327,47 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
     end
   end
 
-  defp do_slice(this, args) do
-    case this do
-      {:obj, ref} ->
-        map = Heap.get_obj(ref, %{})
+  defp do_slice({:obj, ref} = this, args) do
+    map = array_buffer_map!(this)
 
-        if is_map(map) and Map.get(map, "__detached__") do
-          JSThrow.type_error!("ArrayBuffer is detached")
-        end
-
-        buf = Map.get(map, buffer(), <<>>)
-        len = byte_size(buf)
-
-        s =
-          case args do
-            [n | _] when is_number(n) -> normalize_idx(trunc(n), len)
-            _ -> 0
-          end
-
-        e =
-          case args do
-            [_, n | _] when is_number(n) -> normalize_idx(trunc(n), len)
-            _ -> len
-          end
-
-        new_len = max(0, e - s)
-
-        read_array_buffer_species()
-
-        # After species getter, re-check the buffer (it may have been resized/detached)
-        map2 = Heap.get_obj(ref, %{})
-        buf2 = Map.get(map2, buffer(), <<>>)
-
-        if byte_size(buf2) < s + new_len do
-          JSThrow.type_error!("ArrayBuffer is detached")
-        end
-
-        new_buf = if new_len > 0, do: binary_part(buf2, s, new_len), else: <<>>
-        Heap.wrap(%{buffer() => new_buf, "byteLength" => new_len})
-
-      _ ->
-        :undefined
+    if Map.get(map, "__detached__") do
+      JSThrow.type_error!("ArrayBuffer is detached")
     end
+
+    buf = Map.get(map, buffer(), <<>>)
+    len = byte_size(buf)
+
+    s =
+      case args do
+        [n | _] -> normalize_idx(TypedArrayCoercion.integer_or_infinity(n), len)
+        _ -> 0
+      end
+
+    e =
+      case args do
+        [_, n | _] -> normalize_idx(TypedArrayCoercion.integer_or_infinity(n), len)
+        _ -> len
+      end
+
+    new_len = max(0, e - s)
+
+    read_array_buffer_species()
+
+    map2 = Heap.get_obj(ref, %{})
+    buf2 = Map.get(map2, buffer(), <<>>)
+
+    if byte_size(buf2) < s + new_len do
+      JSThrow.type_error!("ArrayBuffer is detached")
+    end
+
+    new_buf = if new_len > 0, do: binary_part(buf2, s, new_len), else: <<>>
+    Heap.wrap(%{buffer() => new_buf, "byteLength" => new_len, "__array_buffer_kind__" => :array_buffer})
   end
 
+  defp do_slice(_this, _args), do: JSThrow.type_error!("receiver is not an ArrayBuffer")
+
+  defp normalize_idx(:infinity, len), do: len
+  defp normalize_idx(:neg_infinity, _len), do: 0
   defp normalize_idx(n, len) when n < 0, do: max(0, len + n)
   defp normalize_idx(n, len), do: min(n, len)
 
