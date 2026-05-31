@@ -312,7 +312,7 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     {indexes, rest} = Enum.split_with(keys, &array_index_key?/1)
     {strings, symbols} = Enum.split_with(rest, &is_binary/1)
 
-    Enum.sort_by(indexes, &array_index_value/1) ++ strings ++ Enum.reverse(symbols)
+    Enum.sort_by(indexes, &array_index_value/1) ++ strings ++ symbols
   end
 
   defp wrapped_string_length_present?(map, "length") when is_map(map) do
