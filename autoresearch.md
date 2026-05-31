@@ -33,12 +33,12 @@ Latest local result:
 
 ```text
 compatibility_cases=3408
-compatibility_pass=3381
-compatibility_failures=27
+compatibility_pass=3389
+compatibility_failures=19
 compiler_errors=0
 compiler_crashes=0
 compiler_fails=16
-both_fail=11
+both_fail=3
 interpreter_fail_compiler_pass=0
 ```
 

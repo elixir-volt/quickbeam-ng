@@ -16,9 +16,9 @@ Latest result:
 
 ```text
 compatibility_cases=3408
-compatibility_pass=3381
-compatibility_failures=27
-both_fail=11
+compatibility_pass=3389
+compatibility_failures=19
+both_fail=3
 interpreter_fail_compiler_pass=0
 compiler_fails=16
 compiler_crashes=0
@@ -69,14 +69,14 @@ Latest result:
 
 ```text
 compatibility_cases=3408
-compatibility_pass=3381
-compatibility_failures=27
-both_fail=11
+compatibility_pass=3389
+compatibility_failures=19
+both_fail=3
 compiler_fails=16
 interpreter_fail_compiler_pass=0
 ```
 
-Recent kept fixes reduced the slice from 52 to 27 failures:
+Recent kept fixes reduced the slice from 52 to 19 failures:
 
 - `Object.defineProperties` now collects descriptor keys through ordinary internal own-key/enumerability semantics for builtin object-like values.
 - Error instance `Symbol.toStringTag` descriptors are hidden/non-enumerable.
@@ -85,18 +85,23 @@ Recent kept fixes reduced the slice from 52 to 27 failures:
 - `Object.entries` re-checks enumerability immediately before each getter read.
 - RegExp assignment-created own properties use enumerable data descriptors.
 - `Object.fromEntries` does not call `return` when `next()` itself returns a non-object.
+- `Object.values` re-checks enumerability immediately before each getter read.
+- `Object.prototype` method arities are declared for `hasOwnProperty`, `isPrototypeOf`, and `propertyIsEnumerable`.
+- Error instance `Symbol.toStringTag` remains hidden/non-enumerable but is writable for assignment overrides.
+- Symbol writes on shape-backed objects and array named properties preserve chronological own-key order.
 
 Promising current clusters:
 
 - compiler-only `Object.defineProperty` failures on `arguments` objects and generic/index properties (`15.2.3.6-4-293` through `-324`); focused probes point at compiler catch/call boundaries around caught `Object.defineProperty` TypeErrors and later `verifyProperty(arguments, ...)` calls.
 - both-fail non-object invalid `getOwnPropertyNames` / `getOwnPropertySymbols` side effects where captured lexical updates made before a TypeError are not visible after `assert.throws`.
-- descriptor/order cluster around symbols: isolated object/array `getOwnPropertySymbols` order can be fixed, but as a standalone experiment it did not move the active metric because `getOwnPropertyDescriptors/order-after-define-property.js` remains in the same cluster.
+- both-fail `Object.keys` arguments-object case where sequential functions with identical bodies appear to observe stale/mismatched `arguments` for `in` checks.
 
 Tried and reverted as ineffective:
 
 - syncing captured locals in interpreter `catch_and_dispatch` throw branches did not improve the non-object invalid count cases because compiler also fails and the captured update is deeper than the caller frame.
 - avoiding stale `arguments` globals/fallback cached arguments objects did not improve `Object.keys(arguments)` or the active metric.
-- preserving symbol order for object/array assignment passed focused symbol probes but did not improve the active metric; only revisit with descriptor ordering in the same patch.
+- preserving symbol order for object/array assignment only improved the metric when paired with descriptor result key-order storage.
+- changing compiler catch handler context to `RuntimeState.current_or(ctx)` did not improve the `defineProperty(arguments)` cluster.
 
 ### 2. Completed direct eval with spread
 
