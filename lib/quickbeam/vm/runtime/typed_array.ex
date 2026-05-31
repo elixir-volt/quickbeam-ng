@@ -1822,7 +1822,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
               off > byte_size(bin) ->
                 JSThrow.range_error!("Invalid typed array byteOffset")
 
-              auto_length? and rem(available, es) != 0 ->
+              auto_length? and not length_tracking? and rem(available, es) != 0 ->
                 JSThrow.range_error!("Invalid typed array length")
 
               true ->
