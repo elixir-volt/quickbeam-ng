@@ -41,12 +41,12 @@ defmodule QuickBEAM.VM.Runtime.Function do
         prop("name", "")
 
         @ecma "20.2.3.1"
-        method "apply" do
+        method "apply", length: 2 do
           fn_apply(this, args, this)
         end
 
         @ecma "20.2.3.2"
-        method "bind" do
+        method "bind", length: 1 do
           unless Builtin.callable?(this),
             do:
               throw(
@@ -57,7 +57,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
         end
 
         @ecma "20.2.3.3"
-        method "call" do
+        method "call", length: 1 do
           fn_call(this, args, this)
         end
 
@@ -74,7 +74,7 @@ defmodule QuickBEAM.VM.Runtime.Function do
 
         @ecma "20.2.3.6"
         symbol :hasInstance do
-          method do
+          method length: 1 do
             obj = Builtin.arg(args, 0, :undefined)
             ordinary_has_instance(this, obj)
           end
