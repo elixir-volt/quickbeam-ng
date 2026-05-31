@@ -9,7 +9,7 @@ Drive BEAM interpreter/compiler behavior toward QuickJS NIF parity on Test262, p
 Continue with adjacent QuickJS-accepted object-model slices. The next active candidate is `built-ins/TypedArray`:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/TypedArray/prototype/set TEST262_ERROR_LIMIT=40 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/TypedArray TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed result:
@@ -71,7 +71,7 @@ built-ins/Function: 495/495
 Current active candidate:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/TypedArray/prototype/set TEST262_ERROR_LIMIT=40 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/TypedArray TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed Array result:
@@ -122,7 +122,7 @@ Kept fixes in TypedArray follow-up:
 - `join`/`toString` clean at `29/29`; Number prototype lookup for `NaN`/`±Infinity`.
 - Species `filter`/`map`/`slice` is clean at `236/236`; fixes covered length-tracking views over unaligned resizable ArrayBuffers and preventing outer constructor `new.target` from making ordinary `BigInt()` calls throw.
 
-Current remaining focused candidate is TypedArray `set`: one broad interpreter/compiler timeout in `typedarray-arg-src-backed-by-resizable-buffer.js`. A naive bulk-write optimization was tried locally and regressed abrupt-completion/ordering semantics, so do not retry that unchanged. Prefer preserving per-element observable order while reducing per-write buffer/view churn.
+TypedArray `set` is clean at `100/100`; the timeout was dominated by repeated post-call global object refresh scans, now cached until persistent globals or raw `globalThis` storage changes. Rebaseline the broader `built-ins/TypedArray` QuickJS-accepted category to identify the next residual cluster.
 
 Tried and reverted as ineffective:
 
