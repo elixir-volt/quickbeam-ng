@@ -108,6 +108,7 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
             Heap.put_obj(ref, updated)
             mark_wrapped_virtual_delete(ref, map, key)
             mark_regexp_prototype_delete(ref, key)
+            mark_date_prototype_delete(ref, key)
             true
           end
 
@@ -155,6 +156,13 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
       if key == {:symbol, "Symbol.matchAll"},
         do: QuickBEAM.VM.Execution.RegexpState.delete_match_all_override()
 
+      Heap.put_prop_desc(ref, key, :deleted)
+    end
+  end
+
+  defp mark_date_prototype_delete(ref, key) do
+    if QuickBEAM.VM.Runtime.global_class_proto("Date") == {:obj, ref} and
+         QuickBEAM.VM.Runtime.Date.proto_property(key) != :undefined do
       Heap.put_prop_desc(ref, key, :deleted)
     end
   end

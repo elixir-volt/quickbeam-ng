@@ -153,8 +153,14 @@ defmodule QuickBEAM.VM.Runtime.Object.Enumeration do
 
   def enumerable_descriptor_pairs(target, keys) do
     keys
-    |> Enum.filter(&InternalMethods.enumerable_own_property?(target, &1))
-    |> Enum.map(&Heap.wrap([&1, Get.get(target, &1)]))
+    |> Enum.reduce([], fn key, acc ->
+      if InternalMethods.enumerable_own_property?(target, key) do
+        [Heap.wrap([key, Get.get(target, key)]) | acc]
+      else
+        acc
+      end
+    end)
+    |> Enum.reverse()
   end
 
   def string_indexed_entries(string), do: JSString.utf16_indexed_entries(string)

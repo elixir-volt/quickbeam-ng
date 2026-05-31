@@ -669,6 +669,14 @@ defmodule QuickBEAM.VM.ObjectModel.OwnProperty do
     prop_desc = Heap.get_prop_desc(ref, prop_name)
     wrapped_string_length = wrapped_string_length_descriptor(data, prop_name)
 
+    if prop_desc == :deleted do
+      :undefined
+    else
+      map_descriptor(ref, data, prop_name, prop_desc, wrapped_string_length)
+    end
+  end
+
+  defp map_descriptor(ref, data, prop_name, prop_desc, wrapped_string_length) do
     case Map.fetch(data, prop_name) do
       _ when prop_name == proto() and prop_desc == nil ->
         :undefined
