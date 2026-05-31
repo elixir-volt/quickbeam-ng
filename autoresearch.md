@@ -31,22 +31,16 @@ Latest local result:
 
 ```text
 compatibility_cases=85
-compatibility_pass=82
-compatibility_failures=3
+compatibility_pass=85
+compatibility_failures=0
 compiler_errors=0
 compiler_crashes=0
 compiler_fails=0
-both_fail=3
+both_fail=0
 interpreter_fail_compiler_pass=0
 ```
 
-Current residuals are direct eval with spread argument lists:
-
-- `language/expressions/call/eval-spread.js`
-- `language/expressions/call/eval-spread-empty-leading.js`
-- `language/expressions/call/eval-spread-empty-trailing.js`
-
-The previous `language/expressions/object` QuickJS-accepted slice is clean at `941/941`.
+The previous `language/expressions/object` QuickJS-accepted slice is clean at `941/941`. Rebaseline a broader QuickJS-accepted workload next before choosing another category.
 
 ## How to run
 

@@ -16,9 +16,9 @@ Latest result:
 
 ```text
 compatibility_cases=85
-compatibility_pass=82
-compatibility_failures=3
-both_fail=3
+compatibility_pass=85
+compatibility_failures=0
+both_fail=0
 interpreter_fail_compiler_pass=0
 compiler_fails=0
 compiler_crashes=0
@@ -63,25 +63,27 @@ checks_timeout_seconds: 900
 
 ## Near-term plan
 
-### 1. Direct eval with spread
+### 1. Rebaseline broader QuickJS-accepted parity
 
-Current `language/expressions/call` residuals are:
+The `language/expressions/call` slice is clean. Re-run a broader native-accepted workload before selecting the next focused category:
 
-- `eval-spread.js`
-- `eval-spread-empty-leading.js`
-- `eval-spread-empty-trailing.js`
+```sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 ./autoresearch.sh
+```
 
-A focused repro shows `eval(...iter)` can update the local `x`, but the global `x` is also updated; both interpreter and compiler fail the same observable global assertion. Inspect direct-eval spread lowering and `DirectEval` transient/global write propagation. Do not special-case these filenames.
+### 2. Completed direct eval with spread
+
+The direct eval spread residuals were fixed by restoring `globalThis` object properties alongside persistent globals when eval assignments resolve to caller locals. Kept regression tests cover direct eval with and without spread.
 
 Tried and reverted as ineffective:
 
 - treating `apply_eval` operand `0` as current scope instead of subtracting one; it did not improve the metric and left the global write wrong.
 
-### 2. Completed object-expression side effects
+### 3. Completed object-expression side effects
 
 The previous `language/expressions/object` QuickJS-accepted slice is clean at `941/941`. The kept fix refreshes global object writes after caught calls and updates the persistent global snapshot so later var declarations do not restore stale values.
 
-### 3. Expand category slices only when useful
+### 4. Expand category slices only when useful
 
 Use bounded slices for focused subsystems, not broad unrelated sweeps:
 
