@@ -277,7 +277,9 @@ defmodule QuickBEAM.VM.Interpreter do
       |> Enum.reduce(locals, fn {vd, idx}, acc ->
         name = Names.resolve_display_name(vd.name)
 
-        with true <- idx >= arg_count and is_binary(name) and idx < tuple_size(acc),
+        with true <-
+               idx >= arg_count and is_binary(name) and name != "arguments" and
+                 idx < tuple_size(acc),
              {:ok, value} <- synced_global_value(ctx, name) do
           put_elem(acc, idx, value)
         else
