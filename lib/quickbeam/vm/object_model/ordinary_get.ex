@@ -39,9 +39,13 @@ defmodule QuickBEAM.VM.ObjectModel.OrdinaryGet do
     if callbacks.explicit_own?.(value, key) do
       :undefined
     else
-      value
-      |> callbacks.get_prototype_raw.(key)
-      |> prototype_result(receiver, callbacks)
+      if callbacks.prototype_property_with_receiver do
+        callbacks.prototype_property_with_receiver.(value, key, receiver)
+      else
+        value
+        |> callbacks.get_prototype_raw.(key)
+        |> prototype_result(receiver, callbacks)
+      end
     end
   end
 

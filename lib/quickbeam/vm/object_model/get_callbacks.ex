@@ -27,12 +27,19 @@ defmodule QuickBEAM.VM.ObjectModel.GetCallbacks do
 
   @type t :: %__MODULE__{}
 
-  def ordinary(call_getter, explicit_own?, get_own, get_prototype_raw) do
+  def ordinary(
+        call_getter,
+        explicit_own?,
+        get_own,
+        get_prototype_raw,
+        prototype_with_receiver \\ nil
+      ) do
     context!(
       call_getter: call_getter,
       explicit_own?: explicit_own?,
       get_own: get_own,
-      get_prototype_raw: get_prototype_raw
+      get_prototype_raw: get_prototype_raw,
+      prototype_property_with_receiver: prototype_with_receiver
     )
   end
 

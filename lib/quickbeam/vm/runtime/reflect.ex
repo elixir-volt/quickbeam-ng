@@ -120,6 +120,8 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
       descriptor = Enum.at(args, 2, :undefined)
       require_object!(obj, "Reflect.defineProperty")
 
+      key = PropertyKey.to_property_key(key)
+
       unless Value.object_like?(descriptor) do
         JSThrow.type_error!("Property description must be an object")
       end
@@ -128,7 +130,7 @@ defmodule QuickBEAM.VM.Runtime.Reflect do
         Object.static_property("defineProperty")
         |> Invocation.invoke_callback_or_throw([
           obj,
-          PropertyKey.to_property_key(key),
+          key,
           descriptor
         ])
 

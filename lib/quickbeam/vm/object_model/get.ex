@@ -88,7 +88,8 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
         &call_getter/2,
         &explicit_undefined_own?/2,
         &get_own/2,
-        &get_prototype_raw/2
+        &get_prototype_raw/2,
+        &prototype_property_with_receiver/3
       )
 
   defp get_callable_symbol(value, sym_key),
