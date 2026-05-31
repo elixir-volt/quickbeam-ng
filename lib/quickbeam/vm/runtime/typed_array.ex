@@ -10,7 +10,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
-  alias QuickBEAM.VM.ObjectModel.Get
+  alias QuickBEAM.VM.ObjectModel.{Get, PropertyKey}
   alias QuickBEAM.VM.Semantics.Values
   alias QuickBEAM.VM.Value
   alias QuickBEAM.VM.Runtime
@@ -90,6 +90,26 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   @doc "Returns the typed-array element type for a constructor name, when known."
   defdelegate constructor_type(name), to: Metadata
+
+  @doc "Classifies a property key using integer-indexed exotic object rules."
+  def integer_index_key(key) do
+    case PropertyKey.integer_index(key) do
+      {:ok, idx} -> {:ok, idx}
+      :error -> invalid_integer_index_key(key)
+    end
+  end
+
+  defp invalid_integer_index_key(key) when is_binary(key) do
+    cond do
+      key == "-0" -> :invalid
+      Regex.match?(~r/^-\d+$/, key) -> :invalid
+      Regex.match?(~r/^\d+$/, key) -> :invalid
+      true -> :not_integer_index
+    end
+  end
+
+  defp invalid_integer_index_key(key) when is_integer(key), do: :invalid
+  defp invalid_integer_index_key(_key), do: :not_integer_index
 
   @doc "Returns whether an object map stores a typed-array instance for a constructor name."
   def instance_for_constructor?(

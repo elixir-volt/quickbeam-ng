@@ -3,13 +3,13 @@ defmodule QuickBEAM.VM.ObjectModel.TypedArrayExoticGet do
 
   import QuickBEAM.VM.Heap.Keys, only: [key_order: 0]
 
-  alias QuickBEAM.VM.ObjectModel.PropertyKey
   alias QuickBEAM.VM.Runtime.TypedArray
 
   def property(obj, map, key, fallback) when is_function(fallback, 0) do
-    case PropertyKey.array_index(key) do
+    case TypedArray.integer_index_key(key) do
       {:ok, idx} -> indexed_property(obj, map, key, idx)
-      :error -> fallback.()
+      :invalid -> :undefined
+      :not_integer_index -> fallback.()
     end
   end
 

@@ -224,6 +224,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
       map when is_map(map) ->
         cond do
+          Map.get(map, typed_array()) == true and
+              typed_array_integer_put(obj, key, val) != :not_integer_index ->
+            :ok
+
           match?({:accessor, _, setter} when setter != nil, Map.get(map, key)) ->
             {:accessor, _, setter} = Map.get(map, key)
             invoke_setter(setter, val, obj)
@@ -715,6 +719,23 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
       true ->
         Heap.put_ctor_static(callable, key, val)
+    end
+  end
+
+  defp typed_array_integer_put(obj, key, val) do
+    case Runtime.TypedArray.integer_index_key(key) do
+      {:ok, idx} ->
+        if idx < Runtime.TypedArray.element_count(obj) do
+          Runtime.TypedArray.set_element(obj, idx, val)
+        end
+
+        :ok
+
+      :invalid ->
+        :ok
+
+      :not_integer_index ->
+        :not_integer_index
     end
   end
 
@@ -1241,9 +1262,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   def put_element({:obj, ref} = obj, key, val) do
     case Heap.get_obj(ref) do
       %{typed_array() => true} ->
-        case PropertyKey.array_index(key) do
-          {:ok, idx} -> Runtime.TypedArray.set_element(obj, idx, val)
-          :error -> put(obj, PropertyKey.normalize(key), val)
+        case typed_array_integer_put(obj, key, val) do
+          :not_integer_index -> put(obj, PropertyKey.normalize(key), val)
+          :ok -> :ok
         end
 
       {:qb_arr, arr} ->

@@ -75,4 +75,20 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayTest do
       "TypeError"
     )
   end
+
+  test "typed-array integer-indexed keys do not fall back to ordinary properties", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let a = new Uint8Array([5]); a["-1"] = 9; a["-0"] = 8; a["4294967295"] = 7; [a[0], a["-1"], a["-0"], a["4294967295"], Object.prototype.hasOwnProperty.call(a, "-1")].join(",")|,
+      "5,,,,false"
+    )
+  end
+
+  test "typed-array delete and defineProperty obey integer-indexed element rules", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let a = new Uint8Array([5]); let del = delete a[0]; Object.defineProperty(a, "0", {value: null}); let afterNull = a[0]; let bad = (() => { try { Object.defineProperty(a, "0", {get(){return 1}}); return "ok"; } catch (e) { return e.name; } })(); [del, afterNull, bad].join(",")|,
+      "false,0,TypeError"
+    )
+  end
 end

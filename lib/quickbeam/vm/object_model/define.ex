@@ -343,20 +343,35 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   defp define_typed_array_index_property(obj, _ref, existing, prop_name, desc) do
     if is_map(existing) and Map.get(existing, typed_array()) do
-      case PropertyKey.integer_index(prop_name) do
+      case TypedArray.integer_index_key(prop_name) do
         {:ok, idx} ->
-          if TypedArray.out_of_bounds?(obj) or idx >= TypedArray.element_count(obj) do
-            throw({:js_throw, Heap.make_error("Invalid typed array index", "TypeError")})
-          end
+          define_typed_array_element!(obj, idx, desc)
 
-          val = Map.get(desc, "value")
-          if val != nil, do: TypedArray.set_element(obj, idx, val)
-          throw({:early_return, obj})
+        :invalid ->
+          throw({:js_throw, Heap.make_error("Invalid typed array index", "TypeError")})
 
-        _ ->
+        :not_integer_index ->
           :ok
       end
     end
+  end
+
+  defp define_typed_array_element!(obj, idx, desc) do
+    if TypedArray.out_of_bounds?(obj) or idx >= TypedArray.element_count(obj) do
+      throw({:js_throw, Heap.make_error("Invalid typed array index", "TypeError")})
+    end
+
+    if Map.has_key?(desc, "get") or Map.has_key?(desc, "set") or
+         Map.get(desc, "configurable") == false or Map.get(desc, "enumerable") == false or
+         Map.get(desc, "writable") == false do
+      throw({:js_throw, Heap.make_error("Invalid typed array descriptor", "TypeError")})
+    end
+
+    if Map.has_key?(desc, "value") do
+      TypedArray.set_element(obj, idx, Map.get(desc, "value"))
+    end
+
+    throw({:early_return, obj})
   end
 
   defp descriptor_fields(desc_obj, desc) do

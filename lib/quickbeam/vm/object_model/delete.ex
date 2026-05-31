@@ -45,7 +45,12 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
     end
   end
 
-  def ordinary_delete_property({:obj, ref}, key), do: delete_object_property({:obj, ref}, key)
+  def ordinary_delete_property({:obj, ref} = obj, key) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} -> delete_typed_array_property(obj, key)
+      _ -> delete_object_property(obj, key)
+    end
+  end
 
   def ordinary_delete_property({:builtin, _name, _} = builtin, key) do
     delete_static_property(builtin, key)
@@ -66,6 +71,19 @@ defmodule QuickBEAM.VM.ObjectModel.Delete do
   end
 
   def ordinary_delete_property(_obj, _key), do: true
+
+  defp delete_typed_array_property(obj, key) do
+    case QuickBEAM.VM.Runtime.TypedArray.integer_index_key(key) do
+      {:ok, idx} ->
+        not (idx < QuickBEAM.VM.Runtime.TypedArray.element_count(obj))
+
+      :invalid ->
+        true
+
+      :not_integer_index ->
+        delete_object_property(obj, key)
+    end
+  end
 
   defp delete_object_property({:obj, ref}, key) do
     key = PropertyKey.normalize(key)
