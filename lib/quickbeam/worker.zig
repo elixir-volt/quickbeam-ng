@@ -859,7 +859,7 @@ pub const WorkerState = struct {
         exports_slot.* = exports;
         defer gpa.destroy(exports_slot);
 
-        var final_exports: qjs.JSValue = exports;
+        var final_exports: qjs.JSValue = qjs.JS_DupValue(self.ctx, exports);
 
         // Check if napi_module_register was called during dlopen (static constructor)
         if (napi_mod.getPendingModule()) |mod| {
@@ -867,15 +867,22 @@ pub const WorkerState = struct {
             if (mod.nm_register_func) |register| {
                 const ret_val = register(env, exports_slot);
                 self.drain_jobs();
-                if (ret_val) |rv| final_exports = rv.*;
+                if (ret_val) |rv| {
+                    qjs.JS_FreeValue(self.ctx, final_exports);
+                    final_exports = qjs.JS_DupValue(self.ctx, rv.*);
+                }
             }
         } else {
             // Try looking up napi_register_module_v1
             if (lib.lookup(*const fn (napi_mod.napi_env, napi_mod.napi_value) callconv(.c) napi_mod.napi_value, "napi_register_module_v1")) |init_fn| {
                 const ret_val = init_fn(env, exports_slot);
                 self.drain_jobs();
-                if (ret_val) |rv| final_exports = rv.*;
+                if (ret_val) |rv| {
+                    qjs.JS_FreeValue(self.ctx, final_exports);
+                    final_exports = qjs.JS_DupValue(self.ctx, rv.*);
+                }
             } else {
+                qjs.JS_FreeValue(self.ctx, final_exports);
                 qjs.JS_FreeValue(self.ctx, exports);
                 result.ok = false;
                 result.json = "Addon has no napi_module_register or napi_register_module_v1";
@@ -902,9 +909,7 @@ pub const WorkerState = struct {
 
         // Free our reference to exports
         qjs.JS_FreeValue(self.ctx, exports);
-        if (final_exports.tag != exports.tag or qjs.JS_VALUE_GET_PTR(final_exports) != qjs.JS_VALUE_GET_PTR(exports)) {
-            qjs.JS_FreeValue(self.ctx, final_exports);
-        }
+        qjs.JS_FreeValue(self.ctx, final_exports);
         // These are standalone DupValue'd slots that need cleanup
         env.clearPendingException();
     }

@@ -203,8 +203,7 @@ pub const NapiEnv = struct {
     pub fn createNapiValue(self: *NapiEnv, val: qjs.JSValue) napi_value {
         if (self.scope_stack.items.len > 0) {
             const scope = self.scope_stack.items[self.scope_stack.items.len - 1];
-            scope.values.append(gpa, val) catch return null;
-            return &scope.values.items[scope.values.items.len - 1];
+            return scope.track(self.ctx, val);
         }
         const slot = gpa.create(qjs.JSValue) catch return null;
         slot.* = val;
@@ -271,9 +270,7 @@ pub const NapiEnv = struct {
         // records alive until deinit because native finalizers may still call
         // napi_delete_reference while QuickJS drains objects during shutdown.
         for (self.refs.items) |r| {
-            if (r.ref_count > 0) qjs.JS_FreeValue(self.ctx, r.value);
-            r.value = js.JS_UNDEFINED;
-            r.ref_count = 0;
+            r.releaseValue();
         }
 
         // 3. Release persistent slots (values from addon init)
@@ -307,7 +304,7 @@ pub const NapiEnv = struct {
 // ──── Handle Scope ────
 
 pub const HandleScope = struct {
-    values: std.ArrayListUnmanaged(qjs.JSValue) = .{},
+    values: std.ArrayListUnmanaged(*qjs.JSValue) = .{},
     escapable: bool,
     escaped: bool = false,
 
@@ -322,13 +319,16 @@ pub const HandleScope = struct {
     /// Store a JS value in this scope. Takes ownership of the refcount.
     pub fn track(self: *HandleScope, ctx: *qjs.JSContext, val: qjs.JSValue) *qjs.JSValue {
         _ = ctx;
-        self.values.append(gpa, val) catch @panic("OOM");
-        return &self.values.items[self.values.items.len - 1];
+        const slot = gpa.create(qjs.JSValue) catch @panic("OOM");
+        slot.* = val;
+        self.values.append(gpa, slot) catch @panic("OOM");
+        return slot;
     }
 
     pub fn deinit(self: *HandleScope, ctx: *qjs.JSContext) void {
-        for (self.values.items) |v| {
-            qjs.JS_FreeValue(ctx, v);
+        for (self.values.items) |slot| {
+            qjs.JS_FreeValue(ctx, slot.*);
+            gpa.destroy(slot);
         }
         self.values.deinit(gpa);
     }
@@ -346,25 +346,25 @@ pub const NapiReference = struct {
     finalize_hint: ?*anyopaque = null,
 
     pub fn ref(self: *NapiReference) void {
-        if (self.ref_count == 0 and !self.weak) {
-            _ = qjs.JS_DupValue(self.ctx, self.value);
-        }
         self.ref_count += 1;
     }
 
     pub fn unref(self: *NapiReference) void {
         if (self.ref_count > 0) {
             self.ref_count -= 1;
-            if (self.ref_count == 0 and !self.weak) {
-                qjs.JS_FreeValue(self.ctx, self.value);
-            }
         }
     }
 
-    pub fn deinit(self: *NapiReference) void {
-        if (self.ref_count > 0) {
+    pub fn releaseValue(self: *NapiReference) void {
+        if (!js.is_undefined(self.value)) {
             qjs.JS_FreeValue(self.ctx, self.value);
+            self.value = js.JS_UNDEFINED;
         }
+        self.ref_count = 0;
+    }
+
+    pub fn deinit(self: *NapiReference) void {
+        self.releaseValue();
         gpa.destroy(self);
     }
 };

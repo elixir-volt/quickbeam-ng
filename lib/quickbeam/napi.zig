@@ -757,9 +757,9 @@ pub export fn napi_escape_handle(env_: napi_env, scope_: napi_escapable_handle_s
     // Move the value to the parent scope
     if (env.scope_stack.items.len >= 2) {
         const parent = env.scope_stack.items[env.scope_stack.items.len - 2];
-        r.* = parent.track(env.ctx, val);
+        r.* = parent.track(env.ctx, qjs.JS_DupValue(env.ctx, val));
     } else {
-        r.* = env.createNapiValue(val);
+        r.* = env.createNapiValue(qjs.JS_DupValue(env.ctx, val));
     }
     return env.ok();
 }
@@ -828,7 +828,7 @@ pub export fn napi_get_and_clear_last_exception(env_: napi_env, result: ?*napi_v
     const env = env_ orelse return @intFromEnum(Status.invalid_arg);
     const r = result orelse return env.invalidArg();
     if (env.has_pending_exception) {
-        r.* = env.createNapiValue(env.pending_exception);
+        r.* = env.createNapiValue(qjs.JS_DupValue(env.ctx, env.pending_exception));
         env.clearPendingException();
     } else {
         r.* = env.createNapiValue(js.js_undefined());
@@ -919,9 +919,9 @@ fn napiCallbackTrampoline(
             // Addon returned a value — for constructors this is typically undefined
             // in N-API; the instance is the `this` object
         }
-        return effective_this;
+        return qjs.JS_DupValue(ctx, effective_this);
     }
-    return toVal(napi_result);
+    return qjs.JS_DupValue(ctx, toVal(napi_result));
 }
 
 pub export fn napi_call_function(
@@ -955,8 +955,9 @@ pub export fn napi_call_function(
 
     if (result) |r| {
         r.* = env.createNapiValue(ret);
+    } else {
+        qjs.JS_FreeValue(env.ctx, ret);
     }
-    qjs.JS_FreeValue(env.ctx, ret);
     return env.ok();
 }
 
@@ -978,18 +979,18 @@ pub export fn napi_get_cb_info(
 
         if (argv) |av| {
             for (0..copy_count) |i| {
-                av[i] = env.createNapiValue(info.args[i]);
+                av[i] = env.createNapiValue(qjs.JS_DupValue(env.ctx, info.args[i]));
             }
             // Fill remaining with undefined
             for (copy_count..requested) |i| {
-                av[i] = env.createNapiValue(js.js_undefined());
+                av[i] = env.createNapiValue(qjs.JS_DupValue(env.ctx, js.js_undefined()));
             }
         }
         ac.* = available;
     }
 
     if (this_arg) |t| {
-        t.* = env.createNapiValue(info.this);
+        t.* = env.createNapiValue(qjs.JS_DupValue(env.ctx, info.this));
     }
 
     if (data) |d| {
@@ -1003,7 +1004,7 @@ pub export fn napi_get_new_target(env_: napi_env, cbinfo_: napi_callback_info, r
     const env = env_ orelse return @intFromEnum(Status.invalid_arg);
     const info: *CallbackInfo = cbinfo_ orelse return env.invalidArg();
     const r = result orelse return env.invalidArg();
-    r.* = env.createNapiValue(info.new_target);
+    r.* = env.createNapiValue(qjs.JS_DupValue(env.ctx, info.new_target));
     return env.ok();
 }
 
