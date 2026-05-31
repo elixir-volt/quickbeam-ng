@@ -220,17 +220,17 @@ defmodule QuickBEAM.VM.Runtime.Object do
           end
 
           @ecma "20.1.3.2"
-          method "hasOwnProperty" do
+          method "hasOwnProperty", length: 1 do
             has_own_property(args, this)
           end
 
           @ecma "20.1.3.4"
-          method "isPrototypeOf" do
+          method "isPrototypeOf", length: 1 do
             prototype_of?(args, this)
           end
 
           @ecma "20.1.3.5"
-          method "propertyIsEnumerable" do
+          method "propertyIsEnumerable", length: 1 do
             property_enumerable?(args, this)
           end
 
