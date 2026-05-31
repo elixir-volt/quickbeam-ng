@@ -6,6 +6,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.InOperatorAdapter do
       alias QuickBEAM.VM.Interpreter.Ops.InOperator
 
       defp run({@op_in, []}, pc, frame, [obj, key | rest], gas, ctx) do
+        persistent_before = QuickBEAM.VM.Heap.get_persistent_globals()
         QuickBEAM.VM.RuntimeState.install(ctx)
 
         call_result =
@@ -18,7 +19,14 @@ defmodule QuickBEAM.VM.Interpreter.Ops.InOperatorAdapter do
         case call_result do
           {:ok, result} ->
             ctx = refresh_persistent_globals(ctx)
-            frame = sync_global_writes_to_frame(frame, QuickBEAM.VM.RuntimeState.current_or(ctx))
+
+            frame =
+              if QuickBEAM.VM.Heap.get_persistent_globals() != persistent_before do
+                sync_global_writes_to_frame(frame, QuickBEAM.VM.RuntimeState.current_or(ctx))
+              else
+                frame
+              end
+
             run(pc + 1, frame, [result | rest], gas, ctx)
 
           {:throw, val} ->
