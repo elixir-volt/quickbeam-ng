@@ -102,46 +102,29 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
 
   @ecma "25.1.6.8"
   proto "transfer", length: 0 do
-    case this do
-      {:obj, ref} ->
-        map = Heap.get_obj(ref, %{})
-
-        if is_map(map) do
-          new_buf = Map.get(map, buffer(), <<>>)
-
-          Heap.put_obj(
-            ref,
-            Map.merge(map, %{buffer() => <<>>, "byteLength" => 0, "__detached__" => true})
-          )
-
-          Heap.wrap(%{buffer() => new_buf, "byteLength" => byte_size(new_buf)})
-        else
-          :undefined
-        end
-
-      _ ->
-        :undefined
-    end
+    transfer_buffer(this, args, :preserve_resizable)
   end
 
   @ecma "25.1.6.6"
   proto "resize", length: 1 do
     map = array_buffer_map!(this)
     {:obj, ref} = this
-    new_size = args |> arg(0, :undefined) |> array_buffer_index!()
 
     cond do
-      Map.get(map, "resizable") != true ->
-        JSThrow.type_error!("ArrayBuffer is not resizable")
-
       Map.get(map, "__immutable__") ->
         JSThrow.type_error!("ArrayBuffer is immutable")
 
-      new_size > Map.get(map, "maxByteLength", Map.get(map, "byteLength", 0)) ->
-        JSThrow.range_error!("new length exceeds maxByteLength")
+      Map.get(map, "resizable") != true ->
+        JSThrow.type_error!("ArrayBuffer is not resizable")
 
       true ->
         :ok
+    end
+
+    new_size = args |> arg(0, :undefined) |> array_buffer_index!()
+
+    if new_size > Map.get(map, "maxByteLength", Map.get(map, "byteLength", 0)) do
+      JSThrow.range_error!("new length exceeds maxByteLength")
     end
 
     old_buf = Map.get(map, buffer(), <<>>)
@@ -240,31 +223,76 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
 
   @ecma "25.1.6.9"
   proto "transferToFixedLength", length: 0 do
-    do_transfer_to_immutable(this, args)
+    transfer_buffer(this, args, :fixed)
   end
 
   @ecma "25.1.6.9"
   proto "transferToImmutable", length: 0 do
-    do_transfer_to_immutable(this, args)
+    transfer_buffer(this, args, :immutable)
   end
 
-  defp do_transfer_to_immutable(this, args) do
-    immutable = do_slice_to_immutable(this, args)
+  defp transfer_buffer({:obj, ref} = this, args, mode) do
+    map = array_buffer_map!(this)
 
-    case this do
-      {:obj, ref} ->
-        map = Heap.get_obj(ref, %{})
-
-        Heap.put_obj(
-          ref,
-          Map.merge(map, %{buffer() => <<>>, "byteLength" => 0, "__detached__" => true})
-        )
-
-      _ ->
-        :ok
+    if Map.get(map, "__immutable__") do
+      JSThrow.type_error!("ArrayBuffer is immutable")
     end
 
-    immutable
+    if Map.get(map, "__detached__") do
+      JSThrow.type_error!("ArrayBuffer is detached")
+    end
+
+    old_buf = Map.get(map, buffer(), <<>>)
+    old_len = byte_size(old_buf)
+
+    new_len =
+      case arg(args, 0, :undefined) do
+        :undefined -> old_len
+        value -> array_buffer_index!(value)
+      end
+
+    new_buf = resized_buffer(old_buf, new_len)
+
+    result = %{
+      buffer() => new_buf,
+      "byteLength" => new_len,
+      "resizable" => false,
+      "__array_buffer_kind__" => :array_buffer
+    }
+
+    result =
+      cond do
+        mode == :preserve_resizable and Map.get(map, "resizable") ->
+          result
+          |> Map.put("resizable", true)
+          |> Map.put("maxByteLength", max(Map.get(map, "maxByteLength", old_len), new_len))
+
+        mode == :immutable ->
+          Map.put(result, "__immutable__", true)
+
+        true ->
+          result
+      end
+
+    Heap.put_obj(
+      ref,
+      Map.merge(map, %{buffer() => <<>>, "byteLength" => 0, "__detached__" => true})
+    )
+
+    Heap.wrap(result)
+  end
+
+  defp transfer_buffer(_this, _args, _mode),
+    do: JSThrow.type_error!("receiver is not an ArrayBuffer")
+
+  defp resized_buffer(buf, new_len) do
+    old_len = byte_size(buf)
+
+    cond do
+      new_len == old_len -> buf
+      new_len < old_len -> binary_part(buf, 0, new_len)
+      true -> buf <> :binary.copy(<<0>>, new_len - old_len)
+    end
   end
 
   proto "sliceToImmutable", length: 2 do
