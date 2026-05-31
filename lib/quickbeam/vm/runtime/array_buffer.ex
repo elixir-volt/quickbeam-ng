@@ -7,6 +7,9 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Runtime
+  alias QuickBEAM.VM.Runtime.TypedArrayCoercion
+
+  @max_array_buffer_length 4_294_967_295
 
   defintrinsics do
     intrinsic "ArrayBuffer" do
@@ -44,7 +47,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   @doc "Returns prototype method names installed on ArrayBuffer.prototype."
   def proto_property_names,
     do:
-      ~w(byteLength detached maxByteLength resizable transfer resize slice sliceToImmutable transferToImmutable)
+      ~w(byteLength detached maxByteLength resizable transfer resize slice sliceToImmutable transferToFixedLength transferToImmutable)
 
   @ecma "25.1.6.1"
   proto_getter "byteLength" do
@@ -75,12 +78,16 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
 
   @doc "Builds the JavaScript constructor object for this runtime builtin."
   def constructor(args, this \\ nil) do
-    {byte_length, max_byte_length} =
-      case args do
-        [n, opts | _] when is_integer(n) -> {n, max_byte_length_option(opts)}
-        [n | _] when is_integer(n) -> {n, nil}
-        _ -> {0, nil}
-      end
+    byte_length = args |> arg(0, :undefined) |> array_buffer_index!()
+    max_byte_length = args |> arg(1, :undefined) |> max_byte_length_option()
+
+    if byte_length > @max_array_buffer_length do
+      JSThrow.range_error!("Invalid ArrayBuffer length")
+    end
+
+    if max_byte_length != nil and max_byte_length < byte_length do
+      JSThrow.range_error!("maxByteLength is smaller than byteLength")
+    end
 
     map = %{
       buffer() => :binary.copy(<<0>>, byte_length),
@@ -94,7 +101,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   end
 
   @ecma "25.1.6.8"
-  proto "transfer" do
+  proto "transfer", length: 0 do
     case this do
       {:obj, ref} ->
         map = Heap.get_obj(ref, %{})
@@ -118,37 +125,38 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   end
 
   @ecma "25.1.6.6"
-  proto "resize" do
-    case this do
-      {:obj, ref} ->
-        map = Heap.get_obj(ref, %{})
+  proto "resize", length: 1 do
+    map = array_buffer_map!(this)
+    {:obj, ref} = this
+    new_size = args |> arg(0, :undefined) |> array_buffer_index!()
 
-        new_size =
-          case args do
-            [n | _] when is_number(n) -> trunc(n)
-            _ -> 0
-          end
+    cond do
+      Map.get(map, "resizable") != true ->
+        JSThrow.type_error!("ArrayBuffer is not resizable")
 
-        if is_map(map) do
-          old_buf = Map.get(map, buffer(), <<>>)
+      Map.get(map, "__immutable__") ->
+        JSThrow.type_error!("ArrayBuffer is immutable")
 
-          new_buf =
-            if new_size <= byte_size(old_buf) do
-              binary_part(old_buf, 0, new_size)
-            else
-              old_buf <> :binary.copy(<<0>>, new_size - byte_size(old_buf))
-            end
+      new_size > Map.get(map, "maxByteLength", Map.get(map, "byteLength", 0)) ->
+        JSThrow.range_error!("new length exceeds maxByteLength")
 
-          resized = Map.merge(map, %{buffer() => new_buf, "byteLength" => new_size})
-          Heap.put_obj(ref, resized)
-          update_typed_array_views(resized, new_size)
-        end
-
-        :undefined
-
-      _ ->
-        :undefined
+      true ->
+        :ok
     end
+
+    old_buf = Map.get(map, buffer(), <<>>)
+
+    new_buf =
+      if new_size <= byte_size(old_buf) do
+        binary_part(old_buf, 0, new_size)
+      else
+        old_buf <> :binary.copy(<<0>>, new_size - byte_size(old_buf))
+      end
+
+    resized = Map.merge(map, %{buffer() => new_buf, "byteLength" => new_size})
+    Heap.put_obj(ref, resized)
+    update_typed_array_views(resized, new_size)
+    :undefined
   end
 
   defp update_typed_array_views(%{"__views__" => views}, new_size) when is_list(views) do
@@ -226,12 +234,21 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   defp is_view(_), do: false
 
   @ecma "25.1.6.7"
-  proto "slice" do
+  proto "slice", length: 2 do
     do_slice(this, args)
   end
 
   @ecma "25.1.6.9"
-  proto "transferToImmutable" do
+  proto "transferToFixedLength", length: 0 do
+    do_transfer_to_immutable(this, args)
+  end
+
+  @ecma "25.1.6.9"
+  proto "transferToImmutable", length: 0 do
+    do_transfer_to_immutable(this, args)
+  end
+
+  defp do_transfer_to_immutable(this, args) do
     immutable = do_slice_to_immutable(this, args)
 
     case this do
@@ -250,7 +267,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
     immutable
   end
 
-  proto "sliceToImmutable" do
+  proto "sliceToImmutable", length: 2 do
     do_slice_to_immutable(this, args)
   end
 
@@ -329,14 +346,32 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   defp normalize_idx(n, len) when n < 0, do: max(0, len + n)
   defp normalize_idx(n, len), do: min(n, len)
 
+  defp max_byte_length_option(:undefined), do: nil
+
   defp max_byte_length_option({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
-      map when is_map(map) -> Map.get(map, "maxByteLength")
-      _ -> nil
+      map when is_map(map) ->
+        case Map.get(map, "maxByteLength", :undefined) do
+          :undefined -> nil
+          value -> array_buffer_index!(value)
+        end
+
+      _ ->
+        nil
     end
   end
 
   defp max_byte_length_option(_), do: nil
+
+  defp array_buffer_index!(value) do
+    index = TypedArrayCoercion.index(value)
+
+    if index > @max_array_buffer_length do
+      JSThrow.range_error!("Invalid ArrayBuffer length")
+    end
+
+    index
+  end
 
   defp read_array_buffer_species do
     case Runtime.global_constructor("ArrayBuffer") do
