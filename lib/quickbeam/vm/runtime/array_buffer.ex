@@ -2,12 +2,16 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   @moduledoc "JS `ArrayBuffer` and `SharedArrayBuffer` built-in: constructor, transfer, resize, and slice operations."
 
   import QuickBEAM.VM.Heap.Keys
+  import QuickBEAM.VM.Value, only: [is_nullish: 1]
   use QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.Heap
   alias QuickBEAM.VM.JSThrow
+  alias QuickBEAM.VM.Invocation
+  alias QuickBEAM.VM.ObjectModel.Get
   alias QuickBEAM.VM.Runtime
   alias QuickBEAM.VM.Runtime.TypedArrayCoercion
+  alias QuickBEAM.VM.Value
 
   @max_array_buffer_length 4_294_967_295
 
@@ -351,8 +355,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
       end
 
     new_len = max(0, e - s)
-
-    read_array_buffer_species()
+    result = array_buffer_species_create(this, new_len)
 
     map2 = Heap.get_obj(ref, %{})
     buf2 = Map.get(map2, buffer(), <<>>)
@@ -361,8 +364,9 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
       JSThrow.type_error!("ArrayBuffer is detached")
     end
 
-    new_buf = if new_len > 0, do: binary_part(buf2, s, new_len), else: <<>>
-    Heap.wrap(%{buffer() => new_buf, "byteLength" => new_len, "__array_buffer_kind__" => :array_buffer})
+    copy = if new_len > 0, do: binary_part(buf2, s, new_len), else: <<>>
+    write_array_buffer_slice_result!(result, copy, new_len)
+    result
   end
 
   defp do_slice(_this, _args), do: JSThrow.type_error!("receiver is not an ArrayBuffer")
@@ -399,16 +403,68 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
     index
   end
 
-  defp read_array_buffer_species do
-    case Runtime.global_constructor("ArrayBuffer") do
+  defp array_buffer_species_create(obj, new_len) do
+    case array_buffer_species_constructor(obj) do
       nil ->
-        nil
+        Heap.wrap(%{
+          buffer() => :binary.copy(<<0>>, new_len),
+          "byteLength" => new_len,
+          "__array_buffer_kind__" => :array_buffer,
+          proto() => Runtime.global_class_proto("ArrayBuffer")
+        })
 
       ctor ->
-        case Map.get(Heap.get_ctor_statics(ctor), {:symbol, "Symbol.species"}) do
-          {:accessor, getter, _} when getter != nil -> Runtime.call_callback(getter, [])
-          _ -> nil
+        unless QuickBEAM.VM.Builtin.callable?(ctor) do
+          JSThrow.type_error!("ArrayBuffer species constructor is not a constructor")
+        end
+
+        result = Invocation.construct_runtime(ctor, ctor, [new_len])
+        result_map = array_buffer_map!(result)
+
+        cond do
+          result == obj ->
+            JSThrow.type_error!("ArrayBuffer species returned same buffer")
+
+          Map.get(result_map, "__immutable__") ->
+            JSThrow.type_error!("ArrayBuffer species returned immutable buffer")
+
+          Map.get(result_map, "byteLength", 0) < new_len ->
+            JSThrow.type_error!("ArrayBuffer species result is too small")
+
+          true ->
+            result
         end
     end
+  end
+
+  defp array_buffer_species_constructor(obj) do
+    case Get.get(obj, "constructor") do
+      :undefined ->
+        nil
+
+      :null ->
+        JSThrow.type_error!("ArrayBuffer constructor is not an object")
+
+      ctor when is_nullish(ctor) ->
+        JSThrow.type_error!("ArrayBuffer constructor is not an object")
+
+      ctor ->
+        unless Value.object_like?(ctor) do
+          JSThrow.type_error!("ArrayBuffer constructor is not an object")
+        end
+
+        case Get.get(ctor, {:symbol, "Symbol.species"}) do
+          species when is_nullish(species) -> nil
+          species -> species
+        end
+    end
+  end
+
+  defp write_array_buffer_slice_result!({:obj, ref}, copy, new_len) do
+    map = Heap.get_obj(ref, %{})
+    buf = Map.get(map, buffer(), <<>>)
+    suffix_len = max(byte_size(buf) - new_len, 0)
+    suffix = if suffix_len > 0, do: binary_part(buf, new_len, suffix_len), else: <<>>
+    Heap.put_obj(ref, Map.put(map, buffer(), copy <> suffix))
   end
 end
