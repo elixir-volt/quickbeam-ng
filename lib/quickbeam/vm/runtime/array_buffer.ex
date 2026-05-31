@@ -26,6 +26,11 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
     end
   end
 
+  @ecma "25.1.5.1"
+  static "isView", length: 1 do
+    is_view(arg(args, 0, :undefined))
+  end
+
   static_methods do
     @ecma "25.1.5.3"
     symbol :species do
@@ -146,6 +151,16 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   end
 
   defp update_typed_array_views(_, _), do: :ok
+
+  defp is_view({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true} -> true
+      %{"__data_view__" => true} -> true
+      _ -> false
+    end
+  end
+
+  defp is_view(_), do: false
 
   @ecma "25.1.6.7"
   proto "slice" do
