@@ -77,11 +77,27 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
         )
 
         Installer.install_prototype_specs(typed_array_base_ref, spec_module)
+        alias_base_prototype_methods(typed_array_base_ref)
         Heap.put_prop_desc(typed_array_base_ref, "constructor", PropertyDescriptor.constructor())
 
         ConstructorRegistry.put_prototype(typed_array_base, {:obj, typed_array_base_ref})
         Heap.put_ctor_prop_desc(typed_array_base, "prototype", PropertyDescriptor.prototype())
         Installer.install_static_specs(typed_array_base, spec_module)
+    end
+  end
+
+  defp alias_base_prototype_methods(ref) do
+    case Heap.get_obj(ref, %{}) do
+      %{"values" => values} = map ->
+        aliased =
+          map
+          |> Map.put({:symbol, "Symbol.iterator"}, values)
+          |> Map.put("toString", Get.get(Heap.get_array_proto(), "toString"))
+
+        Heap.put_obj(ref, aliased)
+
+      _ ->
+        :ok
     end
   end
 
