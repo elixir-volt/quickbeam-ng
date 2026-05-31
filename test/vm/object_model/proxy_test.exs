@@ -139,9 +139,11 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
-  test "Proxy constructor requires object target and handler", %{rt: rt} do
+  test "Proxy constructor requires new and object target and handler", %{rt: rt} do
+    assert_modes(rt, ~S|try { Proxy({}, {}); "ok"; } catch (e) { e.name; }|, "TypeError")
     assert_modes(rt, ~S|try { new Proxy(1, {}); "ok"; } catch (e) { e.name; }|, "TypeError")
     assert_modes(rt, ~S|try { new Proxy({}, null); "ok"; } catch (e) { e.name; }|, "TypeError")
+    assert_modes(rt, ~S|Object.prototype.hasOwnProperty.call(Proxy, "prototype")|, false)
   end
 
   test "Proxy.revocable function metadata matches built-in descriptors", %{rt: rt} do

@@ -11,6 +11,10 @@ defmodule QuickBEAM.VM.Runtime.Proxy do
       length: 2,
       phase: :fundamental
     )
+
+    install do
+      Heap.put_ctor_static(ctor, "prototype", :deleted)
+    end
   end
 
   @ecma "28.2.2.1"
