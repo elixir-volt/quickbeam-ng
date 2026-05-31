@@ -798,6 +798,14 @@ defmodule QuickBEAM.VM.Invocation do
   defp unwrap_new_target({:bound, _, _, _, _} = bound), do: bound
   defp unwrap_new_target(%QuickBEAM.VM.Function{} = fun), do: fun
   defp unwrap_new_target({:builtin, _, _} = builtin), do: builtin
+
+  defp unwrap_new_target({:obj, ref} = obj) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => _target} -> obj
+      _ -> nil
+    end
+  end
+
   defp unwrap_new_target(_), do: nil
 
   defp with_ctx(ctx, fun), do: RuntimeState.with_context(ctx, fun)

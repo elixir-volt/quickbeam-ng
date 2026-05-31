@@ -1,6 +1,8 @@
 defmodule QuickBEAM.VM.Realm do
   @moduledoc "Realm-specific global objects and intrinsic prototype lookup."
 
+  import QuickBEAM.VM.Heap.Keys, only: [proxy_target: 0]
+
   require QuickBEAM.VM.Builtin
 
   alias QuickBEAM.VM.Execution.RealmState
@@ -273,6 +275,13 @@ defmodule QuickBEAM.VM.Realm do
 
   def intrinsic({:bound, _, _, target, _}, intrinsic),
     do: intrinsic(target, intrinsic)
+
+  def intrinsic({:obj, ref}, intrinsic) do
+    case Heap.get_obj(ref, %{}) do
+      %{proxy_target() => target} -> intrinsic(target, intrinsic)
+      _ -> nil
+    end
+  end
 
   def intrinsic(constructor, intrinsic) do
     case RealmState.intrinsics(constructor) do

@@ -154,6 +154,20 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     assert_modes(rt, ~S|Object.prototype.hasOwnProperty.call(Proxy, "prototype")|, false)
   end
 
+  test "proxy newTarget uses target function realm for default prototypes", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let realm = $262.createRealm().global; let newTarget = new realm.Function(); newTarget.prototype = false; let proxy = new Proxy(newTarget, {}); let array = Reflect.construct(Array, [], proxy); [array instanceof realm.Array, Object.getPrototypeOf(array) === realm.Array.prototype].join(",")|,
+      "true,true"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let realm = $262.createRealm().global; let newTarget = new realm.Function(); newTarget.prototype = null; let proxy = new Proxy(new Proxy(newTarget, {}), {}); let boxed = Reflect.construct(Boolean, [], proxy); [boxed instanceof realm.Boolean, Object.getPrototypeOf(boxed) === realm.Boolean.prototype].join(",")|,
+      "true,true"
+    )
+  end
+
   test "Proxy.revocable function metadata matches built-in descriptors", %{rt: rt} do
     assert_modes(
       rt,
