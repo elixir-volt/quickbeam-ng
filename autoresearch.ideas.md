@@ -103,7 +103,6 @@ TypedArray full-category baseline was too slow for a tight loop (`~423s`, 34 fai
 - `built-ins/TypedArray/prototype/reduce,built-ins/TypedArray/prototype/reduceRight` is clean at `92/92`; fix was closure-aware mapped arguments offsets.
 - `built-ins/TypedArray/prototype/join,built-ins/TypedArray/prototype/toString` is clean at `29/29`; fix was Number prototype lookup for `NaN`/`±Infinity`.
 - `built-ins/TypedArray/prototype/Symbol.iterator` rechecked clean at `1/1`.
-- Current remaining focused candidate: `built-ins/TypedArray/prototype/set` has one QuickJS-accepted interpreter timeout in `typedarray-arg-src-backed-by-resizable-buffer.js`; decide whether to optimize generic `set` or defer because the test is intentionally broad/nested.
 
 Current focused TypedArray species slice:
 
@@ -123,6 +122,8 @@ Kept fixes in TypedArray follow-up:
 - Species `filter`/`map`/`slice` is clean at `236/236`; fixes covered length-tracking views over unaligned resizable ArrayBuffers and preventing outer constructor `new.target` from making ordinary `BigInt()` calls throw.
 
 TypedArray `set` is clean at `100/100`; the timeout was dominated by repeated post-call global object refresh scans, now cached until persistent globals or raw `globalThis` storage changes. The broader `built-ins/TypedArray` QuickJS-accepted category is clean at `1302/1302`; final residuals were prototype method identity aliases for `Symbol.iterator`/`values` and `toString`/`Array.prototype.toString`. Next adjacent candidate is ArrayBuffer/DataView resizable-buffer parity.
+
+ArrayBuffer/DataView slice improved `135 → 2`; kept fixes cover `ArrayBuffer.isView`, prototype accessors and `@@toStringTag`, size validation, transfer/transferToFixedLength sizing and mutability order, slice receiver/index/default-end handling, species construction, and in-place initialization of constructed ArrayBuffers for `newTarget` prototype semantics. Remaining failures: `ArrayBuffer/options-maxbytelength-compared-before-object-creation.js` and `ArrayBuffer/prototype/slice/species-constructor-is-not-object.js`.
 
 Tried and reverted as ineffective:
 

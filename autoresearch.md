@@ -32,10 +32,10 @@ AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/ArrayB
 Latest completed local result:
 
 ```text
-category=built-ins/TypedArray
-compatibility_cases=1302
-compatibility_pass=1302
-compatibility_failures=0
+category=built-ins/ArrayBuffer,built-ins/DataView
+compatibility_cases=666
+compatibility_pass=664
+compatibility_failures=2
 compiler_errors=0
 compiler_crashes=0
 compiler_fails=0
