@@ -114,195 +114,195 @@ defmodule QuickBEAM.VM.Runtime.Array do
   # ── Array.prototype dispatch ──
 
   @ecma "23.1.3.23"
-  proto "push" do
+  proto "push", length: 1 do
     push(this, args)
   end
 
   @ecma "23.1.3.22"
-  proto "pop" do
+  proto "pop", length: 0 do
     pop(this, args)
   end
 
   @ecma "23.1.3.27"
-  proto "shift" do
+  proto "shift", length: 0 do
     shift(this, args)
   end
 
   @ecma "23.1.3.37"
-  proto "unshift" do
+  proto "unshift", length: 1 do
     unshift(this, args)
   end
 
   @ecma "23.1.3.21"
-  proto "map" do
+  proto "map", length: 1 do
     map(this, args)
   end
 
   @ecma "23.1.3.8"
-  proto "filter" do
+  proto "filter", length: 1 do
     filter(this, args)
   end
 
   @ecma "23.1.3.24"
-  proto "reduce" do
+  proto "reduce", length: 1 do
     reduce(this, args)
   end
 
   @ecma "23.1.3.25"
-  proto "reduceRight" do
+  proto "reduceRight", length: 1 do
     reduce_right(this, args)
   end
 
   @ecma "23.1.3.15"
-  proto "forEach" do
+  proto "forEach", length: 1 do
     for_each(this, args)
   end
 
   @ecma "23.1.3.17"
-  proto "indexOf" do
+  proto "indexOf", length: 1 do
     index_of(this, args)
   end
 
   @ecma "23.1.3.20"
-  proto "lastIndexOf" do
+  proto "lastIndexOf", length: 1 do
     last_index_of(this, args)
   end
 
   @ecma "23.1.3.36"
-  proto "toString" do
+  proto "toString", length: 0 do
     array_to_string(this)
   end
 
   @ecma "23.1.3.32"
-  proto "toLocaleString" do
+  proto "toLocaleString", length: 0 do
     to_locale_string(this)
   end
 
   @ecma "23.1.3.16"
-  proto "includes" do
+  proto "includes", length: 1 do
     includes(this, args)
   end
 
   @ecma "23.1.3.28"
-  proto "slice" do
+  proto "slice", length: 2 do
     slice(this, args)
   end
 
   @ecma "23.1.3.31"
-  proto "splice" do
+  proto "splice", length: 2 do
     splice(this, args)
   end
 
   @ecma "23.1.3.18"
-  proto "join" do
+  proto "join", length: 1 do
     join(this, args)
   end
 
   @ecma "23.1.3.2"
-  proto "concat" do
+  proto "concat", length: 1 do
     concat(this, args)
   end
 
   @ecma "23.1.3.26"
-  proto "reverse" do
+  proto "reverse", length: 0 do
     reverse(this, args)
   end
 
   @ecma "23.1.3.30"
-  proto "sort" do
+  proto "sort", length: 1 do
     sort(this, args)
   end
 
   @ecma "23.1.3.13"
-  proto "flat" do
+  proto "flat", length: 0 do
     flat(this, args)
   end
 
   @ecma "23.1.3.9"
-  proto "find" do
+  proto "find", length: 1 do
     find(this, args)
   end
 
   @ecma "23.1.3.10"
-  proto "findIndex" do
+  proto "findIndex", length: 1 do
     find_index(this, args)
   end
 
   @ecma "23.1.3.11"
-  proto "findLast" do
+  proto "findLast", length: 1 do
     find_last(this, args)
   end
 
   @ecma "23.1.3.12"
-  proto "findLastIndex" do
+  proto "findLastIndex", length: 1 do
     find_last_index(this, args)
   end
 
   @ecma "23.1.3.6"
-  proto "every" do
+  proto "every", length: 1 do
     every(this, args)
   end
 
   @ecma "23.1.3.29"
-  proto "some" do
+  proto "some", length: 1 do
     some(this, args)
   end
 
   @ecma "23.1.3.14"
-  proto "flatMap" do
+  proto "flatMap", length: 1 do
     flat_map(this, args)
   end
 
   @ecma "23.1.3.7"
-  proto "fill" do
+  proto "fill", length: 1 do
     fill(this, args)
   end
 
   @ecma "23.1.3.4"
-  proto "copyWithin" do
+  proto "copyWithin", length: 2 do
     copy_within(this, args)
   end
 
   @ecma "23.1.3.1"
-  proto "at" do
+  proto "at", length: 1 do
     require_object_coercible!(this)
     array_at(this, args)
   end
 
   @ecma "23.1.3.33"
-  proto "toReversed" do
+  proto "toReversed", length: 0 do
     to_reversed(this)
   end
 
   @ecma "23.1.3.34"
-  proto "toSorted" do
+  proto "toSorted", length: 1 do
     to_sorted(this, args)
   end
 
   @ecma "23.1.3.35"
-  proto "toSpliced" do
+  proto "toSpliced", length: 2 do
     to_spliced(this, args)
   end
 
   @ecma "23.1.3.39"
-  proto "with" do
+  proto "with", length: 2 do
     array_with(this, args)
   end
 
   @ecma "23.1.3.38"
-  proto "values" do
+  proto "values", length: 0 do
     require_object_coercible!(this)
     make_array_iterator(this, :values)
   end
 
   @ecma "23.1.3.19"
-  proto "keys" do
+  proto "keys", length: 0 do
     require_object_coercible!(this)
     make_array_iterator(this, :keys)
   end
 
   @ecma "23.1.3.5"
-  proto "entries" do
+  proto "entries", length: 0 do
     require_object_coercible!(this)
     make_array_iterator(this, :entries)
   end
@@ -326,7 +326,7 @@ defmodule QuickBEAM.VM.Runtime.Array do
 
   # credo:disable-for-next-line Credo.Check.Readability.PredicateFunctionNames
   @ecma "23.1.2.2"
-  static "isArray" do
+  static "isArray", length: 1 do
     is_array(hd(args))
   end
 
@@ -377,17 +377,17 @@ defmodule QuickBEAM.VM.Runtime.Array do
   defp is_array(_, _), do: false
 
   @ecma "23.1.2.1"
-  static "from" do
+  static "from", length: 1 do
     from(args, this)
   end
 
   @ecma "23.1.2.3"
-  static "of" do
+  static "of", length: 0 do
     of(args, this)
   end
 
   @ecma "23.1.2.2"
-  static "fromAsync" do
+  static "fromAsync", length: 1 do
     Promise.resolved(from(args, this))
   end
 
