@@ -16,7 +16,17 @@ defmodule QuickBEAM.VM.Invocation do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0, proxy_handler: 0, proxy_target: 0]
 
-  alias QuickBEAM.VM.{Builtin, Compiler, GlobalEnvironment, Heap, Runtime, RuntimeState, Value}
+  alias QuickBEAM.VM.{
+    Builtin,
+    Compiler,
+    GlobalEnvironment,
+    Heap,
+    Realm,
+    Runtime,
+    RuntimeState,
+    Value
+  }
+
   alias QuickBEAM.VM.Compiler.FunctionInfo
   alias QuickBEAM.VM.Compiler.Runner
   alias QuickBEAM.VM.Interpreter
@@ -577,18 +587,28 @@ defmodule QuickBEAM.VM.Invocation do
     Context.mark_dirty(%{active_ctx() | this: :undefined})
   end
 
-  defp call_context(_fun), do: active_ctx()
+  defp call_context(fun) do
+    ctx = active_ctx()
+    Context.mark_dirty(%{ctx | this: default_call_this(fun, ctx)})
+  end
 
   defp dispatch_context(%QuickBEAM.VM.Function{is_strict_mode: true}, ctx, nil),
     do: Context.mark_dirty(%{ctx | this: :undefined})
 
-  defp dispatch_context(_fun, ctx, nil), do: ctx
+  defp dispatch_context(fun, ctx, nil),
+    do: Context.mark_dirty(%{ctx | this: default_call_this(fun, ctx)})
+
   defp dispatch_context(_fun, ctx, this), do: Context.mark_dirty(%{ctx | this: this})
 
   defp runtime_call_context(%QuickBEAM.VM.Function{is_strict_mode: true}, ctx),
     do: Context.mark_dirty(%{ctx | this: :undefined})
 
-  defp runtime_call_context(_fun, ctx), do: ctx
+  defp runtime_call_context(fun, ctx),
+    do: Context.mark_dirty(%{ctx | this: default_call_this(fun, ctx)})
+
+  defp default_call_this(fun, ctx) do
+    Realm.global(fun) || Map.get(ctx.globals, "globalThis", ctx.this)
+  end
 
   defp active_ctx do
     base_globals = GlobalEnvironment.base_globals()
