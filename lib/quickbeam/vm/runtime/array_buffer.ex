@@ -234,10 +234,6 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   defp transfer_buffer({:obj, ref} = this, args, mode) do
     map = array_buffer_map!(this)
 
-    if Map.get(map, "__immutable__") do
-      JSThrow.type_error!("ArrayBuffer is immutable")
-    end
-
     if Map.get(map, "__detached__") do
       JSThrow.type_error!("ArrayBuffer is detached")
     end
@@ -250,6 +246,10 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
         :undefined -> old_len
         value -> array_buffer_index!(value)
       end
+
+    if Map.get(map, "__immutable__") do
+      JSThrow.type_error!("ArrayBuffer is immutable")
+    end
 
     new_buf = resized_buffer(old_buf, new_len)
 
