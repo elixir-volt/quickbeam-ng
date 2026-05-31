@@ -303,6 +303,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
       true ->
         RegexpState.put(ref, key, val)
+
+        if desc == nil do
+          Heap.put_prop_desc(ref, key, PropertyDescriptor.enumerable_data())
+        end
     end
   end
 
