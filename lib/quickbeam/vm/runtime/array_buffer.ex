@@ -345,6 +345,7 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
 
     e =
       case args do
+        [_, :undefined | _] -> len
         [_, n | _] -> normalize_idx(TypedArrayCoercion.integer_or_infinity(n), len)
         _ -> len
       end
