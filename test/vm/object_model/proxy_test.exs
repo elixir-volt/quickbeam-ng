@@ -9,6 +9,20 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
+  test "ordinary set forwards missing own properties to prototype proxy", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|let seen = []; let handler = { set(t, k, v, r) { seen = [this === handler, t, k, v, r]; return true; } }; let target = {}; let proxy = new Proxy(target, handler); let receiver = Object.create(proxy); receiver.prop = "value"; [seen[0], seen[1] === target, seen[2], seen[3], seen[4] === receiver, Object.hasOwn(receiver, "prop")].join(",")|,
+      "true,true,prop,value,true,false"
+    )
+
+    assert_modes(
+      rt,
+      ~S|let seen = []; let handler = { set(t, k, v, r) { seen = [this === handler, t, k, v, r]; return true; } }; let target = {}; let proxy = new Proxy(target, handler); let array = new Array(1); Object.setPrototypeOf(array, proxy); array[0] = 1; [seen[0], seen[1] === target, seen[2], seen[3], seen[4] === array, Object.hasOwn(array, "0")].join(",")|,
+      "true,true,0,1,true,false"
+    )
+  end
+
   test "set invariants use SameValue for numeric values", %{rt: rt} do
     assert_modes(
       rt,

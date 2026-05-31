@@ -503,6 +503,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       %{proxy_target() => _proxy_target, proxy_handler() => _handler} ->
         set({:obj, ref}, key, val, receiver)
 
+      {:qb_arr, _} = array ->
+        set_array_property(ref, array, key, val, receiver)
+
       raw when is_tuple(raw) ->
         if Heap.shape?(raw) do
           set_shape_property(ref, raw, key, val, receiver)
@@ -510,13 +513,16 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           write_receiver(receiver, key, val)
         end
 
+      list when is_list(list) ->
+        set_array_property(ref, list, key, val, receiver)
+
       map when is_map(map) ->
         if typed_array_metadata_slot_without_own_property?(ref, map, key) do
           false
         else
           case Map.get(map, key) do
             nil ->
-              if proto_has_property?(Map.get(map, proto()), key) do
+              if prototype_present?(Map.get(map, proto())) do
                 set(Map.get(map, proto()), key, val, receiver)
               else
                 write_receiver(receiver, key, val)
@@ -554,13 +560,51 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           Heap.raw_has_key?(raw, key) ->
             write_receiver(receiver, key, val)
 
-          proto_has_property?(Heap.shape_proto(raw), key) ->
+          prototype_present?(Heap.shape_proto(raw)) ->
             set(Heap.shape_proto(raw), key, val, receiver)
 
           true ->
             write_receiver(receiver, key, val)
         end
     end
+  end
+
+  defp set_array_property(ref, array, key, val, receiver) do
+    case PropertyKey.array_index(key) do
+      {:ok, idx} ->
+        cond do
+          array_index_present?(ref, array, idx) ->
+            write_receiver(receiver, key, val)
+
+          prototype_present?(Heap.get_array_proto(ref)) ->
+            set(Heap.get_array_proto(ref), key, val, receiver)
+
+          true ->
+            write_receiver(receiver, key, val)
+        end
+
+      :error ->
+        cond do
+          Heap.get_array_prop(ref, key) != nil ->
+            write_receiver(receiver, key, val)
+
+          prototype_present?(Heap.get_array_proto(ref)) ->
+            set(Heap.get_array_proto(ref), key, val, receiver)
+
+          true ->
+            write_receiver(receiver, key, val)
+        end
+    end
+  end
+
+  defp array_index_present?(ref, {:qb_arr, _}, idx),
+    do:
+      Heap.array_get(ref, idx) != :undefined or
+        Heap.get_prop_desc(ref, Integer.to_string(idx)) != nil
+
+  defp array_index_present?(ref, list, idx) when is_list(list) do
+    (idx < length(list) and Enum.at(list, idx) != :undefined) or
+      Heap.get_prop_desc(ref, Integer.to_string(idx)) != nil
   end
 
   defp set_array_length_property(ref, array, val) do
@@ -901,21 +945,18 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
-  defp proto_has_property?(nil, _key), do: false
-  defp proto_has_property?(:undefined, _key), do: false
-
-  defp proto_has_property?({:obj, ref} = obj, key) do
-    raw = Heap.get_obj_raw(ref)
-
-    cond do
-      Heap.raw_has_key?(raw, key) -> true
-      is_map(raw) -> proto_has_property?(Map.get(raw, proto()), key)
-      Heap.shape?(raw) -> proto_has_property?(Heap.shape_proto(raw), key)
-      true -> has_property(obj, key)
+  defp prototype_proxy?({:obj, ref}) do
+    case Heap.get_obj_raw(ref) do
+      %{proxy_target() => _target, proxy_handler() => _handler} -> true
+      _ -> false
     end
   end
 
-  defp proto_has_property?(proto_obj, key), do: has_property(proto_obj, key)
+  defp prototype_proxy?(_), do: false
+
+  defp prototype_present?(nil), do: false
+  defp prototype_present?(:undefined), do: false
+  defp prototype_present?(proto), do: Value.object_like?(proto)
 
   defp proto_has_setter_property?(nil, _key), do: false
   defp proto_has_setter_property?(:undefined, _key), do: false
@@ -1357,6 +1398,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           i >= :array.size(arr) and proto_has_setter?(i) ->
             invoke_proto_setter(obj, i, val)
 
+          not array_index_present?(ref, {:qb_arr, arr}, i) and
+              prototype_proxy?(Heap.get_array_proto(ref)) ->
+            set(Heap.get_array_proto(ref), key, val, obj)
+
           Heap.array_get(ref, i) == :undefined and Heap.get_prop_desc(ref, key) == nil and
               proto_has_setter?(i) ->
             invoke_proto_setter(obj, i, val)
@@ -1422,6 +1467,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
           proto_has_setter?(i) ->
             invoke_proto_setter(obj, i, val)
+
+          not array_index_present?(ref, list, i) and prototype_proxy?(Heap.get_array_proto(ref)) ->
+            set(Heap.get_array_proto(ref), key, val, obj)
 
           mapped_argument_write(ref, i, val) ->
             :ok
