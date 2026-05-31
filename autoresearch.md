@@ -26,15 +26,15 @@ The previous `language/expressions/object` QuickJS-accepted slice is clean at `9
 Current active slice candidate:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/TypedArray TEST262_ERROR_LIMIT=80 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/ArrayBuffer,built-ins/DataView TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed local result:
 
 ```text
-category=built-ins/TypedArray/prototype/set
-compatibility_cases=100
-compatibility_pass=100
+category=built-ins/TypedArray
+compatibility_cases=1302
+compatibility_pass=1302
 compatibility_failures=0
 compiler_errors=0
 compiler_crashes=0
