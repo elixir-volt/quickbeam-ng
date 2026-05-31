@@ -1044,7 +1044,7 @@ defmodule QuickBEAM.VM.Interpreter do
 
         inner_ctx =
           base_inner_ctx
-          |> ArgumentsObject.get(frame, var_ref_offset: :raw)
+          |> ArgumentsObject.get(frame)
           |> then(&ArgumentsObject.store_global(base_inner_ctx, &1))
 
         prev_ctx = RuntimeState.current()
