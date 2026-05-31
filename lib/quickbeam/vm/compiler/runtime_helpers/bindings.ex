@@ -214,32 +214,21 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
   def current_strict_mode?(ctx), do: Value.strict_context?(ctx)
 
   defp arguments_object(ctx) do
-    case Map.fetch(RuntimeContext.globals(ctx), "arguments") do
-      {:ok, arguments} ->
+    current_func = RuntimeContext.current_func(ctx)
+    key = RuntimeState.compiled_arguments_object_key(current_func, RuntimeContext.arg_buf(ctx))
+
+    case RuntimeState.get_arguments_object(key) do
+      nil ->
+        arguments =
+          Heap.wrap_arguments(Tuple.to_list(RuntimeContext.arg_buf(ctx)),
+            strict: current_strict_mode?(ctx),
+            callee: current_func
+          )
+
+        RuntimeState.put_arguments_object(key, arguments)
+
+      arguments ->
         arguments
-
-      :error ->
-        current_func = RuntimeContext.current_func(ctx)
-
-        key =
-          RuntimeState.compiled_arguments_object_key(current_func, RuntimeContext.arg_buf(ctx))
-
-        fallback_key = RuntimeState.compiled_arguments_object_key(current_func)
-
-        case RuntimeState.get_arguments_object(key) ||
-               RuntimeState.get_arguments_object(fallback_key) do
-          nil ->
-            arguments =
-              Heap.wrap_arguments(Tuple.to_list(RuntimeContext.arg_buf(ctx)),
-                strict: current_strict_mode?(ctx),
-                callee: current_func
-              )
-
-            RuntimeState.put_arguments_object([key, fallback_key], arguments)
-
-          arguments ->
-            arguments
-        end
     end
   end
 

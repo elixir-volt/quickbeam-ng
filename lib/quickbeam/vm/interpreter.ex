@@ -175,11 +175,13 @@ defmodule QuickBEAM.VM.Interpreter do
         {:js_throw, val} -> {:throw, val}
       end
 
+    call_ctx = RuntimeState.current_or(ctx)
+
     if refresh_globals? do
       persistent = Heap.get_persistent_globals() || %{}
 
       refreshed_ctx =
-        %{ctx | globals: Map.merge(ctx.globals, persistent)}
+        %{call_ctx | globals: Map.merge(call_ctx.globals, persistent)}
         |> Context.mark_dirty()
         |> refresh_global_object_writes()
 
@@ -200,7 +202,7 @@ defmodule QuickBEAM.VM.Interpreter do
           )
       end
     else
-      updated_ctx = refresh_call_arg_buf(ctx)
+      updated_ctx = refresh_call_arg_buf(call_ctx)
 
       case call_result do
         {:ok, result} ->

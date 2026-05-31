@@ -147,39 +147,42 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Globals do
         persistent_before = Heap.get_persistent_globals()
         base_before = Heap.get_base_globals()
 
-        try do
-          name = Names.resolve_atom(ctx, atom_idx)
+        next_ctx =
+          try do
+            name = Names.resolve_atom(ctx, atom_idx)
 
-          case maybe_set_existing_global_object_property(ctx, atom_idx, op, name, val) do
-            {:handled, ctx} ->
-              run(pc + 1, frame, rest, gas, ctx)
+            case maybe_set_existing_global_object_property(ctx, atom_idx, op, name, val) do
+              {:handled, ctx} ->
+                ctx
 
-            :continue ->
-              new_ctx =
-                GlobalEnvironment.put(ctx, atom_idx, val,
-                  init: op == @op_put_var_init,
-                  strict: current_strict_mode?(ctx),
-                  sync_global_this: false
-                )
+              :continue ->
+                new_ctx =
+                  GlobalEnvironment.put(ctx, atom_idx, val,
+                    init: op == @op_put_var_init,
+                    strict: current_strict_mode?(ctx),
+                    sync_global_this: false
+                  )
 
-              unless GlobalEnvironment.lexical_global?(name) do
-                case Map.get(ctx.globals, "globalThis") do
-                  {:obj, _} = gt ->
-                    validate_global_set_result!(ctx, name, InternalMethods.set(gt, name, val))
+                unless GlobalEnvironment.lexical_global?(name) do
+                  case Map.get(ctx.globals, "globalThis") do
+                    {:obj, _} = gt ->
+                      validate_global_set_result!(ctx, name, InternalMethods.set(gt, name, val))
 
-                  _ ->
-                    :ok
+                    _ ->
+                      :ok
+                  end
                 end
-              end
 
-              run(pc + 1, frame, rest, gas, new_ctx)
+                new_ctx
+            end
+          catch
+            {:js_throw, error} ->
+              Heap.put_persistent_globals(persistent_before)
+              Heap.put_base_globals(base_before)
+              throw_or_catch(frame, error, gas, ctx)
           end
-        catch
-          {:js_throw, error} ->
-            Heap.put_persistent_globals(persistent_before)
-            Heap.put_base_globals(base_before)
-            throw_or_catch(frame, error, gas, ctx)
-        end
+
+        run(pc + 1, frame, rest, gas, next_ctx)
       end
 
       defp maybe_set_existing_global_object_property(ctx, atom_idx, op, name, val) do
