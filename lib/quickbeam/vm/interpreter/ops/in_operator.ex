@@ -4,7 +4,7 @@ defmodule QuickBEAM.VM.Interpreter.Ops.InOperator do
   import QuickBEAM.VM.Value, only: [is_closure: 1, is_object: 1]
 
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.InternalMethods
+  alias QuickBEAM.VM.ObjectModel.{InternalMethods, PropertyKey}
   alias QuickBEAM.VM.Semantics.Values
 
   def evaluate(key, obj) do
@@ -27,8 +27,5 @@ defmodule QuickBEAM.VM.Interpreter.Ops.InOperator do
       match?({:qb_arr, _}, obj) or is_list(obj) or is_map(obj)
   end
 
-  defp property_key({:symbol, _} = key), do: key
-  defp property_key({:symbol, _, _} = key), do: key
-  defp property_key(key) when is_binary(key) or is_integer(key), do: key
-  defp property_key(key), do: Values.stringify(key)
+  defp property_key(key), do: PropertyKey.to_property_key(key)
 end

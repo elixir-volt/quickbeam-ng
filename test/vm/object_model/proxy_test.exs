@@ -83,6 +83,14 @@ defmodule QuickBEAM.VM.ObjectModel.ProxyTest do
     )
   end
 
+  test "in operator converts numeric keys before proxy has trap", %{rt: rt} do
+    assert_modes(
+      rt,
+      ~S|var seen; let target = Object.create([14]); let proxy = new Proxy(target, { has(_target, prop) { seen = prop; return false; } }); let array = []; Object.setPrototypeOf(array, proxy); [1 in array, seen].join(",")|,
+      "false,1"
+    )
+  end
+
   test "has trap enforces non-configurable and non-extensible target invariants", %{rt: rt} do
     assert_modes(
       rt,

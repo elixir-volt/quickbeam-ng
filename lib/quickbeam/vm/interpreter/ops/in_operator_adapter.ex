@@ -6,15 +6,24 @@ defmodule QuickBEAM.VM.Interpreter.Ops.InOperatorAdapter do
       alias QuickBEAM.VM.Interpreter.Ops.InOperator
 
       defp run({@op_in, []}, pc, frame, [obj, key | rest], gas, ctx) do
-        catch_and_dispatch(
-          pc,
-          frame,
-          rest,
-          gas,
-          ctx,
-          fn -> InOperator.evaluate(key, obj) end,
-          false
-        )
+        QuickBEAM.VM.RuntimeState.install(ctx)
+
+        call_result =
+          try do
+            {:ok, InOperator.evaluate(key, obj)}
+          catch
+            {:js_throw, val} -> {:throw, val}
+          end
+
+        case call_result do
+          {:ok, result} ->
+            ctx = refresh_persistent_globals(ctx)
+            frame = sync_global_writes_to_frame(frame, QuickBEAM.VM.RuntimeState.current_or(ctx))
+            run(pc + 1, frame, [result | rest], gas, ctx)
+
+          {:throw, val} ->
+            throw_or_catch(frame, val, gas, close_active_iterators_on_abrupt(rest, ctx))
+        end
       end
     end
   end
