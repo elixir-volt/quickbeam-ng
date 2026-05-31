@@ -16,9 +16,9 @@ Latest result:
 
 ```text
 compatibility_cases=3408
-compatibility_pass=3391
-compatibility_failures=17
-both_fail=1
+compatibility_pass=3392
+compatibility_failures=16
+both_fail=0
 interpreter_fail_compiler_pass=0
 compiler_fails=16
 compiler_crashes=0
@@ -69,14 +69,14 @@ Latest result:
 
 ```text
 compatibility_cases=3408
-compatibility_pass=3391
-compatibility_failures=17
-both_fail=1
+compatibility_pass=3392
+compatibility_failures=16
+both_fail=0
 compiler_fails=16
 interpreter_fail_compiler_pass=0
 ```
 
-Recent kept fixes reduced the slice from 52 to 17 failures:
+Recent kept fixes reduced the slice from 52 to 16 failures:
 
 - `Object.defineProperties` now collects descriptor keys through ordinary internal own-key/enumerability semantics for builtin object-like values.
 - Error instance `Symbol.toStringTag` descriptors are hidden/non-enumerable.
@@ -90,11 +90,11 @@ Recent kept fixes reduced the slice from 52 to 17 failures:
 - Error instance `Symbol.toStringTag` remains hidden/non-enumerable but is writable for assignment overrides.
 - Symbol writes on shape-backed objects and array named properties preserve chronological own-key order.
 - Interpreter global/lexical writes are no longer rolled back when a later continuation throws after a successful `put_var`.
+- Ordinary `in` checks no longer sync stale global writes into frame locals unless the check changed persistent globals.
 
 Promising current clusters:
 
 - compiler-only `Object.defineProperty` failures on `arguments` objects and generic/index properties (`15.2.3.6-4-293` through `-324`); focused probes point at compiler catch/call boundaries around caught `Object.defineProperty` TypeErrors and later `verifyProperty(arguments, ...)` calls.
-- both-fail `Object.keys` arguments-object case where sequential functions with identical bodies appear to observe stale/mismatched `arguments` for `in` checks.
 
 Tried and reverted as ineffective:
 
@@ -103,7 +103,8 @@ Tried and reverted as ineffective:
 - preserving symbol order for object/array assignment only improved the metric when paired with descriptor result key-order storage.
 - changing compiler catch handler context to `RuntimeState.current_or(ctx)` did not improve the `defineProperty(arguments)` cluster.
 - forcing compiler calls with arguments-object arguments through interpreter fallback did not improve the `defineProperty(arguments)` cluster; generated/runtime call paths still observe the stale/missing descriptor.
-- ignoring stale `arguments` entries in interpreter `ArgumentsObject.get/3` did not fix the remaining `Object.keys(arguments)` case.
+- forcing functions whose source mentions `arguments` through interpreter fallback at invocation did not improve the `defineProperty(arguments)` cluster.
+- ignoring stale `arguments` entries in interpreter `ArgumentsObject.get/3` did not fix the former `Object.keys(arguments)` case; the actual fix was narrower `in`-operator frame sync.
 
 ### 2. Completed direct eval with spread
 
