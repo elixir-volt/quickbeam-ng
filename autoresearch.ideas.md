@@ -63,13 +63,43 @@ checks_timeout_seconds: 900
 
 ## Near-term plan
 
-### 1. Rebaseline broader QuickJS-accepted parity
+### 1. Continue built-ins/Object parity
 
-The `language/expressions/call` slice is clean. Re-run a broader native-accepted workload before selecting the next focused category:
+Current active slice:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Object TEST262_ERROR_LIMIT=20 ./autoresearch.sh
 ```
+
+Latest result:
+
+```text
+compatibility_cases=3408
+compatibility_pass=3380
+compatibility_failures=28
+both_fail=12
+compiler_fails=16
+interpreter_fail_compiler_pass=0
+```
+
+Recent kept fixes reduced the slice from 52 to 28 failures:
+
+- `Object.defineProperties` now collects descriptor keys through ordinary internal own-key/enumerability semantics for builtin object-like values.
+- Error instance `Symbol.toStringTag` descriptors are hidden/non-enumerable.
+- Object own-key ordering keeps symbols in chronological order after string keys.
+- Date prototype virtual method deletes are remembered for property-helper configurability checks.
+- `Object.entries` re-checks enumerability immediately before each getter read.
+- RegExp assignment-created own properties use enumerable data descriptors.
+
+Promising current clusters:
+
+- compiler-only `Object.defineProperty` failures on `arguments` objects and generic/index properties (`15.2.3.6-4-293` through `-324`);
+- both-fail non-object invalid `getOwnPropertyNames` / `getOwnPropertySymbols` side effects where captured lexical updates made before a TypeError are not visible after `assert.throws`;
+- symbol order for `Object.getOwnPropertySymbols` after assignment/define (`order-after-define-property`).
+
+Tried and reverted as ineffective:
+
+- syncing captured locals in interpreter `catch_and_dispatch` throw branches did not improve the non-object invalid count cases because compiler also fails and the captured update is deeper than the caller frame.
 
 ### 2. Completed direct eval with spread
 

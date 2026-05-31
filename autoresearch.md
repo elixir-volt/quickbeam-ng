@@ -40,7 +40,26 @@ both_fail=0
 interpreter_fail_compiler_pass=0
 ```
 
-The previous `language/expressions/object` QuickJS-accepted slice is clean at `941/941`. Rebaseline a broader QuickJS-accepted workload next before choosing another category.
+The previous `language/expressions/object` QuickJS-accepted slice is clean at `941/941`, and `language/expressions/call` is clean at `85/85`.
+
+Current broader active slice:
+
+```sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Object TEST262_ERROR_LIMIT=20 ./autoresearch.sh
+```
+
+Latest local result:
+
+```text
+compatibility_cases=3408
+compatibility_pass=3380
+compatibility_failures=28
+compiler_errors=0
+compiler_crashes=0
+compiler_fails=16
+both_fail=12
+interpreter_fail_compiler_pass=0
+```
 
 ## How to run
 
