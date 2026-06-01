@@ -19,6 +19,7 @@ defmodule QuickBEAM.VM.ObjectModel.PrototypeTraversalGet do
   def property_with_receiver(target, key, receiver, callbacks) do
     case lookup_with_receiver(target, key, receiver, callbacks) do
       {:found, value} -> value
+      {:found_from_accessor, value} -> value
       :not_found -> :undefined
     end
   end
