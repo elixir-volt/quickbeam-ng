@@ -26,15 +26,15 @@ The previous `language/expressions/object` QuickJS-accepted slice is clean at `9
 Current active slice candidate:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Boolean,built-ins/Number,built-ins/String,built-ins/Symbol,built-ins/BigInt TEST262_ERROR_LIMIT=80 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/WeakRef,built-ins/FinalizationRegistry,built-ins/SharedArrayBuffer TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed local result:
 
 ```text
-category=collections/misc cumulative shard
-compatibility_cases=2218
-compatibility_pass=2218
+category=built-ins/Boolean,built-ins/Number,built-ins/String,built-ins/Symbol,built-ins/BigInt
+compatibility_cases=1755
+compatibility_pass=1755
 compatibility_failures=0
 compiler_errors=0
 compiler_crashes=0
