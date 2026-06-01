@@ -215,5 +215,5 @@ defmodule QuickBEAM.VM.ObjectModel.Get do
       )
 
   defp prototype_traversal_callbacks,
-    do: GetCallbacks.traversal(&call_getter/2, &get/3, &get_from_prototype/2, &get/2)
+    do: GetCallbacks.traversal(&call_getter/2, &get/3, &get_from_prototype/2, &own/2)
 end
