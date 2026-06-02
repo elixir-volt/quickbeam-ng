@@ -23,7 +23,7 @@ defmodule QuickBEAM.VM.Runtime.Globals.Bindings do
   defp global_function_bindings do
     build_methods do
       @ecma "19.2.1"
-      method "eval", constructable: false do
+      method "eval", length: 1, constructable: false do
         Functions.js_eval(args, this)
       end
 
