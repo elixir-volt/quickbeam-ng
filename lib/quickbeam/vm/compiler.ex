@@ -116,6 +116,15 @@ defmodule QuickBEAM.VM.Compiler do
     end
   end
 
+  defp interpreter_exception_region_fallback?(%QuickBEAM.VM.Function{
+         func_kind: 1,
+         instructions: instructions
+       }) do
+    instructions
+    |> tuple_to_list()
+    |> Enum.any?(&catch_opcode?/1)
+  end
+
   defp interpreter_exception_region_fallback?(%QuickBEAM.VM.Function{instructions: instructions}) do
     instruction_list = tuple_to_list(instructions)
 
