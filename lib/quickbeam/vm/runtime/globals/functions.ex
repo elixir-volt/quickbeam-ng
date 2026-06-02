@@ -53,15 +53,23 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
 
   def decode_uri_component(_, _), do: :undefined
 
-  def encode_uri([value | _], _), do: URI.encode(to_string_value(value), &URI.char_unreserved?/1)
+  def encode_uri([value | _], _), do: encode_uri_string(to_string_value(value), :uri)
   def encode_uri(_, _), do: :undefined
 
-  def encode_uri_component([value | _], _), do: URI.encode_www_form(to_string_value(value))
+  def encode_uri_component([value | _], _),
+    do: encode_uri_string(to_string_value(value), :component)
+
   def encode_uri_component(_, _), do: :undefined
 
   defp to_string_value(value), do: QuickBEAM.VM.Semantics.Values.stringify(value)
 
   @decode_uri_reserved MapSet.new(~c";,/?:@&=+$#")
+  @encode_uri_unescaped MapSet.new(
+                          ~c"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'();,/?:@&=+$#"
+                        )
+  @encode_uri_component_unescaped MapSet.new(
+                                    ~c"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()"
+                                  )
 
   defp decode_uri_string(string, mode) do
     string
@@ -146,6 +154,50 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
       _ -> false
     end
   end
+
+  defp encode_uri_string(string, mode) do
+    unescaped = if mode == :uri, do: @encode_uri_unescaped, else: @encode_uri_component_unescaped
+    encode_uri_codepoints(string, unescaped, []) |> IO.iodata_to_binary()
+  end
+
+  defp encode_uri_codepoints(<<>>, _unescaped, acc), do: Enum.reverse(acc)
+
+  defp encode_uri_codepoints(string, unescaped, acc) do
+    case String.next_codepoint(string) do
+      {codepoint, rest} ->
+        [char] = String.to_charlist(codepoint)
+
+        cond do
+          char in 0xD800..0xDFFF ->
+            uri_error!()
+
+          MapSet.member?(unescaped, char) ->
+            encode_uri_codepoints(rest, unescaped, [codepoint | acc])
+
+          true ->
+            encode_uri_codepoints(rest, unescaped, [percent_encode_utf8(codepoint) | acc])
+        end
+
+      nil ->
+        Enum.reverse(acc)
+    end
+  rescue
+    _ -> uri_error!()
+  end
+
+  defp percent_encode_utf8(codepoint) do
+    codepoint
+    |> :binary.bin_to_list()
+    |> Enum.map(fn byte -> "%" <> byte_to_hex(byte) end)
+  end
+
+  defp byte_to_hex(byte) do
+    <<high::4, low::4>> = <<byte>>
+    <<hex_digit(high), hex_digit(low)>>
+  end
+
+  defp hex_digit(value) when value < 10, do: ?0 + value
+  defp hex_digit(value), do: ?A + value - 10
 
   defp uri_error!, do: throw({:js_throw, Heap.make_error("URI malformed", "URIError")})
 
