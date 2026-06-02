@@ -7,9 +7,8 @@ defmodule QuickBEAM.VM.ObjectModel.FunctionExoticGet do
   @restricted_properties ["caller", "arguments"]
   @builtin_properties ["length", "name", "caller", "arguments"]
 
-  def own_property(%QuickBEAM.VM.Function{func_kind: kind}, "prototype", _call_getter)
-      when kind in [2, 3],
-      do: :undefined
+  def own_property(%QuickBEAM.VM.Function{func_kind: 2}, "prototype", _call_getter),
+    do: :undefined
 
   def own_property(%QuickBEAM.VM.Function{} = fun, "prototype", call_getter) do
     constructor_static_property(fun, "prototype", call_getter, fn ->
@@ -37,11 +36,10 @@ defmodule QuickBEAM.VM.ObjectModel.FunctionExoticGet do
   end
 
   def own_property(
-        {:closure, _, %QuickBEAM.VM.Function{func_kind: kind}},
+        {:closure, _, %QuickBEAM.VM.Function{func_kind: 2}},
         "prototype",
         _call_getter
-      )
-      when kind in [2, 3],
+      ),
       do: :undefined
 
   def own_property({:closure, _, %QuickBEAM.VM.Function{}} = closure, "prototype", call_getter) do

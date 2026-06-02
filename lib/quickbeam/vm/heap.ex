@@ -394,9 +394,16 @@ defmodule QuickBEAM.VM.Heap do
   defp function_prototype_parent(%QuickBEAM.VM.Function{func_kind: 1}),
     do: generator_prototype_object()
 
+  defp function_prototype_parent({:closure, _, %QuickBEAM.VM.Function{func_kind: 3}}),
+    do: async_generator_prototype_object()
+
+  defp function_prototype_parent(%QuickBEAM.VM.Function{func_kind: 3}),
+    do: async_generator_prototype_object()
+
   defp function_prototype_parent(_ctor), do: get_object_prototype()
 
   def get_or_create_generator_prototype_object, do: generator_prototype_object()
+  def get_or_create_async_generator_prototype_object, do: async_generator_prototype_object()
 
   defp generator_prototype_object do
     case Process.get(:qb_generator_prototype_object) do
@@ -407,6 +414,18 @@ defmodule QuickBEAM.VM.Heap do
         proto = QuickBEAM.VM.Interpreter.Generator.prototype_object()
 
         Process.put(:qb_generator_prototype_object, proto)
+        proto
+    end
+  end
+
+  defp async_generator_prototype_object do
+    case Process.get(:qb_async_generator_prototype_object) do
+      {:obj, _} = proto ->
+        proto
+
+      _ ->
+        proto = QuickBEAM.VM.Interpreter.Generator.async_prototype_object()
+        Process.put(:qb_async_generator_prototype_object, proto)
         proto
     end
   end

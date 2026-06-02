@@ -146,12 +146,20 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
     PrototypeState.cached(key, fn ->
       ctor = QuickBEAM.VM.Builtin.builtin(name, constructor, length: 1, constructable: true)
 
-      proto_obj =
-        Heap.wrap(%{
-          "constructor" => ctor,
-          {:symbol, "Symbol.toStringTag"} => name,
-          proto() => Heap.get_func_proto()
-        })
+      prototype_value = function_kind_instance_prototype(name)
+
+      proto_properties = %{
+        "constructor" => ctor,
+        {:symbol, "Symbol.toStringTag"} => name,
+        proto() => Heap.get_func_proto()
+      }
+
+      proto_properties =
+        if prototype_value == :undefined,
+          do: proto_properties,
+          else: Map.put(proto_properties, "prototype", prototype_value)
+
+      proto_obj = Heap.wrap(proto_properties)
 
       Heap.put_ctor_static(ctor, "prototype", proto_obj)
       Heap.put_ctor_static(ctor, "__proto__", QuickBEAM.VM.Runtime.global_constructor("Function"))
@@ -174,11 +182,38 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
           enumerable: false,
           configurable: true
         })
+
+        if prototype_value != :undefined do
+          Heap.put_prop_desc(ref, "prototype", %{
+            writable: false,
+            enumerable: false,
+            configurable: true
+          })
+        end
       end
+
+      link_function_kind_instance_prototype(name, prototype_value, proto_obj)
 
       proto_obj
     end)
   end
+
+  defp function_kind_instance_prototype("AsyncGeneratorFunction"),
+    do: Heap.get_or_create_async_generator_prototype_object()
+
+  defp function_kind_instance_prototype(_), do: :undefined
+
+  defp link_function_kind_instance_prototype("AsyncGeneratorFunction", {:obj, ref}, proto_obj) do
+    Heap.put_obj_key(ref, Heap.get_obj(ref, %{}), "constructor", proto_obj)
+
+    Heap.put_prop_desc(ref, "constructor", %{
+      writable: false,
+      enumerable: false,
+      configurable: true
+    })
+  end
+
+  defp link_function_kind_instance_prototype(_, _, _), do: :ok
 
   defp generator_prototype_object do
     PrototypeState.cached(:qb_generator_prototype_object, fn ->
