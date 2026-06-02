@@ -554,6 +554,22 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   @doc "Returns whether a typed-array object is backed by immutable data."
   def metadata_key?(key), do: key in ["buffer", "byteLength", "byteOffset", "length"]
 
+  @doc "Returns the element type for a typed-array value."
+  def element_type({:obj, ref}), do: type(ref)
+
+  @doc "Returns whether a typed-array view is backed by a SharedArrayBuffer."
+  def shared_buffer?({:obj, ref}) do
+    case Heap.get_obj(ref, %{}) do
+      %{"buffer" => {:obj, buffer_ref}} ->
+        Heap.get_obj(buffer_ref, %{})
+        |> Map.get("__array_buffer_kind__")
+        |> Kernel.==(:shared_array_buffer)
+
+      _ ->
+        false
+    end
+  end
+
   def immutable?({:obj, ref}) do
     is_immutable_buffer?(Heap.get_obj(ref, %{}))
   end
@@ -610,6 +626,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   @doc "Returns the currently addressable byte length for a typed-array value."
   def current_byte_length({:obj, ref}) do
     element_count({:obj, ref}) * elem_size(type(ref))
+  end
+
+  @doc "Returns the value after typed-array element conversion for the given element type."
+  def normalized_element(value, type) do
+    converted = TypedArrayCoercion.element_value(value, type)
+    buffer = :binary.copy(<<0>>, elem_size(type))
+    read_element(write_element(buffer, 0, converted, type), 0, type)
   end
 
   @doc "Writes an element to a typed-array value."

@@ -322,6 +322,12 @@ defmodule QuickBEAM.VM.Builtin do
 
       case method do
         {:builtin, _, _} = method ->
+          Heap.put_ctor_static(
+            method,
+            :__builtin_meta__,
+            meta(name, [length: length, constructable: false], :static)
+          )
+
           Heap.put_ctor_static(method, "length", length)
           Heap.put_ctor_prop_desc(method, "length", PropertyDescriptor.hidden_readonly())
 
