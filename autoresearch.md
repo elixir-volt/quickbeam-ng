@@ -26,15 +26,17 @@ The previous `language/expressions/object` QuickJS-accepted slice is clean at `9
 Current active slice candidate:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/global-object,built-ins/eval,built-ins/AsyncIterator TEST262_ERROR_LIMIT=80 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/decodeURI,built-ins/decodeURIComponent,built-ins/encodeURI,built-ins/encodeURIComponent TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed local result:
 
 ```text
-category=built-ins/Atomics,built-ins/global,built-ins/Iterator
-compatibility_cases=660
-compatibility_pass=660
+category=built-ins/decodeURI,built-ins/decodeURIComponent,built-ins/encodeURI,built-ins/encodeURIComponent
+compatibility_cases=172
+compatibility_pass=150
+compatibility_failures=22
+remaining=timeout-only generated URI cases
 compatibility_failures=0
 compiler_errors=0
 compiler_crashes=0
