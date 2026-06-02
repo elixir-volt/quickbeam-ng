@@ -168,7 +168,11 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
         [char] = String.to_charlist(codepoint)
 
         cond do
-          char in 0xD800..0xDFFF ->
+          char in 0xF0000..0xF03FF ->
+            {combined, rest} = surrogate_pair_codepoint!(char, rest)
+            encode_uri_codepoints(rest, unescaped, [percent_encode_codepoint(combined) | acc])
+
+          char in 0xD800..0xDFFF or char in 0xF0400..0xF07FF ->
             uri_error!()
 
           MapSet.member?(unescaped, char) ->
@@ -183,6 +187,31 @@ defmodule QuickBEAM.VM.Runtime.Globals.Functions do
     end
   rescue
     _ -> uri_error!()
+  end
+
+  defp surrogate_pair_codepoint!(high_private, rest) do
+    case String.next_codepoint(rest) do
+      {low_codepoint, tail} ->
+        [low_private] = String.to_charlist(low_codepoint)
+
+        if low_private in 0xF0400..0xF07FF do
+          high = 0xD800 + high_private - 0xF0000
+          low = 0xDC00 + low_private - 0xF0400
+          {0x10000 + (high - 0xD800) * 0x400 + (low - 0xDC00), tail}
+        else
+          uri_error!()
+        end
+
+      nil ->
+        uri_error!()
+    end
+  end
+
+  defp percent_encode_codepoint(codepoint) do
+    codepoint
+    |> List.wrap()
+    |> :unicode.characters_to_binary(:unicode, :utf8)
+    |> percent_encode_utf8()
   end
 
   defp percent_encode_utf8(codepoint) do
