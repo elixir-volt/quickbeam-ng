@@ -16,7 +16,9 @@ defmodule QuickBEAM.VM.ObjectModel.BuiltinExoticGet do
         JSDate.proto_property(key)
 
       Map.has_key?(map, buffer()) and not Map.has_key?(map, typed_array()) ->
-        ArrayBuffer.proto_property(key)
+        if Map.get(map, "__array_buffer_kind__") == :shared_array_buffer,
+          do: :undefined,
+          else: ArrayBuffer.proto_property(key)
 
       true ->
         :undefined

@@ -107,6 +107,10 @@ defmodule QuickBEAM.VM.ObjectModel.PrototypeGet do
       Map.has_key?(map, proxy_target()) and Builtin.callable?(Map.get(map, proxy_target())) ->
         FunctionPrototypeGet.fallback(:undefined, Map.get(map, proxy_target()), key)
 
+      Map.get(map, "__array_buffer_kind__") == :shared_array_buffer and
+          Map.has_key?(map, :__internal_proto__) ->
+        callbacks.prototype_property_with_receiver.(Map.get(map, :__internal_proto__), key, obj)
+
       (builtin = BuiltinExoticGet.map_proto_property(map, key)) != :undefined ->
         builtin
 

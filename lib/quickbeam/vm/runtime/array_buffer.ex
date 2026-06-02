@@ -24,14 +24,6 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
         to_string_tag("ArrayBuffer")
       end
     end
-
-    intrinsic "SharedArrayBuffer" do
-      constructor(&__MODULE__.constructor/2, length: 1, phase: :fundamental)
-
-      prototype extends: :object do
-        properties()
-      end
-    end
   end
 
   @ecma "25.1.5.1"
@@ -214,7 +206,9 @@ defmodule QuickBEAM.VM.Runtime.ArrayBuffer do
   defp array_buffer_kind({:obj, ref}) do
     case Heap.get_obj(ref, %{}) do
       map when is_map(map) ->
-        if Map.get(map, proto()) == Runtime.global_class_proto("SharedArrayBuffer") do
+        object_proto = Map.get(map, :__internal_proto__, Map.get(map, proto()))
+
+        if object_proto == Runtime.global_class_proto("SharedArrayBuffer") do
           :shared_array_buffer
         else
           :array_buffer
