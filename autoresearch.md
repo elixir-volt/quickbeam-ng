@@ -26,15 +26,15 @@ The previous `language/expressions/object` QuickJS-accepted slice is clean at `9
 Current active slice candidate:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/SharedArrayBuffer TEST262_ERROR_LIMIT=80 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Atomics,built-ins/global,built-ins/Iterator TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed local result:
 
 ```text
-category=built-ins/Boolean,built-ins/Number,built-ins/String,built-ins/Symbol,built-ins/BigInt
-compatibility_cases=1755
-compatibility_pass=1755
+category=built-ins/SharedArrayBuffer
+compatibility_cases=103
+compatibility_pass=103
 compatibility_failures=0
 compiler_errors=0
 compiler_crashes=0

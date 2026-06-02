@@ -9,7 +9,7 @@ Drive BEAM interpreter/compiler behavior toward QuickJS NIF parity on Test262, p
 Continue with adjacent QuickJS-accepted object-model slices. The next active candidate is `built-ins/TypedArray`:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/SharedArrayBuffer TEST262_ERROR_LIMIT=80 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Atomics,built-ins/global,built-ins/Iterator TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed result:
@@ -71,7 +71,7 @@ built-ins/Function: 495/495
 Current active candidate:
 
 ```sh
-AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/SharedArrayBuffer TEST262_ERROR_LIMIT=80 ./autoresearch.sh
+AUTORESEARCH_QUICKJS_PARITY_ALL=1 AUTORESEARCH_TEST262_CATEGORY=built-ins/Atomics,built-ins/global,built-ins/Iterator TEST262_ERROR_LIMIT=80 ./autoresearch.sh
 ```
 
 Latest completed Array result:
