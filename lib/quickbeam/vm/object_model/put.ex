@@ -1643,6 +1643,14 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     do: list ++ List.duplicate(:undefined, max(0, i - length(list))) ++ [val]
 
   defp restricted_function_property?({:bound, _, _, _, _}), do: true
+
+  defp restricted_function_property?(%QuickBEAM.VM.Function{func_kind: kind})
+       when kind in [1, 2, 3], do: true
+
+  defp restricted_function_property?({:closure, _, %QuickBEAM.VM.Function{func_kind: kind}})
+       when kind in [1, 2, 3],
+       do: true
+
   defp restricted_function_property?(fun), do: Value.strict_function?(fun)
 
   defp reject_failed_write! do

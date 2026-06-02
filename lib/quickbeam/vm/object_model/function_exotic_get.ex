@@ -13,6 +13,11 @@ defmodule QuickBEAM.VM.ObjectModel.FunctionExoticGet do
     end)
   end
 
+  def own_property(%QuickBEAM.VM.Function{func_kind: kind}, key, _call_getter)
+      when kind in [1, 2, 3] and key in @restricted_properties do
+    restricted_property_error!()
+  end
+
   def own_property(%QuickBEAM.VM.Function{is_strict_mode: true}, key, _call_getter)
       when key in @restricted_properties do
     restricted_property_error!()
@@ -31,6 +36,11 @@ defmodule QuickBEAM.VM.ObjectModel.FunctionExoticGet do
     constructor_static_property(closure, "prototype", call_getter, fn ->
       Heap.get_or_create_prototype(closure)
     end)
+  end
+
+  def own_property({:closure, _, %QuickBEAM.VM.Function{func_kind: kind}}, key, _call_getter)
+      when kind in [1, 2, 3] and key in @restricted_properties do
+    restricted_property_error!()
   end
 
   def own_property({:closure, _, %QuickBEAM.VM.Function{is_strict_mode: true}}, key, _call_getter)
