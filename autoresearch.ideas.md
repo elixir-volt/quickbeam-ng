@@ -173,3 +173,4 @@ Only reinitialize the experiment when changing the active workload baseline.
 - Full category sweeps after every small edit.
 - Old stale category notes from previous Array/Object/Function/Date/etc. campaigns unless a current run reproduces them.
 - QuickJS bytecode/parser parity work in this branch unless the active Test262 failure is definitely caused before BEAM execution.
+- Revisit URI A2.5 timeout-only cases with a combined approach: decoded 4-byte URI sequences should map to QuickBEAM surrogate-code-unit strings, but that semantic fix alone only reduces elapsed time; it needs a larger top-level global write/loop optimization to affect the 5s timeout metric.
