@@ -16,15 +16,23 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
   alias QuickBEAM.VM.Compiler.RuntimeHelpers
   alias QuickBEAM.VM.Promise, as: Promise
 
+  @generator_ref_key "__generator_ref__"
+
   @doc "Builds the runtime value represented by this module."
   def build(gen_ref, generator_fun \\ nil) do
     QuickBEAM.VM.Builtin.object extends: generator_object_prototype(generator_fun) do
+      prop(@generator_ref_key, gen_ref)
+
       method "next" do
         do_next(gen_ref, argument_or_undefined(args))
       end
 
       method "return" do
         do_return(gen_ref, argument_or_undefined(args))
+      end
+
+      method "throw" do
+        do_throw(gen_ref, argument_or_undefined(args))
       end
 
       symbol :iterator do
@@ -86,6 +94,22 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
       _ ->
         Heap.put_obj(gen_ref, %{state: :completed})
         done(val)
+    end
+  end
+
+  defp do_throw(gen_ref, val) do
+    case Heap.get_obj(gen_ref) do
+      %{state: :suspended, mode: :initial} ->
+        Heap.put_obj(gen_ref, %{state: :completed})
+        throw({:js_throw, val})
+
+      %{state: :suspended, continuation: _cont} ->
+        Heap.put_obj(gen_ref, %{state: :completed})
+        throw({:js_throw, val})
+
+      _ ->
+        Heap.put_obj(gen_ref, %{state: :completed})
+        throw({:js_throw, val})
     end
   end
 
