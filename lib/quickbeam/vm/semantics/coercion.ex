@@ -29,6 +29,8 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
     if Value.object_like?(prim), do: throw_object_to_primitive_error(), else: to_number(prim)
   end
 
+  def to_number({:qb_arr, _} = array), do: array_to_number(array)
+
   def to_number({:symbol, _}),
     do:
       throw(
@@ -46,6 +48,14 @@ defmodule QuickBEAM.VM.Semantics.Coercion do
   def to_number({:bound, _, _, _, _} = f), do: to_number(fn_to_primitive(f))
   def to_number({:builtin, _, _} = f), do: to_number(fn_to_primitive(f))
   def to_number(_), do: :nan
+
+  defp array_to_number(array) do
+    array
+    |> QuickBEAM.VM.Runtime.ArraySource.to_list()
+    |> Enum.map_join(",", &to_string_val/1)
+    |> String.trim()
+    |> parse_numeric()
+  end
 
   def to_number({:obj, _} = obj, hint) do
     prim = to_primitive(obj, hint)

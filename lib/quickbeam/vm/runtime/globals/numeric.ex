@@ -1,6 +1,6 @@
 defmodule QuickBEAM.VM.Runtime.Globals.Numeric do
   @moduledoc "Global numeric functions: `parseInt`, `parseFloat`, `isNaN`, `isFinite`, and related utilities."
-  alias QuickBEAM.VM.Semantics.Values
+  alias QuickBEAM.VM.Semantics.{Coercion, Values}
 
   @doc "Implements JavaScript `parseInt` semantics."
   def parse_int(args, _) do
@@ -128,8 +128,10 @@ defmodule QuickBEAM.VM.Runtime.Globals.Numeric do
       when is_binary(value) and value in ["Infinity", "+Infinity", "-Infinity"], do: false
 
   def nan?([val | _], _) do
-    case Values.to_number(val) do
+    case Coercion.to_number(val) do
       :nan -> true
+      :infinity -> false
+      :neg_infinity -> false
       n when is_number(n) -> false
       _ -> true
     end
