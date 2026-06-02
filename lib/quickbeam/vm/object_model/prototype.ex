@@ -160,10 +160,7 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
 
   defp generator_prototype_object do
     PrototypeState.cached(:qb_generator_prototype_object, fn ->
-      Heap.wrap(%{
-        proto() => QuickBEAM.VM.Runtime.global_class_proto("Iterator"),
-        {:symbol, "Symbol.toStringTag"} => "Generator"
-      })
+      Heap.get_or_create_generator_prototype_object()
     end)
   end
 
@@ -179,6 +176,16 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
           constructable: true
         )
 
+      with {:obj, generator_ref} <- generator_proto do
+        Heap.put_obj_key(generator_ref, Heap.get_obj(generator_ref, %{}), "constructor", ctor)
+
+        Heap.put_prop_desc(generator_ref, "constructor", %{
+          writable: false,
+          enumerable: false,
+          configurable: true
+        })
+      end
+
       proto =
         Heap.wrap(%{
           "constructor" => ctor,
@@ -189,7 +196,27 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
 
       Heap.put_ctor_static(ctor, "prototype", proto)
 
-      Heap.put_prop_desc(proto_ref(proto), "prototype", %{
+      with {:obj, ref} <- proto do
+        Heap.put_prop_desc(ref, "constructor", %{
+          writable: false,
+          enumerable: false,
+          configurable: true
+        })
+
+        Heap.put_prop_desc(ref, "prototype", %{
+          writable: false,
+          enumerable: false,
+          configurable: true
+        })
+
+        Heap.put_prop_desc(ref, {:symbol, "Symbol.toStringTag"}, %{
+          writable: false,
+          enumerable: false,
+          configurable: true
+        })
+      end
+
+      Heap.put_prop_desc(ctor, "prototype", %{
         writable: false,
         enumerable: false,
         configurable: false
@@ -198,8 +225,6 @@ defmodule QuickBEAM.VM.ObjectModel.Prototype do
       proto
     end)
   end
-
-  defp proto_ref({:obj, ref}), do: ref
 
   defp callable_prototype({:builtin, _, _} = callable) do
     if Builtin.callable?(callable) do
