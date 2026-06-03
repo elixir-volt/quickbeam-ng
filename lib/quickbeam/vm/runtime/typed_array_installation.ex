@@ -27,6 +27,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
       end
 
     Heap.put_prop_desc(proto_ref, "BYTES_PER_ELEMENT", bytes_per_element_descriptor())
+    install_uint8array_encoding_prototype(name, proto_ref, spec_module)
     ConstructorRegistry.put_prototype(ctor, proto)
 
     Heap.put_ctor_prop_desc(ctor, "prototype", PropertyDescriptor.prototype())
@@ -113,6 +114,23 @@ defmodule QuickBEAM.VM.Runtime.TypedArrayInstallation do
         :ok
     end
   end
+
+  defp install_uint8array_encoding_prototype("Uint8Array", proto_ref, spec_module) do
+    for {name, length} <- [{"setFromHex", 1}, {"setFromBase64", 1}] do
+      method =
+        {:builtin, name,
+         fn args, this -> apply(spec_module, String.to_atom(name), [args, this]) end}
+        |> QuickBEAM.VM.Builtin.put_builtin_metadata(
+          QuickBEAM.VM.Builtin.meta(name, length: length, constructable: false)
+        )
+        |> QuickBEAM.VM.Builtin.put_function_metadata(name, length)
+
+      Heap.put_obj_key(proto_ref, name, method)
+      Heap.put_prop_desc(proto_ref, name, PropertyDescriptor.method())
+    end
+  end
+
+  defp install_uint8array_encoding_prototype(_name, _proto_ref, _spec_module), do: :ok
 
   defp delete_inherited_concrete_statics(ctor) do
     for key <- ["from", "of", {:symbol, "Symbol.species"}] do

@@ -84,6 +84,48 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     static_of(args, this)
   end
 
+  def setFromHex(args, this) do
+    target = require_uint8array_receiver!(this, "Uint8Array.prototype.setFromHex")
+
+    source =
+      args
+      |> Builtin.arg(0, :undefined)
+      |> require_string_argument!("Uint8Array.prototype.setFromHex")
+
+    bytes = decode_hex_bytes(source)
+    written = write_prefix_bytes(target, bytes, element_count(target))
+    result_object(%{"read" => written * 2, "written" => written})
+  end
+
+  def setFromBase64(args, this) do
+    target = require_uint8array_receiver!(this, "Uint8Array.prototype.setFromBase64")
+
+    source =
+      args
+      |> Builtin.arg(0, :undefined)
+      |> require_string_argument!("Uint8Array.prototype.setFromBase64")
+
+    options = Builtin.arg(args, 1, :undefined)
+    alphabet = base64_option(options, "alphabet", "base64")
+    last_chunk_handling = base64_option(options, "lastChunkHandling", "loose")
+    bytes = decode_base64_bytes(source, alphabet, last_chunk_handling)
+    capacity = element_count(target)
+
+    written =
+      if length(bytes) <= capacity do
+        write_prefix_bytes(target, bytes, capacity)
+      else
+        write_prefix_bytes(target, Enum.take(bytes, div(capacity, 3) * 3), capacity)
+      end
+
+    read =
+      if length(bytes) <= capacity,
+        do: String.length(String.replace(source, ~r/[\t\n\f\r ]/, "")),
+        else: div(capacity, 3) * 4
+
+    result_object(%{"read" => read, "written" => written})
+  end
+
   defp decode_hex_bytes(source) do
     if rem(String.length(source), 2) != 0 do
       JSThrow.syntax_error!("Invalid hex string")
@@ -216,6 +258,28 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
     Invocation.construct_runtime(ctor, ctor, [bytes])
   end
+
+  defp require_uint8array_receiver!({:obj, ref} = obj, name) do
+    case Heap.get_obj(ref, %{}) do
+      %{typed_array() => true, type_key() => :uint8} -> obj
+      _ -> JSThrow.type_error!("#{name} called on incompatible receiver")
+    end
+  end
+
+  defp require_uint8array_receiver!(_this, name) do
+    JSThrow.type_error!("#{name} called on incompatible receiver")
+  end
+
+  defp write_prefix_bytes(target, bytes, capacity) do
+    bytes
+    |> Enum.take(capacity)
+    |> Enum.with_index()
+    |> Enum.each(fn {byte, index} -> set_element(target, index, byte) end)
+
+    min(length(bytes), capacity)
+  end
+
+  defp result_object(properties), do: Heap.wrap(properties)
 
   static_methods do
     @ecma "23.2.3.4"
