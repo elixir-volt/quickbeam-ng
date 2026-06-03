@@ -21,6 +21,8 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   alias QuickBEAM.VM.Runtime.TypedArrayInstallation
   alias QuickBEAM.VM.Semantics.Iterators
 
+  @max_typed_array_elements 4_294_967_295
+
   def builtin_definitions do
     for {name, type} <- Metadata.types() do
       %Definition{
@@ -798,12 +800,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
       true ->
         len = max(Runtime.to_int(Get.get(source, "length")), 0)
-
-        if len == 0 do
-          []
-        else
-          for index <- 0..(len - 1), do: Get.get(source, Integer.to_string(index))
-        end
+        array_like_to_list_with_length(source, len)
     end
   end
 
@@ -2277,12 +2274,17 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp array_like_to_list(obj) do
     len = max(Runtime.to_int(Get.get(obj, "length")), 0)
+    array_like_to_list_with_length(obj, len)
+  end
 
-    if len == 0 do
-      []
-    else
-      for idx <- 0..(len - 1), do: Get.get(obj, Integer.to_string(idx))
-    end
+  defp array_like_to_list_with_length(_obj, len) when len > @max_typed_array_elements do
+    JSThrow.range_error!("Invalid typed array length")
+  end
+
+  defp array_like_to_list_with_length(_obj, 0), do: []
+
+  defp array_like_to_list_with_length(obj, len) do
+    for idx <- 0..(len - 1), do: Get.get(obj, Integer.to_string(idx))
   end
 
   # ── Element read/write ──
