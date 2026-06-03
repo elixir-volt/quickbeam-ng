@@ -239,8 +239,25 @@ defmodule QuickBEAM.VM.Runtime.ConstructorCallbacks do
       Heap.put_ctor_static(value, "__proto__", proto)
     end
 
+    define_dynamic_generator_prototype(value)
     value
   end
+
+  defp define_dynamic_generator_prototype(
+         {:closure, _, %QuickBEAM.VM.Function{func_kind: kind}} = value
+       )
+       when kind in [1, 3] do
+    Heap.put_ctor_static(value, "prototype", Heap.get_or_create_prototype(value))
+    :ok
+  end
+
+  defp define_dynamic_generator_prototype(%QuickBEAM.VM.Function{func_kind: kind} = value)
+       when kind in [1, 3] do
+    Heap.put_ctor_static(value, "prototype", Heap.get_or_create_prototype(value))
+    :ok
+  end
+
+  defp define_dynamic_generator_prototype(_), do: :ok
 
   defp stringify_arg(val) when is_binary(val), do: val
   defp stringify_arg(val), do: QuickBEAM.VM.Semantics.Values.stringify(val)
