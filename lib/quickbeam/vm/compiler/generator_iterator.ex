@@ -71,8 +71,11 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
 
   defp do_next(gen_ref, arg) do
     case Heap.get_obj(gen_ref) do
-      %{state: :suspended, continuation: cont} when is_function(cont, 1) ->
-        resume(gen_ref, cont, arg)
+      %{state: :suspended, continuation: cont} = state when is_function(cont, 1) ->
+        resume(gen_ref, state, cont, arg)
+
+      %{state: :executing} ->
+        QuickBEAM.VM.JSThrow.type_error!("Generator is already executing")
 
       _ ->
         done(:undefined)
@@ -81,11 +84,16 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
 
   defp do_return(gen_ref, val) do
     case Heap.get_obj(gen_ref) do
-      %{state: :suspended, mode: :yield_star, continuation: cont} when is_function(cont, 1) ->
-        resume(gen_ref, cont, RuntimeHelpers.generator_return_resume(val))
+      %{state: :suspended, mode: :yield_star, continuation: cont} = state
+      when is_function(cont, 1) ->
+        resume(gen_ref, state, cont, RuntimeHelpers.generator_return_resume(val))
 
-      %{state: :suspended, mode: :yield_cleanup, continuation: cont} when is_function(cont, 1) ->
-        resume(gen_ref, cont, RuntimeHelpers.generator_return_resume(val))
+      %{state: :suspended, mode: :yield_cleanup, continuation: cont} = state
+      when is_function(cont, 1) ->
+        resume(gen_ref, state, cont, RuntimeHelpers.generator_return_resume(val))
+
+      %{state: :executing} ->
+        QuickBEAM.VM.JSThrow.type_error!("Generator is already executing")
 
       %{state: :suspended} ->
         Heap.put_obj(gen_ref, %{state: :completed})
@@ -107,13 +115,17 @@ defmodule QuickBEAM.VM.Compiler.GeneratorIterator do
         Heap.put_obj(gen_ref, %{state: :completed})
         throw({:js_throw, val})
 
+      %{state: :executing} ->
+        QuickBEAM.VM.JSThrow.type_error!("Generator is already executing")
+
       _ ->
         Heap.put_obj(gen_ref, %{state: :completed})
         throw({:js_throw, val})
     end
   end
 
-  defp resume(gen_ref, cont, arg) do
+  defp resume(gen_ref, state, cont, arg) do
+    Heap.put_obj(gen_ref, Map.put(state, :state, :executing))
     result = cont.(arg)
     Heap.put_obj(gen_ref, %{state: :completed})
     done(result)

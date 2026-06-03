@@ -204,10 +204,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Bindings do
 
   @doc "Reads a variable from a compiled context or throws when absent."
   def fetch_ctx_var(ctx, name) do
-    case GlobalEnvironment.fetch(RuntimeContext.globals(ctx), name) do
-      {:found, :__tdz__} -> JSThrow.reference_error!("#{name} is not initialized")
-      {:found, value} -> value
-      :not_found -> JSThrow.reference_error!("#{name} is not defined")
+    case fetch_global_binding(RuntimeContext.globals(ctx), name) do
+      {:ok, :__tdz__} -> JSThrow.reference_error!("#{name} is not initialized")
+      {:ok, value} -> value
+      :error -> JSThrow.reference_error!("#{name} is not defined")
     end
   end
 

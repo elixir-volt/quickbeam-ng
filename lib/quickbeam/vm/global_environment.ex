@@ -43,7 +43,8 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
   end
 
   @doc "Fetches a global binding by name or atom-table index."
-  def fetch(%Context{} = ctx, atom_idx), do: fetch(ctx.globals, atom_idx, ctx.atoms)
+  def fetch(%Context{} = ctx, atom_idx),
+    do: fetch(Map.merge(ctx.globals, Heap.get_persistent_globals() || %{}), atom_idx, ctx.atoms)
 
   def fetch(globals, atom_idx) when is_map(globals),
     do: fetch(globals, atom_idx, Heap.get_atoms())
@@ -51,7 +52,13 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
   def fetch(atom_idx), do: fetch(current(), atom_idx, Heap.get_atoms())
 
   def get(%Context{} = ctx, atom_idx, default),
-    do: get(ctx.globals, atom_idx, default, ctx.atoms)
+    do:
+      get(
+        Map.merge(ctx.globals, Heap.get_persistent_globals() || %{}),
+        atom_idx,
+        default,
+        ctx.atoms
+      )
 
   def get(globals, atom_idx, default) when is_map(globals),
     do: get(globals, atom_idx, default, Heap.get_atoms())

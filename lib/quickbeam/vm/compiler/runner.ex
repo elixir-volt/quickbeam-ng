@@ -139,8 +139,8 @@ defmodule QuickBEAM.VM.Compiler.Runner do
   defp interpreter_fallback(%QuickBEAM.VM.Function{} = fun, args, ctx),
     do: Interpreter.invoke_function_fallback(fun, args, ctx.gas, ctx)
 
-  defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 1} = fun, compiled, ctx, args) do
-    compiled_gen_invoke(compiled, ctx, args, fun)
+  defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 1} = fun, _compiled, ctx, args) do
+    interpreter_fallback(fun, args, ctx)
   end
 
   defp invoke_compiled(%QuickBEAM.VM.Function{func_kind: 2}, compiled, ctx, args) do
@@ -165,19 +165,6 @@ defmodule QuickBEAM.VM.Compiler.Runner do
     after
       Trace.pop()
     end
-  end
-
-  defp compiled_gen_invoke(compiled, ctx, args, generator_fun) do
-    gen_ref = make_ref()
-
-    try do
-      apply_compiled(compiled, ctx, args)
-    catch
-      {:generator_yield, _val, continuation} ->
-        Heap.put_obj(gen_ref, %{state: :suspended, continuation: continuation, mode: :initial})
-    end
-
-    GeneratorIterator.build(gen_ref, generator_fun)
   end
 
   defp build_suspended_generator(continuation) do
