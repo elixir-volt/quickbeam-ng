@@ -152,40 +152,45 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     normalized_source = String.replace(source, ~r/[\t\n\f\r ]/, "")
     capacity = element_count(target)
 
-    bytes =
-      try do
-        decode_base64_bytes(source, alphabet, last_chunk_handling)
-      catch
-        {:js_throw, reason} ->
-          write_prefix_bytes(
-            target,
-            decode_base64_prefix_before_error(source, alphabet),
-            capacity
-          )
+    if capacity == 0 do
+      result_object(%{"read" => 0, "written" => 0})
+    else
+      {bytes, prefix_completed?} =
+        try do
+          {decode_base64_bytes(source, alphabet, last_chunk_handling), false}
+        catch
+          {:js_throw, reason} ->
+            prefix = decode_base64_prefix_before_error(source, alphabet)
 
-          throw({:js_throw, reason})
-      end
+            if length(prefix) >= capacity do
+              {prefix, true}
+            else
+              write_prefix_bytes(target, prefix, capacity)
+              throw({:js_throw, reason})
+            end
+        end
 
-    written =
-      if length(bytes) <= capacity do
-        write_prefix_bytes(target, bytes, capacity)
-      else
-        write_prefix_bytes(target, Enum.take(bytes, div(capacity, 3) * 3), capacity)
-      end
+      written =
+        if length(bytes) <= capacity do
+          write_prefix_bytes(target, bytes, capacity)
+        else
+          write_prefix_bytes(target, Enum.take(bytes, div(capacity, 3) * 3), capacity)
+        end
 
-    read =
-      cond do
-        length(bytes) > capacity ->
-          div(capacity, 3) * 4
+      read =
+        cond do
+          prefix_completed? or length(bytes) > capacity ->
+            div(capacity, 3) * 4
 
-        last_chunk_handling == "stop-before-partial" ->
-          String.length(trim_base64_partial(normalized_source, last_chunk_handling))
+          last_chunk_handling == "stop-before-partial" ->
+            String.length(trim_base64_partial(normalized_source, last_chunk_handling))
 
-        true ->
-          String.length(source)
-      end
+          true ->
+            String.length(source)
+        end
 
-    result_object(%{"read" => read, "written" => written})
+      result_object(%{"read" => read, "written" => written})
+    end
   end
 
   defp decode_hex_bytes(source) do
@@ -274,6 +279,19 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         end
 
       [_] ->
+        valid_prefix_length = base64_valid_prefix_length(source)
+
+        source =
+          if valid_prefix_length < String.length(source) do
+            if valid_prefix_length < 4 do
+              JSThrow.syntax_error!("Invalid base64 string")
+            else
+              binary_part(source, 0, valid_prefix_length)
+            end
+          else
+            source
+          end
+
         case rem(String.length(source), 4) do
           0 -> source
           remainder -> binary_part(source, 0, String.length(source) - remainder)
@@ -290,6 +308,14 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp trim_base64_partial(source, _), do: source
+
+  defp base64_valid_prefix_length(source) do
+    source
+    |> String.graphemes()
+    |> Enum.take_while(&Regex.match?(~r/[A-Za-z0-9+\/_=-]/, &1))
+    |> Enum.join()
+    |> String.length()
+  end
 
   defp validate_base64_source!(source) do
     cond do
