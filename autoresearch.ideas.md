@@ -6,7 +6,7 @@ Drive BEAM interpreter/compiler behavior toward QuickJS NIF parity on Test262, p
 
 ## Recently cleaned / do not re-baseline as active work unless a shard regresses
 
-- Object / Reflect / Function / Array / TypedArray / TypedArrayConstructors / Uint8Array / ArrayBuffer / DataView / collections / Promise / RegExp prototype / Date / Error / JSON / Math / primitive wrappers / WeakRef / FinalizationRegistry / SharedArrayBuffer / Atomics / Iterator / global numeric and URI semantic slices are already cleaned or checkpointed.
+- Object / Reflect / Function / Array / TypedArray / TypedArrayConstructors / Uint8Array / ArrayBuffer / DataView / collections / Promise / RegExp prototype / Date / Error / JSON / Math / primitive wrappers / WeakRef / FinalizationRegistry / SharedArrayBuffer / Atomics / Iterator / global numeric / small global value and URI semantic slices are already cleaned or checkpointed.
 - AsyncFunction, AsyncGeneratorPrototype, AsyncGeneratorFunction, GeneratorFunction, and GeneratorPrototype are clean in combination.
 - Array/Map/Set/String iterator prototypes are clean.
 - AsyncIteratorPrototype / AsyncFromSyncIteratorPrototype / RegExpStringIteratorPrototype are clean.
@@ -15,7 +15,6 @@ Drive BEAM interpreter/compiler behavior toward QuickJS NIF parity on Test262, p
 
 ## Promising next paths
 
-- Probe other small unclean builtin families after the typed-array and generator slices: `Infinity`, `NaN`, `undefined`, `ShadowRealm`, `AbstractModuleSource`.
 - Run cumulative shards periodically instead of all-in-one broad checkpoint; all-in-one can exhaust BEAM literal memory.
 - Revisit URI A2.5 timeout-only cases only with a structural loop/global synchronization optimization. Do not retry isolated URI/fromCharCode micro-optimizations; they reduced elapsed time but not the primary timeout metric.
 
