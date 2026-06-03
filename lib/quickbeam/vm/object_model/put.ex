@@ -16,6 +16,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.JSThrow
   alias QuickBEAM.VM.Runtime.TypedArray
+  alias QuickBEAM.VM.Runtime.TypedArrayCoercion
 
   alias QuickBEAM.VM.ObjectModel.{
     Define,
@@ -545,7 +546,7 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       map when is_map(map) ->
         cond do
           Map.get(map, typed_array()) == true and
-              typed_array_integer_put({:obj, ref}, key, val) != :not_integer_index ->
+              typed_array_integer_set({:obj, ref}, key, val, receiver) != :not_integer_index ->
             true
 
           typed_array_metadata_slot_without_own_property?(ref, map, key) ->
@@ -874,6 +875,41 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
       :not_integer_index ->
         :not_integer_index
+    end
+  end
+
+  defp typed_array_integer_set(obj, key, val, receiver) do
+    case Runtime.TypedArray.integer_index_key(key) do
+      {:ok, idx} ->
+        cond do
+          receiver != obj and idx < Runtime.TypedArray.element_count(obj) ->
+            write_receiver(receiver, key, val)
+            :ok
+
+          receiver == obj and idx < Runtime.TypedArray.element_count(obj) ->
+            Runtime.TypedArray.set_element(obj, idx, val)
+            :ok
+
+          receiver == obj ->
+            coerce_typed_array_set_value(obj, val)
+            :ok
+
+          true ->
+            :ok
+        end
+
+      :invalid ->
+        :ok
+
+      :not_integer_index ->
+        :not_integer_index
+    end
+  end
+
+  defp coerce_typed_array_set_value({:obj, ref}, val) do
+    case Heap.get_obj(ref, %{}) do
+      %{type_key() => type} -> TypedArrayCoercion.element_value(val, type)
+      _ -> :ok
     end
   end
 
