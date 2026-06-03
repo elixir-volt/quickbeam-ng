@@ -348,7 +348,7 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
           define_typed_array_element!(obj, idx, desc)
 
         :invalid ->
-          throw({:js_throw, Heap.make_error("Invalid typed array index", "TypeError")})
+          throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
 
         :not_integer_index ->
           :ok
@@ -358,13 +358,13 @@ defmodule QuickBEAM.VM.ObjectModel.Define do
 
   defp define_typed_array_element!(obj, idx, desc) do
     if TypedArray.out_of_bounds?(obj) or idx >= TypedArray.element_count(obj) do
-      throw({:js_throw, Heap.make_error("Invalid typed array index", "TypeError")})
+      throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
     end
 
     if Map.has_key?(desc, "get") or Map.has_key?(desc, "set") or
          Map.get(desc, "configurable") == false or Map.get(desc, "enumerable") == false or
          Map.get(desc, "writable") == false do
-      throw({:js_throw, Heap.make_error("Invalid typed array descriptor", "TypeError")})
+      throw({:js_throw, Heap.make_error("Cannot define property", "TypeError")})
     end
 
     if Map.has_key?(desc, "value") do

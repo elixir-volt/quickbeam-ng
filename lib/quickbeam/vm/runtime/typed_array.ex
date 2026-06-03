@@ -92,6 +92,24 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defdelegate constructor_type(name), to: Metadata
 
   @doc "Classifies a property key using integer-indexed exotic object rules."
+  def integer_index_key(key) when is_binary(key) do
+    cond do
+      key == "-0" ->
+        :invalid
+
+      Regex.match?(~r/^-[0-9]+$/, key) ->
+        :invalid
+
+      canonical_nonnegative_integer_string?(key) ->
+        {:ok, String.to_integer(key)}
+
+      true ->
+        :not_integer_index
+    end
+  end
+
+  def integer_index_key(key) when is_float(key) and key == 0.0, do: {:ok, 0}
+
   def integer_index_key(key) do
     case PropertyKey.integer_index(key) do
       {:ok, idx} -> {:ok, idx}
@@ -99,13 +117,10 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
     end
   end
 
-  defp invalid_integer_index_key(key) when is_binary(key) do
-    cond do
-      key == "-0" -> :invalid
-      Regex.match?(~r/^-\d+$/, key) -> :invalid
-      Regex.match?(~r/^\d+$/, key) -> :invalid
-      true -> :not_integer_index
-    end
+  defp canonical_nonnegative_integer_string?("0"), do: true
+
+  defp canonical_nonnegative_integer_string?(key) do
+    Regex.match?(~r/^[1-9][0-9]*$/, key) and String.length(key) < 22
   end
 
   defp invalid_integer_index_key(key) when is_integer(key), do: :invalid

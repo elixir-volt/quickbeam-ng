@@ -12,13 +12,14 @@ defmodule QuickBEAM.VM.ObjectModel.HasProperty do
   def ordinary_has_property?({:obj, ref} = obj, key) do
     case Heap.get_obj(ref, %{}) do
       %{typed_array() => true} = map ->
-        case PropertyKey.array_index(key) do
-          {:ok, _idx} ->
-            if TypedArray.out_of_bounds?(obj),
-              do: false,
-              else: OwnProperty.present?(obj, key) or prototype_has_property?(obj, map, key)
+        case TypedArray.integer_index_key(key) do
+          {:ok, idx} ->
+            not TypedArray.out_of_bounds?(obj) and idx < TypedArray.element_count(obj)
 
-          _ ->
+          :invalid ->
+            false
+
+          :not_integer_index ->
             OwnProperty.present?(obj, key) or prototype_has_property?(obj, map, key)
         end
 
