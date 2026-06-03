@@ -96,7 +96,15 @@ defmodule QuickBEAM.VM.GlobalEnvironment do
         InternalMethods.set(Map.get(ctx.globals, "globalThis"), name, val)
       )
 
-      RuntimeState.refresh_globals(ctx)
+      globals =
+        ctx.globals |> Map.merge(Heap.get_persistent_globals() || %{}) |> Map.put(name, val)
+
+      if Keyword.get(opts, :persist, true) do
+        Heap.put_persistent_globals(globals)
+        Heap.put_base_globals(globals)
+      end
+
+      RuntimeState.refresh_globals(%{ctx | globals: globals})
     else
       globals =
         ctx.globals |> Map.merge(Heap.get_persistent_globals() || %{}) |> Map.put(name, val)

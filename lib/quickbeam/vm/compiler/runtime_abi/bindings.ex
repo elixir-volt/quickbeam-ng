@@ -34,13 +34,12 @@ defmodule QuickBEAM.VM.Compiler.RuntimeABI.Bindings do
   end
 
   defp fetch_global_binding(globals, name) do
-    case Map.fetch(globals, name) do
-      {:ok, _} = found ->
-        found
+    persistent = QuickBEAM.VM.Heap.get_persistent_globals() || %{}
 
-      :error ->
-        persistent = QuickBEAM.VM.Heap.get_persistent_globals() || %{}
-        Map.fetch(persistent, name)
+    if Map.has_key?(persistent, name) do
+      Map.fetch(persistent, name)
+    else
+      Map.fetch(globals, name)
     end
   end
 
