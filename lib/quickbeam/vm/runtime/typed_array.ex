@@ -494,6 +494,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       canonical_nonnegative_integer_string?(key) ->
         {:ok, String.to_integer(key)}
 
+      canonical_non_integral_numeric_string?(key) ->
+        :invalid
+
       true ->
         :not_integer_index
     end
@@ -512,6 +515,19 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp canonical_nonnegative_integer_string?(key) do
     Regex.match?(~r/^[1-9][0-9]*$/, key) and String.length(key) < 22
+  end
+
+  defp canonical_non_integral_numeric_string?(key) when key in ["NaN", "Infinity", "-Infinity"],
+    do: true
+
+  defp canonical_non_integral_numeric_string?(key) do
+    case Float.parse(key) do
+      {number, ""} when number != trunc(number) ->
+        QuickBEAM.VM.Semantics.Values.stringify(number) == key
+
+      _ ->
+        false
+    end
   end
 
   defp invalid_integer_index_key(key) when is_integer(key), do: :invalid

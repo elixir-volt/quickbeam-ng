@@ -5,7 +5,7 @@ defmodule QuickBEAM.VM.ObjectModel.ExplicitOwnProperty do
 
   alias QuickBEAM.VM.Execution.RegexpState
   alias QuickBEAM.VM.Heap
-  alias QuickBEAM.VM.ObjectModel.PropertyKey
+  alias QuickBEAM.VM.Runtime.TypedArray
 
   def present?({:regexp, _, _, ref}, key), do: RegexpState.has_property?(ref, key)
 
@@ -35,5 +35,6 @@ defmodule QuickBEAM.VM.ObjectModel.ExplicitOwnProperty do
 
   defp typed_array_property_present?(ref, key),
     do:
-      match?({:ok, _}, PropertyKey.array_index(key)) or Map.has_key?(Heap.get_obj(ref, %{}), key)
+      TypedArray.integer_index_key(key) != :not_integer_index or
+        Map.has_key?(Heap.get_obj(ref, %{}), key)
 end
