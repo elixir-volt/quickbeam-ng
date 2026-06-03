@@ -259,9 +259,25 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   end
 
   defp trim_base64_partial(source, "stop-before-partial") do
-    case rem(String.length(source), 4) do
-      0 -> source
-      remainder -> binary_part(source, 0, String.length(source) - remainder)
+    case String.split(source, "=", parts: 2) do
+      [prefix, suffix] ->
+        case Base.decode64(source) do
+          {:ok, _} ->
+            source
+
+          :error ->
+            if suffix == "" and rem(String.length(prefix), 4) == 2 do
+              binary_part(prefix, 0, String.length(prefix) - 2)
+            else
+              JSThrow.syntax_error!("Invalid base64 string")
+            end
+        end
+
+      [_] ->
+        case rem(String.length(source), 4) do
+          0 -> source
+          remainder -> binary_part(source, 0, String.length(source) - remainder)
+        end
     end
   end
 
