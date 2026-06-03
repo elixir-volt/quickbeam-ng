@@ -544,6 +544,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
       map when is_map(map) ->
         cond do
+          Map.get(map, typed_array()) == true and
+              typed_array_integer_put({:obj, ref}, key, val) != :not_integer_index ->
+            true
+
           typed_array_metadata_slot_without_own_property?(ref, map, key) ->
             false
 
