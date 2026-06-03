@@ -2154,12 +2154,9 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         buf = Heap.get_obj(buf_ref, %{})
 
         cond do
-          match?({:qb_arr, _}, buf) ->
-            list = :array.to_list(elem(buf, 1))
+          match?({:qb_arr, _}, buf) or is_list(buf) ->
+            list = object_source_to_list(buf_obj)
             {list_to_buffer(list, type), 0, length(list), nil, false}
-
-          is_list(buf) ->
-            {list_to_buffer(buf, type), 0, length(buf), nil, false}
 
           is_map(buf) and Map.get(buf, typed_array()) == true ->
             list = typed_array_source_to_list(buf_obj)
@@ -2214,8 +2211,13 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         {list_to_buffer(list, type), 0, length(list), nil, false}
 
       [length_value | _] ->
-        len = TypedArrayCoercion.index(length_value)
-        {:binary.copy(<<0>>, len * elem_size(type)), 0, len, nil, false}
+        if Value.object_like?(length_value) do
+          list = object_source_to_list(length_value)
+          {list_to_buffer(list, type), 0, length(list), nil, false}
+        else
+          len = TypedArrayCoercion.index(length_value)
+          {:binary.copy(<<0>>, len * elem_size(type)), 0, len, nil, false}
+        end
 
       _ ->
         {<<>>, 0, 0, nil, false}
