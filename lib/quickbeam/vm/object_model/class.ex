@@ -3,7 +3,7 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
 
   import QuickBEAM.VM.Heap.Keys, only: [proto: 0]
 
-  alias QuickBEAM.VM.{Heap, Value}
+  alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Invocation
   alias QuickBEAM.VM.Names
   alias QuickBEAM.VM.ObjectModel.{Functions, Get, Put}
@@ -75,6 +75,8 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
         ctor_closure
       end
 
+    validate_superclass_constructor!(parent_ctor)
+
     raw = raw_function(ctor_closure)
     proto_ref = make_ref()
     proto_map = %{"constructor" => ctor_closure}
@@ -126,6 +128,21 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
     end
 
     {proto_obj, ctor_closure}
+  end
+
+  defp validate_superclass_constructor!(parent_ctor) when parent_ctor in [:undefined, :null],
+    do: :ok
+
+  defp validate_superclass_constructor!(parent_ctor) do
+    case raw_function(parent_ctor) do
+      %QuickBEAM.VM.Function{has_prototype: false, source: source} when is_binary(source) ->
+        if String.contains?(source, "=>") do
+          JSThrow.type_error!("Class extends value is not a constructor")
+        end
+
+      _ ->
+        :ok
+    end
   end
 
   @doc "Classifies an explicit constructor return value according to JavaScript class semantics."

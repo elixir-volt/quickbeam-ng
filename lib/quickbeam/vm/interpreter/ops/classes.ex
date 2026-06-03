@@ -33,11 +33,14 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Classes do
           end
 
         class_name = Names.resolve_atom(ctx, atom_idx)
-        {proto, ctor_closure} = Class.define_class(ctor_closure, parent_ctor, class_name)
 
-        frame = EvalEnv.seed_class_binding(frame, ctx, atom_idx, ctor_closure)
-
-        run(pc + 1, frame, [proto, ctor_closure | rest], gas, ctx)
+        try do
+          {proto, ctor_closure} = Class.define_class(ctor_closure, parent_ctor, class_name)
+          frame = EvalEnv.seed_class_binding(frame, ctx, atom_idx, ctor_closure)
+          run(pc + 1, frame, [proto, ctor_closure | rest], gas, ctx)
+        catch
+          {:js_throw, error} -> throw_or_catch(frame, error, gas, ctx)
+        end
       end
 
       defp run({@op_add_brand, []}, pc, frame, [obj, brand | rest], gas, ctx) do
@@ -75,9 +78,13 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Classes do
           end
 
         class_name = QuickBEAM.VM.ObjectModel.Functions.function_name(computed_name)
-        {proto, ctor_closure} = Class.define_class(ctor_closure, parent_ctor, class_name)
 
-        run(pc + 1, frame, [proto, ctor_closure, computed_name | rest], gas, ctx)
+        try do
+          {proto, ctor_closure} = Class.define_class(ctor_closure, parent_ctor, class_name)
+          run(pc + 1, frame, [proto, ctor_closure, computed_name | rest], gas, ctx)
+        catch
+          {:js_throw, error} -> throw_or_catch(frame, error, gas, ctx)
+        end
       end
 
       defp run(
