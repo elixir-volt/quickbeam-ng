@@ -128,6 +128,11 @@ defmodule QuickBEAM.VM.Compiler do
   defp interpreter_exception_region_fallback?(%QuickBEAM.VM.Function{instructions: instructions}) do
     instruction_list = tuple_to_list(instructions)
 
+    Enum.any?(instruction_list, &computed_method_opcode?/1) or
+      large_exception_region_fallback?(instruction_list)
+  end
+
+  defp large_exception_region_fallback?(instruction_list) do
     length(instruction_list) >= @exception_fallback_min_instruction_count and
       Enum.any?(instruction_list, &catch_opcode?/1)
   end
@@ -144,6 +149,15 @@ defmodule QuickBEAM.VM.Compiler do
   end
 
   defp catch_opcode?(_), do: false
+
+  defp computed_method_opcode?({opcode, _operands}) do
+    case QuickBEAM.VM.OpcodeSpec.name(opcode) do
+      {:ok, :define_method_computed} -> true
+      _ -> false
+    end
+  end
+
+  defp computed_method_opcode?(_), do: false
 
   @doc "Returns the compiler cache directory when disk caching is enabled."
   def cache_dir, do: compiler_cache_dir()
