@@ -2272,7 +2272,7 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
 
   defp typed_array_source_to_list(obj) do
     if out_of_bounds?(obj) do
-      []
+      JSThrow.type_error!("TypedArray is out of bounds")
     else
       for index <- 0..(element_count(obj) - 1)//1, do: get_element(obj, index)
     end
