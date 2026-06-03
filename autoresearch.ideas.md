@@ -6,7 +6,7 @@ Drive BEAM interpreter/compiler behavior toward QuickJS NIF parity on Test262, p
 
 ## Recently cleaned / do not re-baseline as active work unless a shard regresses
 
-- Object / Reflect / Function / Array / String / TypedArray / TypedArrayConstructors / Uint8Array / ArrayBuffer / DataView / collections / Promise / RegExp prototype / Date / Error / JSON / Math / primitive wrappers / WeakRef / FinalizationRegistry / SharedArrayBuffer / Atomics / Iterator / Proxy / global numeric / small global value and URI semantic slices are already cleaned or checkpointed.
+- Object / Reflect / Function / Array / String / Number / TypedArray / TypedArrayConstructors / Uint8Array / ArrayBuffer / DataView / collections / Promise / RegExp prototype / Date / Error / JSON / Math / primitive wrappers / WeakRef / FinalizationRegistry / SharedArrayBuffer / Atomics / Iterator / Proxy / global numeric / small global value and URI semantic slices are already cleaned or checkpointed.
 - AsyncFunction, AsyncGeneratorPrototype, AsyncGeneratorFunction, GeneratorFunction, and GeneratorPrototype are clean in combination.
 - Array/Map/Set/String iterator prototypes are clean.
 - AsyncIteratorPrototype / AsyncFromSyncIteratorPrototype / RegExpStringIteratorPrototype are clean.
