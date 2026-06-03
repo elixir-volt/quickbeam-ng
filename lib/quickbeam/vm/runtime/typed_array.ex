@@ -116,7 +116,22 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
       |> Builtin.arg(0, :undefined)
       |> require_string_argument!("Uint8Array.prototype.setFromHex")
 
-    bytes = decode_hex_bytes(source)
+    bytes =
+      try do
+        decode_hex_bytes(source)
+      catch
+        {:js_throw, reason} ->
+          if rem(String.length(source), 2) == 0 do
+            write_prefix_bytes(
+              target,
+              decode_hex_prefix_before_error(source),
+              element_count(target)
+            )
+          end
+
+          throw({:js_throw, reason})
+      end
+
     written = write_prefix_bytes(target, bytes, element_count(target))
     result_object(%{"read" => written * 2, "written" => written})
   end
@@ -186,6 +201,19 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
         {byte, ""} -> byte
         _ -> JSThrow.syntax_error!("Invalid hex string")
       end
+    end)
+  end
+
+  defp decode_hex_prefix_before_error(source) do
+    source
+    |> String.graphemes()
+    |> Enum.chunk_every(2)
+    |> Enum.take_while(fn pair ->
+      length(pair) == 2 and match?({_byte, ""}, Integer.parse(Enum.join(pair), 16))
+    end)
+    |> Enum.map(fn pair ->
+      {byte, ""} = Integer.parse(Enum.join(pair), 16)
+      byte
     end)
   end
 
