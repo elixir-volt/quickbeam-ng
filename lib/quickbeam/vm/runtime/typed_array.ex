@@ -722,34 +722,26 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   def static_from(args, constructor) do
     {source, map_fn, this_arg} = from_args(args)
 
-    if typed_array_builtin_constructor?(constructor) do
-      values = typed_array_from_values(source, map_fn, this_arg)
-      Invocation.construct_runtime(constructor, constructor, [values])
-    else
-      {values, map_fn, this_arg} = typed_array_from_values_for_target(source, map_fn, this_arg)
-      target = Invocation.construct_runtime(constructor, constructor, [length(values)])
-      typed_target = typed_array_object!(target)
-      require_typed_array_capacity!(typed_target, length(values))
+    {values, map_fn, this_arg} = typed_array_from_values_for_target(source, map_fn, this_arg)
+    target = Invocation.construct_runtime(constructor, constructor, [length(values)])
+    typed_target = typed_array_object!(target)
+    require_typed_array_capacity!(typed_target, length(values))
 
-      values
-      |> Enum.with_index()
-      |> Enum.each(fn {value, index} ->
-        mapped_value =
-          if map_fn == :__missing__ do
-            value
-          else
-            Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
-          end
+    values
+    |> Enum.with_index()
+    |> Enum.each(fn {value, index} ->
+      mapped_value =
+        if map_fn == :__missing__ do
+          value
+        else
+          Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
+        end
 
-        set_element(typed_target, index, mapped_value)
-      end)
+      set_element(typed_target, index, mapped_value)
+    end)
 
-      target
-    end
+    target
   end
-
-  defp typed_array_builtin_constructor?({:builtin, name, _}), do: constructor_type(name) != nil
-  defp typed_array_builtin_constructor?(_), do: false
 
   defp require_typed_array_capacity!(target, required_length) do
     if element_count(target) < required_length do
@@ -778,27 +770,6 @@ defmodule QuickBEAM.VM.Runtime.TypedArray do
   defp typed_array_from_values_for_target(source, map_fn, this_arg) do
     validate_from_map_fn!(map_fn)
     {typed_array_source_values(source), map_fn, this_arg}
-  end
-
-  defp typed_array_from_values(nil, _map_fn, _this_arg),
-    do: JSThrow.type_error!("Cannot convert undefined or null to object")
-
-  defp typed_array_from_values(:undefined, _map_fn, _this_arg),
-    do: JSThrow.type_error!("Cannot convert undefined or null to object")
-
-  defp typed_array_from_values(source, map_fn, this_arg) do
-    validate_from_map_fn!(map_fn)
-
-    source
-    |> typed_array_source_values()
-    |> Enum.with_index()
-    |> Enum.map(fn {value, index} ->
-      if map_fn == :__missing__ do
-        value
-      else
-        Invocation.invoke_with_receiver(map_fn, [value, index], this_arg)
-      end
-    end)
   end
 
   defp validate_from_map_fn!(map_fn) do
