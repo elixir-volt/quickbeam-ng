@@ -534,50 +534,60 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         set_array_property(ref, array, key, val, receiver)
 
       raw when is_tuple(raw) ->
-        if Heap.shape?(raw) do
-          set_shape_property(ref, raw, key, val, receiver)
-        else
-          write_receiver(receiver, key, val)
+        cond do
+          Heap.shape?(raw) and match?({:ok, true}, Heap.raw_fetch(raw, typed_array())) ->
+            case typed_array_integer_set({:obj, ref}, key, val, receiver) do
+              :not_integer_index -> set_shape_property(ref, raw, key, val, receiver)
+              result -> result
+            end
+
+          Heap.shape?(raw) ->
+            set_shape_property(ref, raw, key, val, receiver)
+
+          true ->
+            write_receiver(receiver, key, val)
         end
 
       list when is_list(list) ->
         set_array_property(ref, list, key, val, receiver)
 
       map when is_map(map) ->
-        cond do
-          Map.get(map, typed_array()) == true and
-              typed_array_integer_set({:obj, ref}, key, val, receiver) != :not_integer_index ->
-            true
-
-          typed_array_metadata_slot_without_own_property?(ref, map, key) ->
-            false
-
-          wrapped_string_virtual_readonly?(map, key) ->
-            false
-
-          true ->
-            case Map.get(map, key) do
-              nil ->
-                if prototype_present?(Map.get(map, proto())) do
-                  set(Map.get(map, proto()), key, val, receiver)
-                else
-                  write_receiver(receiver, key, val)
-                end
-
-              {:accessor, _, setter} when setter != nil ->
-                invoke_setter(setter, val, receiver)
-                true
-
-              {:accessor, _, nil} ->
+        case typed_array_set_result(map, {:obj, ref}, key, val, receiver) do
+          :not_integer_index ->
+            cond do
+              typed_array_metadata_slot_without_own_property?(ref, map, key) ->
                 false
 
-              _ ->
-                if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
-                  false
-                else
-                  write_receiver(receiver, key, val)
+              wrapped_string_virtual_readonly?(map, key) ->
+                false
+
+              true ->
+                case Map.get(map, key) do
+                  nil ->
+                    if prototype_present?(Map.get(map, proto())) do
+                      set(Map.get(map, proto()), key, val, receiver)
+                    else
+                      write_receiver(receiver, key, val)
+                    end
+
+                  {:accessor, _, setter} when setter != nil ->
+                    invoke_setter(setter, val, receiver)
+                    true
+
+                  {:accessor, _, nil} ->
+                    false
+
+                  _ ->
+                    if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
+                      false
+                    else
+                      write_receiver(receiver, key, val)
+                    end
                 end
             end
+
+          result ->
+            result
         end
 
       _ ->
@@ -674,6 +684,9 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
 
       raw when is_tuple(raw) ->
         cond do
+          Heap.shape?(raw) and match?({:ok, true}, Heap.raw_fetch(raw, typed_array())) ->
+            write_typed_array_receiver(receiver, key, val)
+
           not Heap.shape?(raw) ->
             put(receiver, key, val)
             true
@@ -697,25 +710,29 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
         end
 
       map when is_map(map) ->
-        case Map.get(map, key) do
-          nil ->
-            if Heap.extensible?(ref) do
-              put(receiver, key, val)
-              true
-            else
-              false
-            end
+        if Map.get(map, typed_array()) == true do
+          write_typed_array_receiver(receiver, key, val)
+        else
+          case Map.get(map, key) do
+            nil ->
+              if Heap.extensible?(ref) do
+                put(receiver, key, val)
+                true
+              else
+                false
+              end
 
-          {:accessor, _, _} ->
-            false
-
-          _ ->
-            if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
+            {:accessor, _, _} ->
               false
-            else
-              put(receiver, key, val)
-              true
-            end
+
+            _ ->
+              if match?(%{writable: false}, Heap.get_prop_desc(ref, key)) do
+                false
+              else
+                put(receiver, key, val)
+                true
+              end
+          end
         end
 
       _ ->
@@ -730,6 +747,25 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
       true
     else
       false
+    end
+  end
+
+  defp write_typed_array_receiver(receiver, key, val) do
+    case Runtime.TypedArray.integer_index_key(key) do
+      {:ok, idx} ->
+        if idx < Runtime.TypedArray.element_count(receiver) do
+          Runtime.TypedArray.set_element(receiver, idx, val)
+          true
+        else
+          false
+        end
+
+      :invalid ->
+        false
+
+      :not_integer_index ->
+        put(receiver, key, val)
+        true
     end
   end
 
@@ -864,8 +900,10 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
   defp typed_array_integer_put(obj, key, val) do
     case Runtime.TypedArray.integer_index_key(key) do
       {:ok, idx} ->
+        coerced = coerce_typed_array_set_value(obj, val)
+
         if idx < Runtime.TypedArray.element_count(obj) do
-          Runtime.TypedArray.set_element(obj, idx, val)
+          Runtime.TypedArray.set_element(obj, idx, coerced)
         end
 
         :ok
@@ -878,24 +916,33 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
     end
   end
 
+  defp typed_array_set_result(%{typed_array() => true}, obj, key, val, receiver),
+    do: typed_array_integer_set(obj, key, val, receiver)
+
+  defp typed_array_set_result(_map, _obj, _key, _val, _receiver), do: :not_integer_index
+
   defp typed_array_integer_set(obj, key, val, receiver) do
     case Runtime.TypedArray.integer_index_key(key) do
       {:ok, idx} ->
         cond do
           receiver != obj and idx < Runtime.TypedArray.element_count(obj) ->
             write_receiver(receiver, key, val)
-            :ok
 
           receiver == obj and idx < Runtime.TypedArray.element_count(obj) ->
             Runtime.TypedArray.set_element(obj, idx, val)
             :ok
 
           receiver == obj ->
-            coerce_typed_array_set_value(obj, val)
+            coerced = coerce_typed_array_set_value(obj, val)
+
+            if idx < Runtime.TypedArray.element_count(obj) do
+              Runtime.TypedArray.set_element(obj, idx, coerced)
+            end
+
             :ok
 
           true ->
-            :ok
+            false
         end
 
       :invalid ->
