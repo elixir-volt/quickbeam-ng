@@ -1735,22 +1735,33 @@ defmodule QuickBEAM.VM.ObjectModel.Put do
           {:obj, ref}
 
         %QuickBEAM.VM.Function{} = ctor ->
-          Heap.put_ctor_static(ctor, PropertyKey.normalize(idx), val)
-          ctor
+          define_callable_static_field(ctor, idx, val)
 
         {:closure, _, %QuickBEAM.VM.Function{}} = ctor ->
-          Heap.put_ctor_static(ctor, PropertyKey.normalize(idx), val)
-          ctor
+          define_callable_static_field(ctor, idx, val)
 
         {:builtin, _, _} = ctor ->
-          Heap.put_ctor_static(ctor, PropertyKey.normalize(idx), val)
-          ctor
+          define_callable_static_field(ctor, idx, val)
 
         _ ->
           obj
       end
 
     {idx, obj2}
+  end
+
+  defp define_callable_static_field(ctor, idx, val) do
+    desc =
+      Heap.wrap(%{
+        "value" => val,
+        "writable" => true,
+        "enumerable" => true,
+        "configurable" => true
+      })
+
+    key = PropertyKey.normalize(idx)
+    Define.property(ctor, key, desc, Heap.get_obj(elem(desc, 1), %{}))
+    ctor
   end
 
   @doc "Returns a list with an index updated, padding holes with `:undefined` as needed."

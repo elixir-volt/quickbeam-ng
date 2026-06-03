@@ -113,6 +113,12 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
 
     Heap.put_ctor_statics(ctor_closure, ctor_statics)
 
+    Heap.put_ctor_prop_desc(ctor_closure, "prototype", %{
+      writable: false,
+      enumerable: false,
+      configurable: false
+    })
+
     if parent_ctor != :undefined do
       Heap.put_parent_ctor(raw, parent_ctor)
     else
