@@ -215,8 +215,18 @@ defmodule QuickBEAM.VM.Interpreter.Generator do
     end
   end
 
-  def async_prototype_object do
+  def async_iterator_prototype_object do
     object extends: Heap.get_object_prototype() do
+      symbol :asyncIterator do
+        method length: 0, constructable: false do
+          this
+        end
+      end
+    end
+  end
+
+  def async_prototype_object do
+    object extends: Heap.get_or_create_async_iterator_prototype_object() do
       method "next", length: 1, constructable: false do
         Promise.resolved(done_result(:undefined))
       end
