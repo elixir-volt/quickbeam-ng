@@ -58,6 +58,8 @@ defmodule QuickBEAM.VM.Names do
       {:symbol, desc, _} -> "[" <> desc <> "]"
       {:symbol, :undefined} -> ""
       {:symbol, desc} -> "[" <> desc <> "]"
+      {:private_symbol, "#" <> _ = name, _} -> name
+      {:private_symbol, name, _} when is_binary(name) -> "#" <> name
       _ -> ""
     end
   end
