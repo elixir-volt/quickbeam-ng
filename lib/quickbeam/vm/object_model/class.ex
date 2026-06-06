@@ -134,14 +134,8 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
     do: :ok
 
   defp validate_superclass_constructor!(parent_ctor) do
-    case raw_function(parent_ctor) do
-      %QuickBEAM.VM.Function{has_prototype: false, source: source} when is_binary(source) ->
-        if String.contains?(source, "=>") do
-          JSThrow.type_error!("Class extends value is not a constructor")
-        end
-
-      _ ->
-        :ok
+    unless Invocation.constructor?(parent_ctor) do
+      JSThrow.type_error!("Class extends value is not a constructor")
     end
   end
 

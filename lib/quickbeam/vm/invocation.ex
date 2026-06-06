@@ -90,6 +90,14 @@ defmodule QuickBEAM.VM.Invocation do
     end)
   end
 
+  @doc "Returns true when a value can be used as an ECMAScript constructor."
+  def constructor?(value) do
+    validate_constructor!(value)
+    true
+  catch
+    {:js_throw, _error} -> false
+  end
+
   @doc "Invokes a JavaScript constructor with `this` and `new.target` context."
   def invoke_constructor(fun, args, this_obj, new_target),
     do: invoke_constructor(fun, args, Runtime.gas_budget(), this_obj, new_target)

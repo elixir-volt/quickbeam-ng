@@ -71,19 +71,11 @@ defmodule QuickBEAM.VM.Semantics.Eval do
 
   def reject_class_field_initializer_eval!(_ctx, _code), do: :ok
 
-  def normalize_class_field_initializer_eval_code(ctx, code) when is_binary(code) do
-    if class_field_initializer_context?(ctx) do
-      code
-      |> String.replace(~r/\bnew\s*\.\s*target\b/, "undefined")
-      |> String.replace(~r/\bsuper\s*(\[[^\]]+\]|\.[A-Za-z_$][\w$]*)/, "undefined")
-    else
-      code
-    end
-  end
+  def normalize_class_field_initializer_eval_code(_ctx, code) when is_binary(code), do: code
 
   def normalize_class_field_initializer_eval_code(_ctx, code), do: code
 
-  defp class_field_initializer_context?(%{current_func: current_func}) do
+  def class_field_initializer_context?(%{current_func: current_func}) do
     case current_func do
       {:closure, captured, %QuickBEAM.VM.Function{} = fun} ->
         Map.get(captured, :__class_field_initializer__, false) or
@@ -97,11 +89,11 @@ defmodule QuickBEAM.VM.Semantics.Eval do
     end
   end
 
-  defp class_field_initializer_context?(_), do: false
+  def class_field_initializer_context?(_), do: false
 
   defp synthetic_field_initializer?(%QuickBEAM.VM.Function{source: "", locals: locals}) do
     local_names = MapSet.new(Enum.map(locals, &Names.resolve_display_name(&1.name)))
-    MapSet.subset?(MapSet.new(["this", "new.target", "<home_object>"]), local_names)
+    MapSet.subset?(MapSet.new(["this", "<home_object>"]), local_names)
   end
 
   defp synthetic_field_initializer?(_), do: false
