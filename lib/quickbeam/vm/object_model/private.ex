@@ -121,10 +121,10 @@ defmodule QuickBEAM.VM.ObjectModel.Private do
   defp brand_home_match?({:obj, ref}, home_object) do
     object = Heap.get_obj(ref, %{})
 
-    if is_map(object) and Map.has_key?(object, :__private_brand_pending__) do
+    if Heap.pending_private_brand?({:obj, ref}) do
       false
     else
-      parent = Map.get(object, proto(), :undefined)
+      parent = if is_map(object), do: Map.get(object, proto(), :undefined), else: :undefined
       parent == home_object or brand_home_match?(parent, home_object)
     end
   end

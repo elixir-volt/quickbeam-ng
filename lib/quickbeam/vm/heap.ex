@@ -493,6 +493,16 @@ defmodule QuickBEAM.VM.Heap do
   @doc "Stores the parent constructor associated with a class constructor."
   defdelegate put_parent_ctor(ctor, parent), to: Store
   defdelegate delete_parent_ctor(ctor), to: Store
+
+  def pending_private_brand?({:obj, ref}),
+    do: Process.get({:qb_pending_private_brand, ref}, false)
+
+  def pending_private_brand?(_), do: false
+
+  def put_pending_private_brand({:obj, ref}, pending?),
+    do: Process.put({:qb_pending_private_brand, ref}, pending?)
+
+  def put_pending_private_brand(_, _), do: :ok
   defdelegate get_ctor_statics(ctor), to: Store
   defdelegate put_ctor_statics(ctor, statics), to: Store
   defdelegate put_ctor_static(ctor, key, value), to: Store

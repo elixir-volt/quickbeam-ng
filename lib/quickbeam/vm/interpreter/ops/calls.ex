@@ -191,13 +191,9 @@ defmodule QuickBEAM.VM.Interpreter.Ops.Calls do
 
         init = if proto, do: %{proto() => proto}, else: %{}
 
-        init =
-          if pending_private_brand?,
-            do: Map.put(init, :__private_brand_pending__, true),
-            else: init
-
         Heap.put_obj(this_ref, init)
         fresh_this = {:obj, this_ref}
+        Heap.put_pending_private_brand(fresh_this, pending_private_brand?)
 
         this_obj =
           if derived_constructor? do

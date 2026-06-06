@@ -423,11 +423,8 @@ defmodule QuickBEAM.VM.Invocation do
           match?(%QuickBEAM.VM.Function{is_derived_class_constructor: true}, raw_new_target)
 
       init = if ctor_proto, do: %{proto() => ctor_proto}, else: %{}
-
-      init =
-        if pending_private_brand?, do: Map.put(init, :__private_brand_pending__, true), else: init
-
       this_obj = Heap.wrap(init)
+      Heap.put_pending_private_brand(this_obj, pending_private_brand?)
 
       result =
         case ctor do
