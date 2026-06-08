@@ -110,7 +110,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
   def invoke_runtime(fun, args), do: Invocation.invoke_runtime(fun, args)
 
   def eval_or_call(ctx, fun, [code | _] = args) when is_binary(code) do
-    if fun == ctx.globals["eval"] do
+    if intrinsic_eval?(fun, ctx) do
       eval_source(ctx, code)
     else
       Invocation.invoke_runtime(ctx, fun, args)
@@ -120,7 +120,7 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
   def eval_or_call(ctx, fun, args), do: Invocation.invoke_runtime(ctx, fun, args)
 
   def eval_or_call_scope(ctx, fun, [code | _] = args, locals, captures) when is_binary(code) do
-    if fun == ctx.globals["eval"] do
+    if intrinsic_eval?(fun, ctx) do
       scoped_globals = Map.merge(ctx.globals, local_globals(locals, captures))
       pre_globals = Heap.get_persistent_globals() || %{}
       result = eval_source(%{ctx | globals: scoped_globals}, code)
@@ -154,6 +154,10 @@ defmodule QuickBEAM.VM.Compiler.RuntimeHelpers.Calls do
       {:ok, value} -> value
       :error -> Invocation.invoke_with_receiver(parent, args, gas, pending_this)
     end
+  end
+
+  defp intrinsic_eval?(fun, ctx) do
+    fun == ctx.globals["eval"] or Eval.intrinsic_eval?(fun)
   end
 
   defp eval_source(ctx, code) do

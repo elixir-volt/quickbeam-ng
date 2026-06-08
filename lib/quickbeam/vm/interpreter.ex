@@ -704,7 +704,7 @@ defmodule QuickBEAM.VM.Interpreter do
 
   defp eval_or_call_result(fun, code, args, scope_idx, frame, gas, ctx, var_objs) do
     cond do
-      fun == ctx.globals["eval"] and is_binary(code) ->
+      intrinsic_eval?(fun, ctx) and is_binary(code) ->
         keep_declared? = scope_idx > 0
         {value, transient_globals} = eval_code(code, frame, gas, ctx, var_objs, keep_declared?)
         {value, Context.mark_dirty(%{ctx | globals: Map.merge(ctx.globals, transient_globals)})}
@@ -718,6 +718,10 @@ defmodule QuickBEAM.VM.Interpreter do
       true ->
         {:undefined, ctx}
     end
+  end
+
+  defp intrinsic_eval?(fun, ctx) do
+    fun == ctx.globals["eval"] or QuickBEAM.VM.Semantics.Eval.intrinsic_eval?(fun)
   end
 
   defp callable?(fun) do

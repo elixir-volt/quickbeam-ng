@@ -112,6 +112,9 @@ defmodule QuickBEAM.VM.Semantics.Eval do
 
   def class_field_initializer_eval_ast(_ctx, _code), do: :continue
 
+  def intrinsic_eval?({:builtin, "eval", _}), do: true
+  def intrinsic_eval?(_), do: false
+
   def commit_class_field_initializer_eval_globals(ctx_globals, globals) when is_map(globals) do
     merged = Map.merge(Heap.get_persistent_globals() || %{}, globals)
     Heap.put_persistent_globals(merged)

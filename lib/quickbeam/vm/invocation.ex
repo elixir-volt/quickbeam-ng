@@ -433,9 +433,13 @@ defmodule QuickBEAM.VM.Invocation do
 
           %QuickBEAM.VM.Function{} = fun ->
             if Class.default_derived_constructor?(fun) do
-              fun
-              |> Class.get_super()
-              |> construct_runtime(new_target, args)
+              super_this =
+                fun
+                |> Class.get_super()
+                |> construct_runtime(new_target, args)
+
+              initialize_default_derived_fields(ctx, fun, super_this)
+              super_this
             else
               case Runner.invoke_constructor(fun, args, this_obj, new_target, ctx) do
                 {:ok, value} ->
@@ -455,9 +459,13 @@ defmodule QuickBEAM.VM.Invocation do
 
           {:closure, _, %QuickBEAM.VM.Function{} = fun} = closure ->
             if Class.default_derived_constructor?(fun) do
-              closure
-              |> Class.get_super()
-              |> construct_runtime(new_target, args)
+              super_this =
+                closure
+                |> Class.get_super()
+                |> construct_runtime(new_target, args)
+
+              initialize_default_derived_fields(ctx, closure, super_this)
+              super_this
             else
               case Runner.invoke_constructor(closure, args, this_obj, new_target, ctx) do
                 {:ok, value} ->
@@ -493,6 +501,36 @@ defmodule QuickBEAM.VM.Invocation do
       end
     end)
   end
+
+  defp initialize_default_derived_fields(ctx, ctor, this_obj) do
+    case default_derived_field_initializer(ctor) do
+      nil -> :ok
+      :undefined -> :ok
+      initializer -> invoke_method_runtime(ctx, initializer, this_obj, [])
+    end
+  end
+
+  defp default_derived_field_initializer({:closure, captured, %QuickBEAM.VM.Function{} = fun}) do
+    fun
+    |> default_derived_field_initializer_key()
+    |> then(fn
+      nil -> nil
+      key -> captured_value(Map.get(captured, key))
+    end)
+  end
+
+  defp default_derived_field_initializer(%QuickBEAM.VM.Function{}), do: nil
+
+  defp default_derived_field_initializer_key(%QuickBEAM.VM.Function{} = fun) do
+    Enum.find_value(fun.closure_vars, fn closure_var ->
+      if QuickBEAM.VM.Names.resolve_display_name(closure_var.name) == "<class_fields_init>" do
+        {closure_var.closure_type, closure_var.var_idx}
+      end
+    end)
+  end
+
+  defp captured_value({:cell, ref}), do: Heap.get_cell(ref)
+  defp captured_value(value), do: value
 
   defp construct_proxy_runtime(ctx, {:obj, ref} = proxy, new_target, args) do
     case Heap.get_obj(ref, %{}) do
