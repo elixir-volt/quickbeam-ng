@@ -1,7 +1,7 @@
 defmodule QuickBEAM.VM.ObjectModel.FunctionExoticGet do
   @moduledoc "Function exotic own-property lookup helpers."
 
-  alias QuickBEAM.VM.{Heap, JSThrow}
+  alias QuickBEAM.VM.{Heap, JSThrow, Value}
   alias QuickBEAM.VM.Runtime.Function
 
   @restricted_properties ["caller", "arguments"]
@@ -78,7 +78,7 @@ defmodule QuickBEAM.VM.ObjectModel.FunctionExoticGet do
 
   defp constructor_static_property(fun, key, call_getter, create_prototype) do
     case Map.get(Heap.get_ctor_statics(fun), key, :not_set) do
-      :not_set -> create_prototype.()
+      :not_set -> if Value.has_function_prototype?(fun), do: create_prototype.(), else: :undefined
       {:accessor, getter, _} when getter != nil -> call_getter.(getter, fun)
       val -> val
     end

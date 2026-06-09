@@ -149,12 +149,14 @@ defmodule QuickBEAM.VM.ObjectModel.Class do
   end
 
   defp inherited_constructor_prototype(:undefined), do: nil
+  defp inherited_constructor_prototype(:null), do: :null_proto
 
   defp inherited_constructor_prototype(parent_ctor) do
     case Get.get(parent_ctor, "prototype") do
       {:obj, _} = proto -> proto
+      :null -> :null_proto
       :null_proto -> :null_proto
-      _ -> nil
+      _ -> JSThrow.type_error!("parent prototype must be an object or null")
     end
   end
 

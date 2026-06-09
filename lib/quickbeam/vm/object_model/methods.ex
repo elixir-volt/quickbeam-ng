@@ -25,8 +25,8 @@ defmodule QuickBEAM.VM.ObjectModel.Methods do
     Functions.put_home_object(named_method, target)
 
     case method_type do
-      1 -> Put.put_getter(target, name, named_method, enumerable)
-      2 -> Put.put_setter(target, name, named_method, enumerable)
+      1 -> put_getter(target, name, named_method, enumerable)
+      2 -> put_setter(target, name, named_method, enumerable)
       _ -> put_method(target, name, named_method, enumerable)
     end
 
@@ -59,12 +59,22 @@ defmodule QuickBEAM.VM.ObjectModel.Methods do
     Functions.put_home_object(named_method, target)
 
     case method_type do
-      1 -> Put.put_getter(target, property_key, named_method, enumerable)
-      2 -> Put.put_setter(target, property_key, named_method, enumerable)
+      1 -> put_getter(target, property_key, named_method, enumerable)
+      2 -> put_setter(target, property_key, named_method, enumerable)
       _ -> put_method(target, property_key, named_method, enumerable)
     end
 
     target
+  end
+
+  defp put_getter(target, key, method, enumerable) do
+    Put.put_getter(target, key, method, enumerable)
+    put_callable_method_descriptor(target, key, enumerable)
+  end
+
+  defp put_setter(target, key, method, enumerable) do
+    Put.put_setter(target, key, method, enumerable)
+    put_callable_method_descriptor(target, key, enumerable)
   end
 
   defp put_method(target, key, method, enumerable) do
@@ -72,6 +82,10 @@ defmodule QuickBEAM.VM.ObjectModel.Methods do
       Put.put(target, key, method, enumerable)
     end)
 
+    put_callable_method_descriptor(target, key, enumerable)
+  end
+
+  defp put_callable_method_descriptor(target, key, enumerable) do
     unless match?({:obj, _}, target) do
       Heap.put_ctor_prop_desc(
         target,
